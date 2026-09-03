@@ -1,0 +1,34 @@
+{
+  "name": "factory-mobile",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Jeu d'usine 2D pour mobile, TypeScript et PixiJS v8. Nom de code provisoire.",
+  "type": "module",
+  "homepage": "https://cardona.digital",
+  "author": {
+    "name": "Salvador Cardona",
+    "url": "https://cardona.digital"
+  },
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.9.1",
+    "globals": "^17.12.0",
+    "typescript": "~6.0.2",
+    "typescript-eslint": "^8.69.0",
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11"
+  },
+  "dependencies": {
+    "pixi.js": "^8.20.1"
+  }
+}
