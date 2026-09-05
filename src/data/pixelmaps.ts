@@ -785,6 +785,145 @@ const WATCHTOWER = [
   NU_EMPTY,
 ];
 
+/* ------------------------------------------------ maison des constructeurs */
+
+const HOUSE_PALETTE: PixelPalette = {
+  o: 'outline',
+  b: 'brick',
+  p: 'plaster',
+  P: 'plasterShadow',
+  m: 'metal',
+  M: 'metalLight',
+  d: 'metalDark',
+  w: 'beam',
+  W: 'trunkShadow',
+  n: 'night',
+  a: 'accent',
+  g: 'dirtDark',
+  u: 'rust',
+};
+
+/** Une ligne de mur : contour, 28 pixels d'intérieur, contour. */
+function bunk(interior: string): string {
+  return `.o${interior}o.`;
+}
+
+const HO_EMPTY = '.'.repeat(32);
+const HO_WINDOW = (glass: string): string => bunk(`bbb${'o' + glass + 'o'}${'b'.repeat(12)}${'o' + glass + 'o'}bbb`);
+
+const BUILDER_HOUSE = [
+  HO_EMPTY,
+  HO_EMPTY,
+  '.....oo.........................',
+  '.....oMo........................',
+  '.oooooMooooooooooooooooooooooo..',
+  '.oMMMMMMMMMMMMMMMMMMMMMMMMMMMMo.',
+  '.ommmmmmmmmmmmmmmmmmmmmmmmmmmmo.',
+  '.ommmmmmmmmmmmmmmmmmmmmmmmmmmmo.',
+  '.oddddddddddddddddddddddddddddo.',
+  '.oooooooooooooooooooooooooooooo.',
+  bunk('w'.repeat(28)),
+  bunk('W'.repeat(28)),
+  bunk('b'.repeat(28)),
+  bunk(`bbb${'ooooo'}${'b'.repeat(12)}${'ooooo'}bbb`),
+  HO_WINDOW('nna'),
+  HO_WINDOW('nan'),
+  HO_WINDOW('ann'),
+  bunk(`bbb${'ooooo'}${'b'.repeat(12)}${'ooooo'}bbb`),
+  bunk('b'.repeat(28)),
+  bunk('b'.repeat(28)),
+  bunk(`${'b'.repeat(11)}oooooo${'b'.repeat(11)}`),
+  bunk(`${'b'.repeat(11)}owwwwo${'b'.repeat(11)}`),
+  bunk(`${'b'.repeat(11)}owwwwo${'b'.repeat(6)}uu${'b'.repeat(3)}`),
+  bunk(`${'b'.repeat(11)}owwawo${'b'.repeat(6)}um${'b'.repeat(3)}`),
+  bunk(`${'b'.repeat(11)}owwwwo${'b'.repeat(6)}um${'b'.repeat(3)}`),
+  bunk(`${'b'.repeat(11)}owwwwo${'b'.repeat(6)}uw${'b'.repeat(3)}`),
+  bunk(`${'b'.repeat(11)}oWWWWo${'b'.repeat(6)}uw${'b'.repeat(3)}`),
+  bunk(`${'P'.repeat(11)}oWWWWo${'P'.repeat(6)}uw${'P'.repeat(3)}`),
+  '.oooooooooooooooooooooooooooooo.',
+  '..gggggggggggggggggggggggggggg..',
+  HO_EMPTY,
+  HO_EMPTY,
+];
+
+/* ----------------------------------------------------------------- ferme */
+
+const FARM_PALETTE: PixelPalette = {
+  o: 'outline',
+  d: 'dirt',
+  D: 'dirtDark',
+  g: 'leaves',
+  G: 'leavesLight',
+  k: 'leavesDark',
+  w: 'beam',
+  W: 'trunkShadow',
+  m: 'metal',
+  M: 'metalLight',
+  p: 'plaster',
+};
+
+/** Une ligne de sillon : terre claire et sombre en alternance. */
+function furrow(pattern: string): string {
+  return `.o${pattern.repeat(14)}o.`;
+}
+
+/** Deux sillons de terre : creux sombre, crête claire. */
+const FA_RIDGE = furrow('dd');
+const FA_TROUGH = furrow('DD');
+
+/** Une ligne de jeunes pousses sur la crête, plus ou moins hautes. */
+function sprouts(top: string, tall: boolean): string {
+  const plant = tall ? `${top}G` : `${top}g`;
+
+  return `.o${plant.padEnd(4, 'd').slice(0, 4).repeat(7)}o.`;
+}
+
+const FA_SHED_TOP = '.oooooooooooo...................';
+const FA_SHED_ROOF_L = '.oMMMMMMMMMMo...................';
+const FA_SHED_ROOF = '.ommmmmmmmmmo...................';
+const FA_SHED_WALL = '.owwwwwwwwwwo...................';
+const FA_SHED_DOOR = '.owwwoooowwwo...................';
+const FA_SHED_DOOR_IN = '.owwwoWWowwwo...................';
+const FA_SHED_BASE = '.oWWWoWWoWWWo...................';
+
+const FARM_IDLE = [
+  '.'.repeat(32),
+  FA_SHED_TOP,
+  FA_SHED_ROOF_L,
+  FA_SHED_ROOF,
+  FA_SHED_ROOF,
+  '.ooooooooooooooooooooooooooooooo',
+  FA_SHED_WALL.slice(0, 13) + FA_RIDGE.slice(13),
+  FA_SHED_DOOR.slice(0, 13) + FA_TROUGH.slice(13),
+  FA_SHED_DOOR_IN.slice(0, 13) + sprouts('dg', false).slice(13),
+  FA_SHED_BASE.slice(0, 13) + FA_TROUGH.slice(13),
+  '.oooooooooooo' + FA_RIDGE.slice(13),
+  FA_TROUGH,
+  sprouts('dg', false),
+  FA_TROUGH,
+  FA_RIDGE,
+  FA_TROUGH,
+  sprouts('dg', false),
+  FA_TROUGH,
+  FA_RIDGE,
+  FA_TROUGH,
+  sprouts('dg', false),
+  FA_TROUGH,
+  FA_RIDGE,
+  FA_TROUGH,
+  sprouts('dg', false),
+  FA_TROUGH,
+  FA_RIDGE,
+  FA_TROUGH,
+  FA_RIDGE,
+  FA_RIDGE,
+  '.oooooooooooooooooooooooooooooo.',
+  '.'.repeat(32),
+];
+
+const FARM_GROW_A = FARM_IDLE.map((row) => row.replace(/dg/g, 'gg'));
+const FARM_GROW_B = FARM_IDLE.map((row) => row.replace(/dg/g, 'gG').replace(/DD(?=gG)/g, 'Dk'));
+
 const TOWN_HALL_PALETTE: PixelPalette = {
   o: 'outline',
   p: 'plaster',
@@ -941,6 +1080,14 @@ export const PIXEL_MAPS: Record<SpriteId, PixelMap> = {
   nursery: {
     palette: NURSERY_PALETTE,
     animations: { idle: [NURSERY] },
+  },
+  builderHouse: {
+    palette: HOUSE_PALETTE,
+    animations: { idle: [BUILDER_HOUSE] },
+  },
+  farm: {
+    palette: FARM_PALETTE,
+    animations: { idle: [FARM_IDLE], grow: [FARM_GROW_A, FARM_GROW_B] },
   },
   watchtower: {
     palette: WATCHTOWER_PALETTE,

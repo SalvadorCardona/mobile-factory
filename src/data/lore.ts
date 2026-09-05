@@ -91,6 +91,18 @@ export const LORE = {
         'Un abri chauffé, des couvertures, un berceau. Toutes les dix minutes, ' +
         'un enfant y naît et la colonie grandit d’un survivant.',
     },
+    builderHouse: {
+      name: 'Maison des constructeurs',
+      description:
+        'Un dortoir de planches et de tôle pour quatre ouvriers. Ce sont eux ' +
+        'qui, bientôt, porteront les ressources à la place d’Adam.',
+    },
+    farm: {
+      name: 'Ferme',
+      description:
+        'Quelques sillons dans la terre irradiée et une cabane à outils. Quatre ' +
+        'ouvriers y font pousser de quoi nourrir la colonie.',
+    },
     watchtower: {
       name: 'Tour de guet',
       description:

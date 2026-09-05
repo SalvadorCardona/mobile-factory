@@ -6,7 +6,7 @@ import type { ItemId } from '../data/items.ts';
 import { WEAPONS } from '../data/weapons.ts';
 import { BUILD_REACH_TILES } from './player.ts';
 import type { Entity, EntityId, Mutant } from './types.ts';
-import { World } from './world.ts';
+import { World, siteMissing } from './world.ts';
 
 /** Place Adam sur une tuile libre collée à l'emprise, et renvoie l'axe qui pousse vers elle. */
 function standNextTo(world: World, tx: number, ty: number, width: number, height: number): { x: number; y: number } {
@@ -43,9 +43,18 @@ function completeSite(world: World, id: EntityId): Entity {
 
   for (let i = 0; i < 400; i += 1) {
     world.tick();
-    if (world.entities.get(id)?.kind !== 'site') break;
+
+    const current = world.entities.get(id);
+
+    if (current?.kind === 'site' && siteMissing(current) === 0) break;
   }
   world.push({ type: 'setMoveAxis', x: 0, y: 0 });
+  world.tick();
+
+  // Un chantier livré ne se termine jamais seul : c'est le bouton « Construire ».
+  world.push({ type: 'buildSite', id });
+  world.tick();
+  // Un tick de plus, comme avant : les cadences des tests se comptent depuis là.
   world.tick();
 
   const built = world.entities.get(id);
@@ -316,7 +325,7 @@ describe('nurserie', () => {
       birthTick = world.tickCount;
     });
     expect(nursery.nextBirthTick - world.tickCount).toBeLessThanOrEqual(NURSERY_BIRTH_TICKS);
-    expect(world.population()).toEqual({ adults: 1, children: 0 });
+    expect(world.population()).toEqual({ adults: 1, children: 0, workers: 0 });
 
     for (let i = 0; i < NURSERY_BIRTH_TICKS - 3; i += 1) world.tick();
     expect(born).toHaveLength(0);
@@ -324,7 +333,7 @@ describe('nurserie', () => {
     for (let i = 0; i < 3; i += 1) world.tick();
     expect(born).toHaveLength(1);
     expect(nursery.born).toBe(1);
-    expect(world.population()).toEqual({ adults: 1, children: 1 });
+    expect(world.population()).toEqual({ adults: 1, children: 1, workers: 0 });
     expect(nursery.nextBirthTick).toBe(birthTick + NURSERY_BIRTH_TICKS);
 
     const home = {

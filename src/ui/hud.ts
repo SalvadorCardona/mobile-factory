@@ -19,6 +19,7 @@ import { ITEMS, type ItemId } from '../data/items.ts';
 import { LORE } from '../data/lore.ts';
 import type { PlacementRejection } from '../sim/commands.ts';
 import { siteMissing, type World } from '../sim/world.ts';
+import { itemAmount, itemIcon } from './icons.ts';
 
 const REJECTION_LABELS: Record<PlacementRejection, string> = {
   occupied: 'Emplacement déjà occupé',
@@ -93,8 +94,13 @@ export class Hud {
     this.root.append(this.objective, this.bag, this.floats, this.stats, this.toast, this.audioButton, this.defeat);
 
     world.events.on('placementRejected', ({ reason }) => this.notify(REJECTION_LABELS[reason]));
-    world.events.on('resourceHarvested', ({ item }) => this.float(`+1 ${ITEMS[item].label}`));
-    world.events.on('siteDelivered', ({ item }) => this.float(`−1 ${ITEMS[item].label}`, true));
+    world.events.on('resourceHarvested', ({ item }) => this.float(item, 1));
+    world.events.on('siteDelivered', ({ item, amount }) => this.float(item, -amount));
+    world.events.on('siteReady', () => this.notify('Chantier livré — appuyez sur Construire', true));
+    world.events.on('siteRejected', ({ reason }) => {
+      if (reason === 'outOfReach') this.notify(REJECTION_LABELS.outOfReach);
+      if (reason === 'nothingToGive') this.notify('Rien dans le sac que ce chantier attende');
+    });
     world.events.on('inventoryFull', () => this.notify('Sac plein — livrez le chantier'));
     world.events.on('buildingCompleted', ({ id }) => {
       const entity = world.entities.get(id);
@@ -128,13 +134,13 @@ export class Hud {
     }, 1600);
   }
 
-  /** Un mot qui monte et s'efface. Le DOM le retire lui-même à la fin de l'animation. */
-  private float(text: string, out = false): void {
+  /** Une icône et un delta qui montent et s'effacent. Le DOM les retire à la fin de l'animation. */
+  private float(item: ItemId, delta: number): void {
     const element = document.createElement('span');
 
     element.className = 'hud-float';
-    element.dataset['out'] = String(out);
-    element.textContent = text;
+    element.dataset['out'] = String(delta < 0);
+    element.append(`${delta > 0 ? '+' : '−'}${Math.abs(delta)}`, itemIcon(item, 16));
     this.floats.append(element);
     window.setTimeout(() => element.remove(), FLOAT_MS);
   }
@@ -177,7 +183,7 @@ export class Hud {
       );
 
       text = `Construire la ${LORE.buildings.townHall.name} — ${parts.join(', ')}`;
-      if (siteMissing(hall) === 0) text = `${LORE.buildings.townHall.name} terminée`;
+      if (siteMissing(hall) === 0) text = `${LORE.buildings.townHall.name} livrée — tapez-la et appuyez sur Construire`;
     } else if (hall) {
       const health = `♥ ${hall.hp}/${BUILDINGS[hall.proto].hp}`;
       const { children } = this.world.population();
@@ -196,16 +202,25 @@ export class Hud {
     this.objective.textContent = text;
   }
 
+  /**
+   * Le sac : une ligne « icône + quantité » par objet. Le DOM n'est reconstruit
+   * que si le contenu change — comparer une clé texte coûte moins qu'un diff.
+   */
   private updateBag(): void {
     const { inventory } = this.world.player;
     const entries = inventory.entries();
-    const text =
-      `Sac ${inventory.total()}/${inventory.capacity}` +
-      (entries.length ? '\n' + entries.map(([item, amount]) => `${ITEMS[item].label} ${amount}`).join('\n') : '');
+    const key = `${inventory.total()}/${inventory.capacity}|${entries.map(([item, amount]) => `${item}:${amount}`).join(',')}`;
 
-    if (text === this.lastBag) return;
-    this.lastBag = text;
-    this.bag.textContent = text;
+    if (key === this.lastBag) return;
+    this.lastBag = key;
+
+    const title = document.createElement('div');
+
+    title.className = 'hud-bag-title';
+    title.textContent = `Sac ${inventory.total()}/${inventory.capacity}`;
+    title.dataset['full'] = String(inventory.freeSpace() <= 0);
+
+    this.bag.replaceChildren(title, ...entries.map(([item, amount]) => itemAmount(item, amount)));
   }
 
   public destroy(): void {

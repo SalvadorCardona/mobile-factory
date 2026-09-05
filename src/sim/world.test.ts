@@ -104,9 +104,18 @@ function completeSite(world: World, id: EntityId): Entity {
 
   for (let i = 0; i < 400; i += 1) {
     world.tick();
-    if (world.entities.get(id)?.kind !== 'site') break;
+
+    const current = world.entities.get(id);
+
+    if (current?.kind === 'site' && siteMissing(current) === 0) break;
   }
   world.push({ type: 'setMoveAxis', x: 0, y: 0 });
+  world.tick();
+
+  // Un chantier livré ne se termine jamais seul : c'est le bouton « Construire ».
+  world.push({ type: 'buildSite', id });
+  world.tick();
+  // Un tick de plus, comme avant : les cadences des tests se comptent depuis là.
   world.tick();
 
   const built = world.entities.get(id);
@@ -310,6 +319,75 @@ describe('World', () => {
     expect(completed).toEqual([2]);
     expect(delivered.length).toBe(DRILL.cost.stone + DRILL.cost.ironOre);
     expect(world.player.inventory.total()).toBe(0);
+  });
+
+  it('transfère le sac d’un coup dans le chantier, puis attend « Construire »', () => {
+    const world = new World(7);
+    const ready: EntityId[] = [];
+    const completed: EntityId[] = [];
+    const rejected: string[] = [];
+
+    world.events.on('siteReady', ({ id }) => ready.push(id));
+    world.events.on('buildingCompleted', ({ id }) => completed.push(id));
+    world.events.on('siteRejected', ({ reason }) => rejected.push(reason));
+
+    // Construire avant d'avoir livré : refusé.
+    world.push({ type: 'buildSite', id: world.townHallId });
+    world.tick();
+    expect(rejected).toEqual(['incomplete']);
+
+    // Un sac à moitié rempli : tout passe, le chantier n'est pas prêt.
+    world.player.inventory.add('wood', 5);
+    world.push({ type: 'transferToSite', id: world.townHallId });
+    world.tick();
+
+    const site = world.entities.get(world.townHallId);
+
+    expect(site?.kind).toBe('site');
+    expect(site?.kind === 'site' && site.delivered.wood).toBe(5);
+    expect(world.player.inventory.total()).toBe(0);
+    expect(ready).toEqual([]);
+
+    // Rien à donner : refusé, sans rien casser.
+    world.push({ type: 'transferToSite', id: world.townHallId });
+    world.tick();
+    expect(rejected).toEqual(['incomplete', 'nothingToGive']);
+
+    // Le reste, plus du surplus qui doit rester dans le sac.
+    world.player.inventory.add('wood', 20);
+    world.player.inventory.add('stone', 12);
+    world.push({ type: 'transferToSite', id: world.townHallId });
+    world.tick();
+    expect(ready).toEqual([world.townHallId]);
+    expect(world.player.inventory.count('wood')).toBe(5);
+    expect(completed).toEqual([]);
+
+    world.push({ type: 'buildSite', id: world.townHallId });
+    world.tick();
+    expect(completed).toEqual([world.townHallId]);
+    expect(world.entities.get(world.townHallId)?.kind).toBe('townHall');
+  });
+
+  it('compte les ouvriers des bâtiments finis dans la population', () => {
+    const world = new World(7);
+
+    completeSite(world, world.townHallId);
+    expect(world.population().workers).toBe(0);
+
+    const spot = { tx: Math.floor(world.player.x / TILE_SIZE) + 2, ty: Math.floor(world.player.y / TILE_SIZE) + 2 };
+
+    for (let y = spot.ty - 1; y < spot.ty + 3; y += 1) {
+      for (let x = spot.tx - 1; x < spot.tx + 3; x += 1) world.resources.clear(x, y);
+    }
+    world.push({ type: 'placeBuilding', building: 'builderHouse', tx: spot.tx, ty: spot.ty });
+    world.tick();
+
+    const id = Math.max(...world.entities.keys());
+
+    // Un chantier n'emploie personne.
+    expect(world.population().workers).toBe(0);
+    completeSite(world, id);
+    expect(world.population().workers).toBe(BUILDINGS.builderHouse.workers);
   });
 
   it('achève la mairie quand Adam y a tout apporté', () => {

@@ -29,6 +29,13 @@ export const RECIPES = {
     inputs: {},
     outputs: { ironOre: 1 },
   },
+  growFood: {
+    label: 'Culture',
+    building: 'farm',
+    duration: 20 * 30,
+    inputs: {},
+    outputs: { food: 4 },
+  },
 } as const satisfies Record<string, RecipeProto>;
 
 export type RecipeId = keyof typeof RECIPES;

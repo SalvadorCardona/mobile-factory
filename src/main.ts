@@ -42,6 +42,7 @@ const HARVEST_COLORS: Record<ItemId, readonly number[]> = {
   stone: [PALETTE.rock, PALETTE.rockLight, PALETTE.rockDark],
   ironOre: [PALETTE.rock, PALETTE.iron, PALETTE.ironLight],
   coal: [PALETTE.rock, PALETTE.coal, PALETTE.coalLight],
+  food: [PALETTE.leaves, PALETTE.leavesLight, PALETTE.dirt],
 };
 
 /** Les gestes qui comptent comme une activation utilisateur pour l'audio. */
@@ -75,7 +76,7 @@ async function main(): Promise<void> {
   );
 
   const hud = new Hud(world);
-  const buildMenu = new BuildMenu(placement, MENU_BUILDING_IDS);
+  const buildMenu = new BuildMenu(placement, MENU_BUILDING_IDS, () => audio.play('open'));
   const panel = new BuildingPanel(world, () => audio.play('open'));
   const inspect = new Inspect(
     world,
@@ -88,13 +89,15 @@ async function main(): Promise<void> {
   mount.append(hud.root);
 
   // Ordre d'interrogation des doigts : l'inspection d'abord (elle ne
-  // revendique qu'un tap sur un bâtiment), le joystick ensuite (moitié
-  // gauche), le placement en dernier.
+  // revendique qu'un tap sur un bâtiment), le placement ensuite (il ne
+  // revendique rien tant qu'aucun bâtiment n'est armé — mais armé, il doit
+  // passer avant le joystick, sinon on ne peut pas construire sur la moitié
+  // gauche de l'écran), le joystick en dernier.
   const pointers = new PointerRouter(renderer.canvas);
 
   pointers.add(inspect);
-  pointers.add(joystick);
   pointers.add(placement);
+  pointers.add(joystick);
 
   wireAudio(world, audio, hud);
   wireParticles(world, renderer);
@@ -112,7 +115,7 @@ async function main(): Promise<void> {
       accumulator -= STEP_MS;
     }
 
-    renderer.draw(accumulator / STEP_MS, placement.ghost, joystick.state);
+    renderer.draw(accumulator / STEP_MS, placement.mode !== 'idle', placement.ghost, joystick.state);
     hud.update(ticker.FPS, renderer.bakedChunks);
     buildMenu.refresh();
     panel.update();
@@ -161,6 +164,7 @@ function wireAudio(world: World, audio: AudioEngine, hud: Hud): void {
 
   world.events.on('resourceHarvested', ({ item }) => audio.play(item === 'wood' ? 'chop' : 'rock'));
   world.events.on('siteDelivered', () => audio.play('deliver'));
+  world.events.on('siteReady', () => audio.play('open'));
   world.events.on('buildingCompleted', () => audio.play('build'));
   world.events.on('arrowShot', () => audio.play('arrow'));
   world.events.on('mutantHit', () => audio.play('hit'));

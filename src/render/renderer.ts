@@ -100,7 +100,7 @@ export class GameRenderer {
     return this.camera.screenToWorld(x, y);
   }
 
-  public draw(alpha: number, ghost: GhostState | null, joystick: JoystickState): void {
+  public draw(alpha: number, building: boolean, ghost: GhostState | null, joystick: JoystickState): void {
     const { player } = this.world;
 
     this.camera.resize(this.app.screen.width, this.app.screen.height);
@@ -118,7 +118,7 @@ export class GameRenderer {
     this.chunkLayer.update(this.world, this.camera);
     this.entityLayer.update(alpha, this.app.ticker);
     this.particles.update(this.app.ticker.deltaMS);
-    this.ghostLayer.update(ghost);
+    this.ghostLayer.update(building, ghost);
 
     this.joystickBase.visible = joystick.active;
     this.joystickKnob.visible = joystick.active;

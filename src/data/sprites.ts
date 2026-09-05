@@ -215,6 +215,36 @@ export const SPRITES = {
       'window with a pink blanket hanging beside the door. 32x32 pixels.',
   },
 
+  builderHouse: {
+    file: null,
+    frameWidth: 32,
+    frameHeight: 32,
+    anchorX: 0,
+    anchorY: 0,
+    animations: { idle: STILL },
+    prompt:
+      'A survivor colony bunkhouse on a 2x2 tile base: a long low dormitory ' +
+      'of brick and salvaged planks, a flat sheet-metal roof, two small ' +
+      'windows, tools leaning against the wall by the door. 32x32 pixels.',
+  },
+
+  farm: {
+    file: null,
+    frameWidth: 32,
+    frameHeight: 32,
+    anchorX: 0,
+    anchorY: 0,
+    animations: {
+      idle: STILL,
+      grow: { row: 1, frames: 2, fps: 1, loop: true },
+    },
+    prompt:
+      'A small post-apocalyptic farm plot on a 2x2 tile base: dark tilled ' +
+      'soil in rows, a few green sprouts, a tiny plank tool shed with a ' +
+      'sheet-metal roof in one corner. Row 1: sprouts. Row 2: 2 frames of the ' +
+      'plants growing taller. 32x32 pixels per frame.',
+  },
+
   watchtower: {
     file: null,
     frameWidth: 32,
