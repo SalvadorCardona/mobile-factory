@@ -10,7 +10,7 @@
  * - `hud`, en pixels écran, où vit le joystick.
  */
 
-import { Application, Container, Sprite } from 'pixi.js';
+import { Application, Container, Sprite, TextureSource } from 'pixi.js';
 import type { JoystickState } from '../input/joystick.ts';
 import type { GhostState } from '../input/placement.ts';
 import type { World } from '../sim/world.ts';
@@ -19,6 +19,7 @@ import { Camera } from './camera.ts';
 import { ChunkLayer } from './chunkLayer.ts';
 import { EntityLayer } from './entityLayer.ts';
 import { GhostLayer } from './ghostLayer.ts';
+import { SpriteLibrary } from './spriteLibrary.ts';
 
 export class GameRenderer {
   public readonly camera = new Camera();
@@ -30,17 +31,19 @@ export class GameRenderer {
   private readonly ghostLayer: GhostLayer;
   private readonly joystickBase: Sprite;
   private readonly joystickKnob: Sprite;
+  private readonly library: SpriteLibrary;
 
   public readonly app: Application;
 
   private readonly world: World;
 
-  private constructor(app: Application, world: World, atlas: Atlas) {
+  private constructor(app: Application, world: World, atlas: Atlas, library: SpriteLibrary) {
     this.app = app;
     this.world = world;
-    this.chunkLayer = new ChunkLayer(app.renderer);
-    this.entityLayer = new EntityLayer(world, atlas);
-    this.ghostLayer = new GhostLayer(world, atlas);
+    this.library = library;
+    this.chunkLayer = new ChunkLayer(app.renderer, library);
+    this.entityLayer = new EntityLayer(world, library);
+    this.ghostLayer = new GhostLayer(world, library);
 
     this.worldContainer.addChild(
       this.chunkLayer.container,
@@ -61,13 +64,16 @@ export class GameRenderer {
     this.camera.centerOn(world.player.x, world.player.y);
   }
 
-  public static async create(world: World, mount: HTMLElement): Promise<GameRenderer> {
+  public static async create(world: World, mount: HTMLElement, baseUrl: string): Promise<GameRenderer> {
+    // Pixel art : aucune texture n'est jamais lissée. Réglé avant la moindre
+    // création de texture, RenderTextures des chunks comprises.
+    TextureSource.defaultOptions.scaleMode = 'nearest';
+
     const app = new Application();
 
     await app.init({
       resizeTo: mount,
       background: 0x11161d,
-      // Pixel art à venir : pas d'antialias, et la résolution suit l'écran.
       antialias: false,
       autoDensity: true,
       resolution: window.devicePixelRatio,
@@ -78,7 +84,9 @@ export class GameRenderer {
 
     mount.append(app.canvas);
 
-    return new GameRenderer(app, world, createAtlas(app.renderer));
+    const library = await SpriteLibrary.load(app.renderer, baseUrl);
+
+    return new GameRenderer(app, world, createAtlas(app.renderer), library);
   }
 
   public get canvas(): HTMLCanvasElement {
@@ -100,11 +108,12 @@ export class GameRenderer {
       player.prevY + (player.y - player.prevY) * alpha,
     );
 
-    this.worldContainer.position.set(this.camera.offsetX(), this.camera.offsetY());
+    // Décalage arrondi au pixel : une caméra sub-pixel fait vibrer le pixel art.
+    this.worldContainer.position.set(Math.round(this.camera.offsetX()), Math.round(this.camera.offsetY()));
     this.worldContainer.scale.set(this.camera.zoom);
 
     this.chunkLayer.update(this.world, this.camera);
-    this.entityLayer.update(alpha);
+    this.entityLayer.update(alpha, this.app.ticker);
     this.ghostLayer.update(ghost);
 
     this.joystickBase.visible = joystick.active;
@@ -125,6 +134,7 @@ export class GameRenderer {
     this.chunkLayer.destroy();
     this.entityLayer.destroy();
     this.ghostLayer.destroy();
+    this.library.destroy();
     this.app.destroy(true, { children: true });
   }
 }

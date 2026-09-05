@@ -6,12 +6,16 @@
  * fantôme posé, et reste grisé tant que l'emplacement est refusé : le joueur
  * voit pourquoi ça ne marche pas avant d'appuyer, pas après.
  *
- * `unlocked` est pour l'instant la liste complète. Quand la recherche
- * existera, elle viendra de `unlockedBuildings` — le menu filtrera sur une
- * donnée, sans une ligne de logique en plus.
+ * Chaque bouton porte le coût du bâtiment. Il ne se grise pas quand le sac
+ * est vide : poser un chantier ne coûte rien, c'est le remplir qui coûte.
+ *
+ * `unlocked` est pour l'instant la liste complète des bâtiments du menu.
+ * Quand la recherche existera, elle viendra de `unlockedBuildings` — le menu
+ * filtrera sur une donnée, sans une ligne de logique en plus.
  */
 
 import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
+import { ITEMS, type ItemId } from '../data/items.ts';
 import type { Placement } from '../input/placement.ts';
 
 export class BuildMenu {
@@ -34,7 +38,12 @@ export class BuildMenu {
     this.cancelButton = button('Annuler', () => this.placement.cancel());
 
     for (const id of unlocked) {
-      const element = button(BUILDINGS[id].label, () => this.placement.select(id));
+      const proto = BUILDINGS[id];
+      const element = button(proto.label, () => this.placement.select(id));
+      const cost = document.createElement('small');
+
+      cost.textContent = costLabel(proto.cost);
+      element.append(cost);
 
       this.buttons.set(id, element);
       this.root.append(element);
@@ -62,6 +71,14 @@ export class BuildMenu {
   public destroy(): void {
     this.root.remove();
   }
+}
+
+function costLabel(cost: Partial<Record<ItemId, number>>): string {
+  const parts = (Object.entries(cost) as [ItemId, number][]).map(
+    ([item, amount]) => `${amount} ${ITEMS[item].label.toLowerCase()}`,
+  );
+
+  return parts.length ? parts.join(' · ') : 'gratuit';
 }
 
 function button(label: string, onTap: () => void): HTMLButtonElement {

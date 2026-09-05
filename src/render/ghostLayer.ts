@@ -16,8 +16,8 @@ import { TILE_SIZE } from '../core/grid.ts';
 import { BUILDINGS } from '../data/buildings.ts';
 import { BUILD_REACH_TILES } from '../sim/player.ts';
 import type { World } from '../sim/world.ts';
-import type { Atlas } from './atlas.ts';
 import type { GhostState } from '../input/placement.ts';
+import { SPRITE_SCALE, type SpriteLibrary } from './spriteLibrary.ts';
 
 const VALID = 0x7fc8a9;
 const INVALID = 0xe2725b;
@@ -27,17 +27,17 @@ export class GhostLayer {
 
   private readonly outline = new Graphics();
   private readonly reach = new Graphics();
-  private readonly preview: Sprite;
+  private readonly preview = new Sprite();
   private lastKey = '';
 
   private readonly world: World;
-  private readonly atlas: Atlas;
+  private readonly library: SpriteLibrary;
 
-  public constructor(world: World, atlas: Atlas) {
+  public constructor(world: World, library: SpriteLibrary) {
     this.world = world;
-    this.atlas = atlas;
-    this.preview = new Sprite(atlas.buildings.drill);
+    this.library = library;
     this.preview.alpha = 0.6;
+    this.preview.scale.set(SPRITE_SCALE);
 
     this.container.addChild(this.reach, this.preview, this.outline);
     this.container.visible = false;
@@ -64,7 +64,7 @@ export class GhostLayer {
     const proto = BUILDINGS[ghost.building];
     const color = rejection ? INVALID : VALID;
 
-    this.preview.texture = this.atlas.buildings[ghost.building];
+    this.preview.texture = this.library.still(proto.sprite, 'idle');
     this.preview.position.set(ghost.tx * TILE_SIZE, ghost.ty * TILE_SIZE);
     this.preview.tint = color;
 

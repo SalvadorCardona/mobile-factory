@@ -3,16 +3,21 @@
  *
  * TypeScript attrape déjà les ids inconnus. Ce qu'il n'attrape pas, ce sont les
  * incohérences entre tables : une recette dont le bâtiment n'existe plus, une
- * quantité nulle, un libellé dupliqué. Tout ça se voit ici, au chargement,
+ * quantité nulle, un libellé dupliqué, une planche de sprites dont le
+ * placeholder n'a pas la taille annoncée. Tout ça se voit ici, au chargement,
  * plutôt qu'en jeu trois semaines plus tard.
  *
  * Plus tard s'ajouteront les cycles dans l'arbre techno et les déblocages en
  * double, quand `technologies.ts` existera.
  */
 
+import { ART_PIXELS_PER_TILE, PALETTE } from './artDirection.ts';
 import { BUILDINGS } from './buildings.ts';
 import { ITEMS } from './items.ts';
+import { PIXEL_MAPS } from './pixelmaps.ts';
 import { RECIPES } from './recipes.ts';
+import { RESOURCES } from './resources.ts';
+import { SPRITES, type AnimationProto } from './sprites.ts';
 
 export function validatePrototypes(): string[] {
   const errors: string[] = [];
@@ -36,6 +41,20 @@ export function validatePrototypes(): string[] {
       }
       if (amount <= 0) {
         errors.push(`BUILDINGS.${id} : coût nul ou négatif en « ${itemId} »`);
+      }
+    }
+    if (!(building.sprite in SPRITES)) {
+      errors.push(`BUILDINGS.${id} : planche inconnue « ${building.sprite} »`);
+    } else {
+      const sprite = SPRITES[building.sprite];
+      const expectedW = building.width * ART_PIXELS_PER_TILE;
+      const expectedH = building.height * ART_PIXELS_PER_TILE;
+
+      if (sprite.frameWidth !== expectedW || sprite.frameHeight !== expectedH) {
+        errors.push(
+          `BUILDINGS.${id} : la planche « ${building.sprite} » fait ` +
+            `${sprite.frameWidth}×${sprite.frameHeight}, l'emprise demande ${expectedW}×${expectedH}`,
+        );
       }
     }
   }
@@ -70,6 +89,70 @@ export function validatePrototypes(): string[] {
   for (const [id, building] of Object.entries(BUILDINGS)) {
     if (building.kind === 'drill' && !buildingsWithRecipe.has(id)) {
       errors.push(`BUILDINGS.${id} : aucun bâtiment producteur sans recette associée`);
+    }
+  }
+
+  for (const [id, resource] of Object.entries(RESOURCES)) {
+    if (!(resource.item in ITEMS)) {
+      errors.push(`RESOURCES.${id} : objet inconnu « ${resource.item} »`);
+    }
+    if (resource.amount <= 0 || resource.harvestTicks <= 0) {
+      errors.push(`RESOURCES.${id} : quantité ou cadence nulle`);
+    }
+    if (!(resource.sprite in SPRITES)) {
+      errors.push(`RESOURCES.${id} : planche inconnue « ${resource.sprite} »`);
+    } else if (!('full' in SPRITES[resource.sprite].animations)) {
+      errors.push(`RESOURCES.${id} : la planche « ${resource.sprite} » n'a pas d'animation « full »`);
+    }
+  }
+
+  for (const [id, sprite] of Object.entries(SPRITES)) {
+    const map = PIXEL_MAPS[id as keyof typeof PIXEL_MAPS];
+
+    const animations = sprite.animations as Record<string, AnimationProto>;
+
+    for (const [name, animation] of Object.entries(animations)) {
+      if (animation.frames <= 0 || animation.fps <= 0) {
+        errors.push(`SPRITES.${id}.${name} : frames ou fps nul`);
+      }
+
+      const frames = map.animations[name];
+
+      if (!frames) {
+        errors.push(`PIXEL_MAPS.${id} : animation « ${name} » manquante`);
+        continue;
+      }
+      if (frames.length !== animation.frames) {
+        errors.push(
+          `PIXEL_MAPS.${id}.${name} : ${frames.length} image(s), la planche en annonce ${animation.frames}`,
+        );
+      }
+      for (const [index, rows] of frames.entries()) {
+        if (rows.length !== sprite.frameHeight) {
+          errors.push(`PIXEL_MAPS.${id}.${name}[${index}] : ${rows.length} lignes au lieu de ${sprite.frameHeight}`);
+        }
+        for (const [y, row] of rows.entries()) {
+          if (row.length !== sprite.frameWidth) {
+            errors.push(
+              `PIXEL_MAPS.${id}.${name}[${index}] ligne ${y} : ${row.length} pixels au lieu de ${sprite.frameWidth}`,
+            );
+          }
+          for (const char of row) {
+            if (char === '.') continue;
+
+            const key = map.palette[char];
+
+            if (key === undefined) {
+              errors.push(`PIXEL_MAPS.${id}.${name}[${index}] : caractère « ${char} » hors palette`);
+              break;
+            }
+            if (!(key in PALETTE)) {
+              errors.push(`PIXEL_MAPS.${id} : couleur « ${key} » inconnue de la direction artistique`);
+              break;
+            }
+          }
+        }
+      }
     }
   }
 

@@ -8,7 +8,7 @@
 
 import './style.css';
 import { assertPrototypes } from './data/validate.ts';
-import { BUILDING_IDS } from './data/buildings.ts';
+import { MENU_BUILDING_IDS } from './data/buildings.ts';
 import { Joystick } from './input/joystick.ts';
 import { Placement } from './input/placement.ts';
 import { PointerRouter } from './input/pointer.ts';
@@ -40,7 +40,7 @@ async function main(): Promise<void> {
   if (!mount) throw new Error('#app introuvable');
 
   const world = new World(readSeed());
-  const renderer = await GameRenderer.create(world, mount);
+  const renderer = await GameRenderer.create(world, mount, import.meta.env.BASE_URL);
 
   const joystick = new Joystick(() => renderer.app.screen.width);
   const placement = new Placement(
@@ -50,7 +50,7 @@ async function main(): Promise<void> {
   );
 
   const hud = new Hud(world);
-  const buildMenu = new BuildMenu(placement, BUILDING_IDS);
+  const buildMenu = new BuildMenu(placement, MENU_BUILDING_IDS);
 
   hud.root.append(buildMenu.root);
   mount.append(hud.root);

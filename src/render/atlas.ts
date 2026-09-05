@@ -1,62 +1,34 @@
 /**
- * Atlas de substitution.
+ * Textures qui ne sont pas des sprites : le terrain et le joystick.
  *
- * Les assets définitifs seront générés (Nano Banana 2 pour le personnage,
- * Recraft V4 Styles pour les décors) puis empaquetés en un seul atlas. En
- * attendant, on fabrique les textures au lancement avec `generateTexture` :
- * elles sont créées une fois, réutilisées par tous les sprites, et Pixi batche
- * les draw calls parce qu'elles partagent la même source.
- *
- * Le jour où l'atlas existe, seul ce fichier change.
+ * Les sprites — personnage, ressources, bâtiments — passent par
+ * `spriteLibrary.ts`. Ici ne restent que les aplats de terrain, bakés dans
+ * les chunks, et les deux disques du joystick, dessinés en vectoriel parce
+ * qu'ils vivent en pixels écran, pas en pixels monde.
  */
 
 import { Graphics, type Renderer, type Texture } from 'pixi.js';
-import { TILE_SIZE } from '../core/grid.ts';
-import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
 import type { TerrainKind } from '../sim/terrain.ts';
 
-export const TERRAIN_COLORS: Record<TerrainKind, number> = {
-  water: 0x2f5d78,
-  sand: 0xc8b184,
-  grass: 0x4b7a45,
-  rock: 0x6d6f74,
+/**
+ * Deux teintes par terrain, choisies tuile par tuile depuis la seed : un
+ * aplat uni se lit comme un prototype, deux teintes se lisent comme du
+ * pixel art. Palette terne, poussiéreuse — c'est l'après.
+ */
+export const TERRAIN_COLORS: Record<TerrainKind, readonly [number, number]> = {
+  water: [0x2f5d78, 0x2a5570],
+  sand: [0xc4ad7f, 0xb9a274],
+  grass: [0x5f7f3f, 0x577639],
+  rock: [0x6d6f74, 0x64666b],
 };
 
-/** Teinte du minerai peinte par-dessus le terrain, au bake du chunk. */
-export const ORE_COLOR = 0x8a5f3d;
-
 export interface Atlas {
-  buildings: Record<BuildingId, Texture>;
-  player: Texture;
   joystickBase: Texture;
   joystickKnob: Texture;
 }
 
 export function createAtlas(renderer: Renderer): Atlas {
-  const buildings = {} as Record<BuildingId, Texture>;
-
-  for (const [id, proto] of Object.entries(BUILDINGS) as [BuildingId, (typeof BUILDINGS)[BuildingId]][]) {
-    buildings[id] = bake(
-      renderer,
-      new Graphics()
-        .roundRect(1, 1, proto.width * TILE_SIZE - 2, proto.height * TILE_SIZE - 2, 6)
-        .fill(proto.tint)
-        .stroke({ width: 2, color: 0x2a1e13, alignment: 1 })
-        // Repère d'orientation, en attendant le vrai sprite.
-        .circle((proto.width * TILE_SIZE) / 2, (proto.height * TILE_SIZE) / 2, TILE_SIZE / 4)
-        .fill(0x2a1e13),
-    );
-  }
-
   return {
-    buildings,
-    player: bake(
-      renderer,
-      new Graphics()
-        .circle(TILE_SIZE / 2, TILE_SIZE / 2, TILE_SIZE / 2 - 2)
-        .fill(0xf2e8d5)
-        .stroke({ width: 2, color: 0x11161d, alignment: 1 }),
-    ),
     joystickBase: bake(
       renderer,
       new Graphics().circle(64, 64, 62).fill({ color: 0xffffff, alpha: 0.12 }).stroke({
@@ -74,7 +46,7 @@ export function createAtlas(renderer: Renderer): Atlas {
 
 /** Rend un `Graphics` une fois pour toutes et libère la géométrie vectorielle. */
 function bake(renderer: Renderer, graphics: Graphics): Texture {
-  const texture = renderer.generateTexture(graphics);
+  const texture = renderer.generateTexture({ target: graphics, antialias: true });
 
   graphics.destroy();
   return texture;
