@@ -1,9 +1,15 @@
 /**
- * Terrain : un chunk = un Sprite.
+ * Terrain et ressources de surface : un chunk = un Sprite.
  *
  * Levier de performance numéro un sur mobile. Les 1024 tuiles d'un chunk sont
  * dessinées **une fois** dans une RenderTexture, puis affichées comme un seul
- * Sprite. Sans ça, ce sont 1024 quads par chunk et par frame.
+ * Sprite. Sans ça, ce sont 1024 quads par chunk et par frame — et autant de
+ * sprites d'arbres en plus.
+ *
+ * Les arbres et rochers sont bakés avec le terrain : ils ne bougent pas, et
+ * ils sont des centaines par écran. Quand Adam en abîme un, la simulation
+ * marque le chunk sale et il est rebaké — deux fois par tuile au plus, à
+ * l'entame et à la disparition.
  *
  * Trois règles tenues ici :
  * - bake unique, rebake seulement si `chunk.dirty` ;
@@ -14,10 +20,13 @@
 
 import { Container, Graphics, RenderTexture, Sprite, type Renderer } from 'pixi.js';
 import { CHUNK_SIZE, CHUNK_TILES, TILE_SIZE, coordKey } from '../core/grid.ts';
-import { oreAt, terrainAt, type TerrainKind } from '../sim/terrain.ts';
+import { hash3 } from '../core/rng.ts';
+import { RESOURCES } from '../data/resources.ts';
+import { terrainAt, type TerrainKind } from '../sim/terrain.ts';
 import type { World } from '../sim/world.ts';
+import { TERRAIN_COLORS } from './atlas.ts';
 import type { Camera } from './camera.ts';
-import { ORE_COLOR, TERRAIN_COLORS } from './atlas.ts';
+import { SPRITE_SCALE, type SpriteLibrary } from './spriteLibrary.ts';
 
 /** Marge d'éviction, en chunks au-delà de la zone visible. */
 const KEEP_MARGIN = 2;
@@ -33,9 +42,11 @@ export class ChunkLayer {
   private readonly baked = new Map<string, BakedChunk>();
 
   private readonly renderer: Renderer;
+  private readonly library: SpriteLibrary;
 
-  public constructor(renderer: Renderer) {
+  public constructor(renderer: Renderer, library: SpriteLibrary) {
     this.renderer = renderer;
+    this.library = library;
   }
 
   /** Nombre de chunks actuellement dessinés — remonté au HUD de debug. */
@@ -68,7 +79,12 @@ export class ChunkLayer {
   }
 
   private bake(world: World, cx: number, cy: number): BakedChunk {
-    const texture = RenderTexture.create({ width: CHUNK_SIZE, height: CHUNK_SIZE });
+    const texture = RenderTexture.create({
+      width: CHUNK_SIZE,
+      height: CHUNK_SIZE,
+      resolution: 1,
+      scaleMode: 'nearest',
+    });
 
     this.renderInto(world, cx, cy, texture);
 
@@ -81,51 +97,57 @@ export class ChunkLayer {
   }
 
   /**
-   * Dessine le chunk dans sa RenderTexture, puis jette la géométrie vectorielle.
+   * Dessine le chunk dans sa RenderTexture, puis jette la géométrie.
    *
-   * Les rectangles sont regroupés par type de terrain et remplis en un seul
-   * `fill()` par type : quatre instructions de dessin au lieu de 1024. Le
-   * `Graphics` est détruit juste après — seule la texture survit, et c'est elle
-   * qu'on affiche.
+   * Les rectangles de terrain sont regroupés par couleur et remplis en un
+   * seul `fill()` par couleur : huit instructions de dessin au lieu de 1024.
+   * Les ressources sont des sprites temporaires par-dessus. Tout est détruit
+   * juste après — seule la texture survit, et c'est elle qu'on affiche.
    */
   private renderInto(world: World, cx: number, cy: number, target: RenderTexture): void {
+    const scene = new Container();
     const graphics = new Graphics();
-    const byKind = new Map<TerrainKind, number[]>();
-    const ore: number[] = [];
+    const byColor = new Map<number, number[]>();
     const baseTx = cx * CHUNK_TILES;
     const baseTy = cy * CHUNK_TILES;
+
+    scene.addChild(graphics);
 
     for (let ly = 0; ly < CHUNK_TILES; ly += 1) {
       for (let lx = 0; lx < CHUNK_TILES; lx += 1) {
         const tx = baseTx + lx;
         const ty = baseTy + ly;
-        const kind = terrainAt(world.seed, tx, ty);
-        let coords = byKind.get(kind);
+        const color = shadeOf(world.seed, tx, ty, terrainAt(world.seed, tx, ty));
+        let coords = byColor.get(color);
 
         if (!coords) {
           coords = [];
-          byKind.set(kind, coords);
+          byColor.set(color, coords);
         }
         coords.push(lx * TILE_SIZE, ly * TILE_SIZE);
 
-        if (oreAt(world.seed, tx, ty)) ore.push(lx * TILE_SIZE, ly * TILE_SIZE);
+        const resource = world.resources.at(tx, ty);
+
+        if (!resource) continue;
+
+        const stage = resource.stage === 'damaged' ? 'damaged' : 'full';
+        const sprite = new Sprite(this.library.still(RESOURCES[resource.id].sprite, stage));
+
+        sprite.position.set(lx * TILE_SIZE, ly * TILE_SIZE);
+        sprite.scale.set(SPRITE_SCALE);
+        scene.addChild(sprite);
       }
     }
 
-    for (const [kind, coords] of byKind) {
+    for (const [color, coords] of byColor) {
       for (let i = 0; i < coords.length; i += 2) {
         graphics.rect(coords[i]!, coords[i + 1]!, TILE_SIZE, TILE_SIZE);
       }
-      graphics.fill(TERRAIN_COLORS[kind]);
+      graphics.fill(color);
     }
 
-    for (let i = 0; i < ore.length; i += 2) {
-      graphics.circle(ore[i]! + TILE_SIZE / 2, ore[i + 1]! + TILE_SIZE / 2, TILE_SIZE / 3);
-    }
-    if (ore.length > 0) graphics.fill({ color: ORE_COLOR, alpha: 0.85 });
-
-    this.renderer.render({ target, container: graphics, clear: true });
-    graphics.destroy();
+    this.renderer.render({ target, container: scene, clear: true });
+    scene.destroy({ children: true });
   }
 
   private evict(bounds: { minCx: number; minCy: number; maxCx: number; maxCy: number }): void {
@@ -156,4 +178,11 @@ export class ChunkLayer {
     this.baked.clear();
     this.container.destroy();
   }
+}
+
+/** Une des deux teintes du terrain, tirée de la seed : le grain du pixel art. */
+function shadeOf(seed: number, tx: number, ty: number, kind: TerrainKind): number {
+  const pair = TERRAIN_COLORS[kind];
+
+  return hash3(seed ^ 0x6a09e667, tx, ty) % 3 === 0 ? pair[1] : pair[0];
 }

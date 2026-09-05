@@ -12,8 +12,8 @@ import type { Store } from './store.ts';
 
 export type EntityId = number;
 
-export interface Drill {
-  kind: 'drill';
+/** Ce que tout bâtiment posé partage : une identité et une emprise. */
+interface Placed {
   id: EntityId;
   proto: BuildingId;
   /** Tuile d'origine (coin haut-gauche de l'emprise). */
@@ -21,6 +21,21 @@ export interface Drill {
   ty: number;
   width: number;
   height: number;
+}
+
+/**
+ * Un chantier : l'emprise est réservée, le bâtiment n'existe pas encore.
+ * Le joueur y apporte le coût du prototype en le heurtant ; au dernier
+ * objet livré, le chantier devient le bâtiment, sous le même id.
+ */
+export interface Site extends Placed {
+  kind: 'site';
+  /** Ce qui a déjà été livré, par objet. */
+  delivered: Partial<Record<ItemId, number>>;
+}
+
+export interface Drill extends Placed {
+  kind: 'drill';
   /** Coffre interne. */
   store: Store;
   /** Objet extrait par le gisement sous la foreuse, `null` si elle est posée à sec. */
@@ -29,13 +44,35 @@ export interface Drill {
   blocked: boolean;
 }
 
-export type Entity = Drill;
+/** La mairie : le premier toit de la colonie, et son entrepôt. */
+export interface TownHall extends Placed {
+  kind: 'townHall';
+  store: Store;
+}
+
+export type Entity = Site | Drill | TownHall;
+
+export type Building = Exclude<Entity, Site>;
+
+export type Facing = 'down' | 'up' | 'left' | 'right';
 
 export interface Player {
-  /** Position en pixels monde, au tick courant. */
+  /** Position en pixels monde, au tick courant — le centre de la boîte de collision. */
   x: number;
   y: number;
   /** Position au tick précédent — le rendu interpole entre les deux. */
   prevX: number;
   prevY: number;
+  /** Direction du regard, conservée à l'arrêt : le sprite ne se retourne pas tout seul. */
+  facing: Facing;
+  /** Vrai si le joueur a effectivement bougé ce tick. Pilote l'animation de marche. */
+  moving: boolean;
+  /** Le sac à dos. */
+  inventory: Store;
+}
+
+/** La tuile contre laquelle le joueur pousse ce tick, s'il y en a une. */
+export interface Contact {
+  tx: number;
+  ty: number;
 }

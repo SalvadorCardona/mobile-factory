@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { oreAt, terrainAt } from './terrain.ts';
+import { oreAt, resourceAt, terrainAt } from './terrain.ts';
 
 describe('terrain', () => {
   /*
@@ -67,5 +67,65 @@ describe('terrain', () => {
     }
 
     expect(found.size).toBeGreaterThan(0);
+  });
+});
+
+describe('ressources de surface', () => {
+  it('sont déterministes pour une seed', () => {
+    for (let tx = -60; tx < 60; tx += 5) {
+      for (let ty = -60; ty < 60; ty += 5) {
+        expect(resourceAt(1234, tx, ty)).toBe(resourceAt(1234, tx, ty));
+      }
+    }
+  });
+
+  it('ne poussent jamais dans l’eau', () => {
+    for (let tx = -200; tx < 200; tx += 1) {
+      for (let ty = -200; ty < 200; ty += 11) {
+        if (terrainAt(7, tx, ty) === 'water') {
+          expect(resourceAt(7, tx, ty)).toBeNull();
+        }
+      }
+    }
+  });
+
+  it('donnent des arbres sur l’herbe et des rochers sur les filons', () => {
+    const kinds = new Set<string>();
+
+    for (let tx = -150; tx < 150; tx += 2) {
+      for (let ty = -150; ty < 150; ty += 2) {
+        const id = resourceAt(99, tx, ty);
+
+        if (!id) continue;
+
+        kinds.add(id);
+
+        if (id === 'tree') {
+          expect(terrainAt(99, tx, ty)).toBe('grass');
+          expect(oreAt(99, tx, ty)).toBeNull();
+        } else {
+          expect(oreAt(99, tx, ty)).not.toBeNull();
+        }
+      }
+    }
+
+    expect(kinds.has('tree')).toBe(true);
+    expect(kinds.size).toBeGreaterThan(2);
+  });
+
+  it('laissent des clairières : une forêt n’est pas un mur', () => {
+    let trees = 0;
+    let grass = 0;
+
+    for (let tx = -150; tx < 150; tx += 1) {
+      for (let ty = -150; ty < 150; ty += 3) {
+        if (terrainAt(5, tx, ty) !== 'grass') continue;
+        grass += 1;
+        if (resourceAt(5, tx, ty) === 'tree') trees += 1;
+      }
+    }
+
+    expect(trees / grass).toBeGreaterThan(0.05);
+    expect(trees / grass).toBeLessThan(0.5);
   });
 });

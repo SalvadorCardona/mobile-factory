@@ -13,11 +13,18 @@ import type { BuildingId } from '../data/buildings.ts';
 export type Command =
   /** Axe analogique du joystick, dans [-1, 1]. Remplace la valeur précédente. */
   | { type: 'setMoveAxis'; x: number; y: number }
-  /** Confirmation de construction, après l'aperçu fantôme. */
+  /** Confirmation de construction, après l'aperçu fantôme. Ouvre un chantier. */
   | { type: 'placeBuilding'; building: BuildingId; tx: number; ty: number };
 
 /** Motif de refus d'un placement — remonté à l'UI par un événement. */
-export type PlacementRejection = 'occupied' | 'terrain' | 'outOfReach';
+export type PlacementRejection =
+  | 'occupied'
+  | 'terrain'
+  | 'outOfReach'
+  /** Un arbre ou un rocher encombre l'emprise : il faut le récolter d'abord. */
+  | 'resource'
+  /** Le joueur est dans l'emprise : un bâtiment est solide, il y resterait coincé. */
+  | 'onPlayer';
 
 export interface CommandLogEntry {
   tick: number;
