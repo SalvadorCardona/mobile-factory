@@ -28,8 +28,9 @@ Le pitch est dans `src/data/lore.ts` et fait foi :
 > mutants radioactifs qui rôdent au-delà de la clairière.
 
 Personnages : **Adam** (le héros, jouable), **Ève** (à venir), les **mutants
-radioactifs** (à venir). Leur description physique est dans `lore.ts`, et
-c'est de là que partent les prompts.
+radioactifs** (en jeu, par vagues), les **enfants** (nés à la nurserie). Leur
+description physique est dans `lore.ts`, et c'est de là que partent les
+prompts.
 
 ## Règles techniques
 
@@ -43,10 +44,10 @@ c'est de là que partent les prompts.
 | Fond | transparent | Les sprites se posent sur le terrain baké |
 | Anti-aliasing, flou, dégradés, texte | interdits | Ce n'est plus du pixel art |
 
-Un personnage tient dans 16 × 24 px, ancre aux pieds (0.5, 0.8). Un
-bâtiment occupe exactement son emprise : 32 × 32 px pour 2 × 2 tuiles,
-48 × 48 px pour 3 × 3. Une ressource de surface tient dans sa tuile de
-16 × 16 px.
+Un personnage adulte — Adam, un mutant — tient dans 16 × 24 px, ancre aux
+pieds (0.5, 0.8) ; un enfant dans 16 × 16 px. Un bâtiment occupe exactement
+son emprise : 32 × 32 px pour 2 × 2 tuiles, 48 × 48 px pour 3 × 3. Une
+ressource de surface et une flèche tiennent dans une tuile de 16 × 16 px.
 
 ## Palette
 

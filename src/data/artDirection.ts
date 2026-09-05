@@ -89,6 +89,14 @@ export const PALETTE = {
   dirtDark: 0x6a4f34,
 
   radioactive: 0x9ef01a,
+  /* Mutants : peau grise-verdâtre et haillons. */
+  mutantSkin: 0x8a9a7a,
+  mutantSkinShadow: 0x5f6e54,
+  rags: 0x6a5a4a,
+  ragsShadow: 0x463b30,
+  /* Tissus de la nurserie. */
+  blanket: 0xc46a7a,
+  blanketLight: 0xe09aa6,
 } as const;
 
 export type PaletteKey = keyof typeof PALETTE;

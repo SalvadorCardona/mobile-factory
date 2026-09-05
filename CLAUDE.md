@@ -19,6 +19,12 @@ choses : un arbre ou un rocher heurté se récolte (bois, fer, charbon,
 pierre) ; un chantier heurté reçoit ce qu'il attend. Les ressources et les
 bâtiments sont solides, on ne les traverse pas.
 
+**Menace** — dès que la mairie est debout, des **mutants** arrivent par
+vagues (`src/data/enemies.ts`) et marchent droit sur elle ; ils traversent
+tout sauf le bâti, qu'ils cassent. L'arc d'Adam et la tour de guet
+(`src/data/weapons.ts`) tirent seuls. La mairie à zéro = partie perdue.
+La **nurserie** fait naître un enfant toutes les dix minutes.
+
 ## Direction artistique
 
 **Pixel art heroic fantasy 16 bits, sujet post-apocalyptique.**
@@ -78,12 +84,21 @@ référencé sans être passé par ces étapes.
 - Les ressources de surface sont bakées dans la RenderTexture du chunk
   (`chunkLayer.ts`) et rebakées quand la simulation salit le chunk.
 
+## Son
+
+Tout est synthétisé en Web Audio (`src/audio/`) : pas de fichier audio dans
+le dépôt. Un nouvel effet = une entrée dans `SOUNDS` (`synth.ts`) et une
+ligne dans `wireAudio()` (`main.ts`), qui est la seule table événement → son.
+Rien ne joue avant un geste du joueur.
+
 ## Règles d'architecture
 
 - **`sim/` et `data/` n'importent jamais `pixi.js`, `render/`, `ui/` ni le
   DOM.** Appliqué par ESLint. Les tests tournent headless en Node.
 - L'UI ne modifie jamais l'état : elle pousse une commande (`sim/commands.ts`),
-  le tick la consomme. Seed + journal de commandes = partie rejouable.
+  le tick la consomme. Seed + journal de commandes = partie rejouable. Le
+  hasard des vagues et des enfants vient du PRNG du monde, jamais de
+  `Math.random()` côté `sim/`.
 - La carte n'est jamais stockée : terrain, filons et ressources de surface
   sont régénérés depuis la seed (`sim/terrain.ts`). Seules les modifications
   du joueur (`sim/resources.ts`, entités) sont de l'état.

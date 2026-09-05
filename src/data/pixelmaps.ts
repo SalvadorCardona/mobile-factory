@@ -42,6 +42,10 @@ const ADAM_PALETTE: PixelPalette = {
   p: 'pants',
   P: 'pantsShadow',
   b: 'boots',
+  /* La hache de main : manche en bois, fer clair. */
+  w: 'beam',
+  m: 'metal',
+  M: 'metalLight',
 };
 
 const HEAD_DOWN = [
@@ -165,6 +169,321 @@ const ADAM_UP_B = frame(HEAD_UP, TORSO_FRONT, mirror(LEGS_STEP));
 const ADAM_SIDE_STAND = frame(HEAD_SIDE, TORSO_SIDE, LEGS_SIDE_STAND);
 const ADAM_SIDE_A = frame(HEAD_SIDE, TORSO_SIDE, LEGS_SIDE_APART);
 const ADAM_SIDE_B = frame(HEAD_SIDE, TORSO_SIDE, LEGS_SIDE_CROSS);
+
+/*
+ * La coupe : deux images, hache levée puis abattue. Le bras armé sort du
+ * gabarit du corps, sur la droite ; il empiète sur les lignes de la tête,
+ * d'où des blocs tête + torse écrits d'un seul tenant.
+ */
+const CHOP_DOWN_RAISED = [
+  '......oooo......',
+  '.....ohhhho.....',
+  '....ohhhhhho.ooo',
+  '....ohhhhhhoomMo',
+  '....ossssssoomMo',
+  '....oseSSeso.ooo',
+  '....osssssso.ow.',
+  '.....oSSSSo..ow.',
+  '......oooo...oso',
+  '.....occcco..oso',
+  '....occcccco.oco',
+  '...oCccccccCoCo.',
+  '...ococccccco...',
+  '...ocoCccCco....',
+  '...osocccco.....',
+  '...osoCCCCo.....',
+  '....oPPPPPPo....',
+];
+
+const CHOP_DOWN_SWUNG = [
+  ...HEAD_DOWN,
+  '.....occcco.....',
+  '....occcccco....',
+  '...oCccccccCo...',
+  '...ococccccoco..',
+  '...ocoCccCcosoo.',
+  '...osoccccooswo.',
+  '...osoCCCCo.owoo',
+  '....oPPPPPPooMmo',
+];
+
+const CHOP_UP_RAISED = [
+  '......oooo......',
+  '.....ohhhho.....',
+  '....ohhhhhho.ooo',
+  '....ohhhhhhoomMo',
+  '....ohhhhhhoomMo',
+  '....ohhhhhho.ooo',
+  '....ohhhhhho.ow.',
+  '.....oSSSSo..ow.',
+  '......oooo...oso',
+  ...CHOP_DOWN_RAISED.slice(9),
+];
+
+const CHOP_UP_SWUNG = [
+  ...HEAD_UP,
+  '.....occcco.....',
+  '....occcccco....',
+  '...oCccccccCo...',
+  '...ococccccoco..',
+  '...ocoCccCcoso..',
+  '...osoccccooso..',
+  '...osoCCCCo.wo..',
+  '....oPPPPPPowo..',
+];
+
+const CHOP_SIDE_RAISED = [
+  '......oooo......',
+  '.....ohhhho.....',
+  '....ohhhhhho.ooo',
+  '....ohhhhhhoomMo',
+  '....ohhssso.omMo',
+  '....ohhsseo..ooo',
+  '....ohsssso..ow.',
+  '.....oSSSo...ow.',
+  '......ooo....oso',
+  '.....occcco..os.',
+  '.....occcCco.oo.',
+  '.....occcCcooo..',
+  '.....occoCco....',
+  '.....occoCco....',
+  '.....ossoCco....',
+  '.....oCCoCCo....',
+  '.....oPPPPPo....',
+];
+
+const CHOP_SIDE_SWUNG = [
+  ...HEAD_SIDE,
+  '.....occcco.....',
+  '.....occcCco....',
+  '.....occcCcoo...',
+  '.....occoCcoso..',
+  '.....occoCcosoo.',
+  '.....ossoCco.owo',
+  '.....oCCoCCo.oMo',
+  '.....oPPPPPo.oMo',
+];
+
+/** Jambes à l'arrêt, avec le fer de la hache qui descend jusqu'aux genoux. */
+const LEGS_STAND_AXE = ['....oppooppooMmo', '....oppooppo.ooo', ...LEGS_STAND.slice(2)];
+const LEGS_SIDE_STAND_AXE = ['.....oppppo..ooo', ...LEGS_SIDE_STAND.slice(1)];
+
+const ADAM_CHOP_DOWN_A = [...CHOP_DOWN_RAISED, ...LEGS_STAND];
+const ADAM_CHOP_DOWN_B = [...CHOP_DOWN_SWUNG, ...LEGS_STAND_AXE];
+const ADAM_CHOP_UP_A = [...CHOP_UP_RAISED, ...LEGS_STAND];
+const ADAM_CHOP_UP_B = [...CHOP_UP_SWUNG, ...LEGS_STAND];
+const ADAM_CHOP_SIDE_A = [...CHOP_SIDE_RAISED, ...LEGS_SIDE_STAND];
+const ADAM_CHOP_SIDE_B = [...CHOP_SIDE_SWUNG, ...LEGS_SIDE_STAND_AXE];
+
+/* ---------------------------------------------------------------- mutant */
+
+/**
+ * Le mutant partage le gabarit d'Adam (16 × 24, mêmes jambes) : même échelle,
+ * même ancre, et les cycles de marche sont réutilisés tels quels. Ce qui
+ * change est la palette — peau grise, haillons, pieds nus — et la tête, où
+ * les yeux et les fissures luisent en vert acide.
+ */
+const MUTANT_PALETTE: PixelPalette = {
+  o: 'outline',
+  s: 'mutantSkin',
+  S: 'mutantSkinShadow',
+  g: 'radioactive',
+  c: 'rags',
+  C: 'ragsShadow',
+  p: 'rags',
+  P: 'ragsShadow',
+  b: 'mutantSkinShadow',
+};
+
+const MUTANT_HEAD_DOWN = [
+  '......oooo......',
+  '.....ossSso.....',
+  '....osssSsso....',
+  '....oSsgssSo....',
+  '....osssssso....',
+  '....osgSSgso....',
+  '....ossssgso....',
+  '.....oSSSSo.....',
+  '......oooo......',
+];
+
+const MUTANT_HEAD_UP = [
+  '......oooo......',
+  '.....ossSso.....',
+  '....osssssso....',
+  '....ossgssso....',
+  '....oSsssgso....',
+  '....osssssso....',
+  '....ossSssso....',
+  '.....oSSSSo.....',
+  '......oooo......',
+];
+
+const MUTANT_HEAD_SIDE = [
+  '......oooo......',
+  '.....ossSso.....',
+  '....osssssso....',
+  '....ossgssso....',
+  '....ossssso.....',
+  '....osssgso.....',
+  '....oSssso......',
+  '.....oSSSo......',
+  '......ooo.......',
+];
+
+const MUTANT_TORSO_FRONT = [
+  '.....occCco.....',
+  '....ocCcccCo....',
+  '...oCcgcccCCo...',
+  '...ococcCcoco...',
+  '...osoCcccoso...',
+  '...osocgccoso...',
+  '...oSoCCCCoSo...',
+  '....oPPPPPPo....',
+];
+
+const MUTANT_TORSO_SIDE = [
+  '.....occcco.....',
+  '.....occCCco....',
+  '.....occcCco....',
+  '.....ocgoCco....',
+  '.....occoCco....',
+  '.....ossoCco....',
+  '.....oCCoCCo....',
+  '.....oPPPPPo....',
+];
+
+const MUTANT_DOWN_STAND = frame(MUTANT_HEAD_DOWN, MUTANT_TORSO_FRONT, LEGS_STAND);
+const MUTANT_DOWN_A = frame(MUTANT_HEAD_DOWN, MUTANT_TORSO_FRONT, LEGS_STEP);
+const MUTANT_DOWN_B = frame(MUTANT_HEAD_DOWN, MUTANT_TORSO_FRONT, mirror(LEGS_STEP));
+const MUTANT_UP_STAND = frame(MUTANT_HEAD_UP, MUTANT_TORSO_FRONT, LEGS_STAND);
+const MUTANT_UP_A = frame(MUTANT_HEAD_UP, MUTANT_TORSO_FRONT, LEGS_STEP);
+const MUTANT_UP_B = frame(MUTANT_HEAD_UP, MUTANT_TORSO_FRONT, mirror(LEGS_STEP));
+const MUTANT_SIDE_STAND = frame(MUTANT_HEAD_SIDE, MUTANT_TORSO_SIDE, LEGS_SIDE_STAND);
+const MUTANT_SIDE_A = frame(MUTANT_HEAD_SIDE, MUTANT_TORSO_SIDE, LEGS_SIDE_APART);
+const MUTANT_SIDE_B = frame(MUTANT_HEAD_SIDE, MUTANT_TORSO_SIDE, LEGS_SIDE_CROSS);
+
+/* ---------------------------------------------------------------- enfant */
+
+const KID_PALETTE: PixelPalette = {
+  o: 'outline',
+  s: 'skin',
+  S: 'skinShadow',
+  e: 'outline',
+  h: 'hair',
+  c: 'cloth',
+  C: 'clothShadow',
+  p: 'pants',
+  P: 'pantsShadow',
+  b: 'boots',
+};
+
+const KID_HEAD_DOWN = [
+  '................',
+  '......oooo......',
+  '.....ohhhho.....',
+  '.....ohhhho.....',
+  '.....osssso.....',
+  '.....oseeso.....',
+  '......oSSo......',
+];
+
+const KID_HEAD_UP = [
+  '................',
+  '......oooo......',
+  '.....ohhhho.....',
+  '.....ohhhho.....',
+  '.....ohhhho.....',
+  '.....ohhhho.....',
+  '......oSSo......',
+];
+
+const KID_HEAD_SIDE = [
+  '................',
+  '......oooo......',
+  '.....ohhhho.....',
+  '.....ohhhho.....',
+  '.....ohhsso.....',
+  '.....ohseo......',
+  '......oSo.......',
+];
+
+const KID_BODY_FRONT = ['.....occcco.....', '....osccccso....', '.....oCCCCo.....'];
+const KID_BODY_SIDE = ['.....occcco.....', '.....occCco.....', '.....oCCCCo.....'];
+
+const KID_LEGS_STAND = [
+  '.....oppppo.....',
+  '.....opoopo.....',
+  '.....obo.obo....',
+  '.....ooo.ooo....',
+  '................',
+  '................',
+];
+
+const KID_LEGS_APART = [
+  '.....oppppo.....',
+  '....opo..opo....',
+  '....obo..obo....',
+  '....ooo..ooo....',
+  '................',
+  '................',
+];
+
+const KID_LEGS_SIDE_STAND = [
+  '.....oppppo.....',
+  '.....oppppo.....',
+  '.....obbbbo.....',
+  '.....oooooo.....',
+  '................',
+  '................',
+];
+
+const KID_LEGS_SIDE_APART = [
+  '.....oppppo.....',
+  '....oppoppo.....',
+  '...obbo.obbo....',
+  '...oooo.oooo....',
+  '................',
+  '................',
+];
+
+const KID_DOWN_STAND = frame(KID_HEAD_DOWN, KID_BODY_FRONT, KID_LEGS_STAND);
+const KID_DOWN_STEP = frame(KID_HEAD_DOWN, KID_BODY_FRONT, KID_LEGS_APART);
+const KID_UP_STAND = frame(KID_HEAD_UP, KID_BODY_FRONT, KID_LEGS_STAND);
+const KID_UP_STEP = frame(KID_HEAD_UP, KID_BODY_FRONT, KID_LEGS_APART);
+const KID_SIDE_STAND = frame(KID_HEAD_SIDE, KID_BODY_SIDE, KID_LEGS_SIDE_STAND);
+const KID_SIDE_STEP = frame(KID_HEAD_SIDE, KID_BODY_SIDE, KID_LEGS_SIDE_APART);
+
+/* ---------------------------------------------------------------- flèche */
+
+const ARROW_PALETTE: PixelPalette = {
+  o: 'outline',
+  w: 'beam',
+  M: 'metalLight',
+  f: 'plaster',
+};
+
+const ARROW_EMPTY = '.'.repeat(16);
+
+/** Pointée vers la droite ; `render/` la tourne dans le sens du vol. */
+const ARROW = [
+  ARROW_EMPTY,
+  ARROW_EMPTY,
+  ARROW_EMPTY,
+  ARROW_EMPTY,
+  ARROW_EMPTY,
+  ARROW_EMPTY,
+  '.f...........M..',
+  '.ffwwwwwwwwwwMMo',
+  '.f...........M..',
+  ARROW_EMPTY,
+  ARROW_EMPTY,
+  ARROW_EMPTY,
+  ARROW_EMPTY,
+  ARROW_EMPTY,
+  ARROW_EMPTY,
+  ARROW_EMPTY,
+];
 
 /* ------------------------------------------------------------ végétation */
 
@@ -350,6 +669,122 @@ const DRILL_WORK_B = DRILL_IDLE.map((row, index) =>
   index >= 17 && index <= 23 ? row.replace('oMo', 'odo') : row,
 );
 
+const NURSERY_PALETTE: PixelPalette = {
+  o: 'outline',
+  p: 'plaster',
+  P: 'plasterShadow',
+  r: 'roof',
+  R: 'roofDark',
+  w: 'beam',
+  W: 'trunkShadow',
+  m: 'metal',
+  M: 'metalLight',
+  k: 'blanket',
+  K: 'blanketLight',
+  a: 'accent',
+  n: 'night',
+  g: 'dirtDark',
+};
+
+/** Une ligne de mur de la nurserie : contour, 26 pixels d'intérieur, contour. */
+function hut(interior: string): string {
+  return `..o${interior}o..`;
+}
+
+const NU_EMPTY = '.'.repeat(32);
+const NU_WINDOW_FRAME = hut(`pp${'oooooo'}${'p'.repeat(10)}${'oooooo'}pp`);
+const NU_DOOR = (leaf: string): string => hut(`${'p'.repeat(10)}${leaf}${'p'.repeat(10)}`);
+
+const NURSERY = [
+  NU_EMPTY,
+  '..........oo....................',
+  '.........omMo...................',
+  '.........omMo...................',
+  '......oooooooooooooooooooo......',
+  '....oorrrrrrrrrrrrrrrrrrrroo....',
+  '..oorrrrrrrrrrrrrrrrrrrrrrrroo..',
+  '.orrrrrrrrrrrrrrrrrrrrrrrrrrrro.',
+  '.orrrrrrrmmmmrrrrrrrrrrrrrrrrro.',
+  '.oRRRRRRRmmmmRRRRRRRRRRRRRRRRRo.',
+  '.oRRRRRRRRRRRRRRRRRRRRRRRRRRRRo.',
+  '.oooooooooooooooooooooooooooooo.',
+  hut('w'.repeat(26)),
+  hut('W'.repeat(26)),
+  hut('p'.repeat(26)),
+  NU_WINDOW_FRAME,
+  hut(`pp${'oannao'}${'p'.repeat(10)}${'okKKko'}pp`),
+  hut(`pp${'oannao'}${'p'.repeat(10)}${'okkKko'}pp`),
+  hut(`pp${'oannao'}${'p'.repeat(10)}${'oKkkko'}pp`),
+  NU_WINDOW_FRAME,
+  hut('p'.repeat(26)),
+  hut('P'.repeat(26)),
+  NU_DOOR('oooooo'),
+  NU_DOOR('owwwwo'),
+  NU_DOOR('oWwwWo'),
+  NU_DOOR('oWawWo'),
+  NU_DOOR('oWwwWo'),
+  hut(`${'P'.repeat(10)}${'oWWWWo'}${'P'.repeat(10)}`),
+  hut('o'.repeat(26)),
+  hut('g'.repeat(26)),
+  NU_EMPTY,
+  NU_EMPTY,
+];
+
+const WATCHTOWER_PALETTE: PixelPalette = {
+  o: 'outline',
+  w: 'beam',
+  W: 'trunkShadow',
+  m: 'metal',
+  M: 'metalLight',
+  d: 'metalDark',
+  a: 'accent',
+  s: 'plaster',
+  g: 'dirtDark',
+};
+
+/** Une ligne de la tour : 4 pixels de marge, 24 d'intérieur, 4 de marge. */
+function tower(interior: string): string {
+  return `....${interior}....`;
+}
+
+const TW_POST = tower('.oWo......owwo......oWo.');
+const TW_POST_SHADOW = tower('.oWo......oWWo......oWo.');
+
+const WATCHTOWER = [
+  NU_EMPTY,
+  tower('.oooooooooooooooooooooo.'),
+  tower('oMMMMMMMMMMMMMMMMMMMMMMo'),
+  tower('ommmmmmmmmmmmmmmmmmmmmmo'),
+  tower('oddddddddddddddddddddddo'),
+  tower('oooooooooooooooooooooooo'),
+  tower('oWo..................oWo'),
+  tower('oWo...oaao....oso....oWo'),
+  tower('oooooooooooooooooooooooo'),
+  tower('owowowowowowowowowowowwo'),
+  tower('owowowowowowowowowowowwo'),
+  tower('oooooooooooooooooooooooo'),
+  tower('owwwwwwwwwwwwwwwwwwwwwwo'),
+  tower('oWWWWWWWWWWWWWWWWWWWWWWo'),
+  tower('oooooooooooooooooooooooo'),
+  TW_POST,
+  TW_POST_SHADOW,
+  TW_POST,
+  TW_POST_SHADOW,
+  TW_POST,
+  TW_POST_SHADOW,
+  TW_POST,
+  TW_POST_SHADOW,
+  TW_POST,
+  TW_POST_SHADOW,
+  TW_POST,
+  TW_POST_SHADOW,
+  tower('.ooo......oooo......ooo.'),
+  tower('gggggggggggggggggggggggg'),
+  NU_EMPTY,
+  NU_EMPTY,
+  NU_EMPTY,
+];
+
 const TOWN_HALL_PALETTE: PixelPalette = {
   o: 'outline',
   p: 'plaster',
@@ -448,7 +883,36 @@ export const PIXEL_MAPS: Record<SpriteId, PixelMap> = {
       walkUp: [ADAM_UP_STAND, ADAM_UP_A, ADAM_UP_STAND, ADAM_UP_B],
       idleSide: [ADAM_SIDE_STAND],
       walkSide: [ADAM_SIDE_STAND, ADAM_SIDE_A, ADAM_SIDE_STAND, ADAM_SIDE_B],
+      chopDown: [ADAM_CHOP_DOWN_A, ADAM_CHOP_DOWN_B],
+      chopUp: [ADAM_CHOP_UP_A, ADAM_CHOP_UP_B],
+      chopSide: [ADAM_CHOP_SIDE_A, ADAM_CHOP_SIDE_B],
     },
+  },
+  mutant: {
+    palette: MUTANT_PALETTE,
+    animations: {
+      idleDown: [MUTANT_DOWN_STAND],
+      walkDown: [MUTANT_DOWN_STAND, MUTANT_DOWN_A, MUTANT_DOWN_STAND, MUTANT_DOWN_B],
+      idleUp: [MUTANT_UP_STAND],
+      walkUp: [MUTANT_UP_STAND, MUTANT_UP_A, MUTANT_UP_STAND, MUTANT_UP_B],
+      idleSide: [MUTANT_SIDE_STAND],
+      walkSide: [MUTANT_SIDE_STAND, MUTANT_SIDE_A, MUTANT_SIDE_STAND, MUTANT_SIDE_B],
+    },
+  },
+  kid: {
+    palette: KID_PALETTE,
+    animations: {
+      idleDown: [KID_DOWN_STAND],
+      walkDown: [KID_DOWN_STEP, KID_DOWN_STAND],
+      idleUp: [KID_UP_STAND],
+      walkUp: [KID_UP_STEP, KID_UP_STAND],
+      idleSide: [KID_SIDE_STAND],
+      walkSide: [KID_SIDE_STEP, KID_SIDE_STAND],
+    },
+  },
+  arrow: {
+    palette: ARROW_PALETTE,
+    animations: { fly: [ARROW] },
   },
   tree: {
     palette: TREE_PALETTE,
@@ -473,6 +937,14 @@ export const PIXEL_MAPS: Record<SpriteId, PixelMap> = {
   drill: {
     palette: DRILL_PALETTE,
     animations: { idle: [DRILL_IDLE], work: [DRILL_WORK_A, DRILL_WORK_B] },
+  },
+  nursery: {
+    palette: NURSERY_PALETTE,
+    animations: { idle: [NURSERY] },
+  },
+  watchtower: {
+    palette: WATCHTOWER_PALETTE,
+    animations: { idle: [WATCHTOWER] },
   },
   townHall: {
     palette: TOWN_HALL_PALETTE,

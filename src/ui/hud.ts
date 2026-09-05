@@ -8,8 +8,9 @@
  * Le HUD **lit** le monde et s'abonne à ses événements. Il ne le modifie
  * jamais — c'est le rôle des commandes.
  *
- * Trois panneaux : l'objectif (le chantier de la mairie, puis rien), le sac
- * d'Adam, et les statistiques de debug. Les récoltes et les livraisons
+ * Quatre panneaux : l'objectif (le chantier de la mairie, puis sa santé et la
+ * vague en cours), le sac d'Adam, les statistiques de debug, et — si la
+ * mairie tombe — l'écran de défaite. Les récoltes et les livraisons
  * n'ouvrent pas de fenêtre : un mot qui flotte au-dessus du sac suffit.
  */
 
@@ -38,6 +39,8 @@ export class Hud {
   private readonly floats: HTMLElement;
   private readonly stats: HTMLElement;
   private readonly toast: HTMLElement;
+  private readonly defeat: HTMLElement;
+  public readonly audioButton: HTMLButtonElement;
   private toastTimer = 0;
   private lastBag = '';
   private lastObjective = '';
@@ -64,7 +67,30 @@ export class Hud {
     this.toast = document.createElement('div');
     this.toast.className = 'panel hud-toast';
 
-    this.root.append(this.objective, this.bag, this.floats, this.stats, this.toast);
+    this.audioButton = document.createElement('button');
+    this.audioButton.type = 'button';
+    this.audioButton.className = 'hud-audio';
+    this.audioButton.setAttribute('aria-label', 'Son');
+
+    this.defeat = document.createElement('div');
+    this.defeat.className = 'hud-defeat';
+    this.defeat.hidden = true;
+
+    const defeatPanel = document.createElement('div');
+    const defeatTitle = document.createElement('h2');
+    const defeatText = document.createElement('p');
+    const retry = document.createElement('button');
+
+    defeatPanel.className = 'panel';
+    defeatTitle.textContent = `La ${LORE.buildings.townHall.name.toLowerCase()} est tombée`;
+    defeatText.textContent = 'Les mutants ont eu raison du premier toit de la colonie.';
+    retry.type = 'button';
+    retry.textContent = 'Recommencer';
+    retry.addEventListener('click', () => window.location.reload());
+    defeatPanel.append(defeatTitle, defeatText, retry);
+    this.defeat.append(defeatPanel);
+
+    this.root.append(this.objective, this.bag, this.floats, this.stats, this.toast, this.audioButton, this.defeat);
 
     world.events.on('placementRejected', ({ reason }) => this.notify(REJECTION_LABELS[reason]));
     world.events.on('resourceHarvested', ({ item }) => this.float(`+1 ${ITEMS[item].label}`));
@@ -75,6 +101,20 @@ export class Hud {
 
       if (entity) this.notify(`${BUILDINGS[entity.proto].label} terminée`, true);
     });
+    world.events.on('waveStarted', ({ wave, count }) =>
+      this.notify(`Vague ${wave} — ${count} mutant${count > 1 ? 's' : ''} en approche !`),
+    );
+    world.events.on('buildingDestroyed', ({ proto }) => this.notify(`${BUILDINGS[proto].label} détruite`));
+    world.events.on('childBorn', () => this.notify('Un enfant est né !', true));
+    world.events.on('townHallDestroyed', () => {
+      this.defeat.hidden = false;
+    });
+  }
+
+  /** L'icône du bouton son suit l'état du moteur audio. */
+  public setMuted(muted: boolean): void {
+    this.audioButton.textContent = muted ? '🔇' : '🔊';
+    this.audioButton.dataset['muted'] = String(muted);
   }
 
   public notify(message: string, good = false): void {
@@ -108,7 +148,7 @@ export class Hud {
     const lines = [
       `tick ${this.world.tickCount}   ${fps.toFixed(0)} fps`,
       `chunk ${cx},${cy}   ${chunks} bakés   ${this.world.resources.size()} tuiles entamées`,
-      `${this.world.entities.size} bâtiment(s)   ${this.world.pendingWakes()} réveil(s)`,
+      `${this.world.entities.size} bâtiment(s)   ${this.world.mobiles.size} mobile(s)   ${this.world.pendingWakes()} réveil(s)`,
     ];
 
     for (const entity of this.world.entities.values()) {
@@ -138,8 +178,17 @@ export class Hud {
 
       text = `Construire la ${LORE.buildings.townHall.name} — ${parts.join(', ')}`;
       if (siteMissing(hall) === 0) text = `${LORE.buildings.townHall.name} terminée`;
+    } else if (hall) {
+      const health = `♥ ${hall.hp}/${BUILDINGS[hall.proto].hp}`;
+      const { children } = this.world.population();
+      const people = children > 0 ? ` · ${1 + children} habitants` : '';
+
+      text =
+        this.world.wave === 0
+          ? `${LORE.buildings.townHall.name} debout ${health}${people} — les mutants vont venir.`
+          : `${LORE.buildings.townHall.name} ${health}${people} — vague ${this.world.wave}`;
     } else {
-      text = `${LORE.buildings.townHall.name} debout. Explorez, récoltez, forez.`;
+      text = `La ${LORE.buildings.townHall.name.toLowerCase()} est tombée.`;
     }
 
     if (text === this.lastObjective) return;

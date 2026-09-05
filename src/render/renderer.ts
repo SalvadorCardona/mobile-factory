@@ -19,6 +19,7 @@ import { Camera } from './camera.ts';
 import { ChunkLayer } from './chunkLayer.ts';
 import { EntityLayer } from './entityLayer.ts';
 import { GhostLayer } from './ghostLayer.ts';
+import { ParticleLayer } from './particles.ts';
 import { SpriteLibrary } from './spriteLibrary.ts';
 
 export class GameRenderer {
@@ -29,6 +30,7 @@ export class GameRenderer {
   private readonly chunkLayer: ChunkLayer;
   private readonly entityLayer: EntityLayer;
   private readonly ghostLayer: GhostLayer;
+  public readonly particles = new ParticleLayer();
   private readonly joystickBase: Sprite;
   private readonly joystickKnob: Sprite;
   private readonly library: SpriteLibrary;
@@ -48,6 +50,7 @@ export class GameRenderer {
     this.worldContainer.addChild(
       this.chunkLayer.container,
       this.entityLayer.container,
+      this.particles.container,
       this.ghostLayer.container,
     );
 
@@ -114,6 +117,7 @@ export class GameRenderer {
 
     this.chunkLayer.update(this.world, this.camera);
     this.entityLayer.update(alpha, this.app.ticker);
+    this.particles.update(this.app.ticker.deltaMS);
     this.ghostLayer.update(ghost);
 
     this.joystickBase.visible = joystick.active;
@@ -134,6 +138,7 @@ export class GameRenderer {
     this.chunkLayer.destroy();
     this.entityLayer.destroy();
     this.ghostLayer.destroy();
+    this.particles.destroy();
     this.library.destroy();
     this.app.destroy(true, { children: true });
   }

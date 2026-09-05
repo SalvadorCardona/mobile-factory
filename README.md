@@ -19,10 +19,18 @@ jouable dans le navigateur, sur téléphone :
 - boucle à pas fixe 20 TPS, rendu interpolé à la fréquence de l'écran ;
 - joystick virtuel flottant à sortie analogique ;
 - une foreuse qui extrait le gisement sous elle dans son coffre interne ;
-- placement au tap en deux temps, avec aperçu fantôme.
+- placement au tap en deux temps, avec aperçu fantôme ;
+- récolte par contact : Adam heurte un arbre ou un rocher, le coupe à la
+  hache (animation, copeaux, son), et livre le chantier de la mairie ;
+- une fenêtre d'inspection au tap sur un chantier ou un bâtiment ;
+- une **nurserie** qui fait naître un enfant toutes les dix minutes, et une
+  **tour de guet** qui tire seule ;
+- des **mutants radioactifs** par vagues, dès que la mairie est debout : ils
+  marchent droit sur elle et cassent ce qui les bloque ; l'arc d'Adam tire
+  automatiquement sur le plus proche ; si la mairie tombe, la partie est perdue ;
+- sons et musique de fond synthétisés en Web Audio, sans fichier audio.
 
-Récolte de proximité, entrepôt, porteurs, assembleur, recherche et électricité
-viendront ensuite.
+Entrepôt, porteurs, assembleur, recherche et électricité viendront ensuite.
 
 ## Démarrer
 
@@ -96,11 +104,15 @@ La variante `typescript-eslint` est volontaire : elle voit aussi les
 ```
 src/
   core/     rng, grid, events          — briques sans dépendance
-  data/     items, recipes, buildings  — contenu pur, aucune logique
-  sim/      world, scheduler, chunk, terrain, store, player, commands
-  render/   renderer, camera, chunkLayer, entityLayer, ghostLayer, atlas
-  input/    joystick, pointer, placement
-  ui/       hud, buildMenu
+  data/     items, recipes, buildings, enemies, weapons, sprites, pixelmaps
+            — contenu pur, aucune logique
+  sim/      world, scheduler, chunk, terrain, store, player, motion,
+            enemies, combat, kids, commands
+  render/   renderer, camera, chunkLayer, entityLayer, mobileLayer,
+            particles, ghostLayer, spriteLibrary, atlas
+  input/    joystick, pointer, placement, inspect
+  ui/       hud, buildMenu, buildingPanel
+  audio/    engine, synth, music       — Web Audio, sons procéduraux
   main.ts   câblage uniquement
 ```
 
@@ -116,7 +128,18 @@ elle-même, et ne se replanifie pas du tout quand elle est bloquée — c'est
 l'événement qui libère sa sortie qui la réveille. Le scheduler est une roue de
 256 slots doublée d'une map pour les délais longs, en O(1). Dix mille machines
 coûtent quelques centaines de réveils par tick au lieu de 200 000 appels par
-seconde.
+seconde. Une tour de guet ne se replanifie que tant qu'il reste des mutants.
+
+**Les mobiles, eux, bougent à chaque tick.** Mutants, flèches et enfants sont
+peu nombreux ; c'est ce qui rend acceptable ce que le scheduler interdit aux
+bâtiments. Un mutant n'a pas de pathfinding : il traverse l'eau et les
+forêts, et casse le bâti qui le bloque. On ne le piège pas, on le tue.
+
+**Le son est synthétisé.** Aucun fichier audio : chaque effet est fabriqué
+avec des oscillateurs et du bruit filtré, la musique de fond est une boucle
+chiptune séquencée sur l'horloge audio. Rien ne joue avant un geste du
+joueur, comme les navigateurs mobiles l'exigent ; le bouton en haut à gauche
+coupe tout, et ce réglage survit au rechargement.
 
 **Le contenu est de la donnée.** Objets, recettes et bâtiments sont déclarés en
 `as const satisfies Record<string, XProto>` : TypeScript en dérive les unions

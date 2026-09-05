@@ -13,11 +13,13 @@
 
 import { ART_PIXELS_PER_TILE, PALETTE } from './artDirection.ts';
 import { BUILDINGS } from './buildings.ts';
+import { ENEMIES, WAVES } from './enemies.ts';
 import { ITEMS } from './items.ts';
 import { PIXEL_MAPS } from './pixelmaps.ts';
 import { RECIPES } from './recipes.ts';
 import { RESOURCES } from './resources.ts';
 import { SPRITES, type AnimationProto } from './sprites.ts';
+import { WEAPONS } from './weapons.ts';
 
 export function validatePrototypes(): string[] {
   const errors: string[] = [];
@@ -42,6 +44,15 @@ export function validatePrototypes(): string[] {
       if (amount <= 0) {
         errors.push(`BUILDINGS.${id} : coût nul ou négatif en « ${itemId} »`);
       }
+    }
+    if (building.hp <= 0) {
+      errors.push(`BUILDINGS.${id} : points de vie nuls`);
+    }
+    if (building.weapon !== null && !(building.weapon in WEAPONS)) {
+      errors.push(`BUILDINGS.${id} : arme inconnue « ${String(building.weapon)} »`);
+    }
+    if (building.kind === 'tower' && building.weapon === null) {
+      errors.push(`BUILDINGS.${id} : une tour sans arme ne sert à rien`);
     }
     if (!(building.sprite in SPRITES)) {
       errors.push(`BUILDINGS.${id} : planche inconnue « ${building.sprite} »`);
@@ -104,6 +115,34 @@ export function validatePrototypes(): string[] {
     } else if (!('full' in SPRITES[resource.sprite].animations)) {
       errors.push(`RESOURCES.${id} : la planche « ${resource.sprite} » n'a pas d'animation « full »`);
     }
+  }
+
+  for (const [id, enemy] of Object.entries(ENEMIES)) {
+    if (enemy.hp <= 0 || enemy.speed <= 0 || enemy.damage <= 0 || enemy.attackTicks <= 0) {
+      errors.push(`ENEMIES.${id} : points de vie, vitesse, dégâts ou cadence nuls`);
+    }
+    if (enemy.halfW <= 0 || enemy.halfH <= 0 || enemy.halfW * 2 > ART_PIXELS_PER_TILE * 2) {
+      errors.push(`ENEMIES.${id} : boîte de collision invalide`);
+    }
+    if (!(enemy.sprite in SPRITES)) {
+      errors.push(`ENEMIES.${id} : planche inconnue « ${enemy.sprite} »`);
+    } else {
+      for (const name of ['idleDown', 'walkDown', 'idleUp', 'walkUp', 'idleSide', 'walkSide']) {
+        if (!(name in SPRITES[enemy.sprite].animations)) {
+          errors.push(`ENEMIES.${id} : la planche « ${enemy.sprite} » n'a pas d'animation « ${name} »`);
+        }
+      }
+    }
+  }
+
+  for (const [id, weapon] of Object.entries(WEAPONS)) {
+    if (weapon.range <= 0 || weapon.cooldown <= 0 || weapon.damage <= 0 || weapon.arrowSpeed <= 0) {
+      errors.push(`WEAPONS.${id} : portée, cadence, dégâts ou vitesse nuls`);
+    }
+  }
+
+  if (WAVES.minDistance > WAVES.maxDistance || WAVES.firstDelay <= 0 || WAVES.interval <= 0) {
+    errors.push('WAVES : distances ou délais incohérents');
   }
 
   for (const [id, sprite] of Object.entries(SPRITES)) {
