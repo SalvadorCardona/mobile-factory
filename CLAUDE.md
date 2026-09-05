@@ -54,20 +54,34 @@ avec un script du dépôt. Procédure, à suivre telle quelle :
    unused cells stay fully transparent. » `sheetGrid(SPRITES[id])` donne R
    et C.
 3. Appeler l'outil de génération d'image du MCP OpenRouter avec ce prompt.
-   Modèle par défaut : `google/gemini-2.5-flash-image` (Nano Banana) ;
-   demander une image PNG à fond transparent.
-4. Enregistrer le résultat dans `public/sprites/<id>.png` et vérifier ses
-   dimensions : elles doivent valoir exactement la grille, ou un multiple
-   entier (auquel cas réduire en `nearest` d'abord). Une planche hors grille
-   donne des images décalées à l'écran : recadrer ou régénérer, jamais
-   référencer.
+   Modèle par défaut : `google/gemini-3.1-flash-image` (Nano Banana 2) :
+   à prompt égal, il respecte la structure lignes × colonnes et n'écrit pas
+   de texte, là où `gemini-2.5-flash-image` produit une grille 4×4 légendée.
+   Aucun ne rend un vrai fond transparent (damier peint) ni une grille au
+   pixel : prévoir `--key` et un recadrage.
+4. Enregistrer le résultat brut hors du dépôt (scratchpad), puis le
+   normaliser : `npm run sprite:normalize -- <id> <brut.png>`. L'outil
+   (`src/tools/`) réduit en `nearest` à la grille, binarise l'alpha,
+   quantifie chaque pixel à `PALETTE` et écrit `public/sprites/<id>.png`.
+   Il refuse une image dont les dimensions ne sont pas la grille ou un
+   multiple entier : recadrer (`--crop x,y,w,h`) ou régénérer, jamais
+   étirer. Un fond opaque s'incruste avec `--key RRGGBB`. Le rapport donne
+   la « dérive » moyenne : grande, le modèle n'a pas suivi la palette et la
+   planche mérite un regard sévère.
 5. Regarder l'image (l'ouvrir avec `Read`) : grille respectée, fond
    transparent, ancre cohérente avec `anchorX/anchorY`, palette proche de
    `PALETTE`, pas de texte ni d'anti-aliasing.
 6. Seulement alors, renseigner `SPRITES[id].file = '<id>.png'`. Rien d'autre
    ne change : `spriteLibrary` découpe la planche sur la grille déclarée.
-7. Lancer `npm run lint && npm run typecheck && npm test`, puis vérifier en
-   jeu avant de committer le PNG.
+7. Lancer `npm run lint && npm run typecheck && npm test` — le test
+   `sprites.test.ts` revérifie grille, alpha et palette de tout PNG
+   référencé — puis vérifier en jeu avant de committer le PNG.
+
+Cohérence d'une planche à l'autre : c'est la quantification qui garantit la
+palette, pas le prompt. Générer d'abord la planche de référence (Adam),
+l'itérer jusqu'à satisfaction, ajuster `STYLE_PROMPT` si besoin, et seulement
+ensuite les autres, dans la même session et avec le même modèle. Ce qui doit
+se ressembler (Adam, Ève, l'enfant) se génère de préférence dans un même lot.
 
 Jamais de style improvisé, jamais d'asset non vérifié, jamais de PNG
 référencé sans être passé par ces étapes.

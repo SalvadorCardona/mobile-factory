@@ -19,29 +19,6 @@ export const ART_PIXELS_PER_TILE = 16;
 export const ART_DIRECTION_NAME = 'Pixel art heroic fantasy, univers post-apocalyptique';
 
 /**
- * Préfixe commun à tous les prompts de génération.
- *
- * Rédigé en anglais : les modèles d'image suivent nettement mieux les
- * consignes techniques dans cette langue. Le sujet de chaque sprite vient de
- * `SPRITES[id].prompt` et s'y ajoute.
- */
-export const STYLE_PROMPT =
-  '16-bit pixel art, heroic fantasy RPG style (SNES era, chunky clean pixels, ' +
-  'strong 1-pixel dark outlines, saturated but earthy colors, painterly ' +
-  'dithering kept minimal). Subject matter is post-apocalyptic: ruins, rust, ' +
-  'scavenged materials, overgrown nature, a faint acid-green radioactive glow ' +
-  'on anything mutated. Top-down 3/4 view (JRPG camera), consistent light from ' +
-  'the top-left. Flat, fully transparent background. No text, no watermark, ' +
-  'no blur, no anti-aliasing, no gradients.';
-
-/** Consignes pour les planches animées, ajoutées après le sujet. */
-export const SHEET_PROMPT =
-  'Output a single sprite sheet laid out on a strict grid: one animation per ' +
-  'row, one frame per column, every frame exactly the same size, aligned to ' +
-  'the grid with no gutters. Same character/object in every frame, same ' +
-  'proportions, same palette.';
-
-/**
  * Palette de référence. Les placeholders et l'UI l'utilisent telle quelle ;
  * les assets générés doivent s'en approcher.
  */
@@ -98,5 +75,47 @@ export const PALETTE = {
   blanket: 0xc46a7a,
   blanketLight: 0xe09aa6,
 } as const;
+
+/** La palette telle que le prompt la cite : « skin #e8b48a, … ». */
+export const PALETTE_PROMPT = Object.entries(PALETTE)
+  .map(([name, hex]) => `${name} #${hex.toString(16).padStart(6, '0')}`)
+  .join(', ');
+
+/**
+ * Préfixe commun à tous les prompts de génération.
+ *
+ * Rédigé en anglais : les modèles d'image suivent nettement mieux les
+ * consignes techniques dans cette langue. Le sujet de chaque sprite vient de
+ * `SPRITES[id].prompt` et s'y ajoute.
+ *
+ * La palette y figure en hexadécimal, générée depuis `PALETTE` : un modèle
+ * suit une liste de codes bien mieux que des adjectifs, et la quantification
+ * de `tools/spriteSheet.ts` ramène ensuite chaque pixel à la valeur exacte.
+ * Les proportions sont chiffrées pour la même raison : c'est ce qui fait
+ * qu'Adam, Ève et un mutant générés à des jours différents ont la même taille
+ * de tête et les pieds au même endroit du cadre.
+ */
+export const STYLE_PROMPT =
+  '16-bit pixel art, heroic fantasy RPG style (SNES era, chunky clean pixels, ' +
+  'strong 1-pixel dark outlines in #1b1523, saturated but earthy colors, ' +
+  'dithering kept minimal). Subject matter is post-apocalyptic: ruins, rust, ' +
+  'scavenged materials, overgrown nature, a faint acid-green radioactive glow ' +
+  'on anything mutated. Top-down 3/4 view (JRPG camera), consistent light from ' +
+  'the top-left, shadows on the bottom-right. ' +
+  'Use ONLY these colors: ' +
+  PALETTE_PROMPT +
+  '. Proportions: adult characters are 2.5 heads tall with a big head, single ' +
+  'dark pixels for eyes, feet resting at 80% of the frame height with empty ' +
+  'space below; children are 1.5 heads tall; buildings fill their whole frame ' +
+  'edge to edge. Flat, fully transparent background (alpha 0, no checkerboard, ' +
+  'no solid color). No text, no watermark, no blur, no anti-aliasing, no ' +
+  'gradients, no drop shadows on the ground.';
+
+/** Consignes pour les planches animées, ajoutées après le sujet. */
+export const SHEET_PROMPT =
+  'Output a single sprite sheet laid out on a strict grid: one animation per ' +
+  'row, one frame per column, every frame exactly the same size, aligned to ' +
+  'the grid with no gutters. Same character/object in every frame, same ' +
+  'proportions, same palette.';
 
 export type PaletteKey = keyof typeof PALETTE;
