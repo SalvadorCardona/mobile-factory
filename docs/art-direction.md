@@ -52,8 +52,12 @@ ressource de surface et une flèche tiennent dans une tuile de 16 × 16 px.
 ## Palette
 
 La palette de référence est `PALETTE` dans `artDirection.ts`. Les
-placeholders l'utilisent telle quelle ; les planches générées doivent s'en
-approcher — pas à la valeur près, mais dans les mêmes familles : peaux
+placeholders l'utilisent telle quelle ; les planches générées y sont
+**ramenées** : `STYLE_PROMPT` cite chaque couleur en hexadécimal
+(`PALETTE_PROMPT`), et la normalisation remplace chaque pixel par la couleur
+de palette la plus proche. Un PNG référencé n'a donc jamais une couleur hors
+palette — c'est vérifié par test. Ce que le modèle doit viser, ce sont les
+familles : peaux
 chaudes, tissus olive et gris, bois brun, roche grise, fer rouillé, charbon
 noir, métal froid avec un accent orange, plâtre et brique pour le bâti, et
 un unique vert acide (`radioactive`) réservé à ce qui a muté.
@@ -73,8 +77,11 @@ Ajouter un sprite :
    validation impose qu'il ait exactement la taille annoncée ;
 3. générer avec le MCP OpenRouter, en suivant la procédure de `CLAUDE.md`
    (prompt = `STYLE_PROMPT` + sujet + `SHEET_PROMPT` + grille chiffrée) ;
-4. regarder le PNG. Vraiment. Vérifier la grille, l'ancre, le fond ;
-5. renseigner `SPRITES[id].file`. Rien d'autre ne change.
+4. normaliser le brut : `npm run sprite:normalize -- <id> <brut.png>`
+   réduit à la grille, binarise l'alpha et quantifie à `PALETTE` ;
+5. regarder le PNG. Vraiment. Vérifier la grille, l'ancre, le fond ;
+6. renseigner `SPRITES[id].file`. Rien d'autre ne change — et le test
+   `sprites.test.ts` vérifie désormais chaque PNG référencé.
 
 Tant que `file` est `null`, le jeu affiche le placeholder. Il n'y a pas de
 troisième état : pas d'asset à moitié intégré.
@@ -89,7 +96,7 @@ grille chiffrée. C'est ce qui garantit une seule direction artistique quel
 que soit le jour, la session ou la personne qui génère : le style n'est
 jamais retapé à la main.
 
-Modèle par défaut : `google/gemini-2.5-flash-image`. Les modèles d'image
+Modèle par défaut : `google/gemini-3.1-flash-image` (Nano Banana 2). Les modèles d'image
 respectent imparfaitement une grille au pixel près : les dimensions du PNG
 se vérifient contre la grille (`sheetGrid()` dans `sprites.ts`), et un
 recadrage ou une régénération reste un geste conscient, jamais automatique.

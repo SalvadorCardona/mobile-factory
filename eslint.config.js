@@ -53,8 +53,9 @@ export default tseslint.config(
     },
   },
 
+  // Tests et outillage tournent en Node, pas dans le navigateur.
   {
-    files: ['**/*.test.ts'],
+    files: ['**/*.test.ts', 'src/tools/**'],
     languageOptions: { globals: globals.node },
   },
 
