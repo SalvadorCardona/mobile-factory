@@ -1,10 +1,10 @@
 {
-  "name": "factory-mobile",
+  "name": "mobile-factory",
   "private": true,
   "version": "0.1.0",
-  "description": "Jeu d'usine 2D pour mobile, TypeScript et PixiJS v8. Nom de code provisoire.",
+  "description": "Jeu d'usine 2D pour mobile, TypeScript et PixiJS v8.",
   "type": "module",
-  "homepage": "https://cardona.digital",
+  "homepage": "https://cardona.digital/mobile-factory/",
   "author": {
     "name": "Salvador Cardona",
     "url": "https://cardona.digital"

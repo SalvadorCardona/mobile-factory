@@ -1,13 +1,13 @@
-# Factory Mobile
+# Mobile Factory
+
+**[▶ Jouer](https://cardona.digital/mobile-factory/)** — dans le navigateur,
+téléphone compris.
 
 Jeu d'usine 2D pour navigateur mobile, en TypeScript et PixiJS. On explore une
 carte générée à l'infini, on pose des machines qui extraient et transforment des
 ressources, et on fait circuler les matériaux — non pas par des convoyeurs, mais
 par des **porteurs** qui parcourent physiquement la distance entre les
 bâtiments.
-
-> `factory-mobile` est un nom de code. Le jeu n'est pas encore nommé, et le
-> dépôt sera renommé quand il le sera.
 
 ## Ce qui marche aujourd'hui
 
@@ -152,6 +152,16 @@ fermer cette porte, ne pas ouvrir ce chantier.
 
 Et pas d'optimisation sans mesure : PixiJS Devtools et l'onglet Performance de
 Chrome, sur un vrai téléphone.
+
+## Déploiement
+
+Chaque push sur `main` construit le jeu et le publie sur GitHub Pages, à
+[cardona.digital/mobile-factory](https://cardona.digital/mobile-factory/)
+(`.github/workflows/deploy.yml`).
+
+Le site est servi sous un sous-chemin, d'où le `base` de `vite.config.ts`. Ces
+deux valeurs doivent rester d'accord : si le dépôt est renommé, l'une sans
+l'autre donne un écran noir.
 
 ## Auteur
 

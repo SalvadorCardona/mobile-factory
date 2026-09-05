@@ -1,0 +1,55 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  # Permet de republier sans commit, depuis l'onglet Actions.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  # Exigé par actions/deploy-pages : le déploiement s'authentifie par OIDC,
+  # aucun token de longue durée n'est stocké dans le dépôt.
+  id-token: write
+
+# Un seul déploiement à la fois. `cancel-in-progress: false` — contrairement à
+# la CI : interrompre une publication en cours laisserait le site dans un état
+# intermédiaire. Les pushs rapprochés font la queue, ils ne s'annulent pas.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # `npm run build` = `tsc --noEmit && vite build` : le typecheck est déjà
+      # dans le build, rien à dupliquer ici. Lint et tests restent à la CI.
+      - name: Build
+        run: npm run build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
