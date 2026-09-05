@@ -214,3 +214,128 @@ canvas {
 .build-menu button[disabled] {
   opacity: 0.4;
 }
+
+/* Bouton son : sous l'objectif, à gauche, hors du chemin du pouce. */
+.hud-audio {
+  position: absolute;
+  top: calc(var(--safe-top) + 56px);
+  left: calc(var(--safe-left) + 8px);
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  background: var(--hud-bg);
+  color: var(--hud-fg);
+  font-size: 20px;
+  backdrop-filter: blur(6px);
+}
+
+.hud-audio[data-muted='true'] {
+  opacity: 0.6;
+}
+
+/* Fenêtre d'un bâtiment : centrée, au-dessus du menu de construction. */
+.building-panel {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--safe-bottom) + 88px);
+  transform: translateX(-50%);
+  width: min(320px, calc(100vw - 32px));
+  padding: 12px 14px;
+  border-color: var(--hud-accent);
+}
+
+.building-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.building-panel h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.building-panel-close {
+  width: 40px;
+  height: 40px;
+  margin: -6px -8px -6px 0;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--hud-fg);
+  font-size: 18px;
+}
+
+.building-panel-description {
+  margin: 6px 0 8px;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.building-panel-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.building-panel-bar div {
+  height: 100%;
+  background: var(--hud-accent);
+  transition: width 120ms linear;
+}
+
+.building-panel-bar[data-kind='hp'] div {
+  background: var(--hud-danger);
+}
+
+.building-panel-lines {
+  margin: 8px 0 0;
+  font: inherit;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: pre-wrap;
+}
+
+/* La défaite : un voile sur tout, un panneau au centre. */
+.hud-defeat {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(17, 22, 29, 0.7);
+  pointer-events: auto;
+}
+
+.hud-defeat[hidden] {
+  display: none;
+}
+
+.hud-defeat .panel {
+  text-align: center;
+  padding: 20px 24px;
+  border-color: var(--hud-danger);
+}
+
+.hud-defeat h2 {
+  margin: 0 0 8px;
+  color: var(--hud-danger);
+}
+
+.hud-defeat p {
+  margin: 0 0 16px;
+}
+
+.hud-defeat button {
+  min-width: 160px;
+  min-height: 48px;
+  border: none;
+  border-radius: 14px;
+  background: var(--hud-accent);
+  color: #11161d;
+  font-size: 15px;
+  font-weight: 600;
+}

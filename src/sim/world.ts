@@ -7,28 +7,52 @@
  *
  * L'extérieur ne touche jamais l'état directement : il pousse une commande
  * avec `push()`, et le tick suivant la consomme. Une partie se résume donc à
- * une seed et à une liste de commandes horodatées.
+ * une seed et à une liste de commandes horodatées. Le PRNG des vagues et des
+ * enfants vit ici et n'avance qu'au tick : il fait partie de cette promesse.
  *
  * Le pitch tient dans `data/lore.ts` ; ce qu'il implique ici : la partie
  * commence sur le chantier de la mairie, et Adam récolte à mains nues, par
  * **contact** — un arbre ou un rocher heurté se récolte, un chantier heurté
- * reçoit ce qu'il attend.
+ * reçoit ce qu'il attend. Une fois la mairie debout, les mutants arrivent par
+ * vagues et marchent droit dessus ; l'arc d'Adam et les tours de guet tirent
+ * seuls. Si la mairie tombe, la partie est perdue.
  */
 
 import { Emitter } from '../core/events.ts';
 import { CHUNK_TILES, TILE_SIZE, coordKey, distanceSq, floorDiv } from '../core/grid.ts';
-import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
+import { mulberry32, type Rng } from '../core/rng.ts';
+import { BUILDINGS, NURSERY_BIRTH_TICKS, type BuildingId } from '../data/buildings.ts';
+import { ENEMIES, WAVES, waveSize } from '../data/enemies.ts';
 import type { ItemId } from '../data/items.ts';
 import { RECIPES, type RecipeId } from '../data/recipes.ts';
 import { RESOURCES } from '../data/resources.ts';
+import { WEAPONS } from '../data/weapons.ts';
 import { ChunkIndex } from './chunk.ts';
+import { nearestMutant, shoot, stepArrow } from './combat.ts';
 import type { Command, CommandLogEntry, PlacementRejection } from './commands.ts';
+import { spawnPoint, stepMutant } from './enemies.ts';
+import { stepKid } from './kids.ts';
+import { facingOf } from './motion.ts';
 import { BUILD_REACH_TILES, createPlayer, playerOverlaps, stepPlayer } from './player.ts';
 import { ResourceIndex } from './resources.ts';
 import { Scheduler } from './scheduler.ts';
 import { Store } from './store.ts';
 import { isBuildable, isWalkable, oreAt, terrainAt } from './terrain.ts';
-import type { Building, Contact, Drill, Entity, EntityId, Player, Site } from './types.ts';
+import type {
+  Building,
+  Contact,
+  Drill,
+  Entity,
+  EntityId,
+  Kid,
+  Mobile,
+  MobileId,
+  Mutant,
+  Nursery,
+  Player,
+  Site,
+  Tower,
+} from './types.ts';
 
 /** 20 ticks de simulation par seconde. */
 export const TICKS_PER_SECOND = 20;
@@ -44,6 +68,12 @@ export const DELIVER_TICKS = 2;
 /** Le bâtiment que la partie ouvre en chantier au démarrage. */
 export const STARTING_BUILDING: BuildingId = 'townHall';
 
+/**
+ * Id de réveil réservé aux vagues de mutants. Les entités commencent à 1 :
+ * le scheduler ne fait pas la différence, `wake()` si.
+ */
+const WAVE_WAKE_ID = 0;
+
 export type WorldEvents = {
   /** Un chantier est ouvert (ou un bâtiment à coût nul, posé fini). */
   buildingPlaced: { id: EntityId; tx: number; ty: number };
@@ -58,6 +88,21 @@ export type WorldEvents = {
   siteDelivered: { id: EntityId; item: ItemId; missing: number };
   /** Le sac est plein : la récolte s'arrête, il faut aller livrer. */
   inventoryFull: Record<string, never>;
+  /** Une vague de mutants vient d'apparaître autour de la mairie. */
+  waveStarted: { wave: number; count: number };
+  /** Un arc a tiré, depuis (x, y). */
+  arrowShot: { x: number; y: number };
+  /** Une flèche a touché un mutant ; `hp` est ce qui lui reste. */
+  mutantHit: { id: MobileId; hp: number; x: number; y: number };
+  mutantDied: { id: MobileId; x: number; y: number };
+  /** Un mutant a frappé un bâtiment ; `hp` est ce qui lui reste. */
+  buildingDamaged: { id: EntityId; hp: number };
+  /** Le bâtiment est tombé à zéro : il n'existe plus. */
+  buildingDestroyed: { id: EntityId; proto: BuildingId; tx: number; ty: number };
+  /** La mairie est tombée : la partie est perdue. */
+  townHallDestroyed: Record<string, never>;
+  /** La nurserie a produit un enfant. */
+  childBorn: { nurseryId: EntityId; kidId: MobileId; x: number; y: number };
 };
 
 export class World {
@@ -65,19 +110,28 @@ export class World {
   public readonly chunks = new ChunkIndex();
   public readonly resources: ResourceIndex;
   public readonly entities = new Map<EntityId, Entity>();
+  public readonly mobiles = new Map<MobileId, Mobile>();
   public readonly events = new Emitter<WorldEvents>();
   public readonly player: Player;
 
-  /** Le chantier puis la mairie : l'objectif de départ. */
+  /** Le chantier puis la mairie : l'objectif de départ, et la cible des mutants. */
   public readonly townHallId: EntityId;
 
   /** Tick courant. Sert d'horodatage aux commandes et de base au scheduler. */
   public tickCount = 0;
 
+  /** Numéro de la dernière vague apparue ; 0 tant que la mairie est en chantier. */
+  public wave = 0;
+
+  /** Vrai une fois la mairie détruite. La simulation continue, les vagues s'arrêtent. */
+  public defeated = false;
+
   private readonly scheduler = new Scheduler();
   private readonly queue: Command[] = [];
   private readonly log: CommandLogEntry[] = [];
+  private readonly rng: Rng;
   private nextId: EntityId = 1;
+  private nextMobileId: MobileId = 1;
   private moveX = 0;
   private moveY = 0;
 
@@ -85,9 +139,13 @@ export class World {
   private contactKey = '';
   private contactTicks = 0;
 
+  /** Centre de la mairie en pixels monde : ce que les mutants visent. */
+  private readonly target: { x: number; y: number };
+
   public constructor(seed: number) {
     this.seed = seed >>> 0;
     this.resources = new ResourceIndex(this.seed);
+    this.rng = mulberry32(this.seed ^ 0x3c6ef372);
 
     const [sx, sy] = this.findSpawn();
     const proto = BUILDINGS[STARTING_BUILDING];
@@ -101,6 +159,7 @@ export class World {
 
     this.player = createPlayer((sx + 0.5) * TILE_SIZE, (sy + 1.5) * TILE_SIZE);
     this.townHallId = this.openSite(STARTING_BUILDING, sx - 1, sy - proto.height);
+    this.target = { x: (sx + 0.5) * TILE_SIZE, y: (sy - proto.height / 2) * TILE_SIZE };
   }
 
   /* ---------------------------------------------------------------- entrée */
@@ -127,8 +186,15 @@ export class World {
     const contact = stepPlayer(this.player, this.moveX, this.moveY, this.isSolid, STEP_SECONDS);
 
     this.handleContact(contact);
+    this.stepMobiles();
+    this.shootPlayerBow();
 
     for (const id of this.scheduler.due(this.tickCount)) {
+      if (id === WAVE_WAKE_ID) {
+        this.spawnWave();
+        continue;
+      }
+
       const entity = this.entities.get(id);
 
       if (entity) this.wake(entity);
@@ -184,6 +250,8 @@ export class World {
    * pour qu'on ne puisse pas « charger » une récolte contre un mur.
    */
   private handleContact(contact: Contact | null): void {
+    this.player.harvesting = false;
+
     if (!contact) {
       this.contactKey = '';
       this.contactTicks = 0;
@@ -201,6 +269,8 @@ export class World {
     const resource = this.resources.at(contact.tx, contact.ty);
 
     if (resource) {
+      this.player.harvesting = true;
+
       if (this.contactTicks % RESOURCES[resource.id].harvestTicks === 0) {
         this.harvest(contact.tx, contact.ty);
       }
@@ -328,7 +398,16 @@ export class World {
   /** Le chantier devient le bâtiment, sous le même id : le rendu n'a qu'à changer de texture. */
   private complete(site: Site): void {
     const proto = BUILDINGS[site.proto];
-    const base = { id: site.id, proto: site.proto, tx: site.tx, ty: site.ty, width: site.width, height: site.height };
+    const base = {
+      id: site.id,
+      proto: site.proto,
+      tx: site.tx,
+      ty: site.ty,
+      width: site.width,
+      height: site.height,
+      store: new Store(proto.storage),
+      hp: proto.hp,
+    };
     let building: Building;
 
     switch (proto.kind) {
@@ -336,14 +415,21 @@ export class World {
         building = {
           ...base,
           kind: 'drill',
-          store: new Store(proto.storage),
           output: this.oreUnder(site.tx, site.ty, site.width, site.height),
           blocked: false,
         };
         break;
 
       case 'townHall':
-        building = { ...base, kind: 'townHall', store: new Store(proto.storage) };
+        building = { ...base, kind: 'townHall' };
+        break;
+
+      case 'nursery':
+        building = { ...base, kind: 'nursery', nextBirthTick: this.tickCount + NURSERY_BIRTH_TICKS, born: 0 };
+        break;
+
+      case 'tower':
+        building = { ...base, kind: 'tower', armed: false };
         break;
     }
 
@@ -351,10 +437,27 @@ export class World {
     this.dirtyTile(site.tx, site.ty);
     this.events.emit('buildingCompleted', { id: site.id });
 
-    // Une foreuse posée à sec ne se planifie pas du tout : zéro coût.
-    if (building.kind === 'drill') {
-      if (building.output) this.scheduleDrill(building);
-      else building.blocked = true;
+    switch (building.kind) {
+      case 'drill':
+        // Une foreuse posée à sec ne se planifie pas du tout : zéro coût.
+        if (building.output) this.scheduleDrill(building);
+        else building.blocked = true;
+        break;
+
+      case 'nursery':
+        this.scheduler.schedule(building.id, building.nextBirthTick, this.tickCount);
+        break;
+
+      case 'tower':
+        if (this.hasMutants()) this.armTower(building, 1);
+        break;
+
+      case 'townHall':
+        // Le toit est posé : les mutants savent maintenant où aller.
+        if (building.id === this.townHallId) {
+          this.scheduler.schedule(WAVE_WAKE_ID, this.tickCount + WAVES.firstDelay, this.tickCount);
+        }
+        break;
     }
   }
 
@@ -380,6 +483,14 @@ export class World {
     switch (entity.kind) {
       case 'drill':
         this.runDrill(entity);
+        break;
+
+      case 'nursery':
+        this.runNursery(entity);
+        break;
+
+      case 'tower':
+        this.runTower(entity);
         break;
 
       case 'site':
@@ -424,6 +535,236 @@ export class World {
     const recipe = RECIPES[DRILL_RECIPE];
 
     this.scheduler.schedule(drill.id, this.tickCount + recipe.duration, this.tickCount);
+  }
+
+  /** Une naissance : un enfant apparaît sur la première tuile libre autour de la nurserie. */
+  private runNursery(nursery: Nursery): void {
+    const home = {
+      x: (nursery.tx + nursery.width / 2) * TILE_SIZE,
+      y: (nursery.ty + nursery.height / 2) * TILE_SIZE,
+    };
+    const spot = this.freeTileAround(nursery.tx, nursery.ty, nursery.width, nursery.height);
+    const x = spot ? (spot.tx + 0.5) * TILE_SIZE : home.x;
+    const y = spot ? (spot.ty + 0.5) * TILE_SIZE : nursery.ty * TILE_SIZE + nursery.height * TILE_SIZE + 8;
+    const kid: Kid = {
+      kind: 'kid',
+      id: this.nextMobileId++,
+      x,
+      y,
+      prevX: x,
+      prevY: y,
+      facing: 'down',
+      moving: false,
+      homeId: nursery.id,
+      homeX: home.x,
+      homeY: home.y,
+      dirX: 0,
+      dirY: 0,
+      wanderTicks: 0,
+    };
+
+    this.mobiles.set(kid.id, kid);
+    nursery.born += 1;
+    nursery.nextBirthTick = this.tickCount + NURSERY_BIRTH_TICKS;
+    this.scheduler.schedule(nursery.id, nursery.nextBirthTick, this.tickCount);
+    this.events.emit('childBorn', { nurseryId: nursery.id, kidId: kid.id, x, y });
+  }
+
+  /**
+   * Un tir de tour. La tour ne se replanifie que s'il reste des mutants :
+   * sans eux, elle se rendort, et c'est la prochaine vague qui la réarme.
+   */
+  private runTower(tower: Tower): void {
+    tower.armed = false;
+
+    const weapon = BUILDINGS[tower.proto].weapon;
+
+    if (!weapon) return;
+
+    const x = (tower.tx + tower.width / 2) * TILE_SIZE;
+    const y = (tower.ty + tower.height / 2) * TILE_SIZE;
+    const target = nearestMutant(this.mutants(), x, y, WEAPONS[weapon].range);
+
+    if (target) this.fire(weapon, x, y, target);
+    if (this.hasMutants()) this.armTower(tower, WEAPONS[weapon].cooldown);
+  }
+
+  private armTower(tower: Tower, delay: number): void {
+    if (tower.armed) return;
+    tower.armed = true;
+    this.scheduler.schedule(tower.id, this.tickCount + delay, this.tickCount);
+  }
+
+  /* ---------------------------------------------------------------- mobiles */
+
+  private *mutants(): IterableIterator<Mutant> {
+    for (const mobile of this.mobiles.values()) {
+      if (mobile.kind === 'mutant') yield mobile;
+    }
+  }
+
+  private hasMutants(): boolean {
+    for (const mobile of this.mobiles.values()) {
+      if (mobile.kind === 'mutant') return true;
+    }
+    return false;
+  }
+
+  /** Adultes et enfants : Adam, plus tout ce que les nurseries ont produit. */
+  public population(): { adults: number; children: number } {
+    let children = 0;
+
+    for (const mobile of this.mobiles.values()) {
+      if (mobile.kind === 'kid') children += 1;
+    }
+    return { adults: 1, children };
+  }
+
+  private stepMobiles(): void {
+    for (const mobile of this.mobiles.values()) {
+      switch (mobile.kind) {
+        case 'mutant': {
+          const step = stepMutant(mobile, this.target, this.occupantAt, STEP_SECONDS);
+
+          if (step.strikes && step.blockedBy !== null) {
+            this.damageBuilding(step.blockedBy, ENEMIES[mobile.proto].damage);
+          }
+          break;
+        }
+
+        case 'arrow': {
+          const hit = stepArrow(mobile, this.mutants());
+
+          if (hit) {
+            this.mobiles.delete(mobile.id);
+            this.hurtMutant(hit, mobile.damage);
+          } else if (mobile.ttl <= 0) {
+            this.mobiles.delete(mobile.id);
+          }
+          break;
+        }
+
+        case 'kid':
+          stepKid(mobile, { x: mobile.homeX, y: mobile.homeY }, this.isSolid, this.rng, STEP_SECONDS);
+          break;
+      }
+    }
+  }
+
+  private readonly occupantAt = (tx: number, ty: number): EntityId | undefined => this.chunks.occupantAt(tx, ty);
+
+  /** L'arc d'Adam : automatique, dès qu'un mutant est à portée et que le délai est écoulé. */
+  private shootPlayerBow(): void {
+    const { player } = this;
+
+    if (player.bowCooldown > 0) player.bowCooldown -= 1;
+    if (player.bowCooldown > 0) return;
+
+    const target = nearestMutant(this.mutants(), player.x, player.y, WEAPONS.bow.range);
+
+    if (!target) return;
+
+    // Le corps est au-dessus des pieds : la flèche part de la poitrine.
+    this.fire('bow', player.x, player.y - 8, target);
+    player.bowCooldown = WEAPONS.bow.cooldown;
+
+    // À l'arrêt, Adam se tourne vers ce qu'il vise.
+    if (this.moveX === 0 && this.moveY === 0) {
+      player.facing = facingOf(target.x - player.x, target.y - player.y);
+    }
+  }
+
+  private fire(weapon: keyof typeof WEAPONS, x: number, y: number, target: Mutant): void {
+    const arrow = shoot(this.nextMobileId++, weapon, x, y, target);
+
+    this.mobiles.set(arrow.id, arrow);
+    this.events.emit('arrowShot', { x, y });
+  }
+
+  private hurtMutant(mutant: Mutant, damage: number): void {
+    mutant.hp -= damage;
+
+    if (mutant.hp > 0) {
+      this.events.emit('mutantHit', { id: mutant.id, hp: mutant.hp, x: mutant.x, y: mutant.y });
+      return;
+    }
+    this.mobiles.delete(mutant.id);
+    this.events.emit('mutantDied', { id: mutant.id, x: mutant.x, y: mutant.y });
+  }
+
+  /** Une vague : `waveSize(n)` mutants autour de la mairie, puis la suivante est planifiée. */
+  private spawnWave(): void {
+    if (this.defeated) return;
+
+    this.wave += 1;
+
+    const count = waveSize(this.wave);
+
+    for (let i = 0; i < count; i += 1) this.spawnMutant();
+
+    this.events.emit('waveStarted', { wave: this.wave, count });
+
+    for (const entity of this.entities.values()) {
+      if (entity.kind === 'tower') this.armTower(entity, 1);
+    }
+
+    this.scheduler.schedule(WAVE_WAKE_ID, this.tickCount + WAVES.interval, this.tickCount);
+  }
+
+  private spawnMutant(): void {
+    let point = spawnPoint(this.rng, this.target);
+
+    // Pas dans un bâtiment : il y resterait coincé à le ronger de l'intérieur.
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      if (this.occupantAt(floorDiv(point.x, TILE_SIZE), floorDiv(point.y, TILE_SIZE)) === undefined) break;
+      point = spawnPoint(this.rng, this.target);
+    }
+
+    const mutant: Mutant = {
+      kind: 'mutant',
+      id: this.nextMobileId++,
+      proto: 'mutant',
+      x: point.x,
+      y: point.y,
+      prevX: point.x,
+      prevY: point.y,
+      facing: 'down',
+      moving: false,
+      hp: ENEMIES.mutant.hp,
+      attackCooldown: 0,
+    };
+
+    this.mobiles.set(mutant.id, mutant);
+  }
+
+  /* ------------------------------------------------------------ destruction */
+
+  private damageBuilding(id: EntityId, amount: number): void {
+    const entity = this.entities.get(id);
+
+    if (!entity || entity.kind === 'site') return;
+
+    entity.hp = Math.max(0, entity.hp - amount);
+    this.events.emit('buildingDamaged', { id, hp: entity.hp });
+
+    if (entity.hp === 0) this.destroyBuilding(entity);
+  }
+
+  private destroyBuilding(building: Building): void {
+    this.entities.delete(building.id);
+    this.chunks.release(building.id, building.tx, building.ty, building.width, building.height);
+    this.dirtyTile(building.tx, building.ty);
+    this.events.emit('buildingDestroyed', {
+      id: building.id,
+      proto: building.proto,
+      tx: building.tx,
+      ty: building.ty,
+    });
+
+    if (building.id === this.townHallId && !this.defeated) {
+      this.defeated = true;
+      this.events.emit('townHallDestroyed', {});
+    }
   }
 
   /**
@@ -484,6 +825,19 @@ export class World {
       }
     }
     return true;
+  }
+
+  /** La première tuile praticable collée à l'emprise, en commençant par le bas, ou `null`. */
+  private freeTileAround(tx: number, ty: number, width: number, height: number): Contact | null {
+    const candidates: Contact[] = [];
+
+    for (let x = tx; x < tx + width; x += 1) {
+      candidates.push({ tx: x, ty: ty + height }, { tx: x, ty: ty - 1 });
+    }
+    for (let y = ty; y < ty + height; y += 1) {
+      candidates.push({ tx: tx + width, ty: y }, { tx: tx - 1, ty: y });
+    }
+    return candidates.find((tile) => !this.isSolid(tile.tx, tile.ty)) ?? null;
   }
 
   /** Chunk sous le joueur — pratique pour le HUD et le culling. */

@@ -22,6 +22,7 @@ import { BUILDINGS } from '../data/buildings.ts';
 import { SPRITES } from '../data/sprites.ts';
 import type { Entity, EntityId, Facing } from '../sim/types.ts';
 import { siteMissing, type World } from '../sim/world.ts';
+import { MobileLayer } from './mobileLayer.ts';
 import { SPRITE_SCALE, type AnimationFrames, type SpriteLibrary } from './spriteLibrary.ts';
 
 /** Dessous de la boîte de collision d'Adam, pour le tri en profondeur. */
@@ -29,12 +30,13 @@ const PLAYER_FOOT = 7;
 
 const PROGRESS_BG = 0x11161d;
 const PROGRESS_FG = 0x7fc8a9;
+const HP_FG = 0xe2725b;
 
 interface EntityView {
   root: Container;
   /** Sprite animé du bâtiment fini, s'il en a un (la foreuse). */
   animated: AnimatedSprite | null;
-  /** Barre d'avancement d'un chantier. */
+  /** Barre d'avancement d'un chantier, ou barre de vie d'un bâtiment entamé. */
   progress: Graphics | null;
 }
 
@@ -44,6 +46,7 @@ export class EntityLayer {
   private readonly views = new Map<EntityId, EntityView>();
   private readonly player: AnimatedSprite;
   private playerAnimation = '';
+  private readonly mobiles: MobileLayer;
 
   private readonly world: World;
   private readonly library: SpriteLibrary;
@@ -52,6 +55,7 @@ export class EntityLayer {
     this.world = world;
     this.library = library;
     this.container.sortableChildren = true;
+    this.mobiles = new MobileLayer(world, library, this.container);
 
     const adam = SPRITES.adam;
 
@@ -126,24 +130,30 @@ export class EntityLayer {
     // doit comprendre pourquoi elle ne produit rien sans ouvrir un panneau.
     if (entity.kind === 'drill' && !entity.output) sprite.alpha = 0.45;
 
-    root.addChild(sprite);
-    return { root, animated: sprite, progress: null };
+    // La barre de vie n'apparaît qu'une fois le bâtiment entamé.
+    const hp = new Graphics();
+
+    hp.visible = false;
+    root.addChild(sprite, hp);
+    return { root, animated: sprite, progress: hp };
   }
 
   private drawProgress(graphics: Graphics, entity: Entity): void {
-    if (entity.kind !== 'site') return;
-
-    const total = Object.values(BUILDINGS[entity.proto].cost).reduce((sum, amount) => sum + amount, 0);
-    const done = total === 0 ? 1 : 1 - siteMissing(entity) / total;
     const width = entity.width * TILE_SIZE - 8;
     const y = entity.height * TILE_SIZE - 8;
 
-    graphics
-      .clear()
-      .rect(4, y, width, 4)
-      .fill(PROGRESS_BG)
-      .rect(4, y, Math.round(width * done), 4)
-      .fill(PROGRESS_FG);
+    if (entity.kind === 'site') {
+      const total = Object.values(BUILDINGS[entity.proto].cost).reduce((sum, amount) => sum + amount, 0);
+      const done = total === 0 ? 1 : 1 - siteMissing(entity) / total;
+
+      bar(graphics, y, width, done, PROGRESS_FG);
+      return;
+    }
+
+    const max = BUILDINGS[entity.proto].hp;
+
+    graphics.visible = entity.hp < max;
+    if (graphics.visible) bar(graphics, y, width, entity.hp / max, HP_FG);
   }
 
   /** `alpha` est la fraction du pas de simulation déjà écoulée, dans [0, 1[. */
@@ -155,8 +165,9 @@ export class EntityLayer {
       player.prevY + (player.y - player.prevY) * alpha,
     );
     this.player.zIndex = this.player.y + PLAYER_FOOT;
-    this.animatePlayer(player.facing, player.moving);
+    this.animatePlayer(player.facing, player.moving, player.harvesting);
     this.player.update(ticker);
+    this.mobiles.update(alpha, ticker);
 
     for (const [id, view] of this.views) {
       const entity = this.world.entities.get(id);
@@ -182,10 +193,15 @@ export class EntityLayer {
     }
   }
 
-  /** Choisit l'animation d'Adam ; ne la relance que si elle change, sinon elle bégaierait. */
-  private animatePlayer(facing: Facing, moving: boolean): void {
+  /**
+   * Choisit l'animation d'Adam ; ne la relance que si elle change, sinon
+   * elle bégaierait. Le contact avec un arbre ou un rocher prime sur tout :
+   * Adam pousse contre lui sans avancer, donc il coupe.
+   */
+  private animatePlayer(facing: Facing, moving: boolean, harvesting: boolean): void {
     const side = facing === 'left' || facing === 'right';
-    const name = `${moving ? 'walk' : 'idle'}${side ? 'Side' : facing === 'up' ? 'Up' : 'Down'}` as const;
+    const verb = harvesting ? 'chop' : moving ? 'walk' : 'idle';
+    const name = `${verb}${side ? 'Side' : facing === 'up' ? 'Up' : 'Down'}` as const;
 
     // Les images de profil regardent à droite ; à gauche, on retourne le sprite.
     this.player.scale.x = facing === 'left' ? -SPRITE_SCALE : SPRITE_SCALE;
@@ -196,8 +212,19 @@ export class EntityLayer {
   }
 
   public destroy(): void {
+    this.mobiles.destroy();
     this.container.destroy({ children: true });
   }
+}
+
+/** Une barre de `width` px à la hauteur `y`, remplie à `ratio`. */
+function bar(graphics: Graphics, y: number, width: number, ratio: number, color: number): void {
+  graphics
+    .clear()
+    .rect(4, y, width, 4)
+    .fill(PROGRESS_BG)
+    .rect(4, y, Math.round(width * Math.max(0, Math.min(1, ratio))), 4)
+    .fill(color);
 }
 
 function animated(frames: AnimationFrames): AnimatedSprite {

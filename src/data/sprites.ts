@@ -52,13 +52,76 @@ export const SPRITES = {
       walkUp: { row: 3, frames: 4, fps: 8, loop: true },
       idleSide: { row: 4, frames: 1, fps: 1, loop: false },
       walkSide: { row: 5, frames: 4, fps: 8, loop: true },
+      /** Adam frappe ce qu'il heurte : hache levée, hache abattue. */
+      chopDown: { row: 6, frames: 2, fps: 6, loop: true },
+      chopUp: { row: 7, frames: 2, fps: 6, loop: true },
+      chopSide: { row: 8, frames: 2, fps: 6, loop: true },
     },
     prompt:
       'Adam, the hero: a sturdy adult man with messy brown hair, patched olive ' +
       'jacket, grey trousers and walking boots, carrying a scavenger backpack. ' +
       'Rows: idle facing down, walk cycle facing down (4 frames), idle facing ' +
-      'up, walk up (4 frames), idle facing right, walk right (4 frames). ' +
+      'up, walk up (4 frames), idle facing right, walk right (4 frames), ' +
+      'chopping with a hand axe facing down (2 frames: axe raised, axe swung), ' +
+      'chopping facing up (2 frames), chopping facing right (2 frames). ' +
       'Each frame 16x24 pixels.',
+  },
+
+  mutant: {
+    file: null,
+    frameWidth: 16,
+    frameHeight: 24,
+    anchorX: 0.5,
+    anchorY: 0.8,
+    animations: {
+      idleDown: { row: 0, frames: 1, fps: 1, loop: false },
+      walkDown: { row: 1, frames: 4, fps: 6, loop: true },
+      idleUp: { row: 2, frames: 1, fps: 1, loop: false },
+      walkUp: { row: 3, frames: 4, fps: 6, loop: true },
+      idleSide: { row: 4, frames: 1, fps: 1, loop: false },
+      walkSide: { row: 5, frames: 4, fps: 6, loop: true },
+    },
+    prompt:
+      'A radioactive mutant: a deformed, hunched human with grey-green skin, ' +
+      'bald cracked scalp, acid-green glowing eyes and glowing cracks on the ' +
+      'skin, torn brown rags, barefoot. Rows: idle facing down, shambling walk ' +
+      'facing down (4 frames), idle facing up, walk up (4 frames), idle facing ' +
+      'right, walk right (4 frames). Each frame 16x24 pixels.',
+  },
+
+  kid: {
+    file: null,
+    frameWidth: 16,
+    frameHeight: 16,
+    anchorX: 0.5,
+    anchorY: 0.875,
+    animations: {
+      idleDown: { row: 0, frames: 1, fps: 1, loop: false },
+      walkDown: { row: 1, frames: 2, fps: 6, loop: true },
+      idleUp: { row: 2, frames: 1, fps: 1, loop: false },
+      walkUp: { row: 3, frames: 2, fps: 6, loop: true },
+      idleSide: { row: 4, frames: 1, fps: 1, loop: false },
+      walkSide: { row: 5, frames: 2, fps: 6, loop: true },
+    },
+    prompt:
+      'A small survivor child, brown messy hair, olive sweater, grey dungarees, ' +
+      'boots. Rows: idle facing down, walk down (2 frames), idle facing up, ' +
+      'walk up (2 frames), idle facing right, walk right (2 frames). ' +
+      'Each frame 16x16 pixels, the child is about 12 pixels tall.',
+  },
+
+  /** Une flèche pointée vers la droite ; le rendu la tourne dans sa direction. */
+  arrow: {
+    file: null,
+    frameWidth: 16,
+    frameHeight: 16,
+    anchorX: 0.5,
+    anchorY: 0.5,
+    animations: { fly: STILL },
+    prompt:
+      'A crude wooden arrow seen from above, pointing right: a straight shaft, ' +
+      'a scrap-metal head, two small pale feather fletchings. 16x16 pixels, ' +
+      'the arrow spans nearly the full width, centered vertically.',
   },
 
   tree: {
@@ -137,6 +200,32 @@ export const SPRITES = {
       'A scavenged mining drill on a 2x2 tile base: rusty steel frame, an ' +
       'orange-painted motor housing, a vertical drill bit. Row 1: stopped. ' +
       'Row 2: 2 frames of the bit spinning. 32x32 pixels per frame.',
+  },
+
+  nursery: {
+    file: null,
+    frameWidth: 32,
+    frameHeight: 32,
+    anchorX: 0,
+    anchorY: 0,
+    animations: { idle: STILL },
+    prompt:
+      'A survivor colony nursery on a 2x2 tile base: a small warm hut of ' +
+      'plaster and salvaged planks, a patched roof with a stove pipe, a round ' +
+      'window with a pink blanket hanging beside the door. 32x32 pixels.',
+  },
+
+  watchtower: {
+    file: null,
+    frameWidth: 32,
+    frameHeight: 32,
+    anchorX: 0,
+    anchorY: 0,
+    animations: { idle: STILL },
+    prompt:
+      'A wooden watchtower on a 2x2 tile base: four rough posts, a plank ' +
+      'platform with a railing, a small sheet-metal roof, a bow and a quiver ' +
+      'leaning on the railing, a ladder on the front. 32x32 pixels.',
   },
 
   townHall: {

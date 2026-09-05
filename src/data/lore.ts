@@ -45,10 +45,32 @@ export const LORE = {
     },
     mutant: {
       name: 'Mutant radioactif',
-      role: 'humain irradié, hostile, erre en dehors de la colonie',
+      role: 'humain irradié, hostile, marche droit sur la mairie pour la démolir',
       description:
         'Silhouette humaine déformée, peau grise et verdâtre, lueur radioactive ' +
-        'vert acide dans les yeux et les fissures de la peau. Pas encore en jeu.',
+        'vert acide dans les yeux et les fissures de la peau. Il arrive par vagues ' +
+        'dès que la mairie est debout, traverse tout, et ne s’arrête que devant ' +
+        'un mur pour le casser.',
+    },
+    child: {
+      name: 'Enfant',
+      role: 'né à la nurserie, premier signe que la colonie vit',
+      description:
+        'Petit survivant en salopette grise et pull olive, cheveux bruns. Il joue ' +
+        'autour de la nurserie et n’en va jamais loin.',
+    },
+  },
+
+  /**
+   * Adam n'a pas de bouton d'action, mais il n'est pas sans défense : un
+   * petit arc de fortune tire tout seul sur le mutant le plus proche.
+   */
+  weapons: {
+    bow: {
+      name: 'Arc de fortune',
+      description:
+        'Une branche courbée et un fil récupéré. Il tire de lui-même sur le ' +
+        'mutant le plus proche dès qu’il entre à portée.',
     },
   },
 
@@ -62,6 +84,18 @@ export const LORE = {
     drill: {
       name: 'Foreuse',
       description: 'Machine de récupération qui extrait le filon sous elle.',
+    },
+    nursery: {
+      name: 'Nurserie',
+      description:
+        'Un abri chauffé, des couvertures, un berceau. Toutes les dix minutes, ' +
+        'un enfant y naît et la colonie grandit d’un survivant.',
+    },
+    watchtower: {
+      name: 'Tour de guet',
+      description:
+        'Une plateforme de planches sur quatre poteaux, avec un arc et un carquois. ' +
+        'Elle tire seule sur tout mutant qui passe à sa portée.',
     },
   },
 } as const;
