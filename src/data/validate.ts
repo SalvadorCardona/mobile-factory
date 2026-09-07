@@ -14,6 +14,7 @@
 import { ART_PIXELS_PER_TILE, PALETTE } from './artDirection.ts';
 import { BUILDINGS } from './buildings.ts';
 import { ENEMIES, WAVES } from './enemies.ts';
+import { ICON_SIZE, ITEM_ICONS } from './icons.ts';
 import { ITEMS } from './items.ts';
 import { PIXEL_MAPS } from './pixelmaps.ts';
 import { RECIPES } from './recipes.ts';
@@ -27,6 +28,28 @@ export function validatePrototypes(): string[] {
   for (const [id, item] of Object.entries(ITEMS)) {
     if (item.stack <= 0) {
       errors.push(`ITEMS.${id} : stack doit être strictement positif`);
+    }
+
+    // TypeScript garantit qu'une icône existe ; on vérifie ici qu'elle a la bonne taille et sa palette.
+    const icon = ITEM_ICONS[id as keyof typeof ITEM_ICONS];
+
+    if (icon.rows.length !== ICON_SIZE) {
+      errors.push(`ITEM_ICONS.${id} : ${icon.rows.length} lignes au lieu de ${ICON_SIZE}`);
+    }
+    for (const [y, row] of icon.rows.entries()) {
+      if (row.length !== ICON_SIZE) {
+        errors.push(`ITEM_ICONS.${id} ligne ${y} : ${row.length} pixels au lieu de ${ICON_SIZE}`);
+      }
+      for (const char of row) {
+        if (char === '.') continue;
+
+        const key = icon.palette[char];
+
+        if (key === undefined || !(key in PALETTE)) {
+          errors.push(`ITEM_ICONS.${id} : caractère « ${char} » hors palette`);
+          break;
+        }
+      }
     }
   }
 
@@ -47,6 +70,9 @@ export function validatePrototypes(): string[] {
     }
     if (building.hp <= 0) {
       errors.push(`BUILDINGS.${id} : points de vie nuls`);
+    }
+    if (building.workers < 0 || !Number.isInteger(building.workers)) {
+      errors.push(`BUILDINGS.${id} : nombre d'ouvriers invalide`);
     }
     if (building.weapon !== null && !(building.weapon in WEAPONS)) {
       errors.push(`BUILDINGS.${id} : arme inconnue « ${String(building.weapon)} »`);
@@ -98,8 +124,11 @@ export function validatePrototypes(): string[] {
   }
 
   for (const [id, building] of Object.entries(BUILDINGS)) {
-    if (building.kind === 'drill' && !buildingsWithRecipe.has(id)) {
+    if ((building.kind === 'drill' || building.kind === 'farm') && !buildingsWithRecipe.has(id)) {
       errors.push(`BUILDINGS.${id} : aucun bâtiment producteur sans recette associée`);
+    }
+    if (building.kind === 'farm' && building.storage <= 0) {
+      errors.push(`BUILDINGS.${id} : une ferme sans coffre ne peut rien récolter`);
     }
   }
 

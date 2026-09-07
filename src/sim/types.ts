@@ -78,7 +78,19 @@ export interface Tower extends Built {
   armed: boolean;
 }
 
-export type Entity = Site | Drill | TownHall | Nursery | Tower;
+/** La maison des constructeurs : elle ne fait rien, elle loge — ses ouvriers comptent dans la population. */
+export interface House extends Built {
+  kind: 'house';
+}
+
+/** La ferme : ses ouvriers font pousser de la nourriture dans son coffre, à la cadence de la recette. */
+export interface Farm extends Built {
+  kind: 'farm';
+  /** Vrai quand le coffre est plein : la ferme ne se replanifie plus. */
+  blocked: boolean;
+}
+
+export type Entity = Site | Drill | TownHall | Nursery | Tower | House | Farm;
 
 export type Building = Exclude<Entity, Site>;
 

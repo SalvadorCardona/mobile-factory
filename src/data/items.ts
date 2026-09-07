@@ -4,6 +4,10 @@
  * `as const satisfies Record<string, ItemProto>` : TypeScript vérifie la forme
  * de chaque entrée et dérive l'union des ids. Une faute de frappe dans un
  * ingrédient de recette devient une erreur de compilation.
+ *
+ * Chaque objet a **une** icône, déclarée dans `data/icons.ts` sous le même
+ * id : `ITEM_ICONS` est un `Record<ItemId, …>`, donc oublier l'icône d'un
+ * nouvel objet est une erreur de compilation, pas un carré vide à l'écran.
  */
 
 export interface ItemProto {
@@ -18,6 +22,7 @@ export const ITEMS = {
   stone: { label: 'Pierre', stack: 100 },
   coal: { label: 'Charbon', stack: 100 },
   ironOre: { label: 'Minerai de fer', stack: 100 },
+  food: { label: 'Nourriture', stack: 100 },
 } as const satisfies Record<string, ItemProto>;
 
 export type ItemId = keyof typeof ITEMS;

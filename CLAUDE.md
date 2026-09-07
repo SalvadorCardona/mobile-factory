@@ -17,7 +17,13 @@ mutants radioactifs** rôdent. La partie commence sur le chantier de la
 **Mécanique centrale** — Adam n'a pas de bouton d'action. Il **heurte** les
 choses : un arbre ou un rocher heurté se récolte (bois, fer, charbon,
 pierre) ; un chantier heurté reçoit ce qu'il attend. Les ressources et les
-bâtiments sont solides, on ne les traverse pas.
+bâtiments sont solides, on ne les traverse pas. Un tap sur un chantier ouvre
+sa fenêtre : « Transférer le sac » y vide d'un coup ce qu'il attend, et
+« Construire » l'achève — **un chantier livré ne se termine jamais seul**.
+
+**Ouvriers** — chaque bâtiment déclare `workers` ; la maison des
+constructeurs et la ferme en emploient quatre, comptés dans la population
+une fois le bâtiment fini. Les porteurs viendront de là.
 
 **Menace** — dès que la mairie est debout, des **mutants** arrivent par
 vagues (`src/data/enemies.ts`) et marchent droit sur elle ; ils traversent
@@ -85,6 +91,16 @@ se ressembler (Adam, Ève, l'enfant) se génère de préférence dans un même l
 
 Jamais de style improvisé, jamais d'asset non vérifié, jamais de PNG
 référencé sans être passé par ces étapes.
+
+## Icônes et HUD
+
+- Une ressource = une icône : `src/data/icons.ts` est un
+  `Record<ItemId, PixelIcon>` (12 × 12 px, palette du jeu). Un objet sans
+  icône ne compile pas ; `validatePrototypes()` vérifie taille et palette.
+- `src/ui/icons.ts` bake icônes d'objets et vignettes de bâtiments en
+  `data:` URL pour le DOM. Le menu de construction est un tiroir derrière un
+  seul bouton ; armer un bâtiment passe la carte en mode construction
+  (grille + emprises, `render/ghostLayer.ts`).
 
 ## Système de sprites
 

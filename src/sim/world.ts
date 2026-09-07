@@ -29,7 +29,7 @@ import { RESOURCES } from '../data/resources.ts';
 import { WEAPONS } from '../data/weapons.ts';
 import { ChunkIndex } from './chunk.ts';
 import { nearestMutant, shoot, stepArrow } from './combat.ts';
-import type { Command, CommandLogEntry, PlacementRejection } from './commands.ts';
+import type { Command, CommandLogEntry, PlacementRejection, SiteRejection } from './commands.ts';
 import { spawnPoint, stepMutant } from './enemies.ts';
 import { stepKid } from './kids.ts';
 import { facingOf } from './motion.ts';
@@ -44,6 +44,7 @@ import type {
   Drill,
   Entity,
   EntityId,
+  Farm,
   Kid,
   Mobile,
   MobileId,
@@ -61,6 +62,9 @@ const STEP_SECONDS = 1 / TICKS_PER_SECOND;
 
 /** Recette utilisée par une foreuse. Une seule pour l'instant, cf. `data/recipes.ts`. */
 const DRILL_RECIPE: RecipeId = 'mineOre';
+
+/** Recette d'une ferme. */
+const FARM_RECIPE: RecipeId = 'growFood';
 
 /** Ticks de contact entre deux objets livrés sur un chantier. Court : le chantier se remplit à vue. */
 export const DELIVER_TICKS = 2;
@@ -84,8 +88,14 @@ export type WorldEvents = {
   drillProduced: { id: EntityId; item: ItemId };
   /** Adam a arraché une unité à la tuile. `remaining` à 0 : elle a disparu. */
   resourceHarvested: { tx: number; ty: number; item: ItemId; remaining: number };
-  /** Un objet du sac vient d'être posé sur le chantier. `missing` : ce qui manque encore, tous objets confondus. */
-  siteDelivered: { id: EntityId; item: ItemId; missing: number };
+  /** `amount` objets du sac viennent d'être posés sur le chantier. `missing` : ce qui manque encore, tous objets confondus. */
+  siteDelivered: { id: EntityId; item: ItemId; amount: number; missing: number };
+  /** Le chantier a tout reçu : il attend que le joueur appuie sur « Construire ». */
+  siteReady: { id: EntityId };
+  /** Une commande sur un chantier a été refusée. */
+  siteRejected: { id: EntityId; reason: SiteRejection };
+  /** La ferme a récolté. */
+  farmProduced: { id: EntityId; item: ItemId };
   /** Le sac est plein : la récolte s'arrête, il faut aller livrer. */
   inventoryFull: Record<string, never>;
   /** Une vague de mutants vient d'apparaître autour de la mairie. */
@@ -226,7 +236,83 @@ export class World {
         this.openSite(command.building, command.tx, command.ty);
         break;
       }
+
+      case 'transferToSite':
+        this.transfer(command.id);
+        break;
+
+      case 'buildSite':
+        this.build(command.id);
+        break;
     }
+  }
+
+  /* ---------------------------------------------------------------- chantier */
+
+  /** Le chantier existe-t-il encore, et Adam est-il à portée ? */
+  private siteFor(id: EntityId): { site: Site } | { reason: SiteRejection } {
+    const entity = this.entities.get(id);
+
+    if (entity?.kind !== 'site') return { reason: 'missing' };
+    if (!this.inReach(entity)) return { reason: 'outOfReach' };
+    return { site: entity };
+  }
+
+  /** Adam est-il assez près de l'emprise pour y travailler ? Même portée que le placement. */
+  public inReach(entity: Entity): boolean {
+    const centerX = (entity.tx + entity.width / 2) * TILE_SIZE;
+    const centerY = (entity.ty + entity.height / 2) * TILE_SIZE;
+    const reach = BUILD_REACH_TILES * TILE_SIZE;
+
+    return distanceSq(this.player.x, this.player.y, centerX, centerY) <= reach * reach;
+  }
+
+  /** Tout ce que le chantier attend et qu'Adam possède, en une fois. */
+  private transfer(id: EntityId): void {
+    const found = this.siteFor(id);
+
+    if ('reason' in found) {
+      this.events.emit('siteRejected', { id, reason: found.reason });
+      return;
+    }
+
+    const { site } = found;
+    const cost = BUILDINGS[site.proto].cost;
+    const { inventory } = this.player;
+    let moved = 0;
+
+    for (const [item, needed] of Object.entries(cost) as [ItemId, number][]) {
+      const delivered = site.delivered[item] ?? 0;
+      const amount = Math.min(needed - delivered, inventory.count(item));
+
+      if (amount <= 0) continue;
+
+      inventory.remove(item, amount);
+      site.delivered[item] = delivered + amount;
+      moved += amount;
+      this.events.emit('siteDelivered', { id: site.id, item, amount, missing: siteMissing(site) });
+    }
+
+    if (moved === 0) {
+      this.events.emit('siteRejected', { id, reason: 'nothingToGive' });
+      return;
+    }
+    if (siteMissing(site) === 0) this.events.emit('siteReady', { id: site.id });
+  }
+
+  /** Le bouton « Construire » : le chantier livré devient le bâtiment. */
+  private build(id: EntityId): void {
+    const found = this.siteFor(id);
+
+    if ('reason' in found) {
+      this.events.emit('siteRejected', { id, reason: found.reason });
+      return;
+    }
+    if (siteMissing(found.site) > 0) {
+      this.events.emit('siteRejected', { id, reason: 'incomplete' });
+      return;
+    }
+    this.complete(found.site);
   }
 
   /* -------------------------------------------------------------- collision */
@@ -307,7 +393,7 @@ export class World {
     this.events.emit('resourceHarvested', { tx, ty, item, remaining: taken.resource.remaining });
   }
 
-  /** Pose un objet du sac sur le chantier — le premier qui manque et qu'Adam possède. */
+  /** Pose un objet du sac sur le chantier — le premier qui manque et qu'Adam possède. Au contact, le chantier se remplit à vue. */
   private deliver(site: Site): void {
     const cost = BUILDINGS[site.proto].cost;
     const { inventory } = this.player;
@@ -322,9 +408,10 @@ export class World {
 
       const missing = siteMissing(site);
 
-      this.events.emit('siteDelivered', { id: site.id, item, missing });
+      this.events.emit('siteDelivered', { id: site.id, item, amount: 1, missing });
 
-      if (missing === 0) this.complete(site);
+      // Le chantier ne se termine jamais tout seul : il attend « Construire ».
+      if (missing === 0) this.events.emit('siteReady', { id: site.id });
       return;
     }
   }
@@ -431,6 +518,14 @@ export class World {
       case 'tower':
         building = { ...base, kind: 'tower', armed: false };
         break;
+
+      case 'house':
+        building = { ...base, kind: 'house' };
+        break;
+
+      case 'farm':
+        building = { ...base, kind: 'farm', blocked: false };
+        break;
     }
 
     this.entities.set(site.id, building);
@@ -450,6 +545,13 @@ export class World {
 
       case 'tower':
         if (this.hasMutants()) this.armTower(building, 1);
+        break;
+
+      case 'farm':
+        this.scheduleFarm(building);
+        break;
+
+      case 'house':
         break;
 
       case 'townHall':
@@ -493,8 +595,13 @@ export class World {
         this.runTower(entity);
         break;
 
+      case 'farm':
+        this.runFarm(entity);
+        break;
+
       case 'site':
       case 'townHall':
+      case 'house':
         break;
     }
   }
@@ -535,6 +642,29 @@ export class World {
     const recipe = RECIPES[DRILL_RECIPE];
 
     this.scheduler.schedule(drill.id, this.tickCount + recipe.duration, this.tickCount);
+  }
+
+  /**
+   * Un cycle de ferme : même logique que la foreuse — coffre plein, la ferme
+   * s'endort et ne coûte plus rien jusqu'à ce qu'on vienne la vider.
+   */
+  private runFarm(farm: Farm): void {
+    const recipe = RECIPES[FARM_RECIPE];
+    const [item, amount] = (Object.entries(recipe.outputs) as [ItemId, number][])[0] ?? ['food', 1];
+    const accepted = farm.store.add(item, amount);
+
+    if (accepted < amount) {
+      farm.blocked = true;
+      return;
+    }
+
+    farm.blocked = false;
+    this.events.emit('farmProduced', { id: farm.id, item });
+    this.scheduleFarm(farm);
+  }
+
+  private scheduleFarm(farm: Farm): void {
+    this.scheduler.schedule(farm.id, this.tickCount + RECIPES[FARM_RECIPE].duration, this.tickCount);
   }
 
   /** Une naissance : un enfant apparaît sur la première tuile libre autour de la nurserie. */
@@ -610,14 +740,21 @@ export class World {
     return false;
   }
 
-  /** Adultes et enfants : Adam, plus tout ce que les nurseries ont produit. */
-  public population(): { adults: number; children: number } {
+  /**
+   * La population : Adam, les enfants nés aux nurseries, et les ouvriers
+   * qu'emploient les bâtiments finis. Un chantier n'emploie personne.
+   */
+  public population(): { adults: number; children: number; workers: number } {
     let children = 0;
+    let workers = 0;
 
     for (const mobile of this.mobiles.values()) {
       if (mobile.kind === 'kid') children += 1;
     }
-    return { adults: 1, children };
+    for (const entity of this.entities.values()) {
+      if (entity.kind !== 'site') workers += BUILDINGS[entity.proto].workers;
+    }
+    return { adults: 1, children, workers };
   }
 
   private stepMobiles(): void {

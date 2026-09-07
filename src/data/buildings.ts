@@ -18,7 +18,7 @@ import type { SpriteId } from './sprites.ts';
 import type { WeaponId } from './weapons.ts';
 
 /** Comportement simulé associé au bâtiment. Un `kind` = un cas dans `sim/`. */
-export type BuildingKind = 'drill' | 'townHall' | 'nursery' | 'tower';
+export type BuildingKind = 'drill' | 'townHall' | 'nursery' | 'tower' | 'house' | 'farm';
 
 export interface BuildingProto {
   label: string;
@@ -34,6 +34,11 @@ export interface BuildingProto {
   storage: number;
   /** Points de vie du bâtiment fini. */
   hp: number;
+  /**
+   * Ouvriers que le bâtiment emploie ou héberge une fois terminé. Ils
+   * comptent dans la population de la colonie ; les porteurs en sortiront.
+   */
+  workers: number;
   /** Proposé dans le menu de construction ? La mairie, unique, ne l'est pas. */
   menu: boolean;
   /** Planche de sprites du bâtiment terminé. */
@@ -52,6 +57,7 @@ export const BUILDINGS = {
     cost: { wood: 20, stone: 12 },
     storage: Infinity,
     hp: 120,
+    workers: 0,
     menu: false,
     sprite: 'townHall',
     weapon: null,
@@ -65,6 +71,7 @@ export const BUILDINGS = {
     cost: { stone: 6, ironOre: 4 },
     storage: 50,
     hp: 40,
+    workers: 0,
     menu: true,
     sprite: 'drill',
     weapon: null,
@@ -78,8 +85,37 @@ export const BUILDINGS = {
     cost: { wood: 14, stone: 6 },
     storage: 0,
     hp: 60,
+    workers: 0,
     menu: true,
     sprite: 'nursery',
+    weapon: null,
+  },
+  builderHouse: {
+    label: LORE.buildings.builderHouse.name,
+    description: LORE.buildings.builderHouse.description,
+    kind: 'house',
+    width: 2,
+    height: 2,
+    cost: { wood: 16, stone: 8 },
+    storage: 0,
+    hp: 70,
+    workers: 4,
+    menu: true,
+    sprite: 'builderHouse',
+    weapon: null,
+  },
+  farm: {
+    label: LORE.buildings.farm.name,
+    description: LORE.buildings.farm.description,
+    kind: 'farm',
+    width: 2,
+    height: 2,
+    cost: { wood: 10, stone: 4 },
+    storage: 40,
+    hp: 50,
+    workers: 4,
+    menu: true,
+    sprite: 'farm',
     weapon: null,
   },
   watchtower: {
@@ -91,6 +127,7 @@ export const BUILDINGS = {
     cost: { wood: 12, stone: 4 },
     storage: 0,
     hp: 60,
+    workers: 0,
     menu: true,
     sprite: 'watchtower',
     weapon: 'towerBow',
