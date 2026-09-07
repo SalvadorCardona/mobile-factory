@@ -17,7 +17,9 @@ jouable dans le navigateur, sur téléphone :
 - carte chunkée générée depuis une seed, terrain baké en RenderTexture ;
 - caméra qui suit le joueur, culling et éviction par chunk ;
 - boucle à pas fixe 20 TPS, rendu interpolé à la fréquence de l'écran ;
-- joystick virtuel flottant à sortie analogique ;
+- joystick virtuel flottant à sortie analogique ; sur PC, déplacement au
+  clavier — ZQSD, WASD ou flèches, lu par position physique des touches, donc
+  sans réglage entre AZERTY et QWERTY ;
 - une foreuse qui extrait le gisement sous elle dans son coffre interne ;
 - placement au tap en deux temps, avec aperçu fantôme ;
 - récolte par contact : Adam heurte un arbre ou un rocher, le coupe à la
@@ -110,7 +112,7 @@ src/
             enemies, combat, kids, commands
   render/   renderer, camera, chunkLayer, entityLayer, mobileLayer,
             particles, ghostLayer, spriteLibrary, atlas
-  input/    joystick, pointer, placement, inspect
+  input/    joystick, keyboard, pointer, placement, inspect
   ui/       hud, buildMenu, buildingPanel
   audio/    engine, synth, music       — Web Audio, sons procéduraux
   main.ts   câblage uniquement
