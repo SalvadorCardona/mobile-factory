@@ -14,6 +14,7 @@ import { MENU_BUILDING_IDS } from './data/buildings.ts';
 import type { ItemId } from './data/items.ts';
 import { Inspect } from './input/inspect.ts';
 import { Joystick } from './input/joystick.ts';
+import { Keyboard } from './input/keyboard.ts';
 import { Placement } from './input/placement.ts';
 import { PointerRouter } from './input/pointer.ts';
 import { GameRenderer } from './render/renderer.ts';
@@ -33,7 +34,7 @@ import { Hud } from './ui/hud.ts';
  */
 const MAX_FRAME_MS = 250;
 
-/** Seuil sous lequel un mouvement de joystick ne vaut pas une commande. */
+/** Seuil sous lequel un mouvement d'axe ne vaut pas une commande. */
 const AXIS_EPSILON = 0.01;
 
 /** Couleurs des éclats projetés quand Adam entame une ressource. */
@@ -69,6 +70,7 @@ async function main(): Promise<void> {
   if (import.meta.env.DEV) Object.assign(window, { mobileFactory: { world } });
 
   const joystick = new Joystick(() => renderer.app.screen.width);
+  const keyboard = new Keyboard();
   const placement = new Placement(
     world,
     (x, y) => renderer.screenToWorld(x, y),
@@ -122,12 +124,15 @@ async function main(): Promise<void> {
   });
 
   /**
-   * Le joystick est lu en continu mais ne devient une commande que lorsqu'il
-   * bouge vraiment. Sans ce filtre, le journal de commandes — la base de la
+   * L'axe est lu en continu mais ne devient une commande que lorsqu'il bouge
+   * vraiment. Sans ce filtre, le journal de commandes — la base de la
    * rejouabilité — grossirait de 20 entrées par seconde sans rien apprendre.
+   *
+   * Le pouce a la priorité sur le clavier : sur un PC tactile, un joystick
+   * posé pendant qu'une touche est tenue ne doit pas se battre avec elle.
    */
   function pushAxisIfChanged(): void {
-    const { axisX, axisY } = joystick.state;
+    const { axisX, axisY } = joystick.state.active ? joystick.state : keyboard.state;
 
     if (
       Math.abs(axisX - lastAxisX) < AXIS_EPSILON &&
