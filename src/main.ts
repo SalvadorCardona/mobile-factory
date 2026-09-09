@@ -49,6 +49,13 @@ const HARVEST_COLORS: Record<ItemId, readonly number[]> = {
 /** Les gestes qui comptent comme une activation utilisateur pour l'audio. */
 const GESTURES = ['pointerdown', 'pointerup', 'keydown'] as const;
 
+/** Umami expose cet objet globalement une fois `nx.js` chargé (voir index.html). */
+declare global {
+  interface Window {
+    umami?: { track: (eventName: string) => void };
+  }
+}
+
 const MUTANT_COLORS = [PALETTE.radioactive, PALETTE.mutantSkin, PALETTE.mutantSkinShadow];
 const RUBBLE_COLORS = [PALETTE.plaster, PALETTE.brick, PALETTE.rockDark, PALETTE.beam];
 
@@ -62,6 +69,9 @@ async function main(): Promise<void> {
   if (!mount) throw new Error('#app introuvable');
 
   const world = new World(readSeed());
+
+  window.umami?.track('partie-demarree');
+
   const renderer = await GameRenderer.create(world, mount, import.meta.env.BASE_URL);
   const audio = new AudioEngine();
 
