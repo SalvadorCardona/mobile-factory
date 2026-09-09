@@ -1,3 +1,5 @@
+![mobile-factory](https://raw.githubusercontent.com/SalvadorCardona/brand-assets/main/projects/mobile-factory/banner.png)
+
 # Mobile Factory
 
 **[▶ Jouer](https://cardona.digital/mobile-factory/)** — dans le navigateur,

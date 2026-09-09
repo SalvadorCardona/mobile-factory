@@ -14,6 +14,16 @@
     <meta name="theme-color" content="#11161d" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!--
+      L'icône du jeu vient de SalvadorCardona/brand-assets ; `favicon.png` en
+      est la réduction 64×64, pour ne pas télécharger 1024×1024 à chaque
+      chargement. Vite préfixe ces chemins absolus par sa `base`, mais pas ceux
+      du manifeste : celui-ci est un fichier de `public/`, copié tel quel, et
+      ses chemins y sont donc relatifs.
+    -->
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <title>Mobile Factory</title>
   </head>
   <body>
