@@ -6,6 +6,11 @@
  * gameplay finit dans ce fichier, elle est au mauvais endroit.
  */
 
+// Police pixel embarquée dans le build, pas chargée d'un CDN : le jeu est une
+// PWA, il doit avoir sa typo hors ligne. Jersey 15 plutôt qu'une autre : ses
+// chiffres ne se confondent pas (le 5 de Pixelify Sans se lit « S »), et un
+// HUD de ressources, c'est d'abord des chiffres.
+import '@fontsource/jersey-15/latin.css';
 import './style.css';
 import { AudioEngine } from './audio/engine.ts';
 import { assertPrototypes } from './data/validate.ts';
@@ -23,6 +28,7 @@ import { TILE_SIZE } from './core/grid.ts';
 import { BuildingPanel } from './ui/buildingPanel.ts';
 import { BuildMenu } from './ui/buildMenu.ts';
 import { Hud } from './ui/hud.ts';
+import { PauseScreen, TitleScreen } from './ui/screens.ts';
 
 /**
  * Clamp anti-spirale de la mort.
@@ -33,6 +39,9 @@ import { Hud } from './ui/hud.ts';
  * saute le temps perdu au lieu de le rattraper.
  */
 const MAX_FRAME_MS = 250;
+
+/** Hauteur du bouton « Construire » et de sa marge, en pixels écran. */
+const HUD_BOTTOM_INSET = 84;
 
 /** Seuil sous lequel un mouvement d'axe ne vaut pas une commande. */
 const AXIS_EPSILON = 0.01;
@@ -58,6 +67,7 @@ declare global {
 
 const MUTANT_COLORS = [PALETTE.radioactive, PALETTE.mutantSkin, PALETTE.mutantSkinShadow];
 const RUBBLE_COLORS = [PALETTE.plaster, PALETTE.brick, PALETTE.rockDark, PALETTE.beam];
+const CELEBRATION_COLORS = [PALETTE.accent, PALETTE.ironLight, PALETTE.plaster, PALETTE.leavesLight];
 
 async function main(): Promise<void> {
   // Le contrôle d'intégrité des prototypes ne tourne qu'en dev : en production
@@ -69,8 +79,6 @@ async function main(): Promise<void> {
   if (!mount) throw new Error('#app introuvable');
 
   const world = new World(readSeed());
-
-  window.umami?.track('partie-demarree');
 
   const renderer = await GameRenderer.create(world, mount, import.meta.env.BASE_URL);
   const audio = new AudioEngine();
@@ -87,7 +95,8 @@ async function main(): Promise<void> {
     () => buildMenu.refresh(),
   );
 
-  const hud = new Hud(world);
+  const debug = import.meta.env.DEV && new URLSearchParams(window.location.search).has('debug');
+  const hud = new Hud(world, debug);
   const buildMenu = new BuildMenu(placement, MENU_BUILDING_IDS, () => audio.play('open'));
   const panel = new BuildingPanel(world, () => audio.play('open'));
   const inspect = new Inspect(
@@ -98,7 +107,42 @@ async function main(): Promise<void> {
   );
 
   hud.root.append(buildMenu.root, panel.root);
+  hud.setProjector((x, y) => renderer.worldToScreen(x, y));
+
+  /*
+   * L'horloge : la simulation n'avance que si la partie a commencé et n'est
+   * pas en pause. Le rendu, lui, tourne toujours — la carte se dessine
+   * derrière l'écran titre et derrière la pause.
+   */
+  let started = false;
+  let paused = false;
+
+  const pause = new PauseScreen(() => setPaused(false));
+  const title = new TitleScreen(() => {
+    started = true;
+    hud.root.dataset['started'] = 'true';
+    window.umami?.track('partie-demarree');
+  });
+
+  function setPaused(value: boolean): void {
+    if (!started || world.defeated) return;
+    paused = value;
+    pause.visible = value;
+    accumulator = 0;
+  }
+
+  hud.pauseButton.addEventListener('click', () => setPaused(!paused));
+  hud.root.append(pause.root, title.root);
   mount.append(hud.root);
+
+  // Onglet caché, appel entrant, écran verrouillé : la partie s'arrête d'elle-même.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) setPaused(true);
+  });
+  window.addEventListener('keydown', (event) => {
+    if (event.code === 'Escape' || event.code === 'KeyP') setPaused(!paused);
+    if (event.code === 'Backquote' && import.meta.env.DEV) hud.toggleDebug();
+  });
 
   // Ordre d'interrogation des doigts : l'inspection d'abord (elle ne
   // revendique qu'un tap sur un bâtiment), le placement ensuite (il ne
@@ -113,13 +157,15 @@ async function main(): Promise<void> {
 
   wireAudio(world, audio, hud);
   wireParticles(world, renderer);
+  wireShake(world, renderer);
 
   let accumulator = 0;
+  let frame = 0;
   let lastAxisX = 0;
   let lastAxisY = 0;
 
   renderer.app.ticker.add((ticker) => {
-    accumulator += Math.min(ticker.deltaMS, MAX_FRAME_MS);
+    if (started && !paused) accumulator += Math.min(ticker.deltaMS, MAX_FRAME_MS);
 
     while (accumulator >= STEP_MS) {
       pushAxisIfChanged();
@@ -129,6 +175,9 @@ async function main(): Promise<void> {
 
     renderer.draw(accumulator / STEP_MS, placement.mode !== 'idle', placement.ghost, joystick.state);
     hud.update(ticker.FPS, renderer.bakedChunks);
+
+    // Lire la mise en page force un reflow : une fois tous les dix cadres suffit.
+    if (++frame % 10 === 0) renderer.setHudInsets(hud.topInset(), HUD_BOTTOM_INSET);
     buildMenu.refresh();
     panel.update();
   });
@@ -188,6 +237,7 @@ function wireAudio(world: World, audio: AudioEngine, hud: Hud): void {
     if (hp > 0) audio.play('thud');
   });
   world.events.on('buildingDestroyed', () => audio.play('collapse'));
+  world.events.on('waveCountdown', () => audio.play('countdown'));
   world.events.on('waveStarted', () => audio.play('alarm'));
   world.events.on('childBorn', () => audio.play('baby'));
   world.events.on('townHallDestroyed', () => audio.play('defeat'));
@@ -209,9 +259,28 @@ function wireParticles(world: World, renderer: GameRenderer): void {
       particles.burst((entity.tx + entity.width / 2) * TILE_SIZE, (entity.ty + entity.height) * TILE_SIZE, RUBBLE_COLORS, 3);
     }
   });
+  world.events.on('buildingCompleted', ({ id }) => {
+    const entity = world.entities.get(id);
+
+    if (!entity) return;
+
+    // Des éclats dorés tout le long du pied du bâtiment : ça y est, il tient debout.
+    for (let i = 0; i <= entity.width; i += 1) {
+      particles.burst((entity.tx + i) * TILE_SIZE, (entity.ty + entity.height) * TILE_SIZE, CELEBRATION_COLORS, 7, 0.16);
+    }
+  });
   world.events.on('buildingDestroyed', ({ tx, ty }) =>
     particles.burst((tx + 1) * TILE_SIZE, (ty + 1) * TILE_SIZE, RUBBLE_COLORS, 16, 0.14),
   );
+}
+
+/** La caméra encaisse les coups : un peu pour un mur, beaucoup pour la mairie. */
+function wireShake(world: World, renderer: GameRenderer): void {
+  world.events.on('buildingDamaged', ({ id }) => renderer.shake(id === world.townHallId ? 0.28 : 0.14));
+  world.events.on('buildingDestroyed', () => renderer.shake(0.6));
+  world.events.on('waveStarted', () => renderer.shake(0.3));
+  world.events.on('buildingCompleted', () => renderer.shake(0.18));
+  world.events.on('townHallDestroyed', () => renderer.shake(1));
 }
 
 /**

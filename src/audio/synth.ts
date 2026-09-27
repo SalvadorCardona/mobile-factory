@@ -23,7 +23,8 @@ export type SoundName =
   | 'alarm'
   | 'baby'
   | 'defeat'
-  | 'open';
+  | 'open'
+  | 'countdown';
 
 /** Une seconde de bruit blanc, partagée par tous les sons qui en ont besoin. */
 let noiseBuffer: AudioBuffer | null = null;
@@ -190,6 +191,12 @@ export const SOUNDS: Record<SoundName, (ctx: AudioContext, out: AudioNode, at: n
     for (const [i, f] of [392, 349, 311, 262].entries()) {
       tone(ctx, out, at + i * 0.28, 'triangle', f, f * 0.98, { attack: 0.02, decay: 0.3, peak: 0.4 });
     }
+  },
+
+  /** Compte à rebours d'une vague : un bip sec, grave, qui ne se confond pas avec l'alarme. */
+  countdown(ctx, out, at) {
+    tone(ctx, out, at, 'square', 330, 330, { attack: 0.005, decay: 0.09, peak: 0.14 });
+    tone(ctx, out, at, 'triangle', 165, 160, { decay: 0.12, peak: 0.3 });
   },
 
   /** Une fenêtre qui s'ouvre. */

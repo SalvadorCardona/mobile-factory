@@ -69,6 +69,9 @@ const FARM_RECIPE: RecipeId = 'growFood';
 /** Ticks de contact entre deux objets livrés sur un chantier. Court : le chantier se remplit à vue. */
 export const DELIVER_TICKS = 2;
 
+/** Secondes annoncées avant chaque vague. */
+const WAVE_COUNTDOWN_SECONDS = 3;
+
 /** Le bâtiment que la partie ouvre en chantier au démarrage. */
 export const STARTING_BUILDING: BuildingId = 'townHall';
 
@@ -98,6 +101,8 @@ export type WorldEvents = {
   farmProduced: { id: EntityId; item: ItemId };
   /** Le sac est plein : la récolte s'arrête, il faut aller livrer. */
   inventoryFull: Record<string, never>;
+  /** Plus que `seconds` secondes avant la prochaine vague (3, 2, puis 1). */
+  waveCountdown: { seconds: number };
   /** Une vague de mutants vient d'apparaître autour de la mairie. */
   waveStarted: { wave: number; count: number };
   /** Un arc a tiré, depuis (x, y). */
@@ -135,6 +140,15 @@ export class World {
 
   /** Vrai une fois la mairie détruite. La simulation continue, les vagues s'arrêtent. */
   public defeated = false;
+
+  /** Tick d'apparition de la prochaine vague ; 0 tant qu'aucune n'est planifiée. */
+  public nextWaveTick = 0;
+
+  /** Mutants abattus depuis le début de la partie — le score de l'écran de fin. */
+  public kills = 0;
+
+  /** Tick où la mairie est tombée ; 0 tant qu'elle tient. */
+  public defeatTick = 0;
 
   private readonly scheduler = new Scheduler();
   private readonly queue: Command[] = [];
@@ -196,6 +210,7 @@ export class World {
     const contact = stepPlayer(this.player, this.moveX, this.moveY, this.isSolid, STEP_SECONDS);
 
     this.handleContact(contact);
+    this.announceWave();
     this.stepMobiles();
     this.shootPlayerBow();
 
@@ -556,9 +571,7 @@ export class World {
 
       case 'townHall':
         // Le toit est posé : les mutants savent maintenant où aller.
-        if (building.id === this.townHallId) {
-          this.scheduler.schedule(WAVE_WAKE_ID, this.tickCount + WAVES.firstDelay, this.tickCount);
-        }
+        if (building.id === this.townHallId) this.scheduleWave(WAVES.firstDelay);
         break;
     }
   }
@@ -826,6 +839,7 @@ export class World {
       return;
     }
     this.mobiles.delete(mutant.id);
+    this.kills += 1;
     this.events.emit('mutantDied', { id: mutant.id, x: mutant.x, y: mutant.y });
   }
 
@@ -845,7 +859,23 @@ export class World {
       if (entity.kind === 'tower') this.armTower(entity, 1);
     }
 
-    this.scheduler.schedule(WAVE_WAKE_ID, this.tickCount + WAVES.interval, this.tickCount);
+    this.scheduleWave(WAVES.interval);
+  }
+
+  /** Les trois dernières secondes avant une vague, une par une. */
+  private announceWave(): void {
+    if (this.nextWaveTick === 0 || this.defeated) return;
+
+    const left = this.nextWaveTick - this.tickCount;
+
+    if (left > 0 && left <= WAVE_COUNTDOWN_SECONDS * TICKS_PER_SECOND && left % TICKS_PER_SECOND === 0) {
+      this.events.emit('waveCountdown', { seconds: left / TICKS_PER_SECOND });
+    }
+  }
+
+  private scheduleWave(delay: number): void {
+    this.nextWaveTick = this.tickCount + delay;
+    this.scheduler.schedule(WAVE_WAKE_ID, this.nextWaveTick, this.tickCount);
   }
 
   private spawnMutant(): void {
@@ -900,6 +930,8 @@ export class World {
 
     if (building.id === this.townHallId && !this.defeated) {
       this.defeated = true;
+      this.defeatTick = this.tickCount;
+      this.nextWaveTick = 0;
       this.events.emit('townHallDestroyed', {});
     }
   }

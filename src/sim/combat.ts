@@ -8,7 +8,8 @@
  * Une flèche est une ligne droite tirée vers la position du mutant au
  * moment du tir : pas d'anticipation. Un mutant lent et une flèche rapide
  * suffisent à ce qu'elle touche presque toujours, et la rater de temps en
- * temps fait partie du charme.
+ * temps fait partie du charme — à condition que la collision soit balayée,
+ * cf. `stepArrow`.
  */
 
 import { TILE_SIZE, distanceSq } from '../core/grid.ts';
@@ -75,18 +76,41 @@ export function stepArrow(arrow: Arrow, mutants: Iterable<Mutant>): Mutant | nul
   arrow.y += arrow.vy;
   arrow.ttl -= 1;
 
-  for (const mutant of mutants) {
-    const proto = ENEMIES[mutant.proto];
+  /*
+   * Test balayé, pas ponctuel. Une flèche avance de 25 px par tick ; la
+   * boîte d'un mutant en fait 20 de large et 24 de haut. Tester la seule
+   * position d'arrivée, c'est laisser la flèche sauter par-dessus la cible
+   * une fois sur deux — l'arc d'Adam ratait un mutant immobile à trois
+   * tuiles. On échantillonne donc le trajet du tick par pas de `SWEEP_STEP`.
+   */
+  const length = Math.hypot(arrow.vx, arrow.vy);
+  const samples = Math.max(1, Math.ceil(length / SWEEP_STEP));
+  const list = [...mutants];
 
-    // La boîte du mutant est basse (ses pieds) ; la flèche vise son corps,
-    // qu'on prend deux fois plus haut que la boîte.
-    if (
-      Math.abs(arrow.x - mutant.x) <= proto.halfW + 2 &&
-      arrow.y >= mutant.y - proto.halfH * 3 &&
-      arrow.y <= mutant.y + proto.halfH
-    ) {
-      return mutant;
+  for (let i = 1; i <= samples; i += 1) {
+    const x = arrow.prevX + (arrow.vx * i) / samples;
+    const y = arrow.prevY + (arrow.vy * i) / samples;
+
+    for (const mutant of list) {
+      if (touches(mutant, x, y)) return mutant;
     }
   }
   return null;
+}
+
+/** Pas d'échantillonnage du trajet d'une flèche, en pixels : moins que la plus petite dimension d'un mutant. */
+const SWEEP_STEP = 6;
+
+/**
+ * La boîte du mutant est basse (ses pieds) ; la flèche vise son corps,
+ * qu'on prend deux fois plus haut que la boîte.
+ */
+function touches(mutant: Mutant, x: number, y: number): boolean {
+  const proto = ENEMIES[mutant.proto];
+
+  return (
+    Math.abs(x - mutant.x) <= proto.halfW + 2 &&
+    y >= mutant.y - proto.halfH * 3 &&
+    y <= mutant.y + proto.halfH
+  );
 }

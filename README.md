@@ -16,8 +16,13 @@ bâtiments.
 La verticale jouable s'arrête après le placement au tap. Tout ce qui suit est
 jouable dans le navigateur, sur téléphone :
 
-- carte chunkée générée depuis une seed, terrain baké en RenderTexture ;
-- caméra qui suit le joueur, culling et éviction par chunk ;
+- un **écran titre** (le pitch, les commandes, « Jouer ») et une **pause**
+  — bouton, `Échap`/`P`, ou automatique quand l'onglet passe en arrière-plan ;
+- carte chunkée générée depuis une seed, terrain baké en RenderTexture, avec
+  un tileset procédural : variantes de sol (brins d'herbe, fleurs, cailloux,
+  débris), rives d'écume, franges d'herbe, rebords de falaise, ombres portées ;
+- caméra amortie qui anticipe la marche et **tremble** aux impacts, culling
+  et éviction par chunk ;
 - boucle à pas fixe 20 TPS, rendu interpolé à la fréquence de l'écran ;
 - joystick virtuel flottant à sortie analogique ; sur PC, déplacement au
   clavier — ZQSD, WASD ou flèches, lu par position physique des touches, donc
@@ -32,7 +37,17 @@ jouable dans le navigateur, sur téléphone :
 - des **mutants radioactifs** par vagues, dès que la mairie est debout : ils
   marchent droit sur elle et cassent ce qui les bloque ; l'arc d'Adam tire
   automatiquement sur le plus proche ; si la mairie tombe, la partie est perdue ;
-- sons et musique de fond synthétisés en Web Audio, sans fichier audio.
+- un HUD de jeu vidéo : quête avec une barre par ressource, santé de la
+  mairie, compte à rebours de la prochaine vague (3, 2, 1 au centre de
+  l'écran), population et mutants abattus ; un **conseil** contextuel qui
+  sert de tutoriel ; des gains qui jaillissent de la tête d'Adam ; des bulles
+  empilées ; des **flèches au bord de l'écran** vers les mutants hors champ
+  et vers la mairie ; un bilan de partie à la défaite ;
+- du ressenti : bâtiments qui sortent du sol en rebondissant, qui rougissent
+  et tremblent sous les coups, mutants qui flashent à l'impact, éclats dorés
+  à chaque construction, vignette qui vire au rouge pendant une attaque ;
+- sons et musique de fond synthétisés en Web Audio, sans fichier audio ;
+  police pixel (Jersey 15) embarquée dans le build, donc disponible hors ligne.
 
 Entrepôt, porteurs, assembleur, recherche et électricité viendront ensuite.
 
@@ -47,7 +62,8 @@ L'émulateur tactile de Chrome ment sur la latence et sur le multitouch. Le
 joystick et le placement se testent sur un appareil réel, dès le premier jour.
 
 Une seed peut être forcée dans l'URL — `?seed=1234` — pour retomber exactement
-sur la même carte, ce qui rend un bug de génération reproductible.
+sur la même carte, ce qui rend un bug de génération reproductible. En dev,
+`?debug` (ou la touche `²`) affiche le panneau de statistiques.
 
 | Commande            | Effet                                    |
 | ------------------- | ---------------------------------------- |

@@ -14,6 +14,10 @@
  * Tri en profondeur : les enfants sont ordonnés par le bas de leur emprise,
  * pour qu'Adam passe derrière la mairie quand il est au-dessus d'elle et
  * devant quand il est en dessous.
+ *
+ * Le ressenti : un bâtiment achevé « pousse » (il sort du sol en rebondissant),
+ * un bâtiment frappé rougit et tremble. Les deux sont des minuteurs de vue,
+ * en millisecondes d'écran — la simulation n'en sait rien.
  */
 
 import { AnimatedSprite, Container, Graphics, Sprite, type Texture, type Ticker, TilingSprite } from 'pixi.js';
@@ -32,12 +36,22 @@ const PROGRESS_BG = 0x11161d;
 const PROGRESS_FG = 0x7fc8a9;
 const HP_FG = 0xe2725b;
 
+/** Durée du rebond d'un bâtiment achevé, et de la secousse d'un bâtiment frappé. */
+const POP_MS = 420;
+const HIT_MS = 220;
+const HIT_TINT = 0xff8a80;
+
 interface EntityView {
   root: Container;
   /** Sprite animé du bâtiment fini, s'il en a un (la foreuse). */
   animated: AnimatedSprite | null;
   /** Barre d'avancement d'un chantier, ou barre de vie d'un bâtiment entamé. */
   progress: Graphics | null;
+  /** Millisecondes restantes de rebond et de secousse. */
+  pop: number;
+  hit: number;
+  /** Position de repos du pied de l'emprise, en pixels monde. */
+  baseX: number;
 }
 
 export class EntityLayer {
@@ -45,19 +59,25 @@ export class EntityLayer {
 
   private readonly views = new Map<EntityId, EntityView>();
   private readonly player: AnimatedSprite;
+  private readonly playerShadow: Sprite;
   private playerAnimation = '';
   private readonly mobiles: MobileLayer;
 
   private readonly world: World;
   private readonly library: SpriteLibrary;
 
-  public constructor(world: World, library: SpriteLibrary) {
+  public constructor(world: World, library: SpriteLibrary, footShadow: Texture) {
     this.world = world;
     this.library = library;
     this.container.sortableChildren = true;
-    this.mobiles = new MobileLayer(world, library, this.container);
+    this.mobiles = new MobileLayer(world, library, this.container, footShadow);
 
     const adam = SPRITES.adam;
+
+    this.playerShadow = new Sprite(footShadow);
+    this.playerShadow.anchor.set(0.5);
+    this.playerShadow.scale.set(SPRITE_SCALE);
+    this.container.addChild(this.playerShadow);
 
     this.player = new AnimatedSprite({ textures: library.animation('adam', 'idleDown').textures, autoUpdate: false });
     this.player.anchor.set(adam.anchorX, adam.anchorY);
@@ -65,7 +85,18 @@ export class EntityLayer {
     this.container.addChild(this.player);
 
     world.events.on('buildingPlaced', ({ id }) => this.add(id));
-    world.events.on('buildingCompleted', ({ id }) => this.replace(id));
+    world.events.on('buildingCompleted', ({ id }) => {
+      this.replace(id);
+
+      const view = this.views.get(id);
+
+      if (view) view.pop = POP_MS;
+    });
+    world.events.on('buildingDamaged', ({ id }) => {
+      const view = this.views.get(id);
+
+      if (view) view.hit = HIT_MS;
+    });
     for (const id of world.entities.keys()) this.add(id);
   }
 
@@ -76,7 +107,10 @@ export class EntityLayer {
 
     const view = this.build(entity);
 
-    view.root.position.set(entity.tx * TILE_SIZE, entity.ty * TILE_SIZE);
+    // Pivot au pied de l'emprise : le rebond part du sol, pas du coin haut gauche.
+    view.baseX = (entity.tx + entity.width / 2) * TILE_SIZE;
+    view.root.pivot.set((entity.width * TILE_SIZE) / 2, entity.height * TILE_SIZE);
+    view.root.position.set(view.baseX, (entity.ty + entity.height) * TILE_SIZE);
     view.root.zIndex = (entity.ty + entity.height) * TILE_SIZE;
     this.views.set(id, view);
     this.container.addChild(view.root);
@@ -116,7 +150,7 @@ export class EntityLayer {
       root.addChild(ground, preview, progress);
       this.drawProgress(progress, entity);
 
-      return { root, animated: null, progress };
+      return { root, animated: null, progress, pop: 0, hit: 0, baseX: 0 };
     }
 
     const proto = BUILDINGS[entity.proto];
@@ -135,7 +169,7 @@ export class EntityLayer {
 
     hp.visible = false;
     root.addChild(sprite, hp);
-    return { root, animated: sprite, progress: hp };
+    return { root, animated: sprite, progress: hp, pop: 0, hit: 0, baseX: 0 };
   }
 
   private drawProgress(graphics: Graphics, entity: Entity): void {
@@ -165,6 +199,8 @@ export class EntityLayer {
       player.prevY + (player.y - player.prevY) * alpha,
     );
     this.player.zIndex = this.player.y + PLAYER_FOOT;
+    this.playerShadow.position.set(this.player.x, this.player.y - 1);
+    this.playerShadow.zIndex = this.player.zIndex - 0.5;
     this.animatePlayer(player.facing, player.moving, player.harvesting);
     this.player.update(ticker);
     this.mobiles.update(alpha, ticker);
@@ -179,6 +215,7 @@ export class EntityLayer {
       }
 
       if (view.progress) this.drawProgress(view.progress, entity);
+      this.feel(view, ticker.deltaMS);
 
       if (view.animated) {
         view.animated.update(ticker);
@@ -190,6 +227,35 @@ export class EntityLayer {
           if (view.animated.textures !== frames.textures) setFrames(view.animated, frames);
         }
       }
+    }
+  }
+
+  /** Rebond d'achèvement et secousse d'impact, puis retour exact au repos. */
+  private feel(view: EntityView, deltaMs: number): void {
+    const { root } = view;
+
+    if (view.pop > 0) {
+      view.pop = Math.max(0, view.pop - deltaMs);
+
+      // Ressort amorti : écrasé, étiré, puis posé.
+      const t = 1 - view.pop / POP_MS;
+      const spring = Math.exp(-5 * t) * Math.cos(t * Math.PI * 3);
+
+      root.scale.set(1 - spring * 0.12, 1 + spring * 0.18);
+    } else if (root.scale.x !== 1) {
+      root.scale.set(1);
+    }
+
+    if (view.hit > 0) {
+      view.hit = Math.max(0, view.hit - deltaMs);
+
+      const strength = view.hit / HIT_MS;
+
+      root.x = view.baseX + Math.round(Math.sin(view.hit * 0.25) * 3 * strength);
+      if (view.animated) view.animated.tint = strength > 0.35 ? HIT_TINT : 0xffffff;
+    } else if (root.x !== view.baseX) {
+      root.x = view.baseX;
+      if (view.animated) view.animated.tint = 0xffffff;
     }
   }
 
