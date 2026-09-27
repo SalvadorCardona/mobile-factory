@@ -45,9 +45,14 @@ prompts.
 | Anti-aliasing, flou, dégradés, texte | interdits | Ce n'est plus du pixel art |
 
 Un personnage adulte — Adam, un mutant — tient dans 16 × 24 px, ancre aux
-pieds (0.5, 0.8) ; un enfant dans 16 × 16 px. Un bâtiment occupe exactement
-son emprise : 32 × 32 px pour 2 × 2 tuiles, 48 × 48 px pour 3 × 3. Une
-ressource de surface et une flèche tiennent dans une tuile de 16 × 16 px.
+pieds (0.5, 0.8) ; un enfant dans 16 × 16 px. Un bâtiment est vu en 3/4
+comme les personnages : sa planche a la **largeur** de son emprise (32 px
+pour 2 × 2 tuiles, 48 px pour 3 × 3) et au moins sa **hauteur** — la façade
+occupe le bas, le toit, la cheminée ou le derrick montent au-dessus des
+tuiles de derrière (32 × 48 px pour la maison des constructeurs, 32 × 64 px
+pour la tour de guet, 48 × 64 px pour la mairie). Ancre (0, 1) : le bas de
+l'image est le bas de l'emprise. Une ressource de surface, un élément de
+décor et une flèche tiennent dans une tuile de 16 × 16 px.
 
 ## Palette
 

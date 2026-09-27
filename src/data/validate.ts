@@ -87,11 +87,16 @@ export function validatePrototypes(): string[] {
       const expectedW = building.width * ART_PIXELS_PER_TILE;
       const expectedH = building.height * ART_PIXELS_PER_TILE;
 
-      if (sprite.frameWidth !== expectedW || sprite.frameHeight !== expectedH) {
+      // Vue 3/4 : aussi large que l'emprise, au moins aussi haute — le toit dépasse.
+      if (sprite.frameWidth !== expectedW || sprite.frameHeight < expectedH) {
         errors.push(
           `BUILDINGS.${id} : la planche « ${building.sprite} » fait ` +
-            `${sprite.frameWidth}×${sprite.frameHeight}, l'emprise demande ${expectedW}×${expectedH}`,
+            `${sprite.frameWidth}×${sprite.frameHeight}, l'emprise demande ${expectedW} de large ` +
+            `et au moins ${expectedH} de haut`,
         );
+      }
+      if (sprite.anchorX !== 0 || sprite.anchorY !== 1) {
+        errors.push(`BUILDINGS.${id} : la planche « ${building.sprite} » doit être ancrée en (0, 1)`);
       }
     }
   }
