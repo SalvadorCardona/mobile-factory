@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { oreAt, resourceAt, terrainAt } from './terrain.ts';
+import { decorAt, oreAt, resourceAt, terrainAt } from './terrain.ts';
 
 describe('terrain', () => {
   /*
@@ -127,5 +127,40 @@ describe('ressources de surface', () => {
 
     expect(trees / grass).toBeGreaterThan(0.05);
     expect(trees / grass).toBeLessThan(0.5);
+  });
+});
+
+describe('décor', () => {
+  it('ne se pose jamais sur l’eau ni sous une ressource', () => {
+    for (let tx = -150; tx < 150; tx += 1) {
+      for (let ty = -150; ty < 150; ty += 7) {
+        if (decorAt(3, tx, ty) === null) continue;
+        expect(terrainAt(3, tx, ty)).not.toBe('water');
+        expect(resourceAt(3, tx, ty)).toBeNull();
+      }
+    }
+  });
+
+  it('est déterministe, clairsemé et varié', () => {
+    const kinds = new Set<string>();
+    let decorated = 0;
+    let bare = 0;
+
+    for (let tx = -150; tx < 150; tx += 1) {
+      for (let ty = -150; ty < 150; ty += 3) {
+        const decor = decorAt(9, tx, ty);
+
+        expect(decorAt(9, tx, ty)).toBe(decor);
+        if (terrainAt(9, tx, ty) === 'water' || resourceAt(9, tx, ty) !== null) continue;
+        bare += 1;
+        if (decor === null) continue;
+        decorated += 1;
+        kinds.add(decor);
+      }
+    }
+
+    expect(decorated / bare).toBeGreaterThan(0.02);
+    expect(decorated / bare).toBeLessThan(0.15);
+    expect(kinds.size).toBeGreaterThan(6);
   });
 });

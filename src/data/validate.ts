@@ -144,10 +144,19 @@ export function validatePrototypes(): string[] {
     if (resource.amount <= 0 || resource.harvestTicks <= 0) {
       errors.push(`RESOURCES.${id} : quantité ou cadence nulle`);
     }
-    if (!(resource.sprite in SPRITES)) {
-      errors.push(`RESOURCES.${id} : planche inconnue « ${resource.sprite} »`);
-    } else if (!('full' in SPRITES[resource.sprite].animations)) {
-      errors.push(`RESOURCES.${id} : la planche « ${resource.sprite} » n'a pas d'animation « full »`);
+    if ((resource.sprites as readonly string[]).length === 0) {
+      errors.push(`RESOURCES.${id} : aucune planche`);
+    }
+    for (const sprite of resource.sprites) {
+      if (!(sprite in SPRITES)) {
+        errors.push(`RESOURCES.${id} : planche inconnue « ${sprite} »`);
+        continue;
+      }
+      for (const stage of ['full', 'damaged']) {
+        if (!(stage in SPRITES[sprite].animations)) {
+          errors.push(`RESOURCES.${id} : la planche « ${sprite} » n'a pas d'animation « ${stage} »`);
+        }
+      }
     }
   }
 

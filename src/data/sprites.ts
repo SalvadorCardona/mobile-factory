@@ -132,9 +132,38 @@ export const SPRITES = {
     anchorY: 0,
     animations: { full: STILL, damaged: { row: 1, frames: 1, fps: 1, loop: false } },
     prompt:
-      'A gnarled post-apocalyptic tree seen from above, dense dark-green canopy, ' +
-      'thick trunk. Row 1: healthy tree. Row 2: the same tree half chopped, ' +
-      'thinner canopy. Each frame 16x16 pixels, fits inside one tile.',
+      'A round leafy tree seen in 3/4 view: a bushy canopy of three shades of ' +
+      'green lit from the top-left, a short brown trunk with roots. Row 1: ' +
+      'healthy tree. Row 2: the same tree half chopped, a smaller canopy. Each ' +
+      'frame 16x16 pixels, fits inside one tile.',
+  },
+
+  treePine: {
+    file: null,
+    frameWidth: 16,
+    frameHeight: 16,
+    anchorX: 0,
+    anchorY: 0,
+    animations: { full: STILL, damaged: { row: 1, frames: 1, fps: 1, loop: false } },
+    prompt:
+      'A slender pine tree seen in 3/4 view: stacked tiers of dark green ' +
+      'needles, lit from the top-left, a short trunk. Row 1: healthy pine. ' +
+      'Row 2: the same pine with its top chopped off, shorter. Each frame ' +
+      '16x16 pixels, fits inside one tile.',
+  },
+
+  treeDead: {
+    file: null,
+    frameWidth: 16,
+    frameHeight: 16,
+    anchorX: 0,
+    anchorY: 0,
+    animations: { full: STILL, damaged: { row: 1, frames: 1, fps: 1, loop: false } },
+    prompt:
+      'A dead leafless tree seen in 3/4 view: a twisted grey-brown trunk, ' +
+      'bare crooked branches reaching up, a little moss at the roots. Row 1: ' +
+      'whole tree. Row 2: the same tree chopped down to a stump with one ' +
+      'branch. Each frame 16x16 pixels, fits inside one tile.',
   },
 
   rockIron: {
@@ -298,6 +327,42 @@ export const SPRITES = {
       'banners with a yellow sun, one warmly lit window and one boarded-up ' +
       'window, stone steps, sandbags, a crate and a rusty barrel at its foot. ' +
       '48x64 pixels, the bottom 48x48 is the footprint.',
+  },
+
+  /**
+   * Décor de surface : une ligne par élément, une seule image. Rien de tout ça
+   * ne se heurte ni ne se récolte (cf. `data/decor.ts`).
+   */
+  decor: {
+    file: null,
+    frameWidth: 16,
+    frameHeight: 16,
+    anchorX: 0,
+    anchorY: 0,
+    animations: {
+      flowers: STILL,
+      tuft: { row: 1, frames: 1, fps: 1, loop: false },
+      deadBush: { row: 2, frames: 1, fps: 1, loop: false },
+      bones: { row: 3, frames: 1, fps: 1, loop: false },
+      rubble: { row: 4, frames: 1, fps: 1, loop: false },
+      barrel: { row: 5, frames: 1, fps: 1, loop: false },
+      tire: { row: 6, frames: 1, fps: 1, loop: false },
+      sign: { row: 7, frames: 1, fps: 1, loop: false },
+      puddle: { row: 8, frames: 1, fps: 1, loop: false },
+      mushrooms: { row: 9, frames: 1, fps: 1, loop: false },
+      ruin: { row: 10, frames: 1, fps: 1, loop: false },
+    },
+    prompt:
+      'Small ground props for a post-apocalyptic wasteland, one per row, each ' +
+      'a single 16x16 frame, small and low so the ground shows around it: ' +
+      'row 1 a few yellow and pink wild flowers; row 2 a tuft of tall grass; ' +
+      'row 3 a dry dead bush of bare twigs; row 4 a bleached human skull and ' +
+      'a bone; row 5 a pile of broken bricks, plaster and stones; row 6 a ' +
+      'rusty oil barrel with a leaking acid-green drop; row 7 an old black ' +
+      'tire lying flat; row 8 a bent rusty road sign on a pole; row 9 a small ' +
+      'glowing acid-green toxic puddle; row 10 two mutated acid-green ' +
+      'mushrooms; row 11 a crumbling corner of a brick and plaster wall ' +
+      'overgrown with moss.',
   },
 } as const satisfies Record<string, SpriteProto>;
 
