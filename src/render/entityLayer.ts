@@ -143,6 +143,7 @@ export class EntityLayer {
       const preview = new Sprite(this.library.still(BUILDINGS[entity.proto].sprite, 'idle'));
 
       preview.scale.set(SPRITE_SCALE);
+      footAnchor(preview, entity);
       preview.alpha = 0.35;
 
       const progress = new Graphics();
@@ -159,6 +160,8 @@ export class EntityLayer {
         ? this.library.animation('drill', 'work')
         : this.library.animation(proto.sprite, 'idle');
     const sprite = animated(frames);
+
+    footAnchor(sprite, entity);
 
     // Une foreuse posée hors gisement reste visible, mais délavée : le joueur
     // doit comprendre pourquoi elle ne produit rien sans ouvrir un panneau.
@@ -291,6 +294,16 @@ function bar(graphics: Graphics, y: number, width: number, ratio: number, color:
     .fill(PROGRESS_BG)
     .rect(4, y, Math.round(width * Math.max(0, Math.min(1, ratio))), 4)
     .fill(color);
+}
+
+/**
+ * Les bâtiments sont vus en 3/4 : leur planche est plus haute que l'emprise.
+ * Ancrée au pied, l'image s'aligne sur le bas de l'emprise et le toit monte
+ * au-dessus des tuiles de derrière — le tri par `zIndex` fait le reste.
+ */
+function footAnchor(sprite: Sprite, entity: Entity): void {
+  sprite.anchor.set(0, 1);
+  sprite.y = entity.height * TILE_SIZE;
 }
 
 function animated(frames: AnimationFrames): AnimatedSprite {

@@ -74,6 +74,20 @@ export const PALETTE = {
   /* Tissus de la nurserie. */
   blanket: 0xc46a7a,
   blanketLight: 0xe09aa6,
+
+  /* Bâtiments en volume : faces éclairées, tuiles, lumière aux fenêtres. */
+  plasterLight: 0xefe4cc,
+  brickDark: 0x6e3d2c,
+  brickLight: 0xbd7a55,
+  roofLight: 0xa3524a,
+  beamLight: 0xb08a55,
+  glow: 0xf4d06f,
+  glass: 0x4f7488,
+  /* Bâches de récupération, mousse sur les ruines, os blanchis. */
+  tarp: 0x3f6f7a,
+  tarpLight: 0x5f96a0,
+  moss: 0x5f7f35,
+  bone: 0xe6dcc2,
 } as const;
 
 /** La palette telle que le prompt la cite : « skin #e8b48a, … ». */
@@ -106,8 +120,9 @@ export const STYLE_PROMPT =
   PALETTE_PROMPT +
   '. Proportions: adult characters are 2.5 heads tall with a big head, single ' +
   'dark pixels for eyes, feet resting at 80% of the frame height with empty ' +
-  'space below; children are 1.5 heads tall; buildings fill their whole frame ' +
-  'edge to edge. Flat, fully transparent background (alpha 0, no checkerboard, ' +
+  'space below; children are 1.5 heads tall; buildings span the full frame width, ' +
+  'their front wall sits at the bottom of the frame and the roof rises above ' +
+  'it. Flat, fully transparent background (alpha 0, no checkerboard, ' +
   'no solid color). No text, no watermark, no blur, no anti-aliasing, no ' +
   'gradients, no drop shadows on the ground.';
 

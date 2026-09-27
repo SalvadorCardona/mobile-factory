@@ -117,8 +117,15 @@ référencé sans être passé par ces étapes.
   pas d'où viennent les textures.
 - `src/render/entityLayer.ts` : Adam (`AnimatedSprite`, direction + marche,
   profil gauche = miroir du profil droit), chantiers, bâtiments animés.
+- Les bâtiments sont vus en 3/4 : planche large comme l'emprise, plus haute
+  qu'elle (le toit dépasse), ancrée en (0, 1) au pied de l'emprise.
 - Les ressources de surface sont bakées dans la RenderTexture du chunk
-  (`chunkLayer.ts`) et rebakées quand la simulation salit le chunk.
+  (`chunkLayer.ts`) et rebakées quand la simulation salit le chunk. Une
+  ressource peut avoir plusieurs planches (`RESOURCES[id].sprites` : feuillu,
+  sapin, arbre mort), tirées par tuile depuis la seed.
+- Le décor (`src/data/decor.ts`, planche `decor`) est tiré par `decorAt()`
+  (`sim/terrain.ts`) sur les tuiles nues et baké avec le terrain. Il ne se
+  heurte pas et n'est jamais de l'état.
 - Le sol vient de `render/terrainTiles.ts` : un tileset procédural seedé
   (variantes, transitions entre terrains, ombres portées), dessiné à 16 px
   source comme les sprites.

@@ -50,6 +50,8 @@ export class GhostLayer {
     this.library = library;
     this.preview.alpha = 0.6;
     this.preview.scale.set(SPRITE_SCALE);
+    // Ancré au pied de l'emprise : le toit dépasse vers le haut, comme le bâtiment fini.
+    this.preview.anchor.set(0, 1);
 
     this.container.addChild(this.grid, this.footprints, this.reach, this.preview, this.outline);
     this.container.visible = false;
@@ -93,7 +95,7 @@ export class GhostLayer {
     const color = rejection ? INVALID : VALID;
 
     this.preview.texture = this.library.still(proto.sprite, 'idle');
-    this.preview.position.set(ghost.tx * TILE_SIZE, ghost.ty * TILE_SIZE);
+    this.preview.position.set(ghost.tx * TILE_SIZE, (ghost.ty + proto.height) * TILE_SIZE);
     this.preview.tint = color;
 
     this.outline

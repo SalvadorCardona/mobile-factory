@@ -6,7 +6,7 @@
  * Sprite. Sans ça, ce sont 1024 quads par chunk et par frame — et autant de
  * sprites d'arbres en plus.
  *
- * Les arbres et rochers sont bakés avec le terrain : ils ne bougent pas, et
+ * Les arbres, les rochers et le décor sont bakés avec le terrain : ils ne bougent pas, et
  * ils sont des centaines par écran. Quand Adam en abîme un, la simulation
  * marque le chunk sale et il est rebaké — deux fois par tuile au plus, à
  * l'entame et à la disparition.
@@ -22,7 +22,7 @@ import { Container, RenderTexture, Sprite, type Renderer, type Texture } from 'p
 import { CHUNK_SIZE, CHUNK_TILES, TILE_SIZE, coordKey } from '../core/grid.ts';
 import { hash3 } from '../core/rng.ts';
 import { RESOURCES } from '../data/resources.ts';
-import { terrainAt, type TerrainKind } from '../sim/terrain.ts';
+import { decorAt, terrainAt, type TerrainKind } from '../sim/terrain.ts';
 import type { World } from '../sim/world.ts';
 import type { Camera } from './camera.ts';
 import { SPRITE_SCALE, type SpriteLibrary } from './spriteLibrary.ts';
@@ -148,15 +148,22 @@ export class ChunkLayer {
           if (edge) edges.addChild(tileSprite(edge, lx, ly));
         }
 
+        const decor = decorAt(seed, tx, ty);
+
+        if (decor) props.addChild(tileSprite(this.library.still('decor', decor), lx, ly));
+
         const resource = world.resources.at(tx, ty);
 
         if (!resource) continue;
 
         const stage = resource.stage === 'damaged' ? 'damaged' : 'full';
+        // L'essence d'un arbre est tirée par tuile : elle reste la même une fois entamé.
+        const sprites = RESOURCES[resource.id].sprites;
+        const sprite = sprites[hash3(seed ^ 0x510e527f, tx, ty) % sprites.length]!;
 
         props.addChild(
           tileSprite(this.tiles.shadow, lx, ly),
-          tileSprite(this.library.still(RESOURCES[resource.id].sprite, stage), lx, ly),
+          tileSprite(this.library.still(sprite, stage), lx, ly),
         );
       }
     }

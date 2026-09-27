@@ -18,6 +18,7 @@
  */
 
 import { hash3, noise2 } from '../core/rng.ts';
+import { DECOR, DECOR_DENSITY, DECOR_IDS, type DecorId, type DecorTerrain } from '../data/decor.ts';
 import type { ItemId } from '../data/items.ts';
 import { ROCK_OF_ORE, type ResourceId } from '../data/resources.ts';
 
@@ -154,4 +155,41 @@ export function resourceAt(seed: number, tx: number, ty: number): ResourceId | n
   const roll = hash3(seed ^ 0x1b873593, tx, ty) / 4294967296;
 
   return roll < TREE_DENSITY ? 'tree' : null;
+}
+
+/** Tables de tirage du décor, par terrain : ids et poids cumulés. */
+const DECOR_TABLES = new Map<TerrainKind, { ids: DecorId[]; cumulative: number[]; total: number }>();
+
+for (const terrain of ['grass', 'sand', 'rock'] as const satisfies readonly DecorTerrain[]) {
+  const ids: DecorId[] = [];
+  const cumulative: number[] = [];
+  let total = 0;
+
+  for (const id of DECOR_IDS) {
+    const weight: number = (DECOR[id].weights as Partial<Record<DecorTerrain, number>>)[terrain] ?? 0;
+
+    if (weight <= 0) continue;
+    total += weight;
+    ids.push(id);
+    cumulative.push(total);
+  }
+  DECOR_TABLES.set(terrain, { ids, cumulative, total });
+}
+
+/**
+ * L'élément de décor d'une tuile, ou `null`. Seulement sur une tuile que la
+ * carte laisse nue : jamais sous un arbre ni sous un rocher, jamais dans
+ * l'eau. Purement visuel — rien dans la simulation n'en dépend.
+ */
+export function decorAt(seed: number, tx: number, ty: number): DecorId | null {
+  const table = DECOR_TABLES.get(terrainAt(seed, tx, ty));
+
+  if (!table || table.total === 0) return null;
+  if (hash3(seed ^ 0x3c6ef372, tx, ty) / 4294967296 >= DECOR_DENSITY) return null;
+  if (resourceAt(seed, tx, ty) !== null) return null;
+
+  const pick = (hash3(seed ^ 0xa54ff53a, tx, ty) / 4294967296) * table.total;
+  const index = table.cumulative.findIndex((bound) => pick < bound);
+
+  return table.ids[index] ?? null;
 }

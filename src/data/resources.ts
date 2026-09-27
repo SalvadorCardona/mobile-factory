@@ -19,16 +19,26 @@ export interface ResourceProto {
   amount: number;
   /** Ticks de contact entre deux unités. */
   harvestTicks: number;
-  sprite: SpriteId;
+  /**
+   * Planches possibles, tirées par tuile depuis la seed : une forêt mêle les
+   * essences. Répéter une planche la rend plus fréquente.
+   */
+  sprites: readonly SpriteId[];
   /** Verbe affiché au joueur : « Couper du bois », « Extraire du fer ». */
   verb: string;
 }
 
 export const RESOURCES = {
-  tree: { item: 'wood', amount: 5, harvestTicks: 8, sprite: 'tree', verb: 'Couper' },
-  ironRock: { item: 'ironOre', amount: 6, harvestTicks: 10, sprite: 'rockIron', verb: 'Extraire' },
-  coalRock: { item: 'coal', amount: 6, harvestTicks: 10, sprite: 'rockCoal', verb: 'Extraire' },
-  stoneRock: { item: 'stone', amount: 8, harvestTicks: 8, sprite: 'rockStone', verb: 'Casser' },
+  tree: {
+    item: 'wood',
+    amount: 5,
+    harvestTicks: 8,
+    sprites: ['tree', 'tree', 'tree', 'treePine', 'treePine', 'treeDead'],
+    verb: 'Couper',
+  },
+  ironRock: { item: 'ironOre', amount: 6, harvestTicks: 10, sprites: ['rockIron'], verb: 'Extraire' },
+  coalRock: { item: 'coal', amount: 6, harvestTicks: 10, sprites: ['rockCoal'], verb: 'Extraire' },
+  stoneRock: { item: 'stone', amount: 8, harvestTicks: 8, sprites: ['rockStone'], verb: 'Casser' },
 } as const satisfies Record<string, ResourceProto>;
 
 export type ResourceId = keyof typeof RESOURCES;

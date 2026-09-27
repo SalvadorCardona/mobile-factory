@@ -132,9 +132,38 @@ export const SPRITES = {
     anchorY: 0,
     animations: { full: STILL, damaged: { row: 1, frames: 1, fps: 1, loop: false } },
     prompt:
-      'A gnarled post-apocalyptic tree seen from above, dense dark-green canopy, ' +
-      'thick trunk. Row 1: healthy tree. Row 2: the same tree half chopped, ' +
-      'thinner canopy. Each frame 16x16 pixels, fits inside one tile.',
+      'A round leafy tree seen in 3/4 view: a bushy canopy of three shades of ' +
+      'green lit from the top-left, a short brown trunk with roots. Row 1: ' +
+      'healthy tree. Row 2: the same tree half chopped, a smaller canopy. Each ' +
+      'frame 16x16 pixels, fits inside one tile.',
+  },
+
+  treePine: {
+    file: null,
+    frameWidth: 16,
+    frameHeight: 16,
+    anchorX: 0,
+    anchorY: 0,
+    animations: { full: STILL, damaged: { row: 1, frames: 1, fps: 1, loop: false } },
+    prompt:
+      'A slender pine tree seen in 3/4 view: stacked tiers of dark green ' +
+      'needles, lit from the top-left, a short trunk. Row 1: healthy pine. ' +
+      'Row 2: the same pine with its top chopped off, shorter. Each frame ' +
+      '16x16 pixels, fits inside one tile.',
+  },
+
+  treeDead: {
+    file: null,
+    frameWidth: 16,
+    frameHeight: 16,
+    anchorX: 0,
+    anchorY: 0,
+    animations: { full: STILL, damaged: { row: 1, frames: 1, fps: 1, loop: false } },
+    prompt:
+      'A dead leafless tree seen in 3/4 view: a twisted grey-brown trunk, ' +
+      'bare crooked branches reaching up, a little moss at the roots. Row 1: ' +
+      'whole tree. Row 2: the same tree chopped down to a stump with one ' +
+      'branch. Each frame 16x16 pixels, fits inside one tile.',
   },
 
   rockIron: {
@@ -186,89 +215,154 @@ export const SPRITES = {
       'pegs with string, seamless when tiled. 16x16 pixels.',
   },
 
+  /*
+   * Bâtiments : vus en 3/4, plus hauts que leur emprise. La largeur est celle
+   * de l'emprise ; la hauteur en plus porte le toit et ce qui dépasse. Ancre
+   * (0, 1) : le coin bas gauche de l'image est le coin bas gauche de l'emprise.
+   */
   drill: {
     file: null,
     frameWidth: 32,
-    frameHeight: 32,
+    frameHeight: 48,
     anchorX: 0,
-    anchorY: 0,
+    anchorY: 1,
     animations: {
       idle: STILL,
-      work: { row: 1, frames: 2, fps: 4, loop: true },
+      work: { row: 1, frames: 2, fps: 6, loop: true },
     },
     prompt:
-      'A scavenged mining drill on a 2x2 tile base: rusty steel frame, an ' +
-      'orange-painted motor housing, a vertical drill bit. Row 1: stopped. ' +
-      'Row 2: 2 frames of the bit spinning. 32x32 pixels per frame.',
+      'A scavenged mining derrick on a 2x2 tile base, seen in 3/4 view: a ' +
+      'tapering steel lattice tower with a pulley on top rising well above the ' +
+      'base, a stone slab foundation, an orange-painted motor housing with an ' +
+      'exhaust pipe on the left, a rusty barrel and a heap of ore on the right, ' +
+      'a drill rod plunging into a dark hole. Row 1: stopped. Row 2: 2 frames ' +
+      'of the rod spinning, a green indicator light on, a puff of exhaust ' +
+      'smoke. 32x48 pixels per frame, the bottom 32x32 is the footprint.',
   },
 
   nursery: {
     file: null,
     frameWidth: 32,
-    frameHeight: 32,
+    frameHeight: 48,
     anchorX: 0,
-    anchorY: 0,
+    anchorY: 1,
     animations: { idle: STILL },
     prompt:
-      'A survivor colony nursery on a 2x2 tile base: a small warm hut of ' +
-      'plaster and salvaged planks, a patched roof with a stove pipe, a round ' +
-      'window with a pink blanket hanging beside the door. 32x32 pixels.',
+      'A survivor colony nursery on a 2x2 tile base, seen in 3/4 view: a ' +
+      'small cosy cottage with cream plaster walls on a stone footing, a red ' +
+      'tiled roof patched with sheet metal, a dormer window, a metal stove ' +
+      'pipe with a wisp of smoke, a round warmly lit window with a flower box, ' +
+      'an arched wooden door with a pink heart above it, a pink blanket drying ' +
+      'on a line and a small wooden cradle by the wall. 32x48 pixels, the ' +
+      'bottom 32x32 is the footprint.',
   },
 
   builderHouse: {
     file: null,
     frameWidth: 32,
-    frameHeight: 32,
+    frameHeight: 48,
     anchorX: 0,
-    anchorY: 0,
+    anchorY: 1,
     animations: { idle: STILL },
     prompt:
-      'A survivor colony bunkhouse on a 2x2 tile base: a long low dormitory ' +
-      'of brick and salvaged planks, a flat sheet-metal roof, two small ' +
-      'windows, tools leaning against the wall by the door. 32x32 pixels.',
+      'A survivor colony bunkhouse for builders on a 2x2 tile base, seen in ' +
+      '3/4 view: brick walls with one side rebuilt in planks, a corrugated ' +
+      'sheet-metal roof half covered by a teal tarp weighed down with stones, ' +
+      'a brick chimney, a metal door under a plank sign with a crossed hammer, ' +
+      'a shovel and a pickaxe leaning on the wall, crates and a stack of ' +
+      'planks at its foot. 32x48 pixels, the bottom 32x32 is the footprint.',
   },
 
   farm: {
     file: null,
     frameWidth: 32,
-    frameHeight: 32,
+    frameHeight: 40,
     anchorX: 0,
-    anchorY: 0,
+    anchorY: 1,
     animations: {
       idle: STILL,
       grow: { row: 1, frames: 2, fps: 1, loop: true },
     },
     prompt:
-      'A small post-apocalyptic farm plot on a 2x2 tile base: dark tilled ' +
-      'soil in rows, a few green sprouts, a tiny plank tool shed with a ' +
-      'sheet-metal roof in one corner. Row 1: sprouts. Row 2: 2 frames of the ' +
-      'plants growing taller. 32x32 pixels per frame.',
+      'A small post-apocalyptic farm plot on a 2x2 tile base, seen in 3/4 ' +
+      'view: rows of tilled soil inside a wooden picket fence, a tiny plank ' +
+      'tool shed with a sheet-metal roof in the top-left corner, a teal water ' +
+      'barrel and a watering can in the top-right corner, a scarecrow in the ' +
+      'middle wearing a gas mask, a hat and a teal tarp coat, a black crow. ' +
+      'Row 1: young sprouts. Row 2: 2 frames of the crops growing into leafy ' +
+      'plants with pink and yellow flowers. 32x40 pixels per frame, the ' +
+      'bottom 32x32 is the footprint.',
   },
 
   watchtower: {
     file: null,
     frameWidth: 32,
-    frameHeight: 32,
+    frameHeight: 64,
     anchorX: 0,
-    anchorY: 0,
+    anchorY: 1,
     animations: { idle: STILL },
     prompt:
-      'A wooden watchtower on a 2x2 tile base: four rough posts, a plank ' +
-      'platform with a railing, a small sheet-metal roof, a bow and a quiver ' +
-      'leaning on the railing, a ladder on the front. 32x32 pixels.',
+      'A tall wooden watchtower on a 2x2 tile base, seen in 3/4 view: four ' +
+      'rough log posts with cross braces, a ladder up the front, a plank ' +
+      'lookout platform with a plank parapet and arrow slits, a pointed ' +
+      'corrugated sheet-metal roof, a glowing lantern hanging under the roof, ' +
+      'sandbags at the feet of the posts. 32x64 pixels, the bottom 32x32 is ' +
+      'the footprint.',
   },
 
   townHall: {
     file: null,
     frameWidth: 48,
-    frameHeight: 48,
+    frameHeight: 64,
     anchorX: 0,
-    anchorY: 0,
+    anchorY: 1,
     animations: { idle: STILL },
     prompt:
-      'The town hall of a survivor colony on a 3x3 tile base: a squat ' +
-      'rebuilt house of plaster and brick, dark red tiled roof patched with ' +
-      'sheet metal, a wooden double door, a small bell on the roof. 48x48 pixels.',
+      'The town hall of a survivor colony on a 3x3 tile base, seen in 3/4 ' +
+      'view: a large half-timbered house of cream plaster over a brick base, ' +
+      'a big red tiled roof with a teal tarp over a hole and a sheet-metal ' +
+      'patch, a brick chimney, a small wooden bell tower with a brass bell on ' +
+      'the ridge, a jury-rigged radio antenna, a front porch with a gable, a ' +
+      'stopped round clock and a wooden double door flanked by two teal ' +
+      'banners with a yellow sun, one warmly lit window and one boarded-up ' +
+      'window, stone steps, sandbags, a crate and a rusty barrel at its foot. ' +
+      '48x64 pixels, the bottom 48x48 is the footprint.',
+  },
+
+  /**
+   * Décor de surface : une ligne par élément, une seule image. Rien de tout ça
+   * ne se heurte ni ne se récolte (cf. `data/decor.ts`).
+   */
+  decor: {
+    file: null,
+    frameWidth: 16,
+    frameHeight: 16,
+    anchorX: 0,
+    anchorY: 0,
+    animations: {
+      flowers: STILL,
+      tuft: { row: 1, frames: 1, fps: 1, loop: false },
+      deadBush: { row: 2, frames: 1, fps: 1, loop: false },
+      bones: { row: 3, frames: 1, fps: 1, loop: false },
+      rubble: { row: 4, frames: 1, fps: 1, loop: false },
+      barrel: { row: 5, frames: 1, fps: 1, loop: false },
+      tire: { row: 6, frames: 1, fps: 1, loop: false },
+      sign: { row: 7, frames: 1, fps: 1, loop: false },
+      puddle: { row: 8, frames: 1, fps: 1, loop: false },
+      mushrooms: { row: 9, frames: 1, fps: 1, loop: false },
+      ruin: { row: 10, frames: 1, fps: 1, loop: false },
+    },
+    prompt:
+      'Small ground props for a post-apocalyptic wasteland, one per row, each ' +
+      'a single 16x16 frame, small and low so the ground shows around it: ' +
+      'row 1 a few yellow and pink wild flowers; row 2 a tuft of tall grass; ' +
+      'row 3 a dry dead bush of bare twigs; row 4 a bleached human skull and ' +
+      'a bone; row 5 a pile of broken bricks, plaster and stones; row 6 a ' +
+      'rusty oil barrel with a leaking acid-green drop; row 7 an old black ' +
+      'tire lying flat; row 8 a bent rusty road sign on a pole; row 9 a small ' +
+      'glowing acid-green toxic puddle; row 10 two mutated acid-green ' +
+      'mushrooms; row 11 a crumbling corner of a brick and plaster wall ' +
+      'overgrown with moss.',
   },
 } as const satisfies Record<string, SpriteProto>;
 

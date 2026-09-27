@@ -87,11 +87,16 @@ export function validatePrototypes(): string[] {
       const expectedW = building.width * ART_PIXELS_PER_TILE;
       const expectedH = building.height * ART_PIXELS_PER_TILE;
 
-      if (sprite.frameWidth !== expectedW || sprite.frameHeight !== expectedH) {
+      // Vue 3/4 : aussi large que l'emprise, au moins aussi haute — le toit dépasse.
+      if (sprite.frameWidth !== expectedW || sprite.frameHeight < expectedH) {
         errors.push(
           `BUILDINGS.${id} : la planche « ${building.sprite} » fait ` +
-            `${sprite.frameWidth}×${sprite.frameHeight}, l'emprise demande ${expectedW}×${expectedH}`,
+            `${sprite.frameWidth}×${sprite.frameHeight}, l'emprise demande ${expectedW} de large ` +
+            `et au moins ${expectedH} de haut`,
         );
+      }
+      if (sprite.anchorX !== 0 || sprite.anchorY !== 1) {
+        errors.push(`BUILDINGS.${id} : la planche « ${building.sprite} » doit être ancrée en (0, 1)`);
       }
     }
   }
@@ -139,10 +144,19 @@ export function validatePrototypes(): string[] {
     if (resource.amount <= 0 || resource.harvestTicks <= 0) {
       errors.push(`RESOURCES.${id} : quantité ou cadence nulle`);
     }
-    if (!(resource.sprite in SPRITES)) {
-      errors.push(`RESOURCES.${id} : planche inconnue « ${resource.sprite} »`);
-    } else if (!('full' in SPRITES[resource.sprite].animations)) {
-      errors.push(`RESOURCES.${id} : la planche « ${resource.sprite} » n'a pas d'animation « full »`);
+    if ((resource.sprites as readonly string[]).length === 0) {
+      errors.push(`RESOURCES.${id} : aucune planche`);
+    }
+    for (const sprite of resource.sprites) {
+      if (!(sprite in SPRITES)) {
+        errors.push(`RESOURCES.${id} : planche inconnue « ${sprite} »`);
+        continue;
+      }
+      for (const stage of ['full', 'damaged']) {
+        if (!(stage in SPRITES[sprite].animations)) {
+          errors.push(`RESOURCES.${id} : la planche « ${sprite} » n'a pas d'animation « ${stage} »`);
+        }
+      }
     }
   }
 

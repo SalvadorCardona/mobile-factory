@@ -47,7 +47,7 @@ describe('planches générées', () => {
 
   it('calcule la taille de la planche depuis la grille', () => {
     expect(sheetSize(SPRITES.adam)).toEqual({ width: 64, height: 216 });
-    expect(sheetSize(SPRITES.townHall)).toEqual({ width: 48, height: 48 });
+    expect(sheetSize(SPRITES.townHall)).toEqual({ width: 48, height: 64 });
   });
 
   it('accepte un multiple entier de la grille et refuse le reste', () => {
