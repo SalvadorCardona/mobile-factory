@@ -120,7 +120,20 @@ describe('vagues', () => {
     const world = worldWithTownHall();
     const waves: number[] = [];
 
-    world.events.on('waveStarted', ({ wave, count }) => waves.push(wave * 100 + count));
+    const waveTicks: number[] = [];
+    const countdown: number[] = [];
+
+    world.events.on('waveCountdown', ({ seconds }) => countdown.push(seconds));
+
+    world.events.on('waveStarted', ({ wave, count }) => {
+      waves.push(wave * 100 + count);
+      waveTicks.push(world.tickCount);
+    });
+
+    // Le compte à rebours du HUD lit ce tick : il doit tomber pile sur l'apparition.
+    const firstWaveTick = world.nextWaveTick;
+
+    expect(firstWaveTick).toBeGreaterThan(world.tickCount);
 
     for (let i = 0; i < WAVES.firstDelay - 2; i += 1) world.tick();
     expect(mutants(world)).toHaveLength(0);
@@ -128,6 +141,9 @@ describe('vagues', () => {
     for (let i = 0; i < 2; i += 1) world.tick();
     expect(mutants(world)).toHaveLength(waveSize(1));
     expect(waves).toEqual([100 + waveSize(1)]);
+    expect(waveTicks).toEqual([firstWaveTick]);
+    expect(countdown).toEqual([3, 2, 1]);
+    expect(world.nextWaveTick).toBe(firstWaveTick + WAVES.interval);
 
     for (let i = 0; i < WAVES.interval; i += 1) world.tick();
     expect(world.wave).toBe(2);
@@ -199,6 +215,8 @@ describe('mutants', () => {
     for (let i = 0; i < 20 * 120 && !world.defeated; i += 1) world.tick();
 
     expect(world.defeated).toBe(true);
+    expect(world.defeatTick).toBe(world.tickCount);
+    expect(world.nextWaveTick).toBe(0);
     expect(destroyed).toBe(1);
     expect(world.entities.has(world.townHallId)).toBe(false);
     expect(world.chunks.occupantAt(hall.tx, hall.ty)).toBeUndefined();
@@ -235,6 +253,7 @@ describe('arc d’Adam', () => {
     }
 
     expect(deaths).toBe(1);
+    expect(world.kills).toBe(1);
     expect(hits).toEqual([ENEMIES.mutant.hp - 1, ENEMIES.mutant.hp - 2].slice(0, ENEMIES.mutant.hp - 1));
     expect(mutants(world)).toHaveLength(0);
     expect(shots).toBeGreaterThanOrEqual(ENEMIES.mutant.hp);

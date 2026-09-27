@@ -18,15 +18,15 @@
  *   qui empêche une exploration de 20 minutes de saturer la VRAM du téléphone.
  */
 
-import { Container, Graphics, RenderTexture, Sprite, type Renderer } from 'pixi.js';
+import { Container, RenderTexture, Sprite, type Renderer, type Texture } from 'pixi.js';
 import { CHUNK_SIZE, CHUNK_TILES, TILE_SIZE, coordKey } from '../core/grid.ts';
 import { hash3 } from '../core/rng.ts';
 import { RESOURCES } from '../data/resources.ts';
 import { terrainAt, type TerrainKind } from '../sim/terrain.ts';
 import type { World } from '../sim/world.ts';
-import { TERRAIN_COLORS } from './atlas.ts';
 import type { Camera } from './camera.ts';
 import { SPRITE_SCALE, type SpriteLibrary } from './spriteLibrary.ts';
+import { SIDES, SIDE_OFFSET, variantOf, type TerrainTiles } from './terrainTiles.ts';
 
 /** Marge d'éviction, en chunks au-delà de la zone visible. */
 const KEEP_MARGIN = 2;
@@ -43,10 +43,12 @@ export class ChunkLayer {
 
   private readonly renderer: Renderer;
   private readonly library: SpriteLibrary;
+  private readonly tiles: TerrainTiles;
 
-  public constructor(renderer: Renderer, library: SpriteLibrary) {
+  public constructor(renderer: Renderer, library: SpriteLibrary, tiles: TerrainTiles) {
     this.renderer = renderer;
     this.library = library;
+    this.tiles = tiles;
   }
 
   /** Nombre de chunks actuellement dessinés — remonté au HUD de debug. */
@@ -97,55 +99,69 @@ export class ChunkLayer {
   }
 
   /**
-   * Dessine le chunk dans sa RenderTexture, puis jette la géométrie.
+   * Dessine le chunk dans sa RenderTexture, puis jette la scène.
    *
-   * Les rectangles de terrain sont regroupés par couleur et remplis en un
-   * seul `fill()` par couleur : huit instructions de dessin au lieu de 1024.
-   * Les ressources sont des sprites temporaires par-dessus. Tout est détruit
-   * juste après — seule la texture survit, et c'est elle qu'on affiche.
+   * Trois passes, dans l'ordre du peintre : le sol (une variante du tileset
+   * par tuile), les transitions vers les voisines d'un autre terrain, puis
+   * les ombres et les ressources de surface. Les sprites sont temporaires :
+   * tout est détruit juste après — seule la texture survit, et c'est elle
+   * qu'on affiche. Les textures du tileset, elles, sont partagées et restent.
    */
   private renderInto(world: World, cx: number, cy: number, target: RenderTexture): void {
     const scene = new Container();
-    const graphics = new Graphics();
-    const byColor = new Map<number, number[]>();
+    const edges = new Container();
+    const props = new Container();
     const baseTx = cx * CHUNK_TILES;
     const baseTy = cy * CHUNK_TILES;
+    const { seed } = world;
 
-    scene.addChild(graphics);
+    // Une rangée de marge autour du chunk : les transitions du bord en dépendent.
+    const span = CHUNK_TILES + 2;
+    const kinds: TerrainKind[] = new Array<TerrainKind>(span * span);
+
+    for (let ly = -1; ly <= CHUNK_TILES; ly += 1) {
+      for (let lx = -1; lx <= CHUNK_TILES; lx += 1) {
+        kinds[(ly + 1) * span + lx + 1] = terrainAt(seed, baseTx + lx, baseTy + ly);
+      }
+    }
+
+    const kindAt = (lx: number, ly: number): TerrainKind => kinds[(ly + 1) * span + lx + 1]!;
 
     for (let ly = 0; ly < CHUNK_TILES; ly += 1) {
       for (let lx = 0; lx < CHUNK_TILES; lx += 1) {
         const tx = baseTx + lx;
         const ty = baseTy + ly;
-        const color = shadeOf(world.seed, tx, ty, terrainAt(world.seed, tx, ty));
-        let coords = byColor.get(color);
+        const kind = kindAt(lx, ly);
+        const variants = this.tiles.ground[kind];
+        const ground = tileSprite(variants[variantOf(hash3(seed ^ 0x6a09e667, tx, ty)) % variants.length]!, lx, ly);
 
-        if (!coords) {
-          coords = [];
-          byColor.set(color, coords);
+        scene.addChild(ground);
+
+        for (const side of SIDES) {
+          const [dx, dy] = SIDE_OFFSET[side];
+          const neighbour = kindAt(lx + dx, ly + dy);
+
+          if (neighbour === kind) continue;
+
+          const edge = this.tiles.edge(kind, neighbour, side);
+
+          if (edge) edges.addChild(tileSprite(edge, lx, ly));
         }
-        coords.push(lx * TILE_SIZE, ly * TILE_SIZE);
 
         const resource = world.resources.at(tx, ty);
 
         if (!resource) continue;
 
         const stage = resource.stage === 'damaged' ? 'damaged' : 'full';
-        const sprite = new Sprite(this.library.still(RESOURCES[resource.id].sprite, stage));
 
-        sprite.position.set(lx * TILE_SIZE, ly * TILE_SIZE);
-        sprite.scale.set(SPRITE_SCALE);
-        scene.addChild(sprite);
+        props.addChild(
+          tileSprite(this.tiles.shadow, lx, ly),
+          tileSprite(this.library.still(RESOURCES[resource.id].sprite, stage), lx, ly),
+        );
       }
     }
 
-    for (const [color, coords] of byColor) {
-      for (let i = 0; i < coords.length; i += 2) {
-        graphics.rect(coords[i]!, coords[i + 1]!, TILE_SIZE, TILE_SIZE);
-      }
-      graphics.fill(color);
-    }
-
+    scene.addChild(edges, props);
     this.renderer.render({ target, container: scene, clear: true });
     scene.destroy({ children: true });
   }
@@ -180,9 +196,11 @@ export class ChunkLayer {
   }
 }
 
-/** Une des deux teintes du terrain, tirée de la seed : le grain du pixel art. */
-function shadeOf(seed: number, tx: number, ty: number, kind: TerrainKind): number {
-  const pair = TERRAIN_COLORS[kind];
+/** Un sprite de tuile à la résolution source, agrandi ×2, posé sur la grille locale. */
+function tileSprite(texture: Texture, lx: number, ly: number): Sprite {
+  const sprite = new Sprite(texture);
 
-  return hash3(seed ^ 0x6a09e667, tx, ty) % 3 === 0 ? pair[1] : pair[0];
+  sprite.position.set(lx * TILE_SIZE, ly * TILE_SIZE);
+  sprite.scale.set(SPRITE_SCALE);
+  return sprite;
 }

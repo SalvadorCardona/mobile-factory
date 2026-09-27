@@ -97,6 +97,12 @@ référencé sans être passé par ces étapes.
 - Une ressource = une icône : `src/data/icons.ts` est un
   `Record<ItemId, PixelIcon>` (12 × 12 px, palette du jeu). Un objet sans
   icône ne compile pas ; `validatePrototypes()` vérifie taille et palette.
+- `src/ui/hud.ts` : quête, conseil contextuel (le tutoriel), sac, bulles,
+  gains flottants, défaite. `src/ui/screens.ts` : écran titre et pause — la
+  simulation ne tourne qu'après « Jouer » et hors pause. Police : Jersey 15,
+  embarquée via `@fontsource` (ses chiffres ne se confondent pas).
+  Couleurs de l'UI : `--accent`, `--good`, `--danger` dans `style.css`, tirées
+  de `PALETTE`. Le panneau de debug ne s'affiche qu'avec `?debug` en dev.
 - `src/ui/icons.ts` bake icônes d'objets et vignettes de bâtiments en
   `data:` URL pour le DOM. Le menu de construction est un tiroir derrière un
   seul bouton ; armer un bâtiment passe la carte en mode construction
@@ -113,6 +119,12 @@ référencé sans être passé par ces étapes.
   profil gauche = miroir du profil droit), chantiers, bâtiments animés.
 - Les ressources de surface sont bakées dans la RenderTexture du chunk
   (`chunkLayer.ts`) et rebakées quand la simulation salit le chunk.
+- Le sol vient de `render/terrainTiles.ts` : un tileset procédural seedé
+  (variantes, transitions entre terrains, ombres portées), dessiné à 16 px
+  source comme les sprites.
+- Ressenti (rebond, secousse, flash, tremblement de caméra) : des minuteurs
+  de vue côté `render/`, jamais de l'état de simulation.
+  `render/indicatorLayer.ts` dessine les flèches de bord (mutants, mairie).
 
 ## Son
 

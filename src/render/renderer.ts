@@ -7,20 +7,22 @@
  *
  * Deux conteneurs seulement :
  * - `world`, translaté par la caméra, où vit tout ce qui a des coordonnées monde ;
- * - `hud`, en pixels écran, où vit le joystick.
+ * - `hud`, en pixels écran, où vivent le joystick et les repères de bord.
  */
 
 import { Application, Container, Sprite, TextureSource } from 'pixi.js';
 import type { JoystickState } from '../input/joystick.ts';
 import type { GhostState } from '../input/placement.ts';
-import type { World } from '../sim/world.ts';
+import { STEP_MS, type World } from '../sim/world.ts';
 import { createAtlas, type Atlas } from './atlas.ts';
 import { Camera } from './camera.ts';
 import { ChunkLayer } from './chunkLayer.ts';
 import { EntityLayer } from './entityLayer.ts';
 import { GhostLayer } from './ghostLayer.ts';
+import { IndicatorLayer } from './indicatorLayer.ts';
 import { ParticleLayer } from './particles.ts';
 import { SpriteLibrary } from './spriteLibrary.ts';
+import { createTerrainTiles, type TerrainTiles } from './terrainTiles.ts';
 
 export class GameRenderer {
   public readonly camera = new Camera();
@@ -34,6 +36,8 @@ export class GameRenderer {
   private readonly joystickBase: Sprite;
   private readonly joystickKnob: Sprite;
   private readonly library: SpriteLibrary;
+  private readonly tiles: TerrainTiles;
+  private readonly indicators: IndicatorLayer;
 
   public readonly app: Application;
 
@@ -43,8 +47,10 @@ export class GameRenderer {
     this.app = app;
     this.world = world;
     this.library = library;
-    this.chunkLayer = new ChunkLayer(app.renderer, library);
-    this.entityLayer = new EntityLayer(world, library);
+    this.tiles = createTerrainTiles(world.seed);
+    this.chunkLayer = new ChunkLayer(app.renderer, library, this.tiles);
+    this.entityLayer = new EntityLayer(world, library, this.tiles.footShadow);
+    this.indicators = new IndicatorLayer(world);
     this.ghostLayer = new GhostLayer(world, library);
 
     this.worldContainer.addChild(
@@ -60,7 +66,7 @@ export class GameRenderer {
     this.joystickKnob.anchor.set(0.5);
     this.joystickBase.visible = false;
     this.joystickKnob.visible = false;
-    this.hudContainer.addChild(this.joystickBase, this.joystickKnob);
+    this.hudContainer.addChild(this.indicators.container, this.joystickBase, this.joystickKnob);
 
     app.stage.addChild(this.worldContainer, this.hudContainer);
 
@@ -100,15 +106,33 @@ export class GameRenderer {
     return this.camera.screenToWorld(x, y);
   }
 
+  public worldToScreen(x: number, y: number): { x: number; y: number } {
+    return this.camera.worldToScreen(x, y);
+  }
+
+  /** Place occupée par le HUD en haut et en bas de l'écran : les repères de bord l'évitent. */
+  public setHudInsets(top: number, bottom: number): void {
+    this.indicators.setInsets(top, bottom);
+  }
+
+  /** Secoue la caméra : 0.2 pour un coup, 0.6 pour un effondrement. */
+  public shake(amount: number): void {
+    this.camera.shake(amount);
+  }
+
   public draw(alpha: number, building: boolean, ghost: GhostState | null, joystick: JoystickState): void {
     const { player } = this.world;
 
     this.camera.resize(this.app.screen.width, this.app.screen.height);
     // La caméra suit la position interpolée, pas la position de simulation :
-    // sinon elle avance par sauts de 7 pixels à 20 TPS.
-    this.camera.centerOn(
+    // sinon elle avance par sauts de 7 pixels à 20 TPS. La vitesse, elle, se
+    // lit sur le dernier pas : c'est elle qui décide de l'avance.
+    this.camera.follow(
       player.prevX + (player.x - player.prevX) * alpha,
       player.prevY + (player.y - player.prevY) * alpha,
+      (player.x - player.prevX) / STEP_MS,
+      (player.y - player.prevY) / STEP_MS,
+      this.app.ticker.deltaMS,
     );
 
     // Décalage arrondi au pixel : une caméra sub-pixel fait vibrer le pixel art.
@@ -119,6 +143,7 @@ export class GameRenderer {
     this.entityLayer.update(alpha, this.app.ticker);
     this.particles.update(this.app.ticker.deltaMS);
     this.ghostLayer.update(building, ghost);
+    this.indicators.update(this.camera, this.app.ticker.deltaMS, alpha);
 
     this.joystickBase.visible = joystick.active;
     this.joystickKnob.visible = joystick.active;
@@ -138,7 +163,9 @@ export class GameRenderer {
     this.chunkLayer.destroy();
     this.entityLayer.destroy();
     this.ghostLayer.destroy();
+    this.indicators.destroy();
     this.particles.destroy();
+    this.tiles.destroy();
     this.library.destroy();
     this.app.destroy(true, { children: true });
   }
