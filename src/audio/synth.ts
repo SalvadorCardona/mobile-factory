@@ -12,6 +12,7 @@
 
 export type SoundName =
   | 'chop'
+  | 'deny'
   | 'rock'
   | 'deliver'
   | 'build'
@@ -247,6 +248,12 @@ export const SOUNDS: Record<SoundName, (ctx: AudioContext, out: AudioNode, at: n
   pickup(ctx, out, at) {
     tone(ctx, out, at, 'triangle', 988, 988, { decay: 0.06, peak: 0.3 });
     tone(ctx, out, at + 0.06, 'triangle', 1319, 1319, { decay: 0.12, peak: 0.3 });
+  },
+
+  /** Un clic sur un emplacement refusé : deux notes courtes qui descendent, « non-non ». */
+  deny(ctx, out, at) {
+    tone(ctx, out, at, 'square', 330, 330, { decay: 0.06, peak: 0.12 });
+    tone(ctx, out, at + 0.08, 'square', 247, 247, { decay: 0.08, peak: 0.12 });
   },
 
   /** Une fenêtre qui s'ouvre. */

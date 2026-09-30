@@ -23,6 +23,13 @@
  * qu'on vise. Si personne n'en veut (moitié droite), le glissé déplace le
  * fantôme, comme avant.
  *
+ * **À la souris** (mode PC, décidé par `pointerType`, jamais par la taille
+ * d'écran), le premier tap n'a plus de raison d'être : le curseur ne cache
+ * rien et vise au pixel. Le fantôme suit donc le survol, calé sur la grille
+ * et sans décalage de doigt ; un clic gauche pose s'il est posable (sinon
+ * `onRefuse`, et rien n'est posé), un clic droit annule. Le tactile ne passe
+ * par aucune de ces branches.
+ *
  * Rien n'est modifié dans le monde ici : la validation pousse une commande
  * `placeBuilding` que le tick consomme.
  */
@@ -37,6 +44,8 @@ export interface GhostState {
   /** Tuile d'origine (coin haut-gauche de l'emprise). */
   tx: number;
   ty: number;
+  /** Le fantôme suit un curseur de souris : le rendu le fait respirer. */
+  follow: boolean;
 }
 
 export type PlacementMode = 'idle' | 'armed' | 'placing';
@@ -64,15 +73,25 @@ export class Placement implements PointerConsumer {
   private readonly world: World;
   private readonly screenToWorld: (x: number, y: number) => { x: number; y: number };
   private readonly onChange: () => void;
+  private readonly onRefuse: () => void;
 
+  /** `onRefuse` : un clic de souris sur un emplacement refusé — un son, une secousse, rien de posé. */
   public constructor(
     world: World,
     screenToWorld: (x: number, y: number) => { x: number; y: number },
     onChange: () => void,
+    onRefuse: () => void = () => {},
   ) {
     this.world = world;
     this.screenToWorld = screenToWorld;
     this.onChange = onChange;
+    this.onRefuse = onRefuse;
+  }
+
+  /** Le curseur survole la carte sans bouton enfoncé : le fantôme le suit. */
+  public hover(sample: PointerSample): void {
+    if (this.mode === 'idle' || this.pointerId !== null || !sample.mouse) return;
+    this.moveGhost(sample);
   }
 
   /** Le menu de construction a choisi un bâtiment. Un second appui désarme. */
@@ -139,6 +158,12 @@ export class Placement implements PointerConsumer {
   public onDown(sample: PointerSample): boolean {
     if (this.mode === 'idle' || this.pointerId !== null) return false;
 
+    // Clic droit, ou tout autre bouton que le gauche : jamais une pose.
+    if (sample.mouse && sample.button !== undefined && sample.button !== 0) {
+      if (sample.button === 2) this.cancel();
+      return true;
+    }
+
     this.pointerId = sample.id;
     this.startX = sample.x;
     this.startY = sample.y;
@@ -163,8 +188,13 @@ export class Placement implements PointerConsumer {
   public onUp(sample: PointerSample): void {
     if (sample.id !== this.pointerId) return;
     this.pointerId = null;
+    if (this.dragging) return;
     // Un tap pose le fantôme là où le doigt s'est levé.
-    if (!this.dragging) this.moveGhost(sample);
+    this.moveGhost(sample);
+    // Un clic, lui, construit : le fantôme était déjà sous le curseur.
+    if (!sample.mouse) return;
+    if (this.isConfirmable()) this.confirm();
+    else this.onRefuse();
   }
 
   /** Le doigt touche le fantôme — ou le vise, avec le décalage au-dessus du pouce. */
@@ -193,14 +223,16 @@ export class Placement implements PointerConsumer {
     if (!building) return;
 
     const proto = BUILDINGS[building];
-    const world = this.screenToWorld(sample.x, sample.y - FINGER_OFFSET_Y);
-    // Le doigt vise le centre de l'emprise, pas son coin.
+    const follow = sample.mouse === true;
+    // Le curseur ne cache rien : il vise là où il est.
+    const world = this.screenToWorld(sample.x, sample.y - (follow ? 0 : FINGER_OFFSET_Y));
+    // Le doigt (ou le curseur) vise le centre de l'emprise, pas son coin.
     const tx = Math.round(world.x / TILE_SIZE - proto.width / 2);
     const ty = Math.round(world.y / TILE_SIZE - proto.height / 2);
 
-    if (this.ghost && this.ghost.tx === tx && this.ghost.ty === ty) return;
+    if (this.ghost && this.ghost.tx === tx && this.ghost.ty === ty && this.ghost.follow === follow) return;
 
-    this.ghost = { building, tx, ty };
+    this.ghost = { building, tx, ty, follow };
     this.mode = 'placing';
     this.onChange();
   }
