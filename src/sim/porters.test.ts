@@ -8,7 +8,7 @@ import { decodeSave, encodeSave, type SavedEntity } from './save.ts';
 import { isWalkable, terrainAt } from './terrain.ts';
 import type { EntityId, Site, TownHall, Worker } from './types.ts';
 import { clearLine } from './workers.ts';
-import { World, siteMissing } from './world.ts';
+import { World } from './world.ts';
 
 type Stock = Partial<Record<ItemId, number>>;
 
@@ -103,12 +103,15 @@ function workers(world: World): Worker[] {
 }
 
 /** Où se trouve chaque objet : mairie, foreuses, mains des porteurs, chantiers. Rien d'autre n'en crée ni n'en détruit ici. */
-function census(world: World): Record<ItemId, number> {
+function census(world: World, built: ReadonlySet<EntityId> = new Set()): Record<ItemId, number> {
   const total = Object.fromEntries(ITEM_IDS.map((item) => [item, 0])) as Record<ItemId, number>;
 
   for (const entity of world.entities.values()) {
     if (entity.kind === 'site') {
       for (const [item, amount] of Object.entries(entity.delivered) as [ItemId, number][]) total[item] += amount;
+    } else if (built.has(entity.id)) {
+      // Un chantier achevé par son dernier objet : son coût est dans les murs.
+      for (const [item, amount] of Object.entries(BUILDINGS[entity.proto].cost) as [ItemId, number][]) total[item] += amount;
     } else {
       for (const [item, amount] of entity.store.entries()) total[item] += amount;
     }
@@ -162,12 +165,12 @@ describe('porteurs', () => {
     expect(workers(world).every((worker) => worker.inside && worker.job === null)).toBe(true);
   });
 
-  it('un chantier se remplit seul si la mairie a le stock — et attend « Construire »', () => {
+  it('un chantier se remplit seul si la mairie a le stock — et le dernier objet porté l’achève', () => {
     const world = colony({ hall: { wood: 40, stone: 40 }, houses: 1, sites: ['farm'] });
     const [site] = sites(world);
-    const ready: EntityId[] = [];
+    const completed: EntityId[] = [];
 
-    world.events.on('siteReady', ({ id }) => ready.push(id));
+    world.events.on('buildingCompleted', ({ id }) => completed.push(id));
 
     run(world, 60);
     // Ils sont sortis porter.
@@ -177,9 +180,8 @@ describe('porteurs', () => {
 
     const current = world.entities.get(site!.id);
 
-    expect(current?.kind).toBe('site');
-    expect(siteMissing(current as Site)).toBe(0);
-    expect(ready).toEqual([site!.id]);
+    expect(current?.kind).toBe('farm');
+    expect(completed).toEqual([site!.id]);
     expect(hallOf(world).store.count('wood')).toBe(40 - BUILDINGS.farm.cost.wood);
     expect(hallOf(world).store.count('stone')).toBe(40 - BUILDINGS.farm.cost.stone);
     // Le travail fini, tout le monde rentre dormir.
@@ -197,11 +199,21 @@ describe('porteurs', () => {
     for (const worker of workers(world).slice(10)) world.mobiles.delete(worker.id);
     expect(workers(world)).toHaveLength(10);
 
-    const before = census(world);
+    const built = new Set<EntityId>();
+
+    world.events.on('buildingCompleted', ({ id }) => built.add(id));
+
+    // Les matériaux en jeu : une ferme achevée récolte, sa nourriture n'entre pas dans le compte.
+    const materials = (): Stock => {
+      const { wood, stone, ironOre } = census(world, built);
+
+      return { wood, stone, ironOre };
+    };
+    const before = materials();
     let busiest = 0;
 
     run(world, 4000, () => {
-      expect(census(world)).toEqual(before);
+      expect(materials()).toEqual(before);
       expectCoveredPromises(world);
       busiest = Math.max(busiest, workers(world).filter((worker) => worker.job !== null).length);
     });
@@ -211,7 +223,17 @@ describe('porteurs', () => {
 
     // Tout le stock utile est parti sur les chantiers, et pas un objet de plus.
     const hall = hallOf(world);
-    const delivered = (item: ItemId): number => sites(world).reduce((sum, site) => sum + (site.delivered[item] ?? 0), 0);
+    const delivered = (item: ItemId): number =>
+      [...world.entities.values()].reduce(
+        (sum, entity) =>
+          sum +
+          (entity.kind === 'site'
+            ? (entity.delivered[item] ?? 0)
+            : built.has(entity.id)
+              ? ((BUILDINGS[entity.proto].cost as Partial<Record<ItemId, number>>)[item] ?? 0)
+              : 0),
+        0,
+      );
 
     expect(hall.store.count('wood')).toBe(0);
     expect(delivered('wood')).toBe(30);
@@ -299,7 +321,8 @@ describe('porteurs', () => {
 
     world.mobiles.delete(9999);
     run(world, 3000);
-    expect(siteMissing(sites(world)[0]!)).toBe(0);
+    // Le travail a repris jusqu'au bout : le dernier objet porté a achevé la ferme.
+    expect(sites(world)).toHaveLength(0);
   });
 
   it('une sauvegarde en plein transport se recharge avec ses réservations', () => {

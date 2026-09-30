@@ -6,9 +6,9 @@ import type { Command } from './commands.ts';
 import { BUILD_REACH_TILES } from './player.ts';
 import { SAVE_VERSION, decodeSave, deserialize, encodeSave, serialize } from './save.ts';
 import type { EntityId } from './types.ts';
-import { World, siteMissing } from './world.ts';
+import { World } from './world.ts';
 
-/** Remplit le sac, colle Adam à l'emprise, livre au contact, puis « Construire ». */
+/** Remplit le sac, colle Adam à l'emprise, livre au contact : le dernier objet achève le chantier. */
 function completeSite(world: World, id: EntityId): void {
   const site = world.entities.get(id);
 
@@ -31,10 +31,9 @@ function completeSite(world: World, id: EntityId): void {
 
     const current = world.entities.get(id);
 
-    if (current?.kind === 'site' && siteMissing(current) === 0) break;
+    if (current?.kind !== 'site') break;
   }
   world.push({ type: 'setMoveAxis', x: 0, y: 0 });
-  world.push({ type: 'buildSite', id });
   world.tick();
 
   if (world.entities.get(id)?.kind === 'site') throw new Error('le chantier ne s’est pas achevé');

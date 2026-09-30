@@ -14,16 +14,13 @@
 import { BUILDINGS } from '../data/buildings.ts';
 import { EVE, EVE_LINES } from '../data/eve.ts';
 import type { ItemId } from '../data/items.ts';
-import type { EntityId } from '../sim/types.ts';
-import { siteMissing, type World } from '../sim/world.ts';
+import type { World } from '../sim/world.ts';
 
 /** Ce que le joueur a déjà fait : un conseil compris ne revient pas. */
 export interface HintProgress {
   harvestedWood: boolean;
   harvestedStone: boolean;
   delivered: boolean;
-  /** Le bâtiment dont la fenêtre est ouverte, s'il y en a une. */
-  inspected: EntityId | null;
 }
 
 /** Un conseil, et la ressource qu'il envoie chercher : le repère d'objectif y mène. */
@@ -50,8 +47,6 @@ export function tutorialAdvice(world: World, progress: HintProgress, towers: boo
     const needs = (item: ItemId): boolean => (hall.delivered[item] ?? 0) < (cost[item] ?? 0);
     const carries = (Object.keys(cost) as ItemId[]).some((item) => needs(item) && inventory.count(item) > 0);
 
-    // Sa fenêtre ouverte, le chantier est tapé : le bouton « Construire » est sous les yeux.
-    if (siteMissing(hall) === 0) return progress.inspected === hall.id ? null : say(lines.tapSite);
     if (inventory.freeSpace() <= 0) return say(lines.bagFull);
     if (!progress.harvestedWood && needs('wood')) return say(lines.wood, 'wood');
     if (!progress.harvestedStone && needs('stone')) return say(lines.stone, 'stone');

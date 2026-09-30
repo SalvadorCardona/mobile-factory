@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { TILE_SIZE, worldToTile } from '../core/grid.ts';
 import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
 import { EVE } from '../data/eve.ts';
+import type { ItemId } from '../data/items.ts';
 import { QUEST_IDS } from '../data/quests.ts';
 import { RESOURCES } from '../data/resources.ts';
 import { harvestTicksWithTools, isUnlocked } from './eve.ts';
@@ -10,13 +11,18 @@ import { deserialize } from './save.ts';
 import type { EntityId } from './types.ts';
 import { World } from './world.ts';
 
-/** Un chantier livré d'office, puis « Construire » : Adam est à portée. */
+/** Un chantier livré d'office sauf un objet, que le sac apporte : le dernier objet l'achève. Adam est à portée. */
 function finish(world: World, id: EntityId): void {
   const site = world.entities.get(id);
 
   if (site?.kind !== 'site') throw new Error(`#${id} n'est pas un chantier`);
-  site.delivered = { ...BUILDINGS[site.proto].cost };
-  world.push({ type: 'buildSite', id });
+
+  const cost = BUILDINGS[site.proto].cost as Partial<Record<ItemId, number>>;
+  const [last] = Object.keys(cost) as ItemId[];
+
+  site.delivered = { ...cost, [last!]: cost[last!]! - 1 };
+  world.player.inventory.add(last!, 1);
+  world.push({ type: 'transferToSite', id });
   world.tick();
   if (world.entities.get(id)?.kind === 'site') throw new Error('le chantier ne s’est pas achevé');
 }

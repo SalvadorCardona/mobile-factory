@@ -40,7 +40,6 @@ export const EVE = {
 export const EVE_LINES = {
   /** Le conseil sous la quête — le tutoriel, dans sa bouche. Cf. `ui/hint.ts`. */
   hints: {
-    tapSite: 'Tout est livré ! Tape le chantier, puis « Construire ».',
     bagFull: 'Ton sac déborde, Adam. Va vider tout ça sur le chantier !',
     wood: 'Allô Adam ? Ici Ève. Fonce dans un arbre : il nous faut du bois.',
     stone: 'De la pierre, maintenant. Les rochers roses, ça casse bien.',

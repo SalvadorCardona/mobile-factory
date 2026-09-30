@@ -107,14 +107,9 @@ function completeSite(world: World, id: EntityId): Entity {
 
     const current = world.entities.get(id);
 
-    if (current?.kind === 'site' && siteMissing(current) === 0) break;
+    if (current?.kind !== 'site') break;
   }
   world.push({ type: 'setMoveAxis', x: 0, y: 0 });
-  world.tick();
-
-  // Un chantier livré ne se termine jamais seul : c'est le bouton « Construire ».
-  world.push({ type: 'buildSite', id });
-  world.tick();
   // Un tick de plus, comme avant : les cadences des tests se comptent depuis là.
   world.tick();
 
@@ -361,22 +356,15 @@ describe('World', () => {
     expect(world.player.inventory.total()).toBe(0);
   });
 
-  it('transfère le sac d’un coup dans le chantier, puis attend « Construire »', () => {
+  it('transfère le sac d’un coup dans le chantier, qui s’achève au dernier objet', () => {
     const world = new World(7);
-    const ready: EntityId[] = [];
     const completed: EntityId[] = [];
     const rejected: string[] = [];
 
-    world.events.on('siteReady', ({ id }) => ready.push(id));
     world.events.on('buildingCompleted', ({ id }) => completed.push(id));
     world.events.on('siteRejected', ({ reason }) => rejected.push(reason));
 
-    // Construire avant d'avoir livré : refusé.
-    world.push({ type: 'buildSite', id: world.townHallId });
-    world.tick();
-    expect(rejected).toEqual(['incomplete']);
-
-    // Un sac à moitié rempli : tout passe, le chantier n'est pas prêt.
+    // Un sac à moitié rempli : tout passe, le chantier reste un chantier.
     world.player.inventory.add('wood', 5);
     world.push({ type: 'transferToSite', id: world.townHallId });
     world.tick();
@@ -386,26 +374,33 @@ describe('World', () => {
     expect(site?.kind).toBe('site');
     expect(site?.kind === 'site' && site.delivered.wood).toBe(5);
     expect(world.player.inventory.total()).toBe(0);
-    expect(ready).toEqual([]);
+    expect(completed).toEqual([]);
 
     // Rien à donner : refusé, sans rien casser.
     world.push({ type: 'transferToSite', id: world.townHallId });
     world.tick();
-    expect(rejected).toEqual(['incomplete', 'nothingToGive']);
+    expect(rejected).toEqual(['nothingToGive']);
 
-    // Le reste, plus du surplus qui doit rester dans le sac.
+    // Le reste, plus du surplus qui doit rester dans le sac : la mairie est bâtie sans autre commande.
     world.player.inventory.add('wood', 20);
     world.player.inventory.add('stone', 12);
     world.push({ type: 'transferToSite', id: world.townHallId });
     world.tick();
-    expect(ready).toEqual([world.townHallId]);
     expect(world.player.inventory.count('wood')).toBe(5);
-    expect(completed).toEqual([]);
-
-    world.push({ type: 'buildSite', id: world.townHallId });
-    world.tick();
     expect(completed).toEqual([world.townHallId]);
     expect(world.entities.get(world.townHallId)?.kind).toBe('townHall');
+  });
+
+  it('achève au chargement un chantier livré d’une ancienne sauvegarde', () => {
+    const world = new World(7);
+    const hall = world.entities.get(world.townHallId);
+
+    if (hall?.kind !== 'site') throw new Error('la partie ne commence plus sur le chantier de la mairie');
+    hall.delivered = { ...BUILDINGS[hall.proto].cost };
+
+    const restored = World.restore(world.snapshot());
+
+    expect(restored.entities.get(restored.townHallId)?.kind).toBe('townHall');
   });
 
   it('compte les ouvriers des bâtiments finis dans la population', () => {
