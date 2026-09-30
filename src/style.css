@@ -245,17 +245,25 @@ button {
 
 .hud-quest-line {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 6px 8px;
 }
 
+/* Sur un téléphone, la vague garde sa ligne et les compteurs passent dessous, ensemble. */
 .hud-quest-wave {
-  flex: 1;
+  flex: 1 0 auto;
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 
 .hud-quest-wave[data-urgent='true'] {
   color: var(--danger);
+}
+
+.hud-quest-chips {
+  display: flex;
+  gap: 8px;
 }
 
 .hud-quest-chip {
@@ -266,6 +274,57 @@ button {
   border-radius: 999px;
   background: var(--paper-shade);
   font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Le compteur d'ouvriers est un bouton : sa face avant dit qu'on peut le taper. */
+.hud-quest-crew {
+  position: relative;
+  border: none;
+  font: inherit;
+  font-size: 16px;
+  color: inherit;
+  box-shadow: 0 2px 0 var(--violet-light);
+  cursor: pointer;
+}
+
+/* La capsule est petite, le doigt ne l'est pas : la zone de tap déborde. */
+.hud-quest-crew::after {
+  content: '';
+  position: absolute;
+  inset: -8px -4px;
+}
+
+.hud-quest-crew:active,
+.hud-quest-crew[aria-expanded='true'] {
+  transform: translateY(2px);
+  box-shadow: none;
+}
+
+.hud-quest-crew-detail {
+  display: grid;
+  gap: 2px;
+  margin-top: 6px;
+  padding: 4px 12px 4px 8px;
+  border-radius: 14px;
+  background: var(--paper-shade);
+  font-size: 15px;
+}
+
+.hud-quest-crew-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hud-quest-crew-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.hud-quest-crew-count {
+  min-width: 20px;
+  text-align: right;
   font-variant-numeric: tabular-nums;
 }
 

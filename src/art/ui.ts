@@ -133,6 +133,15 @@ export const UI_ICONS = {
   heart: svg(S, S, heart(12, 9.5, 4.6, coral.shade), heart(11.6, 9, 4.2, coral.base), pill(6.5, 6.5, 4, 2, coral.light)),
   /** Un habitant : la tête et la tunique orange des humains. */
   people: svg(S, S, shadedPill(5, 12, 14, 10, 3, 'orange'), circle(12, 8, 5, PALETTE.skin.base), pill(7, 3, 10, 5, ink.base)),
+  /** Un ouvrier : l'habitant, et le bandeau corail des porteurs noué au front. */
+  worker: svg(
+    S,
+    S,
+    shadedPill(5, 12, 14, 10, 3, 'orange'),
+    circle(12, 8, 5, PALETTE.skin.base),
+    pill(7, 3, 10, 5, ink.base),
+    pill(6.5, 5.5, 11, 2.6, coral.base),
+  ),
   /** Une tête de mutant, pour les mutants abattus. */
   mutant: svg(
     S,

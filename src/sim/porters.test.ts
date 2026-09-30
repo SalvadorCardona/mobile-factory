@@ -345,6 +345,44 @@ describe('porteurs', () => {
     expect(copy.snapshot()).toEqual(world.snapshot());
   });
 
+  it('compte les ouvriers de la ville : total, par bâtiment, porteurs occupés ou en attente', () => {
+    const world = colony({ hall: { wood: 40, stone: 40 }, houses: 2, sites: ['farm'] });
+    const houses = BUILDINGS.builderHouse.workers * 2;
+
+    // Un chantier n'emploie personne.
+    expect(world.workforce()).toEqual({
+      total: houses,
+      byBuilding: [{ proto: 'builderHouse', count: houses }],
+      porters: { busy: 0, idle: houses },
+    });
+
+    run(world, 60);
+
+    const { busy, idle } = world.workforce().porters;
+
+    expect(busy).toBeGreaterThan(0);
+    expect(busy + idle).toBe(houses);
+
+    run(world, 3000);
+
+    // La ferme finie embauche : le compte suit, et reste celui de la population.
+    const after = world.workforce();
+
+    expect(after.total).toBe(houses + BUILDINGS.farm.workers);
+    expect(after.total).toBe(world.population().workers);
+    expect(after.byBuilding).toEqual([
+      { proto: 'builderHouse', count: houses },
+      { proto: 'farm', count: BUILDINGS.farm.workers },
+    ]);
+
+    // Une maison tombée : ses ouvriers quittent la ville.
+    const house = [...world.entities.values()].find((entity) => entity.kind === 'house')!;
+
+    world.entities.delete(house.id);
+    expect(world.workforce().total).toBe(BUILDINGS.builderHouse.workers + BUILDINGS.farm.workers);
+    expect(world.workforce().porters.busy + world.workforce().porters.idle).toBe(BUILDINGS.builderHouse.workers);
+  });
+
   it('ne trace jamais une ligne droite à travers l’eau', () => {
     let water: { tx: number; ty: number } | null = null;
 

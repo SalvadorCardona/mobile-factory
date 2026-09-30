@@ -146,6 +146,18 @@ export interface PlacementBlock {
   tiles: TileCoord[];
 }
 
+/**
+ * Les ouvriers de la ville, lus par le HUD : le total, bâtiment par
+ * bâtiment, et ce que font les porteurs sur pied.
+ */
+export interface Workforce {
+  total: number;
+  /** Les bâtiments finis qui emploient, dans l'ordre de `BUILDINGS`, un seul par prototype. */
+  byBuilding: { proto: BuildingId; count: number }[];
+  /** Les porteurs logés : `busy` ont un job, `idle` attendent du travail. */
+  porters: { busy: number; idle: number };
+}
+
 export type WorldEvents = {
   /** Un chantier est ouvert (ou un bâtiment à coût nul, posé fini). */
   buildingPlaced: { id: EntityId; tx: number; ty: number };
@@ -1279,6 +1291,39 @@ export class World {
       if (entity.kind !== 'site') workers += BUILDINGS[entity.proto].workers;
     }
     return { adults: this.eve() ? 2 : 1, children, workers };
+  }
+
+  /**
+   * Les ouvriers, comptés comme `population()` : ceux qu'emploient les
+   * bâtiments finis. Les porteurs dont la maison est tombée quittent la
+   * colonie : ils ne comptent plus.
+   */
+  public workforce(): Workforce {
+    const counts = new Map<BuildingId, number>();
+    let total = 0;
+    let busy = 0;
+    let idle = 0;
+
+    for (const entity of this.entities.values()) {
+      const { workers } = BUILDINGS[entity.proto];
+
+      if (entity.kind === 'site' || workers === 0) continue;
+      counts.set(entity.proto, (counts.get(entity.proto) ?? 0) + workers);
+      total += workers;
+    }
+    for (const worker of this.workers()) {
+      if (!this.entities.has(worker.homeId)) continue;
+      if (worker.job) busy += 1;
+      else idle += 1;
+    }
+
+    const byBuilding = (Object.keys(BUILDINGS) as BuildingId[]).flatMap((proto) => {
+      const count = counts.get(proto);
+
+      return count ? [{ proto, count }] : [];
+    });
+
+    return { total, byBuilding, porters: { busy, idle } };
   }
 
   /**
