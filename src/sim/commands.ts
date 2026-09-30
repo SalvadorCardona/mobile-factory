@@ -62,7 +62,9 @@ export type PlacementRejection =
   /** Un arbre ou un rocher encombre l'emprise : il faut le récolter d'abord. */
   | 'resource'
   /** Le joueur est dans l'emprise : un bâtiment est solide, il y resterait coincé. */
-  | 'onPlayer';
+  | 'onPlayer'
+  /** Il faut d'abord le plan, qu'Ève donne en récompense d'une quête. */
+  | 'locked';
 
 export interface CommandLogEntry {
   tick: number;

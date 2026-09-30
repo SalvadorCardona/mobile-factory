@@ -8,7 +8,7 @@
  * Deux familles :
  * - les **entités** posées sur la grille — chantiers et bâtiments — qui
  *   dorment entre deux réveils du scheduler ;
- * - les **mobiles** — mutants, bêtes, flèches, enfants — qui bougent à chaque tick.
+ * - les **mobiles** — mutants, bêtes, flèches, enfants, Ève — qui bougent à chaque tick.
  *   Ils sont peu nombreux, et c'est ce qui rend le tick par mobile acceptable.
  */
 
@@ -207,4 +207,31 @@ export interface Kid extends Moving {
   wanderTicks: number;
 }
 
-export type Mobile = Mutant | Beast | Arrow | Kid;
+/**
+ * Ce que fait Ève :
+ * - `arriving` : elle arrive sur son vélo-cargo, en ligne droite, jusqu'à la mairie ;
+ * - `idle` : elle flâne près de la mairie ;
+ * - `repair` : entre deux vagues, elle va réparer le bâtiment `targetId`.
+ */
+export type EveState = 'arriving' | 'idle' | 'repair';
+
+/** Ève : elle rejoint Adam après la troisième vague, vit à la mairie et répare. */
+export interface Eve extends Moving {
+  kind: 'eve';
+  state: EveState;
+  /** Là où elle vit : la tuile libre devant la mairie. */
+  homeX: number;
+  homeY: number;
+  /** Le bâtiment qu'elle répare, `null` si aucun. */
+  targetId: EntityId | null;
+  /** Vrai si elle tape sur un mur ce tick. Pilote l'animation de frappe. */
+  working: boolean;
+  /** Ticks avant le prochain coup de clé à molette. */
+  repairCooldown: number;
+  /** Flânerie, comme un enfant. */
+  dirX: number;
+  dirY: number;
+  wanderTicks: number;
+}
+
+export type Mobile = Mutant | Beast | Arrow | Kid | Eve;

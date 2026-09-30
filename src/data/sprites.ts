@@ -19,9 +19,11 @@
 import { ADAM } from '../art/adam.ts';
 import { ARROW } from '../art/arrow.ts';
 import { BUILDER_HOUSE } from '../art/builderHouse.ts';
+import { CARGO_BIKE } from '../art/cargoBike.ts';
 import { CRAB } from '../art/crab.ts';
 import { DECOR_ART } from '../art/decor.ts';
 import { DRILL } from '../art/drill.ts';
+import { EVE_SPRITE } from '../art/eve.ts';
 import { FARM } from '../art/farm.ts';
 import { KID } from '../art/kid.ts';
 import { MUTANT } from '../art/mutant.ts';
@@ -52,6 +54,8 @@ export interface SpriteProto {
 
 export const SPRITES = {
   adam: ADAM,
+  eve: EVE_SPRITE,
+  cargoBike: CARGO_BIKE,
   mutant: MUTANT,
   kid: KID,
   crab: CRAB,
@@ -86,7 +90,7 @@ export const SPRITE_IDS = Object.keys(SPRITES) as SpriteId[];
 /** Noms de morceaux valides pour un sprite donné. */
 export type PartOf<S extends SpriteId> = keyof (typeof SPRITES)[S]['parts'] & string;
 
-/** Les morceaux qu'un marcheur (Adam, mutant, enfant) doit fournir. */
+/** Les morceaux qu'un marcheur (Adam, Ève, mutant, enfant) doit fournir. */
 export const WALKER_PARTS = ['down', 'up', 'side', 'foot'] as const;
 
 /** Les morceaux qu'un bâtiment doit fournir. */

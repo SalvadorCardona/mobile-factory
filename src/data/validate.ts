@@ -15,8 +15,10 @@ import { TILE_SIZE } from '../core/grid.ts';
 import { auditSvg } from './artDirection.ts';
 import { BUILDINGS, NURSERY_BIRTH_TICKS } from './buildings.ts';
 import { ENEMIES, WAVES, WILDLIFE, WILDLIFE_SPAWN, type WildlifeProto } from './enemies.ts';
+import { EVE } from './eve.ts';
 import { ICON_SIZE, ITEM_ICONS } from './icons.ts';
 import { ITEMS } from './items.ts';
+import { QUESTS, QUEST_IDS, TOOLS, type QuestProto } from './quests.ts';
 import { RECIPES } from './recipes.ts';
 import { RESOURCES } from './resources.ts';
 import { BUILDING_PARTS, RESOURCE_PARTS, SPRITES, WALKER_PARTS, type SpriteProto } from './sprites.ts';
@@ -223,6 +225,39 @@ export function validatePrototypes(): string[] {
 
   if (WAVES.minDistance > WAVES.maxDistance || WAVES.firstDelay <= 0 || WAVES.interval <= 0) {
     errors.push('WAVES : distances ou délais incohérents');
+  }
+
+  if (QUEST_IDS.length < 3) errors.push('QUESTS : Ève doit donner au moins trois quêtes');
+  if (EVE.arrivalWave < 1 || EVE.rideSpeed <= 0 || EVE.walkSpeed <= 0 || EVE.repairTicks <= 0 || EVE.repairAmount <= 0) {
+    errors.push('EVE : vague d’arrivée, vitesses ou cadence de réparation nulles');
+  }
+
+  const plansGiven = new Set<string>();
+
+  for (const id of QUEST_IDS) {
+    const quest: QuestProto = QUESTS[id];
+
+    if (quest.goal.count <= 0) errors.push(`QUESTS.${id} : objectif nul`);
+    if (quest.goal.building === 'townHall') errors.push(`QUESTS.${id} : la mairie est unique, on n'en bâtit pas d'autre`);
+    // Un bâtiment à plan demandé avant que son plan soit donné : la quête ne finirait jamais.
+    if (BUILDINGS[quest.goal.building].plan && !plansGiven.has(quest.goal.building)) {
+      errors.push(`QUESTS.${id} : demande « ${quest.goal.building} » avant d'en donner le plan`);
+    }
+    if (quest.reward.type === 'plan') {
+      if (!BUILDINGS[quest.reward.building].plan) errors.push(`QUESTS.${id} : « ${quest.reward.building} » n'a pas besoin de plan`);
+      if (plansGiven.has(quest.reward.building)) errors.push(`QUESTS.${id} : plan « ${quest.reward.building} » donné deux fois`);
+      plansGiven.add(quest.reward.building);
+    } else if (!(quest.reward.tool in TOOLS)) {
+      errors.push(`QUESTS.${id} : outil inconnu « ${quest.reward.tool} »`);
+    }
+  }
+
+  for (const [id, building] of Object.entries(BUILDINGS)) {
+    if (building.plan && !plansGiven.has(id)) errors.push(`BUILDINGS.${id} : aucune quête n'en donne le plan`);
+  }
+
+  for (const [id, tool] of Object.entries(TOOLS)) {
+    if (tool.harvestSpeed <= 1 || (tool.resources as readonly string[]).length === 0) errors.push(`TOOLS.${id} : l'outil ne sert à rien`);
   }
 
   for (const [id, sprite] of Object.entries(SPRITES) as [string, SpriteProto][]) {

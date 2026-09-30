@@ -5,10 +5,14 @@
  * déjà fait. Elle se tait dès que l'étape est franchie : un joueur qui sait
  * déjà jouer ne la voit presque pas.
  *
+ * C'est Ève qui parle (`EVE_LINES.hints`) : par radio tant qu'elle n'est pas
+ * arrivée, de vive voix ensuite. Elle tutoie Adam.
+ *
  * Fonction pure, sans DOM : `hud.ts` l'affiche, les tests la lisent.
  */
 
 import { BUILDINGS } from '../data/buildings.ts';
+import { EVE, EVE_LINES } from '../data/eve.ts';
 import type { ItemId } from '../data/items.ts';
 import type { EntityId } from '../sim/types.ts';
 import { siteMissing, type World } from '../sim/world.ts';
@@ -37,6 +41,8 @@ export function tutorialAdvice(world: World, progress: HintProgress, towers: boo
   const hall = world.entities.get(world.townHallId);
   const { inventory } = world.player;
 
+  const lines = EVE_LINES.hints;
+
   if (world.defeated || !hall) return null;
 
   if (hall.kind === 'site') {
@@ -45,15 +51,22 @@ export function tutorialAdvice(world: World, progress: HintProgress, towers: boo
     const carries = (Object.keys(cost) as ItemId[]).some((item) => needs(item) && inventory.count(item) > 0);
 
     // Sa fenêtre ouverte, le chantier est tapé : le bouton « Construire » est sous les yeux.
-    if (siteMissing(hall) === 0) return progress.inspected === hall.id ? null : say('Tapez le chantier, puis « Construire ».');
-    if (inventory.freeSpace() <= 0) return say('Sac plein ! Marchez contre le chantier pour livrer.');
-    if (!progress.harvestedWood && needs('wood')) return say('Marchez contre un arbre pour couper du bois.', 'wood');
-    if (!progress.harvestedStone && needs('stone')) return say('Il faut de la pierre : foncez dans un rocher rose.', 'stone');
-    if (carries && !progress.delivered) return say('Marchez contre le chantier pour livrer — ou tapez-le.');
+    if (siteMissing(hall) === 0) return progress.inspected === hall.id ? null : say(lines.tapSite);
+    if (inventory.freeSpace() <= 0) return say(lines.bagFull);
+    if (!progress.harvestedWood && needs('wood')) return say(lines.wood, 'wood');
+    if (!progress.harvestedStone && needs('stone')) return say(lines.stone, 'stone');
+    if (carries && !progress.delivered) return say(lines.deliver);
     return null;
   }
 
-  if (world.wave === 0 && !towers) return say('Les mutants arrivent : construisez une tour de guet.');
-  if (mutants > 0 && world.wave <= 2) return say('Restez près d’eux : votre arc tire tout seul.');
+  if (world.wave === 0 && !towers) return say(lines.tower);
+  if (mutants > 0 && world.wave <= 2) return say(lines.bow);
+
+  // Entre deux vagues, tant qu'elle n'est pas là : elle annonce son arrivée.
+  if (mutants === 0 && world.wave > 0 && world.wave < EVE.arrivalWave && !world.eve()) {
+    const left = EVE.arrivalWave - world.wave;
+
+    return say(lines.coming.replace('{n}', String(left)).replace('{s}', left > 1 ? 's' : ''));
+  }
   return null;
 }

@@ -1,7 +1,7 @@
 /**
  * Un pantin : un personnage animé par morceaux.
  *
- * Plus de planche d'images. Adam, un mutant, un enfant, un crabe, un loup
+ * Plus de planche d'images. Adam, Ève, un mutant, un enfant, un crabe, un loup
  * sont des morceaux — un corps par direction, deux pieds, un arc, un halo,
  * des pinces — superposés au même point (les pieds) et animés par
  * transformation :
@@ -9,7 +9,7 @@
  *   lui, **trottine de côté** : le corps se dandine, les deux peignes de
  *   pattes se lèvent tour à tour ;
  * - le repos le fait respirer ;
- * - la **frappe** (Adam contre un arbre) l'écrase et le pousse vers ce qu'il
+ * - la **frappe** (Adam contre un arbre, Ève contre un mur à réparer) l'écrase et le pousse vers ce qu'il
  *   heurte ;
  * - un **coup reçu** montre le corps « touché » un instant et le fait gicler ;
  * - un **tir** tend l'arc puis le relâche ;
@@ -274,4 +274,4 @@ export class Puppet {
 }
 
 /** Sprites qui s'animent en pantin. */
-export type PuppetId = Extract<SpriteId, 'adam' | 'mutant' | 'kid' | 'crab' | 'wolf'>;
+export type PuppetId = Extract<SpriteId, 'adam' | 'eve' | 'mutant' | 'kid' | 'crab' | 'wolf'>;

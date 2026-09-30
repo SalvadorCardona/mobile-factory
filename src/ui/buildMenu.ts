@@ -25,9 +25,9 @@
  * ailleurs. Elles restent focalisables (`aria-disabled`, pas `disabled`) pour
  * que le clavier et le lecteur d'écran les parcourent quand même.
  *
- * `unlocked` est pour l'instant la liste complète des bâtiments du menu.
- * Quand la recherche existera, elle viendra de `unlockedBuildings` — le menu
- * filtrera sur une donnée, sans une ligne de logique en plus.
+ * `unlocked` est la liste complète des bâtiments du menu ; `available` dit,
+ * à chaque frame, lesquels le joueur peut bâtir. Un bâtiment à plan reste
+ * caché tant qu'Ève n'a pas donné le plan (`data/quests.ts`).
  *
  * Au clavier (`handleKey`) : Espace ouvre le tiroir sur la première carte
  * (ou sur le bâtiment déjà armé), les flèches ou ZQSD/WASD passent d'une
@@ -73,16 +73,19 @@ export class BuildMenu {
   private readonly world: World;
   private readonly placement: Placement;
   private readonly onOpen: () => void;
+  private readonly available: (id: BuildingId) => boolean;
 
   public constructor(
     world: World,
     placement: Placement,
     unlocked: readonly BuildingId[],
     onOpen: () => void = () => {},
+    available: (id: BuildingId) => boolean = () => true,
   ) {
     this.world = world;
     this.placement = placement;
     this.onOpen = onOpen;
+    this.available = available;
     this.root = document.createElement('div');
     this.root.className = 'build-menu';
 
@@ -260,7 +263,7 @@ export class BuildMenu {
     const move = MOVES[code];
 
     if (move) {
-      const cards = [...this.cards.values()];
+      const cards = this.visibleCards();
       const index = cards.indexOf(document.activeElement as HTMLButtonElement);
 
       this.focus(cards[gridStep(index, cards.length, this.columns(cards), move)]);
@@ -270,7 +273,7 @@ export class BuildMenu {
     if (code === 'Enter' || code === 'NumpadEnter') {
       if (!repeat) {
         const focused = document.activeElement;
-        const card = [...this.cards.values()].find((c) => c === focused) ?? this.firstCard();
+        const card = this.visibleCards().find((c) => c === focused) ?? this.firstCard();
 
         card?.click();
       }
@@ -286,7 +289,11 @@ export class BuildMenu {
   }
 
   private firstCard(): HTMLButtonElement | undefined {
-    return this.cards.values().next().value;
+    return this.visibleCards()[0];
+  }
+
+  private visibleCards(): HTMLButtonElement[] {
+    return [...this.cards.values()].filter((card) => !card.hidden);
   }
 
   private focus(card: HTMLButtonElement | undefined): void {
@@ -314,6 +321,7 @@ export class BuildMenu {
 
     for (const [id, card] of this.cards) {
       card.dataset['active'] = String(armed === id);
+      card.hidden = !this.available(id);
       if (card.getAttribute('aria-disabled') !== locked) card.setAttribute('aria-disabled', locked);
     }
 

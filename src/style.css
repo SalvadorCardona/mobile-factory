@@ -356,8 +356,9 @@ button {
   margin-top: 10px;
   padding: 6px 14px 6px 8px;
   border-radius: 999px;
-  background: var(--yellow-light);
-  box-shadow: 0 3px 0 var(--yellow-shade);
+  /* Le cyan d'Ève : c'est sa voix. */
+  background: var(--cyan-light);
+  box-shadow: 0 3px 0 var(--cyan);
   font-size: 16px;
   line-height: 1.25;
   animation: hint-in 320ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
@@ -371,6 +372,64 @@ button {
   from {
     opacity: 0;
     transform: translateY(-4px) scale(0.94);
+  }
+}
+
+/* La quête d'Ève, sous la santé de la mairie. */
+.hud-quest-eve {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.hud-quest-eve-label {
+  flex: 1;
+}
+
+/* ------------------------------------------------------------ bulle d'Ève */
+
+/*
+ * Une carte blanche au-dessus de sa tête, sa pointe vers elle. Elle ne prend
+ * jamais le doigt : on joue à travers.
+ */
+.hud-speech {
+  position: absolute;
+  z-index: 2;
+  max-width: 230px;
+  padding: 8px 14px;
+  border-radius: 18px;
+  background: var(--paper);
+  box-shadow: var(--face);
+  font-size: 15px;
+  line-height: 1.25;
+  text-align: center;
+  pointer-events: none;
+  transform: translate(-50%, calc(-100% - 10px));
+  animation: speech-in 260ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+.hud-speech::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  background: var(--paper);
+  box-shadow: 3px 3px 0 var(--paper-shade);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.hud-speech[hidden] {
+  display: none;
+}
+
+@keyframes speech-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-100% - 2px)) scale(0.9);
   }
 }
 

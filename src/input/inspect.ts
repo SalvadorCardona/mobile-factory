@@ -14,19 +14,27 @@
  * occupées. Tout est en pixels monde : le DPR n'entre jamais en jeu, et le
  * zoom est absorbé par `screenToWorld`.
  *
- * Aucune commande ici : ouvrir une fenêtre ne modifie pas le monde.
+ * Ève se tape aussi : un doigt sur elle la fait parler (`onTalk`). Elle
+ * passe avant les bâtiments — elle se tient devant la mairie, dont le cadre
+ * la recouvre.
+ *
+ * Aucune commande ici : ouvrir une fenêtre ou faire parler Ève ne modifie
+ * pas le monde.
  */
 
 import { TILE_SIZE } from '../core/grid.ts';
 import { BUILDINGS } from '../data/buildings.ts';
 import { SPRITES } from '../data/sprites.ts';
-import type { Entity, EntityId } from '../sim/types.ts';
+import type { Entity, EntityId, Eve } from '../sim/types.ts';
 import type { World } from '../sim/world.ts';
 import { TAP_SLOP, type PointerConsumer, type PointerSample } from './pointer.ts';
 
+/** Marge autour du cadre d'Ève, en pixels monde : elle est petite, le doigt est gros. */
+const EVE_TAP_MARGIN = 6;
+
 export class Inspect implements PointerConsumer {
   private pointerId: number | null = null;
-  private target: EntityId | null = null;
+  private target: EntityId | 'eve' | null = null;
   private startX = 0;
   private startY = 0;
   private moved = false;
@@ -35,23 +43,26 @@ export class Inspect implements PointerConsumer {
   private readonly screenToWorld: (x: number, y: number) => { x: number; y: number };
   private readonly enabled: () => boolean;
   private readonly onTap: (id: EntityId) => void;
+  private readonly onTalk: () => void;
 
   public constructor(
     world: World,
     screenToWorld: (x: number, y: number) => { x: number; y: number },
     enabled: () => boolean,
     onTap: (id: EntityId) => void,
+    onTalk: () => void = () => {},
   ) {
     this.world = world;
     this.screenToWorld = screenToWorld;
     this.enabled = enabled;
     this.onTap = onTap;
+    this.onTalk = onTalk;
   }
 
   public onDown(sample: PointerSample): boolean {
     if (this.pointerId !== null || !this.enabled()) return false;
 
-    const id = this.entityAt(sample);
+    const id = this.targetAt(sample);
 
     if (id === undefined) return false;
 
@@ -76,15 +87,31 @@ export class Inspect implements PointerConsumer {
     this.pointerId = null;
     this.target = null;
 
+    if (this.moved || target === null) return;
+    if (target === 'eve') {
+      this.onTalk();
+      return;
+    }
     // Le bâtiment doit encore exister au relâchement : un mutant a pu le raser entre-temps.
-    if (!this.moved && target !== null && this.world.entities.has(target)) this.onTap(target);
+    if (this.world.entities.has(target)) this.onTap(target);
   }
 
-  private entityAt(sample: PointerSample): EntityId | undefined {
+  private targetAt(sample: PointerSample): EntityId | 'eve' | undefined {
     const position = this.screenToWorld(sample.x, sample.y);
+    const eve = this.world.eve();
 
+    if (eve && isOnEve(eve, position.x, position.y)) return 'eve';
     return buildingAt(this.world.entities.values(), position.x, position.y);
   }
+}
+
+/** Le point monde tombe-t-il sur Ève — son sprite entier, plus une marge ? */
+export function isOnEve(eve: Eve, x: number, y: number): boolean {
+  const { width, height, anchorX, anchorY } = SPRITES.eve;
+  const left = eve.x - width * anchorX - EVE_TAP_MARGIN;
+  const top = eve.y - height * anchorY - EVE_TAP_MARGIN;
+
+  return x >= left && x < left + width + EVE_TAP_MARGIN * 2 && y >= top && y < top + height + EVE_TAP_MARGIN * 2;
 }
 
 /**

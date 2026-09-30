@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { BUILDINGS } from '../data/buildings.ts';
+import { EVE_LINES } from '../data/eve.ts';
 import { World } from '../sim/world.ts';
 import { tutorialAdvice, tutorialHint, type HintProgress } from './hint.ts';
 
-const TAP_HINT = 'Tapez le chantier, puis « Construire ».';
+const TAP_HINT = EVE_LINES.hints.tapSite;
 
 const FRESH: HintProgress = { harvestedWood: false, harvestedStone: false, delivered: false, inspected: null };
 

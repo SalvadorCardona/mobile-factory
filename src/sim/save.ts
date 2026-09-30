@@ -20,7 +20,7 @@ import { ENEMIES, WILDLIFE, type EnemyId, type WildlifeId } from '../data/enemie
 import { ITEMS, type ItemId } from '../data/items.ts';
 import type { SchedulerSnapshot } from './scheduler.ts';
 import type { Store, StoreSnapshot } from './store.ts';
-import type { BeastState, Entity, EntityId, Facing, Mobile, Player } from './types.ts';
+import type { BeastState, Entity, EntityId, EveState, Facing, Mobile, Player } from './types.ts';
 import { World } from './world.ts';
 
 /**
@@ -61,6 +61,8 @@ export interface WorldState {
   kills: number;
   defeated: boolean;
   defeatTick: number;
+  /** Quêtes d'Ève déjà finies. Absent des sauvegardes d'avant Ève : 0. */
+  questsDone: number;
   player: SavedPlayer;
   /** Tuiles entamées : `"tx,ty"` → unités déjà prises. */
   resources: Record<string, number>;
@@ -136,6 +138,8 @@ const FACINGS: readonly Facing[] = ['down', 'up', 'left', 'right'];
 
 const BEAST_STATES: readonly BeastState[] = ['roam', 'chase', 'return'];
 
+const EVE_STATES: readonly EveState[] = ['arriving', 'idle', 'repair'];
+
 function parseState(raw: unknown): WorldState {
   const state = record(raw);
 
@@ -154,6 +158,7 @@ function parseState(raw: unknown): WorldState {
     kills: int(state['kills']),
     defeated: bool(state['defeated']),
     defeatTick: int(state['defeatTick']),
+    questsDone: state['questsDone'] === undefined ? 0 : int(state['questsDone']),
     player: parsePlayer(state['player']),
     resources: parseResources(state['resources']),
     entities: unique(array(state['entities']).map(parseEntity)),
@@ -282,6 +287,25 @@ function parseMobile(raw: unknown): Mobile {
         dirY: finite(mobile['dirY']),
         wanderTicks: int(mobile['wanderTicks']),
       };
+    case 'eve': {
+      const state = mobile['state'];
+
+      if (!EVE_STATES.includes(state as EveState)) throw new SaveError(`Ève ne sait pas faire : ${String(state)}`);
+
+      return {
+        ...base,
+        kind: 'eve',
+        state: state as EveState,
+        homeX: finite(mobile['homeX']),
+        homeY: finite(mobile['homeY']),
+        targetId: mobile['targetId'] === null ? null : int(mobile['targetId']),
+        working: bool(mobile['working']),
+        repairCooldown: int(mobile['repairCooldown']),
+        dirX: finite(mobile['dirX']),
+        dirY: finite(mobile['dirY']),
+        wanderTicks: int(mobile['wanderTicks']),
+      };
+    }
     default:
       throw new SaveError(`mobile inconnu : ${String(mobile['kind'])}`);
   }

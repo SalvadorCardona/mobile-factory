@@ -12,7 +12,11 @@
  * - la **quête** en haut : le chantier de la mairie avec une barre par
  *   ressource, puis la santé de la mairie, la vague et son compte à rebours ;
  * - un **conseil** sous la quête, qui suit ce que fait le joueur (couper,
- *   casser, livrer, construire, se défendre) et se tait quand il a compris ;
+ *   casser, livrer, construire, se défendre) et se tait quand il a compris —
+ *   c'est Ève qui le dit, son portrait devant ;
+ * - la **quête d'Ève** en cours, une fois qu'elle est arrivée ;
+ * - la **bulle** d'Ève au-dessus de sa tête : son arrivée, ses quêtes, ce
+ *   qu'elle répond quand on la tape. Courte, jamais bloquante ;
  * - le **sac** d'Adam, à droite ;
  * - des **bulles** empilées pour les événements, et des gains qui flottent
  *   au-dessus de la tête d'Adam ;
@@ -22,11 +26,14 @@
 
 import { BUILDINGS } from '../data/buildings.ts';
 import { ITEMS, type ItemId } from '../data/items.ts';
+import { EVE_LINES } from '../data/eve.ts';
 import { LORE } from '../data/lore.ts';
+import { QUESTS, TOOLS, type QuestReward } from '../data/quests.ts';
 import type { AtlasStats } from '../render/spriteLibrary.ts';
 import type { WaterStats } from '../render/waterLayer.ts';
 import type { PlacementRejection } from '../sim/commands.ts';
 import type { EntityId } from '../sim/types.ts';
+import { currentQuest, questProgress } from '../sim/eve.ts';
 import { TICKS_PER_SECOND, siteMissing, type World } from '../sim/world.ts';
 import { tutorialAdvice, type Advice } from './hint.ts';
 import { itemAmount, itemIcon, uiIcon } from './icons.ts';
@@ -38,6 +45,7 @@ const REJECTION_LABELS: Record<PlacementRejection, string> = {
   outOfReach: 'Trop loin — rapprochez-vous',
   resource: 'Dégagez d’abord les arbres et rochers',
   onPlayer: 'Vous êtes sur l’emplacement',
+  locked: 'Il vous manque le plan de ce bâtiment',
 };
 
 /** Durée de vie d'un gain flottant, en ms (cf. `hud-float-up` dans le CSS). */
@@ -46,6 +54,10 @@ const FLOAT_MS = 1000;
 /** Durée d'affichage d'une bulle, et combien peuvent s'empiler. */
 const TOAST_MS = 2600;
 const MAX_TOASTS = 3;
+
+/** Durée d'une réplique d'Ève : un socle, plus le temps de lire. */
+const SPEECH_BASE_MS = 1600;
+const SPEECH_PER_CHAR_MS = 45;
 
 /** Sous ce seuil, le compte à rebours de la vague passe au rouge. */
 const WAVE_WARNING_SECONDS = 10;
@@ -72,12 +84,22 @@ export class Hud {
   private readonly countdown: HTMLElement;
   private readonly defeat: HTMLElement;
   private readonly defeatStats: HTMLElement;
+  private readonly speech: HTMLElement;
   public readonly audioButton: HTMLButtonElement;
   public readonly pauseButton: HTMLButtonElement;
   private lastBag = '';
   private lastQuest = '';
   private lastHint = '';
   private wanted: ItemId | null = null;
+
+  /** Les répliques d'Ève en attente, et l'heure où la réplique affichée s'en va. */
+  private readonly speechQueue: string[] = [];
+  private speechUntil = 0;
+  /** Ce qu'elle a déjà dit quand on la tape : elle ne radote pas. */
+  private chatterIndex = 0;
+  private talks = 0;
+  /** Bas de la quête, relu à chaque réplique seulement : lire la mise en page force un reflow. */
+  private speechFloor = 0;
   private debug: boolean;
 
   /** Ce que le joueur a déjà fait : un conseil compris ne revient pas. */
@@ -103,7 +125,7 @@ export class Hud {
     this.hint = element('div', 'hud-hint');
     this.hint.hidden = true;
     this.hintText = element('span', 'hud-hint-text');
-    this.hint.append(uiIcon('hint', 22), this.hintText);
+    this.hint.append(uiIcon('eve', 22), this.hintText);
 
     this.bag = element('div', 'panel hud-bag');
     this.floats = element('div', 'hud-floats');
@@ -112,6 +134,9 @@ export class Hud {
     this.toasts = element('div', 'hud-toasts');
     this.toasts.setAttribute('aria-live', 'polite');
     this.countdown = element('div', 'hud-countdown');
+    this.speech = element('div', 'hud-speech');
+    this.speech.hidden = true;
+    this.speech.setAttribute('aria-live', 'polite');
 
     const buttons = element('div', 'hud-buttons');
 
@@ -163,6 +188,7 @@ export class Hud {
     this.root.append(
       this.top,
       this.countdown,
+      this.speech,
       this.toasts,
       this.floats,
       this.stats,
@@ -207,6 +233,82 @@ export class Hud {
       if (loot) this.float(loot, 1);
     });
     world.events.on('playerKnockedOut', () => this.notify('Adam s’est évanoui — il se réveille à la mairie', 'bad'));
+    world.events.on('eveArriving', () => this.notify('Quelqu’un arrive à vélo…', 'good'));
+    world.events.on('eveArrived', () => {
+      this.notify('Ève a rejoint la colonie !', 'good');
+      this.say(EVE_LINES.arrival);
+    });
+    world.events.on('questStarted', ({ quest }) => this.say([QUESTS[quest].give]));
+    world.events.on('questCompleted', ({ quest }) => {
+      this.say([QUESTS[quest].done]);
+      this.notify(rewardLabel(QUESTS[quest].reward), 'good');
+    });
+  }
+
+  /* -------------------------------------------------------------------- Ève */
+
+  /** Des répliques à la suite dans la bulle d'Ève. */
+  private say(lines: readonly string[]): void {
+    this.speechQueue.push(...lines);
+  }
+
+  /**
+   * Ève tapée : elle répond sur-le-champ, à la place de ce qu'elle disait.
+   * Pendant une attaque, elle a mieux à faire ; sinon, une fois sur deux elle
+   * rappelle la quête, l'autre elle dit ce qui lui passe par la tête.
+   */
+  public talkToEve(): void {
+    const quest = currentQuest(this.world.questsDone);
+    let line: string;
+
+    if (this.mutantCount() > 0) {
+      line = EVE_LINES.busy;
+    } else if (this.talks++ % 2 === 0) {
+      line = quest ? QUESTS[quest].give : EVE_LINES.allDone;
+    } else {
+      line = EVE_LINES.chatter[this.chatterIndex++ % EVE_LINES.chatter.length]!;
+    }
+
+    this.speechQueue.length = 0;
+    this.speechQueue.push(line);
+    this.speechUntil = 0;
+  }
+
+  /** La bulle suit Ève à l'écran ; elle passe à la réplique suivante quand le temps de lecture est écoulé. */
+  private updateSpeech(): void {
+    const eve = this.world.eve();
+    const now = performance.now();
+
+    if (!eve) {
+      this.speech.hidden = true;
+      return;
+    }
+
+    if (now >= this.speechUntil) {
+      const line = this.speechQueue.shift();
+
+      if (line === undefined) {
+        this.speech.hidden = true;
+        return;
+      }
+      this.speech.textContent = line;
+      this.speech.hidden = false;
+      this.speechUntil = now + SPEECH_BASE_MS + line.length * SPEECH_PER_CHAR_MS;
+      this.speechFloor = this.topInset() + 60;
+
+      // Relance l'animation d'entrée à chaque réplique.
+      this.speech.style.animation = 'none';
+      void this.speech.offsetWidth;
+      this.speech.style.animation = '';
+    }
+
+    // Au-dessus de la tête — plus haut en selle —, sans sortir de l'écran.
+    const head = eve.state === 'arriving' ? 62 : 50;
+    const { x, y } = this.project(eve.x, eve.y - head);
+    const margin = Math.min(130, window.innerWidth / 2);
+
+    this.speech.style.left = `${Math.round(Math.min(Math.max(x, margin), window.innerWidth - margin))}px`;
+    this.speech.style.top = `${Math.round(Math.max(y, this.speechFloor))}px`;
   }
 
   /** Le renderer sait où est Adam à l'écran ; le HUD non. `main.ts` fait le lien. */
@@ -298,6 +400,7 @@ export class Hud {
     this.updateQuest();
     this.updateHint();
     this.updateBag();
+    this.updateSpeech();
     this.root.dataset['danger'] = String(this.mutantCount() > 0 && !this.world.defeated);
 
     if (this.debug) this.updateStats(fps, chunks, atlas, water);
@@ -350,14 +453,17 @@ export class Hud {
     const max = BUILDINGS[hall.proto].hp;
     const mutants = this.mutantCount();
     const seconds = Math.max(0, Math.ceil((world.nextWaveTick - world.tickCount) / TICKS_PER_SECOND));
-    const { children, workers } = world.population();
-    const people = 1 + children;
+    const { adults, children, workers } = world.population();
+    const people = adults + children;
     const status =
       mutants > 0
         ? `Vague ${world.wave} · ${mutants} mutant${mutants > 1 ? 's' : ''}`
         : `Vague ${world.wave + 1} dans ${clock(seconds)}`;
 
-    key = `hall:${hall.hp}:${status}:${people}:${workers}:${world.kills}`;
+    const quest = world.eve()?.state === 'idle' || world.eve()?.state === 'repair' ? currentQuest(world.questsDone) : null;
+    const progress = quest ? questProgress(quest, world.entities.values()) : null;
+
+    key = `hall:${hall.hp}:${status}:${people}:${workers}:${world.kills}:${quest}:${progress?.have}`;
     if (key === this.lastQuest) return;
     this.lastQuest = key;
 
@@ -380,6 +486,13 @@ export class Hud {
     wave.dataset['urgent'] = String(mutants > 0 || seconds <= WAVE_WARNING_SECONDS);
     line.append(wave, chip('people', people + workers, 'Habitants'), chip('mutant', world.kills, 'Mutants abattus'));
     this.questBody.replaceChildren(hp, line);
+
+    if (quest && progress) {
+      const row = element('div', 'hud-quest-eve');
+
+      row.append(uiIcon('eve', 18), text('hud-quest-eve-label', QUESTS[quest].label), text('hud-meter-value', `${progress.have}/${progress.need}`));
+      this.questBody.append(row);
+    }
   }
 
   /* --------------------------------------------------------------- conseil */
@@ -539,6 +652,13 @@ function meter(item: ItemId, have: number, needed: number): HTMLElement {
   row.dataset['done'] = String(have >= needed);
   row.append(itemIcon(item, 18), bar(have / needed), text('hud-meter-value', `${have}/${needed}`));
   return row;
+}
+
+/** La récompense d'une quête, dite par le jeu. */
+function rewardLabel(reward: QuestReward): string {
+  return reward.type === 'plan'
+    ? `Plan reçu : ${BUILDINGS[reward.building].label}`
+    : `Outil reçu : ${TOOLS[reward.tool].label}`;
 }
 
 /** « 1:05 » ou « 0:09 » à partir d'un nombre de secondes. */

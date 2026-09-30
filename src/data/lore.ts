@@ -39,10 +39,14 @@ export const LORE = {
     },
     eve: {
       name: 'Ève',
-      role: 'seconde survivante, rejoindra Adam plus tard',
+      role:
+        'seconde survivante, ingénieure bricoleuse ; arrive après la troisième vague, ' +
+        'vit à la mairie, répare le bâti et donne les quêtes',
       description:
-        'Femme adulte, cheveux courts, tunique de survivante, création originale ' +
-        'comme Adam. Pas encore en jeu.',
+        'Femme adulte, taquine et bienveillante, création originale comme Adam. ' +
+        'Chignon rond et carré court indigo, bandeau jaune, salopette cyan sur une ' +
+        'chemise orange, clé à molette à la main. Elle arrive sur un vélo-cargo de ' +
+        'récup à caisse jaune fleurie. Elle tutoie Adam, qui ne parle pas.',
     },
     mutant: {
       name: 'Mutant radioactif',

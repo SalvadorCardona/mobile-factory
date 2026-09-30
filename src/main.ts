@@ -27,6 +27,7 @@ import { Keyboard, isTyping, type KeyboardState } from './input/keyboard.ts';
 import { Placement } from './input/placement.ts';
 import { PointerRouter } from './input/pointer.ts';
 import { GameRenderer } from './render/renderer.ts';
+import { isUnlocked } from './sim/eve.ts';
 import { STEP_MS, World } from './sim/world.ts';
 import { LocalSave, type LoadResult } from './storage/localSave.ts';
 import { TILE_SIZE } from './core/grid.ts';
@@ -129,13 +130,23 @@ async function main(): Promise<void> {
 
   const debug = import.meta.env.DEV && new URLSearchParams(window.location.search).has('debug');
   const hud = new Hud(world, debug);
-  const buildMenu = new BuildMenu(world, placement, MENU_BUILDING_IDS, () => audio.play('open'));
+  const buildMenu = new BuildMenu(
+    world,
+    placement,
+    MENU_BUILDING_IDS,
+    () => audio.play('open'),
+    (id) => isUnlocked(id, world.questsDone),
+  );
   const panel = new BuildingPanel(world, () => audio.play('open'));
   const inspect = new Inspect(
     world,
     (x, y) => renderer.screenToWorld(x, y),
     () => placement.mode === 'idle',
     (id) => panel.show(id),
+    () => {
+      hud.talkToEve();
+      audio.play('open');
+    },
   );
 
   hud.root.append(buildMenu.root, panel.root);
@@ -349,6 +360,8 @@ function wireAudio(world: World, audio: AudioEngine, hud: Hud): void {
   world.events.on('waveCountdown', () => audio.play('countdown'));
   world.events.on('waveStarted', () => audio.play('alarm'));
   world.events.on('childBorn', () => audio.play('baby'));
+  world.events.on('eveArrived', () => audio.play('build'));
+  world.events.on('questCompleted', () => audio.play('build'));
   world.events.on('townHallDestroyed', () => audio.play('defeat'));
 }
 

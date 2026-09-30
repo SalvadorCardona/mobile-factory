@@ -45,6 +45,11 @@ export interface BuildingProto {
   workers: number;
   /** Proposé dans le menu de construction ? La mairie, unique, ne l'est pas. */
   menu: boolean;
+  /**
+   * Faut-il un plan pour le bâtir ? Un bâtiment à plan n'entre dans le menu
+   * qu'une fois le plan donné par Ève, en récompense d'une quête (`data/quests.ts`).
+   */
+  plan: boolean;
   /** Sprite du bâtiment : son chantier, sa version finie, sa version endommagée. */
   sprite: SpriteId;
   /** Arme automatique du bâtiment, ou `null` s'il n'en porte pas. */
@@ -65,6 +70,7 @@ export const BUILDINGS = {
     hp: 120,
     workers: 0,
     menu: false,
+    plan: false,
     sprite: 'townHall',
     weapon: null,
   },
@@ -81,6 +87,7 @@ export const BUILDINGS = {
     hp: 40,
     workers: 0,
     menu: true,
+    plan: false,
     sprite: 'drill',
     weapon: null,
   },
@@ -97,6 +104,7 @@ export const BUILDINGS = {
     hp: 60,
     workers: 0,
     menu: true,
+    plan: false,
     sprite: 'nursery',
     weapon: null,
   },
@@ -113,6 +121,7 @@ export const BUILDINGS = {
     hp: 70,
     workers: 4,
     menu: true,
+    plan: true,
     sprite: 'builderHouse',
     weapon: null,
   },
@@ -129,6 +138,7 @@ export const BUILDINGS = {
     hp: 50,
     workers: 4,
     menu: true,
+    plan: false,
     sprite: 'farm',
     weapon: null,
   },
@@ -145,6 +155,7 @@ export const BUILDINGS = {
     hp: 60,
     workers: 0,
     menu: true,
+    plan: false,
     sprite: 'watchtower',
     weapon: 'towerBow',
   },
