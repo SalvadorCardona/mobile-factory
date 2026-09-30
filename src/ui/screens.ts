@@ -11,11 +11,16 @@
  * choix par défaut) et « Nouvelle partie ». Recommencer efface la colonie :
  * les deux écrans le font confirmer avant.
  *
+ * L'écran titre ouvre aussi le jardin des souvenirs (`garden.ts`), où l'on
+ * plante les graines des colonies tombées.
+ *
  * Aucun de ces écrans ne touche au monde ni à la sauvegarde : ils disent à
  * `main.ts` de jouer, d'arrêter l'horloge ou de recommencer, et c'est tout.
  */
 
 import { LORE } from '../data/lore.ts';
+import type { Garden } from '../sim/garden.ts';
+import { GardenPanel, type GardenActions } from './garden.ts';
 import { buildingIcon, itemIcon, uiIcon } from './icons.ts';
 import { seedLine } from './seed.ts';
 
@@ -27,12 +32,15 @@ export interface TitleOptions {
   onPlay: () => void;
   /** « Nouvelle partie », confirmée : la sauvegarde est à effacer. */
   onRestart: () => void;
+  /** Le jardin des souvenirs, et de quoi y planter. */
+  garden: Garden;
+  gardenActions: GardenActions;
 }
 
 export class TitleScreen {
   public readonly root: HTMLElement;
 
-  public constructor({ resume, notice, onPlay, onRestart }: TitleOptions) {
+  public constructor({ resume, notice, onPlay, onRestart, garden, gardenActions }: TitleOptions) {
     this.root = document.createElement('div');
     this.root.className = 'overlay title-screen';
 
@@ -104,6 +112,33 @@ export class TitleScreen {
       panel.append(fresh);
       this.root.append(confirm);
     }
+
+    const gardenButton = document.createElement('button');
+    const gardenPanel = new GardenPanel(
+      garden,
+      gardenActions,
+      ({ seeds, pure }) => {
+        gardenButton.replaceChildren(uiIcon('seed', 22), `Jardin · ${seeds}`);
+        gardenButton.dataset['pure'] = String(pure);
+      },
+      () => {
+        gardenPanel.root.hidden = true;
+        panel.hidden = false;
+        gardenButton.focus();
+      },
+    );
+
+    gardenPanel.root.hidden = true;
+    gardenButton.type = 'button';
+    gardenButton.className = 'button-secondary title-garden';
+    gardenButton.setAttribute('aria-label', 'Jardin des souvenirs');
+    gardenButton.addEventListener('click', () => {
+      panel.hidden = true;
+      gardenPanel.root.hidden = false;
+      gardenPanel.root.querySelector<HTMLButtonElement>('.button-secondary')?.focus();
+    });
+    panel.append(gardenButton);
+    this.root.append(gardenPanel.root);
 
     if (notice) {
       const line = document.createElement('p');

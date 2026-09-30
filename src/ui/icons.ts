@@ -15,6 +15,7 @@ import { UI_ICONS, type UiIcon } from '../art/ui.ts';
 import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
 import { ITEM_ICONS } from '../data/icons.ts';
 import { ITEMS, type ItemId } from '../data/items.ts';
+import { PERKS, type PerkId } from '../data/perks.ts';
 import { SPRITES } from '../data/sprites.ts';
 
 const cache = new Map<string, string>();
@@ -62,6 +63,18 @@ export function uiIcon(name: UiIcon, size = 24): HTMLImageElement {
   const element = image(url(`ui:${name}`, UI_ICONS[name]), 'icon icon-ui', size, size);
 
   element.alt = '';
+  element.setAttribute('aria-hidden', 'true');
+  return element;
+}
+
+/** L'icône d'un bonus du jardin, décorative : la ligne porte déjà son nom. */
+export function perkIcon(perk: PerkId, size = 32): HTMLImageElement {
+  const { icon } = PERKS[perk];
+  const element =
+    'item' in icon ? itemIcon(icon.item, size) : 'building' in icon ? buildingIcon(icon.building, size) : uiIcon(icon.ui, size);
+
+  element.alt = '';
+  element.removeAttribute('title');
   element.setAttribute('aria-hidden', 'true');
   return element;
 }

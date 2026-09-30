@@ -10,11 +10,13 @@
 import {
   PALETTE,
   circle,
+  curve,
   group,
   line,
   pill,
   polygon,
   rect,
+  shadedBlock,
   shadedCircle,
   shadedPill,
   shape,
@@ -22,7 +24,7 @@ import {
 } from '../data/artDirection.ts';
 
 const S = 24;
-const { ink, coral, paper, yellow, orange, toxic, cyan } = PALETTE;
+const { ink, coral, paper, yellow, orange, toxic, cyan, mint, violet } = PALETTE;
 
 /** Un cœur : deux disques et une pointe. */
 function heart(cx: number, cy: number, r: number, color: (typeof PALETTE)['coral']['base' | 'shade']): string {
@@ -160,6 +162,31 @@ export const UI_ICONS = {
   play: svg(S, S, polygon([8.5, 5.5, 19.5, 12.5, 8.5, 19.5], orange.shade), polygon([7.5, 4.5, 18.5, 11.5, 7.5, 18.5], paper.base)),
   /** « Recommencer », sur un bouton blanc : la flèche corail qui repart. */
   restart: svg(S, S, restartArrow(12.6, 13.6, coral.shade), restartArrow(12, 13, coral.base), pill(5, 11.5, 2, 3.4, coral.light)),
+  /** Une graine qui germe : la monnaie du jardin des souvenirs. */
+  seed: svg(
+    S,
+    S,
+    line(12, 13, 12, 6.5, mint.shade),
+    group('translate(12 8) rotate(-150)', pill(0, -1.8, 6.5, 3.6, mint.base)),
+    group('translate(12 7) rotate(-35)', pill(0, -1.8, 6.5, 3.6, mint.base)),
+    shadedPill(5.5, 12, 13, 9, 2.5, 'yellow'),
+  ),
+  /** Le sac à dos violet d'Adam, pour le bonus « Grand sac ». */
+  bag: svg(
+    S,
+    S,
+    curve('M8.5 7.5 C8.5 3 15.5 3 15.5 7.5', ink.base),
+    shadedBlock(5, 6.5, 14, 15, 3, 'violet', 5),
+    rect(8, 14, 8, 4.5, violet.shade, 2),
+    pill(9.5, 15, 3, 1.6, violet.light),
+  ),
+  /** Une hache : manche indigo, fer bleu. */
+  axe: svg(
+    S,
+    S,
+    group('translate(13 12) rotate(25)', rect(-1.6, -10, 3.2, 20, ink.light, 1.6)),
+    group('translate(13 12) rotate(25)', shadedBlock(-9, -8.5, 9, 9, 2.5, 'cyan', 3), rect(-9, -8.5, 2.5, 9, cyan.shade, 1.25)),
+  ),
   /** La même, blanche, sur le bouton corail de la confirmation. */
   restartLight: svg(S, S, restartArrow(12.6, 13.6, orange.shade), restartArrow(12, 13, paper.base)),
 } as const;

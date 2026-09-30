@@ -19,6 +19,7 @@ import { ENEMIES, LOOT_DROPS, WAVES, WILDLIFE, WILDLIFE_SPAWN, type LootTable, t
 import { EVE } from './eve.ts';
 import { ICON_SIZE, ITEM_ICONS } from './icons.ts';
 import { ITEMS } from './items.ts';
+import { PERKS, type PerkProto } from './perks.ts';
 import { QUESTS, QUEST_IDS, TOOLS, type QuestProto } from './quests.ts';
 import { RECIPES, type RecipeProto } from './recipes.ts';
 import { RESOURCES } from './resources.ts';
@@ -315,6 +316,34 @@ export function validatePrototypes(): string[] {
     }
     if (sprite.anchorX < 0 || sprite.anchorX > 1 || sprite.anchorY < 0 || sprite.anchorY > 1) {
       errors.push(`SPRITES.${id} : ancre hors du cadre`);
+    }
+  }
+
+  // Des bonus de confort : un bonus qui fait gagner une vague n'a rien à faire dans le jardin.
+  for (const [id, perk] of Object.entries(PERKS) as [string, PerkProto][]) {
+    const { bag, start, freeSite, harvestSpeed } = perk.effect;
+
+    if (perk.cost <= 0 || !Number.isInteger(perk.cost)) {
+      errors.push(`PERKS.${id} : coût en graines nul ou non entier`);
+    }
+    if (bag === undefined && start === undefined && freeSite === undefined && harvestSpeed === undefined) {
+      errors.push(`PERKS.${id} : aucun effet`);
+    }
+    if (bag !== undefined && (bag <= 0 || !Number.isInteger(bag))) {
+      errors.push(`PERKS.${id} : places de sac nulles ou non entières`);
+    }
+    for (const [itemId, amount] of Object.entries<number>(start ?? {})) {
+      if (!(itemId in ITEMS) || amount <= 0 || !Number.isInteger(amount)) {
+        errors.push(`PERKS.${id} : objet de départ invalide « ${itemId} »`);
+      }
+    }
+    if (freeSite !== undefined && !(freeSite in BUILDINGS)) {
+      errors.push(`PERKS.${id} : chantier offert inconnu « ${freeSite} »`);
+    }
+    for (const [resourceId, speed] of Object.entries<number>(harvestSpeed ?? {})) {
+      if (!(resourceId in RESOURCES) || speed <= 0 || speed > 0.5) {
+        errors.push(`PERKS.${id} : accélération de récolte invalide sur « ${resourceId} »`);
+      }
     }
   }
 
