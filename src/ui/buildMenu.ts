@@ -343,6 +343,7 @@ export class BuildMenu {
   /** Pourquoi la carte est grisée, ou `null` si le joueur peut la choisir. */
   private lockReason(id: BuildingId): string | null {
     if (!this.unlocked()) return 'Débloqué après la mairie';
+    if (this.world.atLimit(id)) return 'Un seul par colonie';
 
     const { unlockNight } = BUILDINGS[id];
 

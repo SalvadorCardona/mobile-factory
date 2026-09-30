@@ -82,6 +82,9 @@ const ITEM_TONES: Record<ItemId, Tone> = {
   coal: FAMILY_TONES.coal,
   food: FAMILY_TONES.colony,
   ironPlate: FAMILY_TONES.iron,
+  mutantGoo: FAMILY_TONES.mutants,
+  wolfFang: 'paper',
+  crabClaw: FAMILY_TONES.humans,
 };
 
 /** Taille de l'icône d'objet dans la pastille, en pixels écran. */

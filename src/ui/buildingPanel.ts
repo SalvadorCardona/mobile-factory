@@ -19,6 +19,9 @@
  * elle-même : chaque bouton pousse une commande (`transferToSite`,
  * `takeFromBuilding`, `supplyBuilding`, `depositToTown`) que le tick consomme.
  *
+ * Sur le labo de recherche, la fenêtre devient le panneau Recherche
+ * (`researchPanel.ts`) : la recherche en cours et la liste des recherches.
+ *
  * Elle **lit** le monde à chaque frame tant qu'elle est ouverte, et se ferme
  * seule si l'entité disparaît — rasée par un mutant, par exemple.
  */
@@ -31,6 +34,7 @@ import { WEAPONS } from '../data/weapons.ts';
 import type { Entity, EntityId } from '../sim/types.ts';
 import { TICKS_PER_SECOND, siteMissing, type World } from '../sim/world.ts';
 import { itemAmount, uiIcon } from './icons.ts';
+import { ResearchPanel } from './researchPanel.ts';
 
 /** L'état d'une foreuse ou d'une ferme qui attend qu'on la vide. */
 const BLOCKED = 'Bloquée : coffre plein — heurtez-la ou appuyez sur Prendre.';
@@ -48,6 +52,8 @@ export class BuildingPanel {
   private readonly transferButton: HTMLButtonElement;
   private readonly takeButton: HTMLButtonElement;
   private readonly depositButton: HTMLButtonElement;
+  /** Le panneau Recherche, que seule la fenêtre du labo montre. */
+  private readonly research: ResearchPanel;
   private lastText = '';
   private lastItems = '';
 
@@ -123,7 +129,10 @@ export class BuildingPanel {
 
     this.actions.append(this.transferButton, this.takeButton, this.depositButton);
 
-    this.root.append(header, this.description, this.bar, this.items, this.lines, this.actions);
+    this.research = new ResearchPanel(world);
+    this.research.root.hidden = true;
+
+    this.root.append(header, this.description, this.bar, this.items, this.lines, this.actions, this.research.root);
   }
 
   public get open(): boolean {
@@ -177,6 +186,14 @@ export class BuildingPanel {
 
     // Le chantier devient le bâtiment sous le même id : le texte suit.
     this.description.textContent = panelDescription(entity);
+
+    // Le labo fini : sa fenêtre devient le panneau Recherche, qui a besoin de toute la place.
+    const lab = entity.kind === 'lab';
+
+    this.root.dataset['kind'] = entity.kind;
+    this.description.hidden = lab;
+    this.research.root.hidden = !lab;
+    if (entity.kind === 'lab') this.research.update(entity);
 
     if (entity.kind === 'site') {
       const total = Object.values(proto.cost).reduce((sum, amount) => sum + amount, 0);
@@ -287,6 +304,10 @@ export class BuildingPanel {
           lines.push('Les ouvriers dorment ici entre deux journées.');
           break;
 
+        case 'lab':
+          // Tout est dans le panneau Recherche, sous les points de vie.
+          break;
+
         case 'clinic': {
           const used = this.world.clinicBedsUsed(entity.id);
 
@@ -300,8 +321,8 @@ export class BuildingPanel {
         }
       }
 
-      // Le coffre de la mairie est le stock de la ville.
-      if (proto.storage > 0) {
+      // Le coffre de la mairie est le stock de la ville. Celui du labo se lit dans le panneau Recherche.
+      if (proto.storage > 0 && !lab) {
         const capacity = Number.isFinite(proto.storage) ? `/${proto.storage}` : '';
         const entries = entity.store.entries();
         const label = entity.kind === 'townHall' ? 'Stock de la ville' : `Coffre ${entity.store.total()}${capacity}`;

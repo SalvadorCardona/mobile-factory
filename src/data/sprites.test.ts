@@ -51,13 +51,15 @@ describe('sprites', () => {
 
   it('réserve le vert fluo aux mutants', () => {
     // Seuls ont le droit de le porter : le mutant, le patient (un mutant assommé), la flaque d'où il sort, son
-    // pictogramme, la bannière, où il en passe un — et l'ex-mutant, pour un seul détail (test suivant).
+    // pictogramme, la bannière, où il en passe un, la gelée qu'il lâche en butin (un bout de lui : son icône,
+    // le tas au sol, la charge d'un porteur) — et l'ex-mutant, pour un seul détail (test suivant).
     const mutants = (name: string): boolean =>
       name.startsWith('mutant.') ||
       name.startsWith('patient.') ||
       name.startsWith('exMutant.') ||
       name.startsWith('puddle.') ||
       name === 'ui.mutant' ||
+      name.endsWith('.mutantGoo') ||
       name === 'brand.banner';
 
     for (const [name, svg] of everySvg()) {
@@ -81,7 +83,8 @@ describe('sprites', () => {
     }
     // Sa charge et ses pieds sont ceux d'un humain.
     for (const [part, svg] of Object.entries(SPRITES.exMutant.parts)) {
-      if (part.startsWith('load.') || part === 'foot') expect(count(svg, TOXIC), `exMutant.${part}`).toBe(0);
+      // Sauf quand il porte de la gelée de mutant : c'est elle qui est verte, pas lui.
+      if ((part.startsWith('load.') && part !== 'load.mutantGoo') || part === 'foot') expect(count(svg, TOXIC), `exMutant.${part}`).toBe(0);
     }
   });
 

@@ -16,14 +16,15 @@
  * recalcule depuis les jobs des ouvriers (`rebuild`), comme les réservations
  * des coffres, dont la sauvegarde ne garde que le stock réel.
  *
- * Premier périmètre : livrer les chantiers depuis la mairie, et vider les
- * coffres des foreuses et des fermes dans la mairie.
+ * Premier périmètre : livrer les chantiers et le labo de recherche depuis la
+ * mairie, et vider les coffres des foreuses et des fermes dans la mairie.
  */
 
 import { TILE_SIZE, distanceSq } from '../core/grid.ts';
 import { BUILDINGS } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
 import { JOB_PRIORITY, PORTERS } from '../data/workers.ts';
+import { labSurplus, labWants, researchCost } from './research.ts';
 import type { Entity, EntityId, Job, Site } from './types.ts';
 
 /** Le trajet en ligne droite de (x0, y0) à (x1, y1) est-il praticable ? */
@@ -110,6 +111,20 @@ export class JobBoard {
             const amount = Math.min(carry, this.siteWants(entity, item), hall.store.available(item));
 
             if (amount > 0) offers.push({ from: hall.id, to: entity.id, item, amount, priority: JOB_PRIORITY.site });
+          }
+          break;
+
+        case 'lab':
+          // Ce que la recherche attend, depuis la mairie, comme un chantier ; le reste d'une recherche abandonnée y retourne.
+          for (const [item] of entity.research === null ? [] : researchCost(entity.research)) {
+            const amount = Math.min(carry, labWants(entity, item), hall.store.available(item), entity.store.freeSpace());
+
+            if (amount > 0) offers.push({ from: hall.id, to: entity.id, item, amount, priority: JOB_PRIORITY.site });
+          }
+          for (const [item] of entity.store.entries()) {
+            const amount = Math.min(carry, labSurplus(entity, item), hall.store.freeSpace());
+
+            if (amount > 0) offers.push({ from: entity.id, to: hall.id, item, amount, priority: JOB_PRIORITY.surplus });
           }
           break;
 

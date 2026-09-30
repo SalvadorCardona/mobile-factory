@@ -18,7 +18,7 @@ import type { SpriteId } from './sprites.ts';
 import type { WeaponId } from './weapons.ts';
 
 /** Comportement simulé associé au bâtiment. Un `kind` = un cas dans `sim/`. */
-export type BuildingKind = 'drill' | 'townHall' | 'nursery' | 'tower' | 'house' | 'farm' | 'forge' | 'clinic';
+export type BuildingKind = 'drill' | 'townHall' | 'nursery' | 'tower' | 'house' | 'farm' | 'forge' | 'clinic' | 'lab';
 
 export interface BuildingProto {
   label: string;
@@ -51,6 +51,8 @@ export interface BuildingProto {
   workers: number;
   /** Proposé dans le menu de construction ? La mairie, unique, ne l'est pas. */
   menu: boolean;
+  /** Un seul par colonie, chantier compris : le labo de recherche. */
+  unique: boolean;
   /**
    * Faut-il un plan pour le bâtir ? Un bâtiment à plan n'entre dans le menu
    * qu'une fois le plan donné par Ève, en récompense d'une quête (`data/quests.ts`).
@@ -83,6 +85,7 @@ export const BUILDINGS = {
     hp: 120,
     workers: 0,
     menu: false,
+    unique: true,
     plan: false,
     unlockNight: 0,
     sprite: 'townHall',
@@ -102,6 +105,7 @@ export const BUILDINGS = {
     hp: 40,
     workers: 0,
     menu: true,
+    unique: false,
     plan: false,
     unlockNight: 0,
     sprite: 'drill',
@@ -121,6 +125,7 @@ export const BUILDINGS = {
     hp: 60,
     workers: 0,
     menu: true,
+    unique: false,
     plan: false,
     unlockNight: 0,
     sprite: 'nursery',
@@ -140,6 +145,7 @@ export const BUILDINGS = {
     hp: 70,
     workers: 4,
     menu: true,
+    unique: false,
     plan: true,
     unlockNight: 0,
     sprite: 'builderHouse',
@@ -159,6 +165,7 @@ export const BUILDINGS = {
     hp: 50,
     workers: 4,
     menu: true,
+    unique: false,
     plan: false,
     unlockNight: 0,
     sprite: 'farm',
@@ -178,6 +185,7 @@ export const BUILDINGS = {
     hp: 60,
     workers: 0,
     menu: true,
+    unique: false,
     plan: false,
     unlockNight: 0,
     sprite: 'watchtower',
@@ -197,6 +205,7 @@ export const BUILDINGS = {
     hp: 60,
     workers: 0,
     menu: true,
+    unique: false,
     plan: false,
     unlockNight: 1,
     sprite: 'forge',
@@ -216,6 +225,7 @@ export const BUILDINGS = {
     hp: 90,
     workers: 0,
     menu: true,
+    unique: false,
     plan: false,
     unlockNight: 1,
     sprite: 'reinforcedTower',
@@ -235,9 +245,31 @@ export const BUILDINGS = {
     hp: 60,
     workers: 0,
     menu: true,
+    unique: false,
     plan: false,
     unlockNight: 1,
     sprite: 'clinic',
+    weapon: null,
+  },
+  lab: {
+    label: LORE.buildings.lab.name,
+    siteDescription: LORE.buildings.lab.site,
+    description: LORE.buildings.lab.description,
+    effect: LORE.buildings.lab.effect,
+    kind: 'lab',
+    width: 2,
+    height: 2,
+    cost: { wood: 14, stone: 10, ironOre: 4 },
+    // De quoi recevoir le plus gros coût de recherche, et ce qui reste d'une recherche abandonnée.
+    storage: 40,
+    logisticRadius: 0,
+    hp: 60,
+    workers: 0,
+    menu: true,
+    unique: true,
+    plan: false,
+    unlockNight: 0,
+    sprite: 'lab',
     weapon: null,
   },
 } as const satisfies Record<string, BuildingProto>;

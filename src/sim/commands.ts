@@ -11,6 +11,7 @@
 import type { BuildingId } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
 import type { PerkId } from '../data/perks.ts';
+import type { ResearchId } from '../data/research.ts';
 import type { EntityId } from './types.ts';
 
 export type Command =
@@ -47,6 +48,25 @@ export type Command =
    */
   | { type: 'dropItem'; item?: ItemId }
   /**
+   * Choisit la recherche que mène le labo. Ses prérequis doivent être finis,
+   * et aucune recherche ne doit déjà tourner ; une recherche qui attendait
+   * encore son coût est remplacée — ce qui était déposé reste au coffre.
+   * Le bouton « Lancer » du panneau Recherche, qu'on soit loin ou non.
+   */
+  | { type: 'startResearch'; lab: EntityId; research: ResearchId }
+  /**
+   * Abandonne la recherche choisie tant que son coût n'est pas réuni. Ce qui
+   * était déposé reste au coffre : les porteurs le rapportent à la mairie,
+   * « Prendre » le remet dans le sac.
+   */
+  | { type: 'cancelResearch'; lab: EntityId }
+  /**
+   * Dépose au labo ce que sa recherche attend : le sac d'abord, puis le
+   * stock de la ville si le labo est dans le rayon de la mairie. Le bouton
+   * « Transférer » du panneau. Le dernier objet déposé lance le compte à rebours.
+   */
+  | { type: 'transferToLab'; id: EntityId }
+  /**
    * Les bonus plantés au jardin des souvenirs, au départ d'une nouvelle
    * colonie. Poussée avant le premier tick ; ignorée ensuite.
    */
@@ -81,6 +101,21 @@ export type SupplyRejection =
   /** Adam n'a rien dans le sac que le bâtiment attende, ou son coffre est plein. */
   | 'nothingToGive';
 
+/** Motif de refus d'une commande sur le labo de recherche. */
+export type ResearchRejection =
+  /** Le labo n'existe plus, ou n'est pas encore bâti. */
+  | 'missing'
+  /** Une recherche tourne déjà : une seule à la fois. */
+  | 'busy'
+  /** Il manque un prérequis, ou la recherche est déjà finie. */
+  | 'locked'
+  /** Pas de recherche en attente de son coût : rien à abandonner ni à livrer. */
+  | 'idle'
+  /** Adam est trop loin du labo pour y déposer. */
+  | 'outOfReach'
+  /** Ni le sac ni la ville à portée n'ont ce que la recherche attend. */
+  | 'nothingToGive';
+
 /** Motif de refus d'un « Déposer en ville ». */
 export type DepositRejection =
   /** La mairie n'est pas encore bâtie, ou elle est tombée : pas de ville où déposer. */
@@ -103,7 +138,9 @@ export type PlacementRejection =
    * Pas encore débloqué : il faut d'abord le plan, qu'Ève donne en récompense
    * d'une quête, ou voir tomber d'autres nuits (`unlockNight`).
    */
-  | 'locked';
+  | 'locked'
+  /** Un seul par colonie, et il y en a déjà un — chantier compris. */
+  | 'unique';
 
 export interface CommandLogEntry {
   tick: number;

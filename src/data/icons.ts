@@ -19,7 +19,7 @@ import type { ItemId } from './items.ts';
 export const ICON_SIZE = 24;
 
 const S = ICON_SIZE;
-const { ink, orange, yellow, cyan, mint } = PALETTE;
+const { ink, orange, yellow, cyan, mint, toxic, paper } = PALETTE;
 
 export const ITEM_ICONS: Record<ItemId, string> = {
   /** Une bûche orange, sa tranche jaune et ses cernes — comme sur la maquette. */
@@ -73,5 +73,41 @@ export const ITEM_ICONS: Record<ItemId, string> = {
     circle(17.5, 8.5, 1.3, ink.base),
     circle(6.5, 14, 1.3, ink.base),
     circle(17.5, 14, 1.3, ink.base),
+  ),
+  /** Une goutte de gelée fluo, tremblotante, qui louche d'un œil : un bout de mutant, drôle plus qu'effrayant. */
+  mutantGoo: svg(
+    S,
+    S,
+    pill(3, 11, 18, 11, toxic.shade),
+    circle(12, 11, 7.5, toxic.shade),
+    pill(3, 11, 18, 8.5, toxic.base),
+    circle(11.4, 10.4, 6.8, toxic.base),
+    pill(6.5, 5.5, 5, 2.4, toxic.light),
+    circle(19.5, 19.5, 1.6, toxic.shade),
+    circle(13.5, 12, 2.6, paper.base),
+    circle(14.2, 12.5, 1.3, ink.base),
+  ),
+  /** Un croc blanc, pointe en bas, passé sur un lacet indigo : le trophée d'un loup. */
+  wolfFang: svg(
+    S,
+    S,
+    line(4, 4.5, 20, 4.5, ink.base),
+    polygon([7, 6, 17, 6, 13.5, 20, 11.5, 21], paper.shade),
+    polygon([7, 6, 15.5, 6, 12.5, 18.5, 11, 19], paper.base),
+    rect(6, 3, 12, 6, paper.shade, RADIUS.small),
+    rect(6, 3, 11, 4.5, paper.base, RADIUS.small),
+    pill(9, 8.5, 2, 6, paper.shade),
+  ),
+  /** Une pince orange, ouverte, comme celles du crabe des ruines. */
+  crabClaw: svg(
+    S,
+    S,
+    shadedPill(3, 12, 11, 8, 2.5, 'orange'),
+    polygon([10, 8, 21, 4, 19, 10, 12, 13], orange.shade),
+    polygon([10, 8, 20, 4.5, 18, 8.5, 11.5, 11.5], orange.base),
+    polygon([11, 14, 21, 15, 20, 19, 12, 18], orange.shade),
+    polygon([11, 14, 20.5, 15, 19.5, 17.5, 12, 16.8], orange.base),
+    pill(12.5, 6.8, 4, 1.6, orange.light),
+    circle(6, 16, 1, orange.light),
   ),
 };

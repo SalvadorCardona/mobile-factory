@@ -167,5 +167,14 @@ export const LORE = {
         'habitant, un peu vert sur les bords, qui porte plus lourd que les autres.',
       effect: 'Soigne les mutants assommés : 3 places.',
     },
+    lab: {
+      name: 'Labo de recherche',
+      site: 'Une cabane de planches, des fioles qui attendent sur une caisse, une antenne à dresser.',
+      description:
+        'Des fioles qui glougloutent, une antenne bricolée et une cheminée qui fume ' +
+        'quand ça cherche. On y dépose bois, pierre et trophées d’ennemis ; il en ' +
+        'ressort des améliorations pour toute la partie.',
+      effect: 'Recherches : un meilleur arc, un plus grand sac, des porteurs plus forts… Un seul par colonie.',
+    },
   },
 } as const;

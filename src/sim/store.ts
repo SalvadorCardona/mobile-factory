@@ -52,6 +52,11 @@ export class Store {
     return this.count(item) - (this.outgoing.get(item) ?? 0);
   }
 
+  /** Ce que des jobs de livraison ont déjà promis d'apporter de cet objet. */
+  public expected(item: ItemId): number {
+    return this.incoming.get(item) ?? 0;
+  }
+
   /** La place qu'un nouveau job peut encore promettre. */
   public freeSpace(): number {
     return this.capacity - this.stockTotal - this.incomingTotal;

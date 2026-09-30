@@ -68,6 +68,9 @@ const HARVEST_COLORS: Record<ItemId, readonly number[]> = {
   coal: [PALETTE.ink.base, PALETTE.ink.light, PALETTE.yellow.light].map(hex),
   food: [PALETTE.yellow.base, PALETTE.mint.base, PALETTE.mint.light].map(hex),
   ironPlate: [PALETTE.cyan.base, PALETTE.cyan.light, PALETTE.ink.base].map(hex),
+  mutantGoo: [PALETTE.toxic.base, PALETTE.toxic.light, PALETTE.toxic.shade].map(hex),
+  wolfFang: [PALETTE.paper.base, PALETTE.paper.shade, PALETTE.ink.light].map(hex),
+  crabClaw: [PALETTE.orange.base, PALETTE.orange.light, PALETTE.orange.shade].map(hex),
 };
 
 /**
@@ -383,6 +386,8 @@ function wireAudio(world: World, audio: AudioEngine, hud: Hud): void {
   world.events.on('siteDelivered', () => audio.play('deliver'));
   world.events.on('storeTaken', () => audio.play('deliver'));
   world.events.on('buildingSupplied', () => audio.play('deliver'));
+  world.events.on('labSupplied', () => audio.play('deliver'));
+  world.events.on('researchCompleted', () => audio.play('eureka'));
   world.events.on('townDeposited', () => audio.play('deliver'));
   world.events.on('itemDropped', () => audio.play('pickup'));
   world.events.on('buildingCompleted', () => audio.play('build'));

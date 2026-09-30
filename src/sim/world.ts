@@ -50,6 +50,7 @@ import {
 } from '../data/perks.ts';
 import type { QuestId } from '../data/quests.ts';
 import { RECIPES, type RecipeId, type RecipeProto } from '../data/recipes.ts';
+import { RESEARCH, type ResearchId, type ResearchStat } from '../data/research.ts';
 import { RESOURCES, type ResourceId } from '../data/resources.ts';
 import { WEAPONS } from '../data/weapons.ts';
 import { JOB_PRIORITY, PORTERS } from '../data/workers.ts';
@@ -61,6 +62,7 @@ import type {
   CommandLogEntry,
   DepositRejection,
   PlacementRejection,
+  ResearchRejection,
   SiteRejection,
   SupplyRejection,
   TakeRejection,
@@ -78,12 +80,24 @@ import {
   PLAYER_CALM_TICKS,
   PLAYER_MAX_HP,
   PLAYER_REGEN_TICKS,
+  PLAYER_SPEED_TILES,
   SPARE_CARRY,
   createPlayer,
   playerOverlaps,
   stepPlayer,
 } from './player.ts';
 import { JobBoard, doorOf, type LineTest } from './jobs.ts';
+import {
+  extraUnits,
+  isCollecting,
+  labMissing,
+  labNeeds,
+  labSurplus,
+  labWants,
+  missingRequirements,
+  researchBonus,
+  researchCost,
+} from './research.ts';
 import { ResourceIndex } from './resources.ts';
 import type { SavedEntity, WorldState } from './save.ts';
 import { Scheduler } from './scheduler.ts';
@@ -106,6 +120,7 @@ import type {
   House,
   Job,
   Kid,
+  Lab,
   Mobile,
   MobileId,
   Mutant,
@@ -294,6 +309,18 @@ export type WorldEvents = {
   patientAdmitted: { id: MobileId; clinicId: EntityId };
   /** Il en ressort guéri : `id` est l'ex-mutant, un ouvrier de plus. */
   mutantHealed: { id: MobileId; clinicId: EntityId; x: number; y: number };
+  /** Le labo `id` a choisi une recherche : il attend son coût. */
+  researchChosen: { id: EntityId; research: ResearchId };
+  /** La recherche choisie est abandonnée ; ce qui était déposé reste au coffre. */
+  researchCancelled: { id: EntityId; research: ResearchId };
+  /** Le coût est réuni et consommé : le compte à rebours tourne jusqu'à `endTick`. */
+  researchStarted: { id: EntityId; research: ResearchId; endTick: number };
+  /** La recherche est finie : son effet vaut désormais pour toute la partie. */
+  researchCompleted: { id: EntityId; research: ResearchId };
+  /** Une commande sur le labo a été refusée. */
+  researchRejected: { id: EntityId; reason: ResearchRejection };
+  /** `amount` objets viennent d'entrer au labo, pris dans le sac d'Adam ou dans le stock de la ville. */
+  labSupplied: { id: EntityId; item: ItemId; amount: number; source: 'bag' | 'town' };
 };
 
 export class World {
@@ -337,6 +364,13 @@ export class World {
 
   /** Les bonus du jardin des souvenirs avec lesquels la colonie est partie. Vide en « partie pure ». */
   public perks: readonly PerkId[] = [];
+
+  /**
+   * Les recherches finies, dans l'ordre où elles l'ont été. Elles sont à la
+   * colonie, pas au labo : elles survivent s'il tombe. La recherche en cours,
+   * elle, est l'état du labo (`Lab.research`).
+   */
+  public researchDone: ResearchId[] = [];
 
   /** Chantiers offerts par les bonus et pas encore ouverts : le prochain de ce bâtiment arrive livré. */
   private giftedSites: BuildingId[] = [];
@@ -439,6 +473,7 @@ export class World {
       questsDone: this.questsDone,
       perks: [...this.perks],
       giftedSites: [...this.giftedSites],
+      researchDone: [...this.researchDone],
       player: { ...player, inventory: inventory.toJSON() },
       resources: this.resources.toJSON(),
       entities: [...this.entities.values()].map(saveEntity),
@@ -484,9 +519,10 @@ export class World {
     this.questsDone = state.questsDone;
     this.perks = [...state.perks];
     this.giftedSites = [...state.giftedSites];
+    this.researchDone = [...state.researchDone];
 
     const { inventory, ...player } = state.player;
-    const capacity = INVENTORY_CAPACITY + bagBonus(this.perks);
+    const capacity = INVENTORY_CAPACITY + bagBonus(this.perks) + this.bonus('bagCapacity');
 
     Object.assign(this.player, player, { inventory: Store.fromJSON(capacity, inventory) });
     this.resources.restore(state.resources);
@@ -527,7 +563,14 @@ export class World {
     this.tickCount += 1;
     this.drainCommands();
 
-    const contact = stepPlayer(this.player, this.moveX, this.moveY, this.playerObstacleAt, STEP_SECONDS);
+    const contact = stepPlayer(
+      this.player,
+      this.moveX,
+      this.moveY,
+      this.playerObstacleAt,
+      STEP_SECONDS,
+      PLAYER_SPEED_TILES + this.bonus('walkSpeed'),
+    );
 
     this.handleContact(contact);
     this.harvestNearby();
@@ -593,6 +636,18 @@ export class World {
 
       case 'applyPerks':
         this.applyPerks(command.perks);
+        break;
+
+      case 'startResearch':
+        this.chooseResearch(command.lab, command.research);
+        break;
+
+      case 'cancelResearch':
+        this.cancelResearch(command.lab);
+        break;
+
+      case 'transferToLab':
+        this.transferToLab(command.id);
         break;
     }
   }
@@ -895,6 +950,7 @@ export class World {
     if (entity?.kind === 'site') this.deliver(entity);
     else if (entity?.kind === 'drill' || entity?.kind === 'farm') this.collect(entity);
     else if (entity?.kind === 'nursery') this.supplyOne(entity);
+    else if (entity?.kind === 'lab') this.supplyLabOne(entity);
     // La forge prend d'abord ce qu'Adam lui apporte, puis lui rend ses plaques.
     else if (entity?.kind === 'forge' && !this.supplyOne(entity)) this.collect(entity);
   }
@@ -951,12 +1007,10 @@ export class World {
       player.harvesting = true;
 
       // Hache ou pioche reçues d'Ève : un nœud donne plus d'une unité par passage.
-      const units = harvestYieldWith(
-        this.perks,
-        node.id,
-        harvestYieldWithTools(node.id, this.questsDone),
-        this.tickCount / HARVEST_PASS_TICKS,
-      );
+      const pass = this.tickCount / HARVEST_PASS_TICKS;
+      const base = harvestYieldWith(this.perks, node.id, harvestYieldWithTools(node.id, this.questsDone), pass);
+      // Haches affûtées (labo) : une part de bois en plus, répartie sur les passages.
+      const units = item === 'wood' ? base + extraUnits(base, this.bonus('woodYield'), pass) : base;
 
       for (let i = 0; i < units; i += 1) {
         if (player.inventory.freeSpace() <= 0) {
@@ -1139,6 +1193,193 @@ export class World {
     }
   }
 
+  /* ------------------------------------------------------ labo de recherche */
+
+  /**
+   * Ce que les recherches finies ajoutent à une statistique : **le** point
+   * où la simulation lit leurs effets. L'arc, le sac, la marche d'Adam, les
+   * porteurs, la récolte du bois, les foreuses et les fermes l'appellent au
+   * moment d'agir ; les données, elles, ne changent jamais.
+   */
+  public bonus(stat: ResearchStat): number {
+    return researchBonus(this.researchDone, stat);
+  }
+
+  /** Le labo fini de la colonie — il n'y en a qu'un —, ou `null`. */
+  public lab(): Lab | null {
+    for (const entity of this.entities.values()) {
+      if (entity.kind === 'lab') return entity;
+    }
+    return null;
+  }
+
+  /** Le labo désigné par une commande, s'il existe et qu'il est bâti. */
+  private labFor(id: EntityId): Lab | null {
+    const entity = this.entities.get(id);
+
+    if (entity?.kind === 'lab') return entity;
+    this.events.emit('researchRejected', { id, reason: 'missing' });
+    return null;
+  }
+
+  /**
+   * « Lancer » : le labo choisit sa recherche et attend son coût. Une seule
+   * à la fois — refusé si le compte à rebours d'une autre tourne ; une
+   * recherche qui attendait encore son coût est remplacée, ce qui était
+   * déposé reste au coffre et compte pour la nouvelle s'il lui sert. Si le
+   * coffre a déjà tout, le compte à rebours part aussitôt.
+   */
+  private chooseResearch(id: EntityId, research: ResearchId): void {
+    const lab = this.labFor(id);
+
+    if (!lab) return;
+    if (lab.endTick > 0) {
+      this.events.emit('researchRejected', { id, reason: 'busy' });
+      return;
+    }
+    if (!Object.hasOwn(RESEARCH, research) || this.researchDone.includes(research) || missingRequirements(research, this.researchDone).length > 0) {
+      this.events.emit('researchRejected', { id, reason: 'locked' });
+      return;
+    }
+    if (lab.research === research) return;
+
+    lab.research = research;
+    this.events.emit('researchChosen', { id, research });
+    this.startCountdown(lab);
+  }
+
+  /** « Abandonner » : tant que le coût n'est pas réuni, le labo lâche sa recherche. Rien de déposé n'est perdu. */
+  private cancelResearch(id: EntityId): void {
+    const lab = this.labFor(id);
+
+    if (!lab) return;
+    if (!isCollecting(lab)) {
+      this.events.emit('researchRejected', { id, reason: lab.endTick > 0 ? 'busy' : 'idle' });
+      return;
+    }
+
+    const research = lab.research!;
+
+    lab.research = null;
+    this.events.emit('researchCancelled', { id, research });
+  }
+
+  /**
+   * « Transférer » : ce que la recherche attend, le sac d'abord, puis le
+   * stock de la ville si le labo est dans le rayon de la mairie — comme un
+   * chantier. La ville ne donne que son disponible, et pas ce qu'un porteur
+   * apporte déjà.
+   */
+  private transferToLab(id: EntityId): void {
+    const lab = this.labFor(id);
+
+    if (!lab) return;
+
+    const reason: ResearchRejection | null = !isCollecting(lab) ? 'idle' : !this.inReach(lab) ? 'outOfReach' : null;
+
+    if (reason) {
+      this.events.emit('researchRejected', { id, reason });
+      return;
+    }
+
+    const town = this.townStockForLab(lab);
+    let moved = 0;
+
+    for (const [item] of researchCost(lab.research!)) {
+      moved += this.supplyLab(lab, item, Math.min(labNeeds(lab, item), this.player.inventory.count(item)), this.player.inventory, 'bag');
+      if (town) moved += this.supplyLab(lab, item, Math.min(labWants(lab, item), town.available(item)), town, 'town');
+    }
+
+    if (moved === 0) {
+      this.events.emit('researchRejected', { id, reason: 'nothingToGive' });
+      return;
+    }
+    this.startCountdown(lab);
+  }
+
+  /** Au contact : un objet du sac que la recherche attend entre au labo. */
+  private supplyLabOne(lab: Lab): void {
+    if (!isCollecting(lab)) return;
+
+    for (const [item] of researchCost(lab.research!)) {
+      if (this.supplyLab(lab, item, Math.min(1, labNeeds(lab, item), this.player.inventory.count(item)), this.player.inventory, 'bag') > 0) {
+        this.startCountdown(lab);
+        return;
+      }
+    }
+  }
+
+  /** Passe `amount` objets de `from` au coffre du labo. Renvoie ce qui est passé. */
+  private supplyLab(lab: Lab, item: ItemId, amount: number, from: Store, source: 'bag' | 'town'): number {
+    // Jamais plus que la place libre : ce qui sortirait du sac sans entrer au labo serait perdu.
+    const count = Math.min(amount, lab.store.freeSpace());
+
+    if (count <= 0) return 0;
+
+    const moved = lab.store.add(item, from.remove(item, count));
+
+    if (moved > 0) this.events.emit('labSupplied', { id: lab.id, item, amount: moved, source });
+    return moved;
+  }
+
+  /** Le stock de la ville, si le labo est dans le rayon de la mairie. */
+  private townStockForLab(lab: Lab): Store | null {
+    const hall = this.warehouse();
+
+    return hall && inLogisticRange(hall, lab) ? hall.store : null;
+  }
+
+  /** Un « Transférer » poserait-il quelque chose au labo ? L'UI grise le bouton sur cette réponse. */
+  public canTransferToLab(lab: Lab): boolean {
+    if (!isCollecting(lab)) return false;
+
+    const town = this.townStockForLab(lab);
+
+    return researchCost(lab.research!).some(
+      ([item]) =>
+        (labNeeds(lab, item) > 0 && this.player.inventory.count(item) > 0) ||
+        (labWants(lab, item) > 0 && (town?.available(item) ?? 0) > 0),
+    );
+  }
+
+  /** Le labo est-il dans le rayon de la mairie finie ? */
+  public labInTownRange(lab: Lab): boolean {
+    return this.townStockForLab(lab) !== null;
+  }
+
+  /** Le coût est-il réuni ? Alors il est consommé, et le compte à rebours part. */
+  private startCountdown(lab: Lab): void {
+    if (!isCollecting(lab) || labMissing(lab) > 0) return;
+
+    const research = lab.research!;
+
+    for (const [item, amount] of researchCost(research)) lab.store.remove(item, amount);
+    lab.endTick = this.tickCount + RESEARCH[research].duration;
+    this.scheduler.schedule(lab.id, lab.endTick, this.tickCount);
+    this.events.emit('researchStarted', { id: lab.id, research, endTick: lab.endTick });
+  }
+
+  /** Le labo se réveille à la fin du compte à rebours : l'effet vaut pour toute la partie. */
+  private finishResearch(lab: Lab): void {
+    const research = lab.research;
+
+    if (research === null || lab.endTick === 0 || this.tickCount < lab.endTick) return;
+
+    lab.research = null;
+    lab.endTick = 0;
+    this.researchDone.push(research);
+
+    // Grand sac : le sac grandit sur-le-champ, avec tout ce qu'il contient.
+    const { effect } = RESEARCH[research];
+
+    if (effect.stat === 'bagCapacity') {
+      const { inventory } = this.player;
+
+      this.player.inventory = Store.fromJSON(inventory.capacity + effect.amount, inventory.toJSON());
+    }
+    this.events.emit('researchCompleted', { id: lab.id, research });
+  }
+
   /* ------------------------------------------------------------- placement */
 
   /**
@@ -1200,6 +1441,9 @@ export class World {
       return { reason: 'outOfReach', tiles: tiles(() => true) };
     }
 
+    // Un seul labo par colonie : le menu le grise déjà, le tick refuse pareil.
+    if (this.atLimit(building)) return { reason: 'unique', tiles: tiles(() => true) };
+
     return null;
   }
 
@@ -1209,6 +1453,16 @@ export class World {
    */
   public isUnlocked(building: BuildingId): boolean {
     return isUnlocked(building, this.questsDone) && this.night >= BUILDINGS[building].unlockNight;
+  }
+
+  /** Un bâtiment unique (`unique`) déjà posé — chantier compris — n'en admet pas un second. */
+  public atLimit(building: BuildingId): boolean {
+    if (!BUILDINGS[building].unique) return false;
+
+    for (const entity of this.entities.values()) {
+      if (entity.proto === building) return true;
+    }
+    return false;
   }
 
   /** Réserve l'emprise et ouvre le chantier. Un coût vide le termine sur-le-champ. */
@@ -1305,6 +1559,10 @@ export class World {
       case 'clinic':
         building = { ...base, kind: 'clinic' };
         break;
+
+      case 'lab':
+        building = { ...base, kind: 'lab', research: null, endTick: 0 };
+        break;
     }
 
     this.entities.set(site.id, building);
@@ -1340,6 +1598,10 @@ export class World {
 
       case 'clinic':
         // Des lits vides : elle attend qu'un mutant tombe assommé.
+        break;
+
+      case 'lab':
+        // Aucune recherche choisie : il attend le joueur, sans rien coûter.
         break;
 
       case 'townHall':
@@ -1392,6 +1654,10 @@ export class World {
         this.runForge(entity);
         break;
 
+      case 'lab':
+        this.finishResearch(entity);
+        break;
+
       case 'site':
       case 'townHall':
       case 'house':
@@ -1434,8 +1700,10 @@ export class World {
 
   private scheduleDrill(drill: Drill): void {
     const recipe = RECIPES[DRILL_RECIPE];
+    // Foreuses rapides (labo) : le cycle raccourcit, jamais sous un tick.
+    const duration = Math.max(1, recipe.duration + this.bonus('drillTicks'));
 
-    this.scheduler.schedule(drill.id, this.tickCount + recipe.duration, this.tickCount);
+    this.scheduler.schedule(drill.id, this.tickCount + duration, this.tickCount);
   }
 
   /**
@@ -1444,7 +1712,9 @@ export class World {
    */
   private runFarm(farm: Farm): void {
     const recipe = RECIPES[FARM_RECIPE];
-    const [item, amount] = (Object.entries(recipe.outputs) as [ItemId, number][])[0] ?? ['food', 1];
+    const [item, base] = (Object.entries(recipe.outputs) as [ItemId, number][])[0] ?? ['food', 1];
+    // Fermes fertiles (labo) : la même récolte, plus généreuse.
+    const amount = base + this.bonus('farmYield');
     const accepted = farm.store.add(item, amount);
 
     if (accepted < amount) {
@@ -1754,8 +2024,9 @@ export class World {
     if (!target || player.bowCooldown > 0) return;
 
     // Le corps est au-dessus des pieds : la flèche part de la poitrine.
-    this.fire('bow', player.x, player.y - 8, target);
-    player.bowCooldown = WEAPONS.bow.cooldown;
+    this.fire('bow', player.x, player.y - 8, target, this.bonus('bowDamage'));
+    // Tir rapide (labo) : le délai raccourcit, jamais sous un tick.
+    player.bowCooldown = Math.max(1, WEAPONS.bow.cooldown + this.bonus('bowCooldown'));
 
     // À l'arrêt, Adam se tourne vers ce qu'il vise.
     if (this.moveX === 0 && this.moveY === 0) {
@@ -1763,9 +2034,11 @@ export class World {
     }
   }
 
-  private fire(weapon: keyof typeof WEAPONS, x: number, y: number, target: Foe): void {
+  /** `extraDamage` : ce que la recherche ajoute aux dégâts de l'arme. */
+  private fire(weapon: keyof typeof WEAPONS, x: number, y: number, target: Foe, extraDamage = 0): void {
     const arrow = shoot(this.nextMobileId++, weapon, x, y, target);
 
+    arrow.damage += extraDamage;
     this.mobiles.set(arrow.id, arrow);
     this.events.emit('arrowShot', { x, y });
   }
@@ -2492,7 +2765,7 @@ export class World {
           worker,
           homeDoor ?? worker,
           this.lineIsClear,
-          carryOf(worker),
+          carryOf(worker) + this.bonus('porterCarry'),
         );
       }
     }
@@ -2585,6 +2858,8 @@ export class World {
 
       // Le dernier objet posé achève le chantier, qu'il vienne d'Adam ou d'un porteur.
       if (target.kind === 'site' && siteMissing(target) === 0) this.complete(target);
+      // Au labo, il lance le compte à rebours.
+      if (target.kind === 'lab') this.startCountdown(target);
     }
 
     worker.searchTicks = 0;
@@ -2690,7 +2965,7 @@ export class World {
   private takeAll(id: EntityId): void {
     const entity = this.entities.get(id);
 
-    if (entity?.kind !== 'drill' && entity?.kind !== 'farm' && entity?.kind !== 'forge') {
+    if (entity?.kind !== 'drill' && entity?.kind !== 'farm' && entity?.kind !== 'forge' && entity?.kind !== 'lab') {
       this.events.emit('takeRejected', { id, reason: 'missing' });
       return;
     }
@@ -2719,9 +2994,18 @@ export class World {
   /**
    * Ce qu'Adam peut prendre dans un coffre : tout, pour une foreuse ou une
    * ferme ; les plaques seulement pour une forge — son fer et son charbon
-   * restent au four.
+   * restent au four ; au labo, le reste d'une recherche abandonnée, jamais
+   * ce que la recherche en cours attend.
    */
-  public takeable(producer: Drill | Farm | Forge): [ItemId, number][] {
+  public takeable(producer: Drill | Farm | Forge | Lab): [ItemId, number][] {
+    if (producer.kind === 'lab') {
+      return producer.store.entries().flatMap(([item]): [ItemId, number][] => {
+        const surplus = labSurplus(producer, item);
+
+        return surplus > 0 ? [[item, surplus]] : [];
+      });
+    }
+
     const entries = producer.store.entries();
 
     if (producer.kind !== 'forge') return entries;
@@ -2732,7 +3016,7 @@ export class World {
   }
 
   /** Du coffre au sac : le coffre se vide (et la machine repart), le sac reçoit. */
-  private takeInto(producer: Drill | Farm | Forge, item: ItemId, amount: number): void {
+  private takeInto(producer: Drill | Farm | Forge | Lab, item: ItemId, amount: number): void {
     const taken = this.withdraw(producer.id, item, amount);
 
     if (taken <= 0) return;
