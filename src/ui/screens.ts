@@ -79,7 +79,7 @@ export class TitleScreen {
     controls.className = 'title-controls';
     for (const [icon, label] of [
       [uiIcon('move', 28), 'Glissez le pouce pour marcher (ZQSD / flèches sur PC)'],
-      [itemIcon('wood', 28), 'Foncez dans un arbre ou un rocher pour récolter'],
+      [itemIcon('wood', 28), 'Passez près des arbres et des rochers pour récolter'],
       [buildingIcon('townHall', 28), 'Foncez dans un chantier pour le livrer'],
     ] as const) {
       const item = document.createElement('li');
