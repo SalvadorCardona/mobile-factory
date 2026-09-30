@@ -20,12 +20,32 @@
  * `unlocked` est pour l'instant la liste complète des bâtiments du menu.
  * Quand la recherche existera, elle viendra de `unlockedBuildings` — le menu
  * filtrera sur une donnée, sans une ligne de logique en plus.
+ *
+ * Au clavier (`handleKey`) : Espace ouvre le tiroir sur la première carte
+ * (ou sur le bâtiment déjà armé), les flèches ou ZQSD/WASD passent d'une
+ * carte à l'autre dans la grille, Entrée choisit, Espace ou Échap referment.
+ * La sélection est le vrai focus du navigateur : un lecteur d'écran suit, et
+ * Tab continue de marcher. Tant que le tiroir est ouvert, ces touches sont au
+ * menu — `main.ts` ne les passe ni au déplacement ni à la pause.
  */
 
+import { gridStep, type GridMove } from '../core/gridNav.ts';
 import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
 import type { Placement } from '../input/placement.ts';
 import { buildingIcon, itemAmount, uiIcon } from './icons.ts';
+
+/** Position physique → mouvement dans la grille : flèches, et ZQSD/WASD comme pour marcher. */
+const MOVES: Readonly<Record<string, GridMove>> = {
+  ArrowLeft: 'left',
+  KeyA: 'left',
+  ArrowRight: 'right',
+  KeyD: 'right',
+  ArrowUp: 'up',
+  KeyW: 'up',
+  ArrowDown: 'down',
+  KeyS: 'down',
+};
 
 export class BuildMenu {
   public readonly root: HTMLElement;
@@ -51,6 +71,8 @@ export class BuildMenu {
     this.toggleButton = button('Construire', () => this.toggle());
     this.toggleButton.className = 'build-toggle';
     this.toggleButton.prepend(uiIcon('hammer', 28));
+    this.toggleButton.append(keyHint('Espace'));
+    this.toggleButton.setAttribute('aria-keyshortcuts', 'Space');
 
     this.drawer = document.createElement('div');
     this.drawer.className = 'panel build-drawer';
@@ -67,9 +89,14 @@ export class BuildMenu {
     close.append(uiIcon('close'));
     close.setAttribute('aria-label', 'Fermer');
 
+    const keys = document.createElement('span');
+
+    keys.className = 'build-drawer-keys';
+    keys.append(keyHint('Flèches'), keyHint('Entrée'), keyHint('Échap'));
+
     const header = document.createElement('header');
 
-    header.append(title, close);
+    header.append(title, keys, close);
 
     const list = document.createElement('div');
 
@@ -140,22 +167,97 @@ export class BuildMenu {
     return card;
   }
 
+  public get isOpen(): boolean {
+    return this.opened;
+  }
+
   public toggle(): void {
     if (this.opened) this.close();
     else this.open();
   }
 
-  public open(): void {
+  /** `focusCard` : ouvert au clavier, le tiroir met tout de suite une carte sous le focus. */
+  public open(focusCard = false): void {
     this.opened = true;
     this.drawer.hidden = false;
     this.onOpen();
     this.refresh();
+
+    if (focusCard) {
+      const armed = this.placement.armedBuilding();
+
+      this.focus((armed && this.cards.get(armed)) || this.firstCard());
+    }
   }
 
   public close(): void {
     this.opened = false;
+    // Une carte cachée qui garde le focus avalerait les touches suivantes :
+    // on le rend à la page, et les flèches refont marcher Adam.
+    if (document.activeElement instanceof HTMLElement && this.drawer.contains(document.activeElement)) {
+      document.activeElement.blur();
+    }
     this.drawer.hidden = true;
     this.refresh();
+  }
+
+  /**
+   * Une touche pour le menu. Renvoie `true` si le menu la prend : l'appelant
+   * empêche alors le navigateur et le reste du jeu de la voir.
+   *
+   * `canOpen` : la partie est lancée, pas en pause ni perdue. Le tiroir ne
+   * s'ouvre pas non plus pendant un placement : Espace n'y a rien à faire.
+   */
+  public handleKey(code: string, repeat: boolean, canOpen: boolean): boolean {
+    if (!this.opened) {
+      if (code !== 'Space' || !canOpen || this.placement.mode !== 'idle') return false;
+      if (!repeat) this.open(true);
+      return true;
+    }
+
+    const move = MOVES[code];
+
+    if (move) {
+      const cards = [...this.cards.values()];
+      const index = cards.indexOf(document.activeElement as HTMLButtonElement);
+
+      this.focus(cards[gridStep(index, cards.length, this.columns(cards), move)]);
+      return true;
+    }
+
+    if (code === 'Enter' || code === 'NumpadEnter') {
+      if (!repeat) {
+        const focused = document.activeElement;
+        const card = [...this.cards.values()].find((c) => c === focused) ?? this.firstCard();
+
+        card?.click();
+      }
+      return true;
+    }
+
+    if (code === 'Space' || code === 'Escape') {
+      if (!repeat) this.close();
+      return true;
+    }
+
+    return false;
+  }
+
+  private firstCard(): HTMLButtonElement | undefined {
+    return this.cards.values().next().value;
+  }
+
+  private focus(card: HTMLButtonElement | undefined): void {
+    if (!card) return;
+    card.focus();
+    card.scrollIntoView({ block: 'nearest' });
+  }
+
+  /** Colonnes de la grille, lues sur la mise en page : autant de cartes que sur la première ligne. */
+  private columns(cards: readonly HTMLButtonElement[]): number {
+    const top = cards[0]?.offsetTop;
+
+    return Math.max(1, cards.filter((card) => card.offsetTop === top).length);
   }
 
   /** Recalcule l'état visible. Appelé à chaque changement de placement et à chaque frame. */
@@ -184,6 +286,15 @@ export class BuildMenu {
   public destroy(): void {
     this.root.remove();
   }
+}
+
+/** Le nom d'une touche, en petite capsule. Masqué en CSS sur les écrans sans clavier. */
+function keyHint(label: string): HTMLElement {
+  const key = document.createElement('kbd');
+
+  key.className = 'key-hint';
+  key.textContent = label;
+  return key;
 }
 
 function button(label: string, onTap: () => void): HTMLButtonElement {

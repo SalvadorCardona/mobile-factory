@@ -850,6 +850,59 @@ button {
   box-shadow: 0 4px 0 var(--yellow-shade);
 }
 
+/*
+ * La carte sous le focus clavier. Pas de contour (règle de la DA) : la carte
+ * passe en cyan clair avec sa face avant cyan, et monte d'un cran — assez
+ * différent du jaune « bâtiment armé » pour qu'on ne confonde pas les deux.
+ */
+.build-card:focus {
+  outline: none;
+}
+
+.build-card:focus-visible {
+  background: var(--cyan-light);
+  box-shadow: 0 6px 0 var(--cyan-shade);
+  transform: translateY(-2px);
+}
+
+/*
+ * Les touches : de petites capsules lavande, montrées seulement là où il y a
+ * probablement un clavier (souris fine). Sur téléphone, rien ne change.
+ */
+.key-hint {
+  display: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--paper-shade);
+  box-shadow: 0 2px 0 var(--violet-light);
+  color: var(--violet-shade);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.build-drawer-keys {
+  display: none;
+  gap: 6px;
+  margin-left: auto;
+  margin-right: 10px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .key-hint {
+    display: inline-block;
+  }
+
+  .build-drawer-keys {
+    display: flex;
+  }
+
+  .build-toggle .key-hint {
+    margin-left: 10px;
+  }
+}
+
 .build-card .icon-building {
   /* Les bâtiments sont plus hauts que larges : la vignette les loge sans les écraser. */
   object-fit: contain;

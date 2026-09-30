@@ -21,7 +21,7 @@ import { MENU_BUILDING_IDS } from './data/buildings.ts';
 import type { ItemId } from './data/items.ts';
 import { Inspect } from './input/inspect.ts';
 import { Joystick } from './input/joystick.ts';
-import { Keyboard } from './input/keyboard.ts';
+import { Keyboard, isTyping, type KeyboardState } from './input/keyboard.ts';
 import { Placement } from './input/placement.ts';
 import { PointerRouter } from './input/pointer.ts';
 import { GameRenderer } from './render/renderer.ts';
@@ -47,6 +47,9 @@ const HUD_BOTTOM_INSET = 84;
 
 /** Seuil sous lequel un mouvement d'axe ne vaut pas une commande. */
 const AXIS_EPSILON = 0.01;
+
+/** L'axe d'un clavier au repos : ce que lit le déplacement quand le menu de construction a le clavier. */
+const STILL: KeyboardState = { active: false, axisX: 0, axisY: 0 };
 
 /** Couleurs des éclats projetés quand Adam entame une ressource. */
 const HARVEST_COLORS: Record<ItemId, readonly number[]> = {
@@ -137,6 +140,26 @@ async function main(): Promise<void> {
   hud.root.append(pause.root, title.root);
   mount.append(hud.root);
 
+  /*
+   * Le menu de construction au clavier : Espace, flèches, Entrée, Échap.
+   * Écouté en phase de capture, donc avant les autres écouteurs de `window` :
+   * une touche que le menu prend ne fait ni marcher Adam ni basculer la pause.
+   */
+  window.addEventListener(
+    'keydown',
+    (event) => {
+      if (isTyping(event.target)) return;
+
+      const canOpen = started && !paused && !world.defeated;
+
+      if (buildMenu.handleKey(event.code, event.repeat, canOpen)) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    },
+    { capture: true },
+  );
+
   // Onglet caché, appel entrant, écran verrouillé : la partie s'arrête d'elle-même.
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) setPaused(true);
@@ -191,9 +214,12 @@ async function main(): Promise<void> {
    *
    * Le pouce a la priorité sur le clavier : sur un PC tactile, un joystick
    * posé pendant qu'une touche est tenue ne doit pas se battre avec elle.
+   * Menu de construction ouvert, le clavier sert à choisir un bâtiment :
+   * une flèche tenue au moment de l'ouvrir n'emmène pas Adam avec elle.
    */
   function pushAxisIfChanged(): void {
-    const { axisX, axisY } = joystick.state.active ? joystick.state : keyboard.state;
+    const keys = buildMenu.isOpen ? STILL : keyboard.state;
+    const { axisX, axisY } = joystick.state.active ? joystick.state : keys;
 
     if (
       Math.abs(axisX - lastAxisX) < AXIS_EPSILON &&

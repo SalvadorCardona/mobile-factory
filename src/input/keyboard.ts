@@ -116,7 +116,7 @@ export class Keyboard {
 }
 
 /** Le clavier appartient au champ de saisie quand il y en a un sous le focus. */
-function isTyping(target: EventTarget | null): boolean {
+export function isTyping(target: EventTarget | null): boolean {
   return (
     target instanceof HTMLElement &&
     (target.isContentEditable || target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)
