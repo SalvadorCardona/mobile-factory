@@ -29,7 +29,7 @@
 
 import { TILE_SIZE } from '../core/grid.ts';
 import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
-import type { World } from '../sim/world.ts';
+import type { PlacementBlock, World } from '../sim/world.ts';
 import { TAP_SLOP, type PointerConsumer, type PointerSample } from './pointer.ts';
 
 export interface GhostState {
@@ -125,11 +125,15 @@ export class Placement implements PointerConsumer {
 
   /** Le fantôme est-il posable là où il est ? Sert à griser le bouton. */
   public isConfirmable(): boolean {
-    return (
-      this.mode === 'placing' &&
-      this.ghost !== null &&
-      this.world.canPlace(this.ghost.building, this.ghost.tx, this.ghost.ty) === null
-    );
+    return this.mode === 'placing' && this.ghost !== null && this.block() === null;
+  }
+
+  /** Pourquoi le fantôme n'est pas posable, et quelles cases bloquent ; `null` s'il l'est ou s'il n'y a pas de fantôme. */
+  public block(): PlacementBlock | null {
+    const ghost = this.ghost;
+
+    if (this.mode !== 'placing' || !ghost) return null;
+    return this.world.placementBlock(ghost.building, ghost.tx, ghost.ty);
   }
 
   public onDown(sample: PointerSample): boolean {

@@ -9,8 +9,10 @@
  *
  * Le fantôme dit trois choses en même temps : où le bâtiment ira, s'il est
  * posable, et jusqu'où le joueur peut construire. La couleur vient de
- * `world.canPlace()` — le même juge que le tick, jamais une seconde règle
- * écrite en parallèle.
+ * `world.placementBlock()` — le même juge que le tick, jamais une seconde
+ * règle écrite en parallèle. Refusé, le fantôme ne rougit pas en entier :
+ * seules les **cases fautives** de l'emprise passent au rouge, et le sprite
+ * pâlit pour laisser voir l'arbre ou l'eau qu'il recouvrait.
  *
  * Le `Graphics` n'est redessiné que lorsque la case ou la validité change :
  * retesseller un rectangle à 120 Hz pour rien serait le genre de gaspillage
@@ -22,7 +24,7 @@ import { TILE_SIZE, worldToTile } from '../core/grid.ts';
 import { BUILDINGS } from '../data/buildings.ts';
 import { PALETTE, RADIUS, STROKE, hex } from '../data/artDirection.ts';
 import { BUILD_REACH_TILES } from '../sim/player.ts';
-import type { World } from '../sim/world.ts';
+import type { PlacementBlock, World } from '../sim/world.ts';
 import type { GhostState } from '../input/placement.ts';
 import type { SpriteLibrary } from './spriteLibrary.ts';
 
@@ -30,6 +32,12 @@ const VALID = hex(PALETTE.mint.base);
 const INVALID = hex(PALETTE.coral.base);
 const WHITE = hex(PALETTE.paper.base);
 const SITE = hex(PALETTE.yellow.base);
+
+/** Opacité du sprite fantôme : posable, il se montre ; refusé, il s'efface devant les cases rouges. */
+const PREVIEW_ALPHA = 0.7;
+const PREVIEW_ALPHA_BLOCKED = 0.4;
+/** Retrait d'une case fautive dans sa tuile : deux cases voisines restent deux cases. */
+const CELL_INSET = 2;
 
 /** Rayon de la grille autour du joueur, en tuiles : un peu plus que la portée. */
 const GRID_RADIUS = BUILD_REACH_TILES + 3;
@@ -40,6 +48,7 @@ export class GhostLayer {
   private readonly grid = new Graphics();
   private readonly footprints = new Graphics();
   private readonly outline = new Graphics();
+  private readonly cells = new Graphics();
   private readonly reach = new Graphics();
   private readonly preview = new Sprite();
   private lastKey = '';
@@ -51,19 +60,20 @@ export class GhostLayer {
   public constructor(world: World, library: SpriteLibrary) {
     this.world = world;
     this.library = library;
-    this.preview.alpha = 0.7;
+    this.preview.alpha = PREVIEW_ALPHA;
     // Ancré au pied de l'emprise : le toit dépasse vers le haut, comme le bâtiment fini.
     this.preview.anchor.set(0, 1);
 
-    this.container.addChild(this.grid, this.footprints, this.reach, this.preview, this.outline);
+    this.container.addChild(this.grid, this.footprints, this.reach, this.preview, this.cells, this.outline);
     this.container.visible = false;
   }
 
   /**
    * `building` : le mode construction est actif (bâtiment armé, fantôme posé
-   * ou non). `ghost` : le fantôme, s'il est posé.
+   * ou non). `ghost` : le fantôme, s'il est posé. `block` : pourquoi il ne
+   * se pose pas, calculé une fois par le renderer.
    */
-  public update(building: boolean, ghost: GhostState | null): void {
+  public update(building: boolean, ghost: GhostState | null, block: PlacementBlock | null): void {
     if (!building) {
       this.container.visible = false;
       this.lastKey = '';
@@ -80,25 +90,43 @@ export class GhostLayer {
     if (!ghost) {
       this.preview.visible = false;
       this.outline.visible = false;
+      this.cells.visible = false;
       this.lastKey = '';
       this.drawReach();
       return;
     }
     this.preview.visible = true;
     this.outline.visible = true;
+    this.cells.visible = true;
 
-    const rejection = this.world.canPlace(ghost.building, ghost.tx, ghost.ty);
-    const key = `${ghost.building}:${ghost.tx}:${ghost.ty}:${rejection ?? 'ok'}`;
+    // Adam qui marche dans l'emprise change les cases sans changer le motif : elles sont dans la clé.
+    const tiles = block?.tiles.map(({ tx, ty }) => `${tx},${ty}`).join(';') ?? '';
+    const key = `${ghost.building}:${ghost.tx}:${ghost.ty}:${block?.reason ?? 'ok'}:${tiles}`;
 
     if (key === this.lastKey) return;
     this.lastKey = key;
 
     const proto = BUILDINGS[ghost.building];
-    const color = rejection ? INVALID : VALID;
+    const color = block ? INVALID : VALID;
 
     this.preview.texture = this.library.texture(`${proto.sprite}.built`);
     this.preview.position.set(ghost.tx * TILE_SIZE, (ghost.ty + proto.height) * TILE_SIZE);
-    this.preview.tint = color;
+    this.preview.tint = block ? WHITE : VALID;
+    this.preview.alpha = block ? PREVIEW_ALPHA_BLOCKED : PREVIEW_ALPHA;
+
+    this.cells.clear();
+    for (const tile of block?.tiles ?? []) {
+      this.cells
+        .roundRect(
+          tile.tx * TILE_SIZE + CELL_INSET,
+          tile.ty * TILE_SIZE + CELL_INSET,
+          TILE_SIZE - CELL_INSET * 2,
+          TILE_SIZE - CELL_INSET * 2,
+          RADIUS.block,
+        )
+        .fill({ color: INVALID, alpha: 0.7 })
+        .stroke({ width: STROKE.width, color: INVALID, alignment: 1 });
+    }
 
     this.outline
       .clear()

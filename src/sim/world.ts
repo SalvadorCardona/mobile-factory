@@ -23,7 +23,7 @@
  */
 
 import { Emitter } from '../core/events.ts';
-import { CHUNK_TILES, TILE_SIZE, coordKey, distanceSq, floorDiv } from '../core/grid.ts';
+import { CHUNK_TILES, TILE_SIZE, coordKey, distanceSq, floorDiv, type TileCoord } from '../core/grid.ts';
 import { mulberry32, type StatefulRng } from '../core/rng.ts';
 import { BUILDINGS, NURSERY_BIRTH_TICKS, type BuildingId } from '../data/buildings.ts';
 import { ENEMIES, WAVES, WILDLIFE, WILDLIFE_SPAWN, waveSize } from '../data/enemies.ts';
@@ -101,6 +101,12 @@ export const STARTING_BUILDING: BuildingId = 'townHall';
  * le scheduler ne fait pas la différence, `wake()` si.
  */
 const WAVE_WAKE_ID = 0;
+
+/** Un refus de placement, et les cases de l'emprise qui le causent. */
+export interface PlacementBlock {
+  reason: PlacementRejection;
+  tiles: TileCoord[];
+}
 
 export type WorldEvents = {
   /** Un chantier est ouvert (ou un bâtiment à coût nul, posé fini). */
@@ -621,34 +627,53 @@ export class World {
 
   /**
    * Le placement est-il légal ? Renvoie le motif de refus, ou `null` si oui.
+   * Raccourci de `placementBlock()`, qui dit aussi quelles cases bloquent.
+   */
+  public canPlace(building: BuildingId, tx: number, ty: number): PlacementRejection | null {
+    return this.placementBlock(building, tx, ty)?.reason ?? null;
+  }
+
+  /**
+   * Pourquoi le placement est refusé, et **quelles cases** de l'emprise
+   * bloquent — ou `null` s'il est légal.
    *
    * Cette fonction est le juge unique : l'aperçu fantôme l'appelle à chaque
    * frame pour se colorer, et le tick l'appelle avant de construire. Deux
    * implémentations qui divergent, c'est un fantôme vert qui refuse de se
    * poser — le genre de bug qui se signale en test utilisateur seulement.
+   *
+   * Un seul motif à la fois, dans l'ordre où le joueur peut y remédier ; ses
+   * cases seulement. Trop loin : toute l'emprise l'est.
    */
-  public canPlace(building: BuildingId, tx: number, ty: number): PlacementRejection | null {
+  public placementBlock(building: BuildingId, tx: number, ty: number): PlacementBlock | null {
     const proto = BUILDINGS[building];
+    const tiles = (blocks: (x: number, y: number) => boolean): TileCoord[] => {
+      const found: TileCoord[] = [];
+
+      for (let y = ty; y < ty + proto.height; y += 1) {
+        for (let x = tx; x < tx + proto.width; x += 1) {
+          if (blocks(x, y)) found.push({ tx: x, ty: y });
+        }
+      }
+      return found;
+    };
 
     // Pas de plan, pas de chantier : le menu ne le propose pas, le tick non plus.
-    if (!isUnlocked(building, this.questsDone)) return 'locked';
+    if (!isUnlocked(building, this.questsDone)) return { reason: 'locked', tiles: tiles(() => true) };
 
-    for (let y = ty; y < ty + proto.height; y += 1) {
-      for (let x = tx; x < tx + proto.width; x += 1) {
-        if (!isBuildable(terrainAt(this.seed, x, y))) return 'terrain';
-      }
+    const checks: [PlacementRejection, (x: number, y: number) => boolean][] = [
+      ['terrain', (x, y) => !isBuildable(terrainAt(this.seed, x, y))],
+      ['occupied', (x, y) => !this.chunks.isFree(x, y, 1, 1)],
+      ['resource', (x, y) => this.resources.isSolid(x, y)],
+      // Un bâtiment est solide : le poser sur Adam l'emmurerait.
+      ['onPlayer', (x, y) => playerOverlaps(this.player, x, y, 1, 1)],
+    ];
+
+    for (const [reason, blocks] of checks) {
+      const found = tiles(blocks);
+
+      if (found.length > 0) return { reason, tiles: found };
     }
-
-    if (!this.chunks.isFree(tx, ty, proto.width, proto.height)) return 'occupied';
-
-    for (let y = ty; y < ty + proto.height; y += 1) {
-      for (let x = tx; x < tx + proto.width; x += 1) {
-        if (this.resources.isSolid(x, y)) return 'resource';
-      }
-    }
-
-    // Un bâtiment est solide : le poser sur Adam l'emmurerait.
-    if (playerOverlaps(this.player, tx, ty, proto.width, proto.height)) return 'onPlayer';
 
     // Portée mesurée depuis le centre de l'emprise, en distances au carré.
     const centerX = (tx + proto.width / 2) * TILE_SIZE;
@@ -656,7 +681,7 @@ export class World {
     const reach = BUILD_REACH_TILES * TILE_SIZE;
 
     if (distanceSq(this.player.x, this.player.y, centerX, centerY) > reach * reach) {
-      return 'outOfReach';
+      return { reason: 'outOfReach', tiles: tiles(() => true) };
     }
 
     return null;

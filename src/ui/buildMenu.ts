@@ -14,7 +14,8 @@
  *
  * Les boutons de pose n'apparaissent qu'une fois le fantôme posé et reste grisé
  * tant que l'emplacement est refusé : le joueur voit pourquoi ça ne marche
- * pas avant d'appuyer, pas après.
+ * pas avant d'appuyer, pas après. Le motif s'écrit sous le nom
+ * (`placementReason.ts`), avec le remède quand Adam peut dégager la place.
  *
  * Une carte ne se grise pas quand le sac est vide : poser un chantier ne
  * coûte rien, c'est le remplir qui coûte. Le coût se colore seulement d'après
@@ -43,6 +44,7 @@ import type { ItemId } from '../data/items.ts';
 import type { Placement } from '../input/placement.ts';
 import type { World } from '../sim/world.ts';
 import { buildingIcon, itemAmount, uiIcon } from './icons.ts';
+import { placementReason } from './placementReason.ts';
 
 /** Position physique → mouvement dans la grille : flèches, et ZQSD/WASD comme pour marcher. */
 const MOVES: Readonly<Record<string, GridMove>> = {
@@ -63,6 +65,9 @@ export class BuildMenu {
   private readonly drawer: HTMLElement;
   private readonly armedBar: HTMLElement;
   private readonly armedLabel: HTMLElement;
+  private readonly reasonText: HTMLElement;
+  private readonly reasonRemedy: HTMLElement;
+  private readonly reason: HTMLElement;
   private readonly confirmButton: HTMLButtonElement;
   private readonly repeatButton: HTMLButtonElement;
   private readonly cancelButton: HTMLButtonElement;
@@ -138,11 +143,20 @@ export class BuildMenu {
     this.armedLabel = document.createElement('span');
     this.armedLabel.className = 'build-armed-label';
 
+    // Pourquoi « Poser » est grisé : une ligne, lue à voix haute par un lecteur d'écran.
+    this.reason = document.createElement('span');
+    this.reason.className = 'build-armed-reason';
+    this.reason.setAttribute('role', 'status');
+    this.reason.hidden = true;
+    this.reasonText = document.createElement('strong');
+    this.reasonRemedy = document.createElement('span');
+    this.reason.append(this.reasonText, this.reasonRemedy);
+
     this.confirmButton = button('Poser', () => this.placement.confirm());
     this.confirmButton.dataset['confirm'] = 'true';
     this.repeatButton = button('Poser encore', () => this.placement.confirm(true));
     this.cancelButton = button('Annuler', () => this.placement.cancel());
-    this.armedBar.append(this.armedLabel, this.cancelButton, this.repeatButton, this.confirmButton);
+    this.armedBar.append(this.armedLabel, this.reason, this.cancelButton, this.repeatButton, this.confirmButton);
 
     this.root.append(this.drawer, this.armedBar, this.toggleButton);
     this.refresh();
@@ -348,7 +362,16 @@ export class BuildMenu {
 
       if (this.armedLabel.textContent !== label) this.armedLabel.textContent = label;
     }
+    const block = this.placement.block();
+    const reason = block && placementReason(block, this.world);
     const confirmable = this.placement.isConfirmable();
+
+    this.reason.hidden = !reason;
+    if (reason) {
+      setText(this.reasonText, reason.text);
+      setText(this.reasonRemedy, reason.remedy ?? '');
+      this.reasonRemedy.hidden = !reason.remedy;
+    }
 
     this.confirmButton.hidden = !placing;
     this.confirmButton.disabled = !confirmable;
@@ -359,6 +382,11 @@ export class BuildMenu {
   public destroy(): void {
     this.root.remove();
   }
+}
+
+/** Ne touche au DOM que si le texte change : `refresh()` tourne à chaque frame. */
+function setText(element: HTMLElement, text: string): void {
+  if (element.textContent !== text) element.textContent = text;
 }
 
 /** Le nom d'une touche, en petite capsule. Masqué en CSS sur les écrans sans clavier. */

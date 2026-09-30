@@ -179,10 +179,13 @@ export class GameRenderer {
 
     this.chunkLayer.update(this.camera);
     this.waterLayer.update(this.camera, this.app.ticker.deltaMS);
-    this.resourceLayer.update(this.camera, this.app.ticker.deltaMS);
+    // Un seul appel au juge par frame : le fantôme colore les cases, l'arbre qui gêne clignote.
+    const block = building && ghost ? this.world.placementBlock(ghost.building, ghost.tx, ghost.ty) : null;
+
+    this.resourceLayer.update(this.camera, this.app.ticker.deltaMS, block?.reason === 'resource' ? block.tiles : []);
     this.entityLayer.update(alpha, this.app.ticker);
     this.particles.update(this.app.ticker.deltaMS);
-    this.ghostLayer.update(building, ghost);
+    this.ghostLayer.update(building, ghost, block);
     this.indicators.update(this.camera, this.app.ticker.deltaMS, alpha);
 
     this.joystickBase.visible = joystick.active;
