@@ -95,7 +95,9 @@ lueurs `add`, pas de filtre.
 **Menace** — la nuit, des **mutants** arrivent par
 vagues (`src/data/enemies.ts`) et marchent droit sur la mairie ; ils traversent
 tout sauf le bâti, qu'ils cassent. Une vague s'annonce trois secondes avant
-(bandeau avec sa direction, cor grave, léger recul de caméra vers elle),
+(bandeau avec sa direction, cor grave, léger recul de caméra vers elle —
+pas si un bâtiment est armé ou une fenêtre ouverte, et un tap n'ouvre rien
+pendant que la carte glisse),
 surgit dans le champ d'une flaque vert fluo — un mutant qui émerge
 (`WAVES.emergeTicks`) n'est pas visable — et finit sur « Nuit N — vague repoussée ! » ;
 tout ennemi abattu (mutant, crabe, loup) lâche au sol le butin de sa table

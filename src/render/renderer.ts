@@ -160,6 +160,11 @@ export class GameRenderer {
     this.camera.peek(x, y);
   }
 
+  /** La carte glisse d'elle-même (recul, coup d'œil) : cf. `Camera.drifting`. */
+  public get cameraDrifting(): boolean {
+    return this.camera.drifting;
+  }
+
   /** Recule la caméra un instant : cf. `Camera.zoomOut`. */
   public zoomOut(zoom: number, holdMs: number, focus: { x: number; y: number } | null = null): void {
     this.camera.zoomOut(zoom, holdMs, focus);

@@ -181,7 +181,8 @@ async function main(): Promise<void> {
   const inspect = new Inspect(
     world,
     (x, y) => renderer.screenToWorld(x, y),
-    () => placement.mode === 'idle',
+    // Pendant que la carte glisse d'elle-même, un tap viserait un point qui bouge : il n'ouvre rien.
+    () => placement.mode === 'idle' && !renderer.cameraDrifting,
     (id) => panel.show(id),
     () => {
       hud.talkToEve();
@@ -311,7 +312,12 @@ async function main(): Promise<void> {
 
   wireAudio(world, audio, hud);
   wireParticles(world, renderer);
-  wireShake(world, renderer);
+  // Le joueur vise ou lit : un bâtiment armé, le menu, une fenêtre ou le sac ouverts.
+  wireShake(
+    world,
+    renderer,
+    () => placement.mode !== 'idle' || buildMenu.isOpen || panel.open || inventory.open,
+  );
 
   let accumulator = 0;
   let frame = 0;
@@ -629,14 +635,18 @@ function wireParticles(world: World, renderer: GameRenderer): void {
  * La caméra encaisse les coups : un peu pour un mur, beaucoup pour la mairie.
  * Et elle recule un peu quand une vague s'annonce, le temps qu'elle sorte de
  * terre, pour qu'on la voie arriver — puis elle revient d'elle-même.
+ *
+ * Sauf si le joueur est occupé (`busy`) : la carte ne glisse pas sous un
+ * bâtiment qu'on pose ou une fenêtre qu'on lit. Le bandeau et le repère de
+ * bord de la vague disent la direction à sa place.
  */
-function wireShake(world: World, renderer: GameRenderer): void {
+function wireShake(world: World, renderer: GameRenderer, busy: () => boolean): void {
   world.events.on('waveCountdown', ({ seconds, x, y }) => {
-    if (seconds === WAVE_ANNOUNCE_SECONDS) renderer.zoomOut(WAVE_ZOOM, WAVE_ZOOM_MS, { x, y });
+    if (seconds === WAVE_ANNOUNCE_SECONDS && !busy()) renderer.zoomOut(WAVE_ZOOM, WAVE_ZOOM_MS, { x, y });
   });
-  world.events.on('waveStarted', ({ x, y }) =>
-    renderer.zoomOut(WAVE_ZOOM, WAVE_ZOOM_MS - WAVE_ANNOUNCE_SECONDS * 1000, { x, y }),
-  );
+  world.events.on('waveStarted', ({ x, y }) => {
+    if (!busy()) renderer.zoomOut(WAVE_ZOOM, WAVE_ZOOM_MS - WAVE_ANNOUNCE_SECONDS * 1000, { x, y });
+  });
   world.events.on('buildingDamaged', ({ id }) => renderer.shake(id === world.townHallId ? 0.28 : 0.14));
   world.events.on('buildingDestroyed', () => renderer.shake(0.6));
   world.events.on('waveStarted', () => renderer.shake(0.3));
