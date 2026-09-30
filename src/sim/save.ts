@@ -18,9 +18,10 @@
 import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
 import { ENEMIES, WILDLIFE, type EnemyId, type WildlifeId } from '../data/enemies.ts';
 import { ITEMS, type ItemId } from '../data/items.ts';
+import { JOB_PRIORITY, type JobPriority } from '../data/workers.ts';
 import type { SchedulerSnapshot } from './scheduler.ts';
 import type { Store, StoreSnapshot } from './store.ts';
-import type { BeastState, Entity, EntityId, EveState, Facing, Mobile, Player } from './types.ts';
+import type { BeastState, Entity, EntityId, EveState, Facing, Job, Mobile, Player } from './types.ts';
 import { World } from './world.ts';
 
 /**
@@ -306,6 +307,15 @@ function parseMobile(raw: unknown): Mobile {
         wanderTicks: int(mobile['wanderTicks']),
       };
     }
+    case 'worker':
+      return {
+        ...base,
+        kind: 'worker',
+        homeId: int(mobile['homeId']),
+        inside: bool(mobile['inside']),
+        job: mobile['job'] === null ? null : parseJob(mobile['job']),
+        searchTicks: int(mobile['searchTicks']),
+      };
     default:
       throw new SaveError(`mobile inconnu : ${String(mobile['kind'])}`);
   }
@@ -315,6 +325,25 @@ function parseDen(raw: unknown): SavedDen {
   const den = record(raw);
 
   return { id: int(den['id']), members: int(den['members']), readyTick: int(den['readyTick']) };
+}
+
+/** Un transport en cours : ses réservations se rejouent au chargement, il doit donc être exact. */
+function parseJob(raw: unknown): Job {
+  const job = record(raw);
+  const amount = int(job['amount']);
+  const priority = int(job['priority']);
+
+  if (amount <= 0) throw new SaveError('job vide');
+  if (!Object.values(JOB_PRIORITY).includes(priority as JobPriority)) throw new SaveError(`priorité inconnue : ${priority}`);
+
+  return {
+    from: int(job['from']),
+    to: int(job['to']),
+    item: oneOf(job['item'], ITEMS) as ItemId,
+    amount,
+    priority: priority as JobPriority,
+    carried: bool(job['carried']),
+  };
 }
 
 function parseScheduler(raw: unknown): SchedulerSnapshot {

@@ -60,7 +60,7 @@ describe('sprites', () => {
   });
 
   it('donne à chaque marcheur un corps par direction et un pied', () => {
-    for (const id of ['adam', 'mutant', 'kid'] as const) {
+    for (const id of ['adam', 'mutant', 'kid', 'worker'] as const) {
       for (const part of WALKER_PARTS) expect(SPRITES[id].parts).toHaveProperty(part);
     }
   });

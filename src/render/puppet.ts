@@ -13,7 +13,8 @@
  *   heurte ;
  * - un **coup reçu** montre le corps « touché » un instant et le fait gicler ;
  * - un **tir** tend l'arc puis le relâche ;
- * - une **attaque** de bête fait claquer les pinces du crabe, bondir le loup.
+ * - une **attaque** de bête fait claquer les pinces du crabe, bondir le loup ;
+ * - un ouvrier qui **porte** a sa charge sur la tête, qui suit le rebond du pas.
  *
  * Le profil gauche est le miroir du profil droit ; l'ombre portée, elle, ne
  * se retourne pas : la lumière vient toujours d'en haut à gauche.
@@ -23,6 +24,7 @@
 
 import { Container, Sprite, type Texture } from 'pixi.js';
 import { LIGHT } from '../data/artDirection.ts';
+import type { ItemId } from '../data/items.ts';
 import { SPRITES, type SpriteId, type SpriteProto } from '../data/sprites.ts';
 import type { Facing } from '../sim/types.ts';
 import type { SpriteLibrary } from './spriteLibrary.ts';
@@ -60,6 +62,8 @@ export class Puppet {
   private readonly bow: Sprite | null;
   private readonly halo: Sprite | null;
   private readonly claws: Sprite | null;
+  private readonly load: Sprite | null;
+  private loadItem: ItemId | null = null;
 
   private readonly library: SpriteLibrary;
   private readonly id: PuppetId;
@@ -93,11 +97,13 @@ export class Puppet {
     this.body = this.part('down');
     this.bow = id === 'adam' ? this.part('bow') : null;
     this.claws = 'claws' in this.proto.parts ? this.part('claws') : null;
+    this.load = id === 'worker' ? this.part('load.wood') : null;
 
     if (this.halo) this.halo.alpha = 0.35;
+    if (this.load) this.load.visible = false;
 
     this.figure.addChild(
-      ...[this.halo, ...this.feet, this.body, this.bow, this.claws].filter((sprite) => sprite !== null),
+      ...[this.halo, ...this.feet, this.body, this.bow, this.claws, this.load].filter((sprite) => sprite !== null),
     );
     this.root.addChild(this.shadow, this.figure);
   }
@@ -125,6 +131,15 @@ export class Puppet {
   /** Tir : l'arc se tend et se relâche. */
   public shoot(): void {
     this.shot = SHOT_MS;
+  }
+
+  /** La charge d'un ouvrier : l'objet porté sur la tête, ou rien. */
+  public carry(item: ItemId | null): void {
+    if (!this.load || item === this.loadItem) return;
+
+    this.loadItem = item;
+    this.load.visible = item !== null;
+    if (item) this.load.texture = this.library.texture(`${this.id}.load.${item}`);
   }
 
   /** Attaque d'une bête : les pinces claquent, le loup bondit. */
@@ -227,6 +242,9 @@ export class Puppet {
     this.body.position.set(bodyX, bodyY);
     this.body.scale.set(1 - squash * 0.6, 1 + squash);
 
+    // La charge suit la tête : le rebond du pas, et l'étirement du corps.
+    this.load?.position.set(bodyX, bodyY - squash * this.proto.height * this.proto.anchorY);
+
     if (this.claws) {
       // Les pinces suivent le corps ; à l'attaque, elles se lèvent et claquent.
       const [px, py] = this.proto.pivots?.['claws'] ?? [0, 0];
@@ -274,4 +292,4 @@ export class Puppet {
 }
 
 /** Sprites qui s'animent en pantin. */
-export type PuppetId = Extract<SpriteId, 'adam' | 'eve' | 'mutant' | 'kid' | 'crab' | 'wolf'>;
+export type PuppetId = Extract<SpriteId, 'adam' | 'eve' | 'mutant' | 'kid' | 'worker' | 'crab' | 'wolf'>;

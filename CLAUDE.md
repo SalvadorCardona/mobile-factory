@@ -25,7 +25,15 @@ sa fenêtre : « Transférer le sac » y vide d'un coup ce qu'il attend, et
 
 **Ouvriers** — chaque bâtiment déclare `workers` ; la maison des
 constructeurs et la ferme en emploient quatre, comptés dans la population
-une fois le bâtiment fini. Les porteurs viendront de là.
+une fois le bâtiment fini. Ceux de la maison sont des **porteurs** (mobile
+`worker`, `src/sim/workers.ts`, `PORTERS` dans `src/data/workers.ts`) : ils
+vident foreuses et fermes dans la mairie et livrent les chantiers depuis
+la mairie. Un job est réservé des deux côtés **à sa création**
+(`src/sim/jobs.ts` : `Store.reserveOut`/`reserveIn`, registre des chantiers)
+— décider sur `available()`, jamais sur le stock brut. Ligne droite, jamais
+à travers l'eau ; à l'abri chez eux pendant une vague, et chez eux quand il
+n'y a rien à porter. Les réservations ne sont pas sauvegardées : elles se
+rejouent depuis les jobs au chargement.
 
 **Menace** — dès que la mairie est debout, des **mutants** arrivent par
 vagues (`src/data/enemies.ts`) et marchent droit sur elle ; ils traversent
@@ -118,9 +126,10 @@ Les règles, en résumé :
   une texture). Le reste du rendu ne voit que des `Texture`. Le panneau
   `?debug` affiche pages, mégapixels et temps de chargement.
 - Animation **par morceaux**, pas par planches : `render/puppet.ts` anime
-  Adam, les mutants et les enfants (pieds qui alternent, rebond, écrasement
+  Adam, les mutants, les enfants et les ouvriers (pieds qui alternent, rebond, écrasement
   à la frappe, arc qui se tend, grimace au coup reçu) ; la roue de la foreuse
-  tourne, les cultures ondulent ; un mutant mort s'écrase et s'efface.
+  tourne, les cultures ondulent ; un mutant mort s'écrase et s'efface ; un
+  porteur a sa charge (l'icône de l'objet) sur la tête.
 - Les bâtiments sont vus en 3/4 : cadre large comme l'emprise, plus haut
   qu'elle (le toit dépasse), ancré en (0, 1) au pied de l'emprise. Sous la
   moitié de ses points de vie, un bâtiment montre `damaged`.

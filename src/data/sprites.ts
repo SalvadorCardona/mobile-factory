@@ -35,6 +35,7 @@ import { TOWN_HALL } from '../art/townHall.ts';
 import { TREE, TREE_DEAD, TREE_PINE } from '../art/trees.ts';
 import { WATCHTOWER } from '../art/watchtower.ts';
 import { WOLF } from '../art/wolf.ts';
+import { WORKER } from '../art/worker.ts';
 
 export interface SpriteProto {
   /** Cadre commun à tous les morceaux, en pixels monde. */
@@ -58,6 +59,7 @@ export const SPRITES = {
   cargoBike: CARGO_BIKE,
   mutant: MUTANT,
   kid: KID,
+  worker: WORKER,
   crab: CRAB,
   wolf: WOLF,
   arrow: ARROW,
@@ -90,7 +92,7 @@ export const SPRITE_IDS = Object.keys(SPRITES) as SpriteId[];
 /** Noms de morceaux valides pour un sprite donné. */
 export type PartOf<S extends SpriteId> = keyof (typeof SPRITES)[S]['parts'] & string;
 
-/** Les morceaux qu'un marcheur (Adam, Ève, mutant, enfant) doit fournir. */
+/** Les morceaux qu'un marcheur (Adam, Ève, mutant, enfant, ouvrier) doit fournir. */
 export const WALKER_PARTS = ['down', 'up', 'side', 'foot'] as const;
 
 /** Les morceaux qu'un bâtiment doit fournir. */

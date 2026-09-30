@@ -20,6 +20,8 @@
  * — crabes sur les plages, loups en forêt — s'en prend à Adam s'il approche.
  * Après la troisième vague repoussée, Ève arrive : elle vit à la mairie,
  * répare le bâti entre les vagues et donne les quêtes (`sim/eve.ts`).
+ * Les ouvriers de la maison des constructeurs portent : ils vident foreuses
+ * et fermes dans la mairie, et livrent les chantiers depuis la mairie.
  */
 
 import { Emitter } from '../core/events.ts';
@@ -33,6 +35,7 @@ import type { QuestId } from '../data/quests.ts';
 import { RECIPES, type RecipeId } from '../data/recipes.ts';
 import { RESOURCES } from '../data/resources.ts';
 import { WEAPONS } from '../data/weapons.ts';
+import { JOB_PRIORITY, PORTERS } from '../data/workers.ts';
 import { ChunkIndex } from './chunk.ts';
 import { nearestFoe, shoot, stepArrow } from './combat.ts';
 import type { Command, CommandLogEntry, PlacementRejection, SiteRejection, TakeRejection } from './commands.ts';
@@ -51,11 +54,13 @@ import {
   playerOverlaps,
   stepPlayer,
 } from './player.ts';
+import { JobBoard, doorOf, type LineTest } from './jobs.ts';
 import { ResourceIndex } from './resources.ts';
 import type { SavedEntity, WorldState } from './save.ts';
 import { Scheduler } from './scheduler.ts';
 import { Store } from './store.ts';
 import { findSpawn, habitatAt, isBuildable, isWalkable, oreAt, terrainAt } from './terrain.ts';
+import { clearLine, standStill, walkToward } from './workers.ts';
 import type {
   Beast,
   Building,
@@ -66,6 +71,8 @@ import type {
   EntityId,
   Farm,
   Foe,
+  House,
+  Job,
   Kid,
   Mobile,
   MobileId,
@@ -74,6 +81,7 @@ import type {
   Player,
   Site,
   Tower,
+  Worker,
 } from './types.ts';
 
 /** 20 ticks de simulation par seconde. */
@@ -167,6 +175,8 @@ export type WorldEvents = {
   questCompleted: { quest: QuestId };
   /** Ève a rendu `hp` points de vie au bâtiment. */
   buildingRepaired: { id: EntityId; hp: number };
+  /** Un porteur a déposé sa charge : sur un chantier, ou dans la mairie. */
+  porterDelivered: { workerId: MobileId; id: EntityId; item: ItemId; amount: number };
 };
 
 export class World {
@@ -234,6 +244,9 @@ export class World {
   /** Cache des tanières par chunk : un calcul pur, gardé pour ne pas le refaire à chaque passage. */
   private readonly denCache = new Map<string, Den[]>();
 
+  /** Les réservations des porteurs. Pas de l'état : elles se relisent dans leurs jobs. */
+  private readonly jobs = new JobBoard();
+
   public constructor(seed: number) {
     this.seed = seed >>> 0;
     this.resources = new ResourceIndex(this.seed);
@@ -300,7 +313,7 @@ export class World {
       player: { ...player, inventory: inventory.toJSON() },
       resources: this.resources.toJSON(),
       entities: [...this.entities.values()].map(saveEntity),
-      mobiles: [...this.mobiles.values()].map((mobile) => ({ ...mobile })),
+      mobiles: [...this.mobiles.values()].map(copyMobile),
       dens: [...this.dens].map(([id, den]) => ({ id, ...den })),
       scheduler: this.scheduler.toJSON(this.tickCount),
     };
@@ -356,12 +369,18 @@ export class World {
     }
 
     this.mobiles.clear();
-    for (const mobile of state.mobiles) this.mobiles.set(mobile.id, { ...mobile });
+    for (const mobile of state.mobiles) this.mobiles.set(mobile.id, copyMobile(mobile));
 
     this.dens.clear();
     for (const { id, members, readyTick } of state.dens) this.dens.set(id, { members, readyTick });
 
     this.scheduler.restore(state.scheduler);
+    this.restoreJobs();
+
+    // Une maison d'une sauvegarde d'avant les porteurs : ses ouvriers s'y installent.
+    for (const entity of this.entities.values()) {
+      if (entity.kind === 'house') this.staff(entity);
+    }
   }
 
   /* ------------------------------------------------------------------ tick */
@@ -781,6 +800,7 @@ export class World {
         break;
 
       case 'house':
+        this.staff(building);
         break;
 
       case 'townHall':
@@ -1006,6 +1026,9 @@ export class World {
   }
 
   private stepMobiles(): void {
+    // Une fois par tick, pas une fois par ouvrier.
+    const alarm = this.hasMutants();
+
     for (const mobile of this.mobiles.values()) {
       switch (mobile.kind) {
         case 'mutant': {
@@ -1044,6 +1067,10 @@ export class World {
 
         case 'eve':
           this.stepEve(mobile);
+          break;
+
+        case 'worker':
+          this.stepWorker(mobile, alarm);
           break;
       }
     }
@@ -1443,6 +1470,205 @@ export class World {
     this.mobiles.set(mutant.id, mutant);
   }
 
+  /* ---------------------------------------------------------------- porteurs */
+
+  private *workers(): IterableIterator<Worker> {
+    for (const mobile of this.mobiles.values()) {
+      if (mobile.kind === 'worker') yield mobile;
+    }
+  }
+
+  /** Ce que le chantier attend encore et qu'aucun porteur n'apporte — la fenêtre du chantier peut l'afficher. */
+  public siteIncoming(id: EntityId, item: ItemId): number {
+    return this.jobs.siteIncoming(id, item);
+  }
+
+  private readonly lineIsClear: LineTest = (x0, y0, x1, y1) => clearLine(this.seed, x0, y0, x1, y1);
+
+  /** Loge les ouvriers de la maison qui n'y sont pas encore. Ils sortent un par un, dès qu'il y a à porter. */
+  private staff(house: House): void {
+    let lodged = 0;
+
+    for (const worker of this.workers()) {
+      if (worker.homeId === house.id) lodged += 1;
+    }
+
+    const door = doorOf(house);
+
+    for (let i = lodged; i < BUILDINGS[house.proto].workers; i += 1) {
+      const worker: Worker = {
+        kind: 'worker',
+        id: this.nextMobileId++,
+        x: door.x,
+        y: door.y,
+        prevX: door.x,
+        prevY: door.y,
+        facing: 'down',
+        moving: false,
+        homeId: house.id,
+        inside: true,
+        job: null,
+        searchTicks: 1 + i * 8,
+      };
+
+      this.mobiles.set(worker.id, worker);
+    }
+  }
+
+  /**
+   * Un tick d'ouvrier. Pendant une vague, il rentre s'abriter avec sa
+   * charge et n'en ressort qu'une fois le dernier mutant tombé. Sinon, il
+   * suit son job — la source, puis la destination — ou en cherche un toutes
+   * les `retryTicks` ; sans rien à porter, il rentre dormir chez lui.
+   */
+  private stepWorker(worker: Worker, alarm: boolean): void {
+    const home = this.entities.get(worker.homeId);
+    const homeDoor = home ? doorOf(home) : null;
+
+    if (alarm && homeDoor) {
+      this.goHome(worker, homeDoor);
+      return;
+    }
+
+    if (!worker.job) {
+      worker.searchTicks -= 1;
+
+      if (worker.searchTicks <= 0) {
+        worker.searchTicks = PORTERS.retryTicks;
+        worker.job = this.jobs.assign(this.entities, this.townHallId, worker, homeDoor ?? worker, this.lineIsClear);
+      }
+    }
+
+    const { job } = worker;
+
+    if (!job) {
+      // Sa maison est tombée et il n'a plus rien à porter : il quitte la colonie.
+      if (homeDoor) this.goHome(worker, homeDoor);
+      else this.mobiles.delete(worker.id);
+      return;
+    }
+
+    worker.inside = false;
+
+    const stop = this.entities.get(job.carried ? job.to : job.from);
+
+    if (!stop) {
+      this.abandon(worker, job);
+      standStill(worker);
+      return;
+    }
+
+    const door = doorOf(stop);
+
+    if (!walkToward(worker, door.x, door.y, STEP_SECONDS)) return;
+
+    if (job.carried) this.dropOff(worker, job);
+    else this.pickUp(worker, job);
+  }
+
+  private goHome(worker: Worker, door: { x: number; y: number }): void {
+    if (worker.inside) standStill(worker);
+    else if (walkToward(worker, door.x, door.y, STEP_SECONDS)) worker.inside = true;
+  }
+
+  /** À la source : la promesse sortante devient un retrait réel, qui réveille une foreuse endormie. */
+  private pickUp(worker: Worker, job: Job): void {
+    const source = this.entities.get(job.from);
+
+    if (!source || source.kind === 'site') {
+      this.abandon(worker, job);
+      return;
+    }
+
+    source.store.releaseOut(job.item, job.amount);
+
+    const taken = this.withdraw(source.id, job.item, job.amount);
+
+    // Moins que promis — ce qui ne devrait pas arriver : la place réservée en trop est rendue.
+    if (taken < job.amount) this.jobs.releaseIn(this.entities, { ...job, amount: job.amount - taken });
+
+    if (taken === 0) {
+      worker.job = null;
+      return;
+    }
+    job.amount = taken;
+    job.carried = true;
+  }
+
+  /**
+   * À destination : la place réservée devient un dépôt réel. Un chantier
+   * qu'Adam a rempli entre-temps, ou déjà achevé, ne prend que ce qui lui
+   * manque ; le reste repart à la mairie — rien ne se perd.
+   */
+  private dropOff(worker: Worker, job: Job): void {
+    const target = this.entities.get(job.to);
+
+    this.jobs.releaseIn(this.entities, job);
+
+    if (!target) {
+      this.reroute(worker, job);
+      return;
+    }
+
+    let accepted: number;
+
+    if (target.kind === 'site') {
+      const needed = (BUILDINGS[target.proto].cost as Partial<Record<ItemId, number>>)[job.item] ?? 0;
+      const delivered = target.delivered[job.item] ?? 0;
+
+      accepted = Math.max(0, Math.min(job.amount, needed - delivered));
+      if (accepted > 0) target.delivered[job.item] = delivered + accepted;
+    } else {
+      accepted = target.store.add(job.item, job.amount);
+    }
+
+    if (accepted > 0) {
+      this.events.emit('porterDelivered', { workerId: worker.id, id: target.id, item: job.item, amount: accepted });
+
+      // Le chantier ne se termine jamais tout seul : il attend « Construire ».
+      if (target.kind === 'site' && siteMissing(target) === 0) this.events.emit('siteReady', { id: target.id });
+    }
+
+    worker.searchTicks = 0;
+
+    if (accepted < job.amount) this.reroute(worker, { ...job, amount: job.amount - accepted });
+    else worker.job = null;
+  }
+
+  /** La source ou la destination a disparu. Sans charge, le job est rendu ; avec, elle repart à la mairie. */
+  private abandon(worker: Worker, job: Job): void {
+    if (!job.carried) {
+      this.jobs.cancel(this.entities, job);
+      worker.job = null;
+      return;
+    }
+    this.jobs.releaseIn(this.entities, job);
+    this.reroute(worker, job);
+  }
+
+  /**
+   * Une charge en main dont la destination ne veut plus : elle part à la
+   * mairie, qui prend tout. La réservation de l'ancienne destination doit
+   * déjà être rendue. Sans mairie, la partie est perdue, et la charge avec.
+   */
+  private reroute(worker: Worker, job: Job): void {
+    const rerouted: Job = { ...job, to: this.townHallId, priority: JOB_PRIORITY.surplus, carried: true };
+
+    worker.job = job.to !== this.townHallId && this.jobs.open(this.entities, rerouted) ? rerouted : null;
+  }
+
+  /** Après un chargement : les réservations se rejouent depuis les jobs sauvegardés. */
+  private restoreJobs(): void {
+    const workers = [...this.workers()];
+    const broken = new Set(this.jobs.rebuild(this.entities, workers.flatMap((worker) => (worker.job ? [worker.job] : []))));
+
+    for (const worker of workers) {
+      if (!worker.job || !broken.has(worker.job)) continue;
+      if (worker.job.carried) this.reroute(worker, worker.job);
+      else worker.job = null;
+    }
+  }
+
   /* ------------------------------------------------------------ destruction */
 
   private damageBuilding(id: EntityId, amount: number): void {
@@ -1478,9 +1704,8 @@ export class World {
   /**
    * Retire des objets du coffre d'un bâtiment et le relance s'il était bloqué.
    *
-   * Adam y passe (heurt et « Prendre ») ; c'est aussi le point d'entrée des
-   * porteurs, un ticket suivant — et la démonstration que le réveil sur
-   * événement fonctionne.
+   * Adam y passe (heurt et « Prendre »), les porteurs aussi : une foreuse ou
+   * une ferme au coffre plein dort, et c'est celui qui la vide qui la réveille.
    */
   public withdraw(id: EntityId, item: ItemId, amount: number): number {
     const entity = this.entities.get(id);
@@ -1572,6 +1797,12 @@ export class World {
 function saveEntity(entity: Entity): SavedEntity {
   if (entity.kind === 'site') return { ...entity, delivered: { ...entity.delivered } };
   return { ...entity, store: entity.store.toJSON() };
+}
+
+/** Un mobile copié : un ouvrier emporte son job, qui ne doit pas être partagé entre deux mondes. */
+function copyMobile(mobile: Mobile): Mobile {
+  if (mobile.kind === 'worker') return { ...mobile, job: mobile.job && { ...mobile.job } };
+  return { ...mobile };
 }
 
 /** Ce qu'il manque encore à un chantier, tous objets confondus. */
