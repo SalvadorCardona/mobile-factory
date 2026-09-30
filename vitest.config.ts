@@ -12,6 +12,6 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     environment: 'node',
-    include: ['src/{sim,core,data}/**/*.test.ts'],
+    include: ['src/{sim,core,data,art}/**/*.test.ts'],
   },
 });

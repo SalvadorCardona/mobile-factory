@@ -1,103 +1,78 @@
 /**
- * Icônes du HUD : une carte de pixels → une `data:` URL.
+ * Icônes du HUD : un SVG → une `data:` URL.
  *
- * Le HUD est du DOM, pas du Pixi : ses images sont des `<img>`. On bake
- * chaque carte de pixels **une fois** sur un canvas 2D à résolution 1, et le
- * navigateur agrandit en `image-rendering: pixelated` — le même principe que
- * les placeholders côté rendu, avec un canvas au lieu d'un `Graphics`.
+ * Le HUD est du DOM, pas du Pixi : ses images sont des `<img>`. Comme tout
+ * visuel du jeu est déjà un SVG, il n'y a rien à baker : le navigateur le
+ * dessine lui-même, net à toutes les densités d'écran.
  *
- * Deux sources : les icônes d'objets (`data/icons.ts`, une par objet, garanti
- * par le type) et la première image `idle` de la planche d'un bâtiment, pour
- * que le menu de construction montre ce qu'on va poser.
+ * Trois sources : les icônes d'objets (`data/icons.ts`, une par objet,
+ * garanti par le type), le bâtiment fini de chaque sprite, pour que le menu
+ * de construction montre ce qu'on va poser, et les pictogrammes de
+ * l'interface (`art/ui.ts`).
  */
 
-import { PALETTE } from '../data/artDirection.ts';
+import { UI_ICONS, type UiIcon } from '../art/ui.ts';
 import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
 import { ITEM_ICONS } from '../data/icons.ts';
 import { ITEMS, type ItemId } from '../data/items.ts';
-import { PIXEL_MAPS, type PixelPalette } from '../data/pixelmaps.ts';
+import { SPRITES } from '../data/sprites.ts';
 
 const cache = new Map<string, string>();
 
-function bake(key: string, palette: PixelPalette, rows: readonly string[]): string {
+function url(key: string, svg: string): string {
   const cached = cache.get(key);
 
   if (cached) return cached;
 
-  const height = rows.length;
-  const width = rows[0]?.length ?? 0;
-  const canvas = document.createElement('canvas');
+  const encoded = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 
-  canvas.width = width;
-  canvas.height = height;
-
-  const context = canvas.getContext('2d');
-
-  if (!context) return '';
-
-  const image = context.createImageData(width, height);
-
-  for (const [y, row] of rows.entries()) {
-    for (let x = 0; x < row.length; x += 1) {
-      const char = row[x]!;
-
-      if (char === '.') continue;
-
-      const color = PALETTE[palette[char]!];
-      const offset = (y * width + x) * 4;
-
-      image.data[offset] = (color >> 16) & 0xff;
-      image.data[offset + 1] = (color >> 8) & 0xff;
-      image.data[offset + 2] = color & 0xff;
-      image.data[offset + 3] = 255;
-    }
-  }
-  context.putImageData(image, 0, 0);
-
-  const url = canvas.toDataURL();
-
-  cache.set(key, url);
-  return url;
+  cache.set(key, encoded);
+  return encoded;
 }
 
 /** URL de l'icône d'un objet. */
 export function itemIconUrl(item: ItemId): string {
-  const icon = ITEM_ICONS[item];
-
-  return bake(`item:${item}`, icon.palette, icon.rows);
+  return url(`item:${item}`, ITEM_ICONS[item]);
 }
 
-/** URL de la vignette d'un bâtiment : sa première image `idle`. */
+/** URL de la vignette d'un bâtiment : son morceau `built`. */
 export function buildingIconUrl(building: BuildingId): string {
-  const map = PIXEL_MAPS[BUILDINGS[building].sprite];
-  const rows = map.animations['idle']?.[0] ?? [];
-
-  return bake(`building:${building}`, map.palette, rows);
+  return url(`building:${building}`, SPRITES[BUILDINGS[building].sprite].parts.built);
 }
 
 /** Un `<img>` d'icône d'objet, prêt à insérer. */
 export function itemIcon(item: ItemId, size = 20): HTMLImageElement {
-  const element = document.createElement('img');
+  const element = image(itemIconUrl(item), 'icon', size, size);
 
-  element.className = 'icon';
-  element.src = itemIconUrl(item);
   element.alt = ITEMS[item].label;
   element.title = ITEMS[item].label;
-  element.width = size;
-  element.height = size;
-  element.draggable = false;
   return element;
 }
 
 /** Un `<img>` de vignette de bâtiment. */
 export function buildingIcon(building: BuildingId, size = 40): HTMLImageElement {
+  const element = image(buildingIconUrl(building), 'icon icon-building', size, size);
+
+  element.alt = BUILDINGS[building].label;
+  return element;
+}
+
+/** Un pictogramme d'interface (pause, son, marteau…), décoratif : le bouton porte déjà son libellé. */
+export function uiIcon(name: UiIcon, size = 24): HTMLImageElement {
+  const element = image(url(`ui:${name}`, UI_ICONS[name]), 'icon icon-ui', size, size);
+
+  element.alt = '';
+  element.setAttribute('aria-hidden', 'true');
+  return element;
+}
+
+function image(src: string, className: string, width: number, height: number): HTMLImageElement {
   const element = document.createElement('img');
 
-  element.className = 'icon icon-building';
-  element.src = buildingIconUrl(building);
-  element.alt = BUILDINGS[building].label;
-  element.width = size;
-  element.height = size;
+  element.className = className;
+  element.src = src;
+  element.width = width;
+  element.height = height;
   element.draggable = false;
   return element;
 }

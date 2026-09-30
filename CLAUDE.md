@@ -33,105 +33,99 @@ La **nurserie** fait naître un enfant toutes les dix minutes.
 
 ## Direction artistique
 
-**Pixel art heroic fantasy 16 bits, sujet post-apocalyptique.**
-Référence : `docs/art-direction.md` ; version exécutable :
-`src/data/artDirection.ts` (`STYLE_PROMPT`, `SHEET_PROMPT`, `PALETTE`).
+**Vectoriel « post-apo joyeux » : la vie reprend ses droits sur la ruine.**
+Ruines arrondies envahies de lianes, fleurs, drapeaux, échelles, grues,
+antennes ; les mutants sont drôles plus qu'effrayants.
 
-- 16 px par tuile en source, affiché ×2 en `nearest`. Jamais de lissage.
-- Tout prompt de génération commence par `STYLE_PROMPT`. Ne jamais retaper
-  le style à la main : c'est ce préfixe qui garantit la cohérence.
-- Tant que `file` est `null`, le placeholder pixel art de
-  `src/data/pixelmaps.ts` est affiché. Un nouveau sprite a **toujours** un
-  placeholder — la validation des prototypes l'exige.
+**Charger le skill `art-direction` (`.claude/skills/art-direction/`) avant
+toute création ou modification de visuel.** Référence :
+`docs/art-direction.md` (règles, palette chiffrée, construction, maquette et
+dessins de l'illustrateur dans `docs/art-direction/`) ; version exécutable :
+`src/data/artDirection.ts` (`PALETTE`, `GROUND`, `RADIUS`, `STROKE`, `LIGHT`,
+`FAMILY_TONES`, helpers SVG, `auditSvg`).
 
-### Générer un asset avec le MCP OpenRouter
+**Tout nouveau visuel est un SVG construit avec les helpers de
+`artDirection.ts`.** Pas de couleur tapée à la main (le type `Color` la
+refuse), pas d'image générée par un modèle, pas de pixel art.
 
-Les assets se génèrent avec le **MCP OpenRouter** (génération d'image), pas
-avec un script du dépôt. Procédure, à suivre telle quelle :
+Les règles, en résumé :
 
-1. Lire `src/data/artDirection.ts` (`STYLE_PROMPT`, `SHEET_PROMPT`) et
-   l'entrée `SPRITES[id]` de `src/data/sprites.ts` (taille d'image,
-   animations, `prompt`). Pour un nouveau sprite, déclarer d'abord l'entrée
-   et son placeholder dans `src/data/pixelmaps.ts`.
-2. Composer le prompt, dans cet ordre et sans rien reformuler :
-   `STYLE_PROMPT` + `SPRITES[id].prompt` + `SHEET_PROMPT` + la grille
-   chiffrée : « Grid: R row(s) × C column(s); each frame W×H pixels; total
-   image exactly (C×W)×(R×H) pixels; row 1: "<animation>", N frame(s); … ;
-   unused cells stay fully transparent. » `sheetGrid(SPRITES[id])` donne R
-   et C.
-3. Appeler l'outil de génération d'image du MCP OpenRouter avec ce prompt.
-   Modèle par défaut : `google/gemini-3.1-flash-image` (Nano Banana 2) :
-   à prompt égal, il respecte la structure lignes × colonnes et n'écrit pas
-   de texte, là où `gemini-2.5-flash-image` produit une grille 4×4 légendée.
-   Aucun ne rend un vrai fond transparent (damier peint) ni une grille au
-   pixel : prévoir `--key` et un recadrage.
-4. Enregistrer le résultat brut hors du dépôt (scratchpad), puis le
-   normaliser : `npm run sprite:normalize -- <id> <brut.png>`. L'outil
-   (`src/tools/`) réduit en `nearest` à la grille, binarise l'alpha,
-   quantifie chaque pixel à `PALETTE` et écrit `public/sprites/<id>.png`.
-   Il refuse une image dont les dimensions ne sont pas la grille ou un
-   multiple entier : recadrer (`--crop x,y,w,h`) ou régénérer, jamais
-   étirer. Un fond opaque s'incruste avec `--key RRGGBB`. Le rapport donne
-   la « dérive » moyenne : grande, le modèle n'a pas suivi la palette et la
-   planche mérite un regard sévère.
-5. Regarder l'image (l'ouvrir avec `Read`) : grille respectée, fond
-   transparent, ancre cohérente avec `anchorX/anchorY`, palette proche de
-   `PALETTE`, pas de texte ni d'anti-aliasing.
-6. Seulement alors, renseigner `SPRITES[id].file = '<id>.png'`. Rien d'autre
-   ne change : `spriteLibrary` découpe la planche sur la grille déclarée.
-7. Lancer `npm run lint && npm run typecheck && npm test` — le test
-   `sprites.test.ts` revérifie grille, alpha et palette de tout PNG
-   référencé — puis vérifier en jeu avant de committer le PNG.
-
-Cohérence d'une planche à l'autre : c'est la quantification qui garantit la
-palette, pas le prompt. Générer d'abord la planche de référence (Adam),
-l'itérer jusqu'à satisfaction, ajuster `STYLE_PROMPT` si besoin, et seulement
-ensuite les autres, dans la même session et avec le même modèle. Ce qui doit
-se ressembler (Adam, Ève, l'enfant) se génère de préférence dans un même lot.
-
-Jamais de style improvisé, jamais d'asset non vérifié, jamais de PNG
-référencé sans être passé par ces étapes.
+- formes pures (capsules, rectangles très arrondis, cercles), **aucun contour** ;
+- trois tons par objet : base, ombre de même teinte tirée vers le violet/bleu
+  (jamais gris, noir ni transparent), reflet en capsule ; lumière en haut à gauche ;
+- palette courte et saturée ; l'**indigo** remplace le noir et le marron ;
+- traits réservés aux petits détails, **une seule épaisseur**, bouts ronds ;
+- arbres en coussins de feuillage empilés sur un tronc indigo, pas en boules ;
+- des détails qui racontent une vie plutôt que de la texture ;
+- ombres portées pleines, teinte foncée du sol ;
+- vue de dessus 3/4, grille lisible ;
+- une teinte dominante par famille, sans collision — vert fluo réservé aux mutants ;
+- personnages lisibles à petite taille (Adam : sac à dos, écharpe, arc ;
+  mutants : tête déformée, bras trop long, halo vert).
 
 ## Icônes et HUD
 
 - Une ressource = une icône : `src/data/icons.ts` est un
-  `Record<ItemId, PixelIcon>` (12 × 12 px, palette du jeu). Un objet sans
-  icône ne compile pas ; `validatePrototypes()` vérifie taille et palette.
+  `Record<ItemId, string>` (un SVG de 24 × 24, helpers de la DA). Un objet
+  sans icône ne compile pas ; `validatePrototypes()` vérifie cadre et règles.
 - `src/ui/hud.ts` : quête, conseil contextuel (le tutoriel), sac, bulles,
   gains flottants, défaite. `src/ui/screens.ts` : écran titre et pause — la
-  simulation ne tourne qu'après « Jouer » et hors pause. Police : Jersey 15,
-  embarquée via `@fontsource` (ses chiffres ne se confondent pas).
-  Couleurs de l'UI : `--accent`, `--good`, `--danger` dans `style.css`, tirées
-  de `PALETTE`. Le panneau de debug ne s'affiche qu'avec `?debug` en dev.
-- `src/ui/icons.ts` bake icônes d'objets et vignettes de bâtiments en
-  `data:` URL pour le DOM. Le menu de construction est un tiroir derrière un
+  simulation ne tourne qu'après « Jouer » et hors pause. Police arrondie :
+  Fredoka, embarquée via `@fontsource` (ses chiffres ne se confondent pas).
+  L'interface suit les règles des sprites : cartes blanches et capsules,
+  trois tons (couleur, « face avant » pleine plus sombre, reflet en capsule),
+  aucun contour ; couleurs de `PALETTE` recopiées en variables dans
+  `style.css` (`--accent`, `--good`, `--danger`…). Pas d'emoji : les
+  pictogrammes sont des SVG de `src/art/ui.ts`. Le panneau de debug ne
+  s'affiche qu'avec `?debug` en dev.
+- `src/ui/icons.ts` sert icônes d'objets, vignettes de bâtiments et
+  pictogrammes (`src/art/ui.ts`) en `data:` URL SVG pour le DOM. Le menu de construction est un tiroir derrière un
   seul bouton ; armer un bâtiment passe la carte en mode construction
   (grille + emprises, `render/ghostLayer.ts`).
 
 ## Système de sprites
 
-- `src/data/sprites.ts` : une planche = une grille, une animation par ligne,
-  une image par colonne, taille d'image fixe, ancre, cadence.
-- `src/render/spriteLibrary.ts` : charge la planche PNG ou bake le
-  placeholder, et sert `Texture[]` par animation. Le reste du rendu ne sait
-  pas d'où viennent les textures.
-- `src/render/entityLayer.ts` : Adam (`AnimatedSprite`, direction + marche,
-  profil gauche = miroir du profil droit), chantiers, bâtiments animés.
-- Les bâtiments sont vus en 3/4 : planche large comme l'emprise, plus haute
-  qu'elle (le toit dépasse), ancrée en (0, 1) au pied de l'emprise.
-- Les ressources de surface sont bakées dans la RenderTexture du chunk
-  (`chunkLayer.ts`) et rebakées quand la simulation salit le chunk. Une
-  ressource peut avoir plusieurs planches (`RESOURCES[id].sprites` : feuillu,
-  sapin, arbre mort), tirées par tuile depuis la seed.
-- Le décor (`src/data/decor.ts`, planche `decor`) est tiré par `decorAt()`
-  (`sim/terrain.ts`) sur les tuiles nues et baké avec le terrain. Il ne se
-  heurte pas et n'est jamais de l'état.
-- Le sol vient de `render/terrainTiles.ts` : un tileset procédural seedé
-  (variantes, transitions entre terrains, ombres portées), dessiné à 16 px
-  source comme les sprites.
-- Ressenti (rebond, secousse, flash, tremblement de caméra) : des minuteurs
+- **Un sprite = un module de `src/art/`** qui construit son SVG avec les
+  helpers de `artDirection.ts`, en **morceaux** (`parts`) du même cadre :
+  un corps par direction et un pied pour un personnage ; `site`, `built`,
+  `damaged` pour un bâtiment (+ `wheel` pour la foreuse, `crops` pour la
+  ferme) ; `full`, `damaged` pour une ressource. Cadre et ancre en pixels
+  monde (tuile = 32 px). `src/data/sprites.ts` est le registre ; `art/` est
+  soumis à la même frontière que `data/` (ni Pixi ni DOM).
+- `src/render/spriteLibrary.ts` rastérise chaque morceau **une fois** au
+  chargement, à la résolution de l'écran (`devicePixelRatio`, plafonné à 3),
+  dans un atlas (une page de 2048 px de large ; ~100 images tiennent dans
+  une texture). Le reste du rendu ne voit que des `Texture`. Le panneau
+  `?debug` affiche pages, mégapixels et temps de chargement.
+- Animation **par morceaux**, pas par planches : `render/puppet.ts` anime
+  Adam, les mutants et les enfants (pieds qui alternent, rebond, écrasement
+  à la frappe, arc qui se tend, grimace au coup reçu) ; la roue de la foreuse
+  tourne, les cultures ondulent ; un mutant mort s'écrase et s'efface.
+- Les bâtiments sont vus en 3/4 : cadre large comme l'emprise, plus haut
+  qu'elle (le toit dépasse), ancré en (0, 1) au pied de l'emprise. Sous la
+  moitié de ses points de vie, un bâtiment montre `damaged`.
+- Arbres et rochers sont des sprites (`render/resourceLayer.ts`) triés en
+  profondeur avec les bâtiments et les personnages : ils montent au-dessus
+  de leur tuile, Adam passe derrière. Une ressource peut avoir plusieurs
+  sprites (`RESOURCES[id].sprites` : feuillu, sapin, arbre mort), tirés par
+  tuile depuis la seed.
+- Le sol (`src/art/terrain.ts` : damier d'herbe, sable, eau, roche,
+  transitions, coins arrondis) et le décor (`src/data/decor.ts`, sprite
+  `decor`, tiré par `decorAt()`) sont bakés par blocs de 16 × 16 tuiles
+  (`render/chunkLayer.ts`, résolution plafonnée à 2) et jamais rebakés : ils
+  ne changent pas. Le décor ne se heurte pas et n'est jamais de l'état.
+- Ombres portées : capsules pleines dans la teinte foncée du sol sous
+  l'objet (`TerrainTiles.shadow`), dans un conteneur sous tout le reste.
+- Ressenti (rebond, secousse, tremblement, flash, caméra) : des minuteurs
   de vue côté `render/`, jamais de l'état de simulation.
-  `render/indicatorLayer.ts` dessine les flèches de bord (mutants, mairie).
+  `render/indicatorLayer.ts` dessine les repères de bord (mutants, mairie).
+- L'icône (favicon, PWA) et la bannière du README sont des scènes SVG
+  composées avec les sprites (`src/art/brand.ts`) ; `npm run art:brand`
+  écrit les pages à rastériser et affiche les commandes Chrome qui
+  produisent `public/icon.png`, `public/favicon.png` et `docs/banner.png`.
+- Relire un visuel : `npm run art:sheet -- planche.svg`, puis
+  `google-chrome --headless --screenshot=planche.png --window-size=L,H planche.svg`
+  et ouvrir le PNG avec `Read`.
 
 ## Son
 

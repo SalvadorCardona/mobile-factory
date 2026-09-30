@@ -1,26 +1,14 @@
 /**
- * Textures qui ne sont pas des sprites : le terrain et le joystick.
+ * Textures qui ne sont pas des sprites : les deux disques du joystick.
  *
- * Les sprites — personnage, ressources, bâtiments — passent par
- * `spriteLibrary.ts`. Ici ne restent que les aplats de terrain, bakés dans
- * les chunks, et les deux disques du joystick, dessinés en vectoriel parce
- * qu'ils vivent en pixels écran, pas en pixels monde.
+ * Les sprites et le sol passent par `spriteLibrary.ts`. Ici ne reste que le
+ * joystick, qui vit en pixels écran, pas en pixels monde — comme sur la
+ * maquette : un grand disque blanc voilé, et un bouton blanc, son ombre
+ * lavande en bas à droite (le blanc est déjà son propre reflet), sans contour.
  */
 
 import { Graphics, type Renderer, type Texture } from 'pixi.js';
-import type { TerrainKind } from '../sim/terrain.ts';
-
-/**
- * Deux teintes par terrain, choisies tuile par tuile depuis la seed : un
- * aplat uni se lit comme un prototype, deux teintes se lisent comme du
- * pixel art. Palette terne, poussiéreuse — c'est l'après.
- */
-export const TERRAIN_COLORS: Record<TerrainKind, readonly [number, number]> = {
-  water: [0x2f5d78, 0x2a5570],
-  sand: [0xc4ad7f, 0xb9a274],
-  grass: [0x5f7f3f, 0x577639],
-  rock: [0x6d6f74, 0x64666b],
-};
+import { PALETTE, hex } from '../data/artDirection.ts';
 
 export interface Atlas {
   joystickBase: Texture;
@@ -28,25 +16,31 @@ export interface Atlas {
 }
 
 export function createAtlas(renderer: Renderer): Atlas {
+  const white = hex(PALETTE.paper.base);
+
   return {
     joystickBase: bake(
       renderer,
-      new Graphics().circle(64, 64, 62).fill({ color: 0xffffff, alpha: 0.12 }).stroke({
-        width: 2,
-        color: 0xffffff,
-        alpha: 0.35,
-      }),
+      new Graphics()
+        .circle(64, 64, 62)
+        .fill({ color: white, alpha: 0.28 })
+        .circle(64, 64, 62)
+        .stroke({ width: 5, color: white, alpha: 0.7, alignment: 1 }),
     ),
     joystickKnob: bake(
       renderer,
-      new Graphics().circle(28, 28, 26).fill({ color: 0xffffff, alpha: 0.45 }),
+      new Graphics()
+        .circle(28, 28, 26)
+        .fill(hex(PALETTE.paper.shade))
+        .circle(26.5, 26, 23.5)
+        .fill(white),
     ),
   };
 }
 
 /** Rend un `Graphics` une fois pour toutes et libère la géométrie vectorielle. */
 function bake(renderer: Renderer, graphics: Graphics): Texture {
-  const texture = renderer.generateTexture({ target: graphics, antialias: true });
+  const texture = renderer.generateTexture({ target: graphics, antialias: true, resolution: renderer.resolution });
 
   graphics.destroy();
   return texture;

@@ -20,8 +20,8 @@ export interface ResourceProto {
   /** Ticks de contact entre deux unités. */
   harvestTicks: number;
   /**
-   * Planches possibles, tirées par tuile depuis la seed : une forêt mêle les
-   * essences. Répéter une planche la rend plus fréquente.
+   * Sprites possibles, tirés par tuile depuis la seed : une forêt mêle les
+   * essences. Répéter un sprite le rend plus fréquent.
    */
   sprites: readonly SpriteId[];
   /** Verbe affiché au joueur : « Couper du bois », « Extraire du fer ». */

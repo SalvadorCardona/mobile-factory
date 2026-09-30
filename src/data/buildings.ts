@@ -41,7 +41,7 @@ export interface BuildingProto {
   workers: number;
   /** Proposé dans le menu de construction ? La mairie, unique, ne l'est pas. */
   menu: boolean;
-  /** Planche de sprites du bâtiment terminé. */
+  /** Sprite du bâtiment : son chantier, sa version finie, sa version endommagée. */
   sprite: SpriteId;
   /** Arme automatique du bâtiment, ou `null` s'il n'en porte pas. */
   weapon: WeaponId | null;

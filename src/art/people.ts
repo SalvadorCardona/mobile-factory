@@ -1,0 +1,134 @@
+/**
+ * Morceaux communs aux humains : Adam et les enfants.
+ *
+ * Un humain se lit à trois choses : une tête ronde aux cheveux indigo, une
+ * tunique orange (la teinte réservée aux humains) et une écharpe corail. Le
+ * corps est dessiné par direction — face, dos, profil droit (le profil gauche
+ * est le miroir, fait au rendu) — et les pieds sont un morceau à part, que le
+ * rendu fait alterner pendant la marche.
+ *
+ * Cadre commun : `width × height`, le sol à `ground`. Le corps s'arrête au
+ * ras des pieds : pas de jambes, la silhouette reste lisible à 32 px.
+ */
+
+import { PALETTE, circle, curve, group, highlight, line, pill, rect, shadedBlock, svg } from '../data/artDirection.ts';
+
+export type Facing = 'down' | 'up' | 'side';
+
+export interface HumanOptions {
+  /** Sac à dos violet, bretelles comprises. */
+  pack: boolean;
+  /** Écharpe corail, dont le pan flotte. */
+  scarf: boolean;
+  /** Petite casquette jaune — les enfants de la colonie. */
+  cap: boolean;
+}
+
+const { ink, orange, coral, violet, skin, yellow } = PALETTE;
+
+/**
+ * Le corps d'un humain vu dans une direction, dans un cadre 32 × 48 aux pieds
+ * en y = 38. Les enfants réutilisent ce corps, réduit autour des pieds.
+ */
+export function humanBody(facing: Facing, options: HumanOptions): string {
+  switch (facing) {
+    case 'down':
+      return (
+        (options.pack ? pill(9.5, 17.5, 13, 6, violet.shade) : '') +
+        // Bras, puis tunique en trois tons, mains.
+        pill(7.5, 22, 4.5, 10, orange.shade) +
+        pill(20, 22, 4.5, 10, orange.shade) +
+        rect(10, 21, 12, 14, orange.shade, 5) +
+        rect(10, 21, 12, 11, orange.base, 5) +
+        highlight(10, 21, 12, 11, 'orange') +
+        circle(9.7, 32, 2, skin.base) +
+        circle(22.3, 32, 2, skin.base) +
+        (options.pack ? line(12.5, 22.5, 12.5, 28, violet.shade) + line(19.5, 22.5, 19.5, 28, violet.shade) : '') +
+        (options.scarf ? pill(10, 19, 12, 4.5, coral.base) + pill(18.5, 21, 3.5, 7, coral.shade) : '') +
+        headFront(options.cap)
+      );
+
+    case 'up':
+      return (
+        pill(7.5, 22, 4.5, 10, orange.shade) +
+        pill(20, 22, 4.5, 10, orange.shade) +
+        rect(10, 21, 12, 14, orange.shade, 5) +
+        rect(10, 21, 12, 11, orange.base, 5) +
+        circle(9.7, 32, 2, skin.base) +
+        circle(22.3, 32, 2, skin.base) +
+        (options.pack ? shadedBlock(10, 20.5, 12, 13, 3, 'violet', 4) + pill(11.5, 20.5, 9, 4, violet.light) : '') +
+        (options.scarf ? pill(10.5, 18.5, 11, 4, coral.base) + pill(13, 21, 3.5, 7, coral.shade) : '') +
+        headBack(options.cap)
+      );
+
+    case 'side':
+      return (
+        (options.scarf ? pill(4.5, 19.5, 9, 3.2, coral.shade) : '') +
+        (options.pack ? shadedBlock(6.5, 19.5, 7.5, 12.5, 3, 'violet', 3) : '') +
+        rect(11, 21, 10, 14, orange.shade, 4.5) +
+        rect(11, 21, 10, 11, orange.base, 4.5) +
+        highlight(11, 21, 10, 11, 'orange') +
+        pill(14.5, 22, 4.5, 10, orange.shade) +
+        circle(17, 32, 2, skin.base) +
+        (options.scarf ? pill(11, 19, 10.5, 4.5, coral.base) : '') +
+        headSide(options.cap)
+      );
+  }
+}
+
+/** Tête de face : cheveux indigo, visage, deux yeux, les joues roses. */
+function headFront(cap: boolean): string {
+  return (
+    circle(16, 11.5, 7, ink.base) +
+    rect(10, 11, 12, 9, skin.base, 4.5) +
+    pill(10.5, 11, 11, 2.2, ink.base) +
+    (cap ? pill(9, 5.5, 14, 5, yellow.base) + pill(11, 6.3, 5, 1.6, yellow.light) : pill(11.5, 6.3, 6, 2, ink.light)) +
+    circle(13.4, 15, 1.1, ink.base) +
+    circle(18.6, 15, 1.1, ink.base) +
+    circle(11.9, 17.3, 1.1, coral.light) +
+    circle(20.1, 17.3, 1.1, coral.light)
+  );
+}
+
+/** Tête de dos : que des cheveux, et la nuque. */
+function headBack(cap: boolean): string {
+  return (
+    pill(13.5, 17, 5, 3, skin.shade) +
+    circle(16, 12, 7, ink.base) +
+    (cap ? pill(9, 5.5, 14, 5, yellow.base) : pill(11.5, 6.5, 6, 2, ink.light))
+  );
+}
+
+/** Tête de profil droit : cheveux vers l'arrière, un œil, la joue. */
+function headSide(cap: boolean): string {
+  return (
+    circle(16.5, 12.5, 7, skin.base) +
+    circle(15, 11, 6.6, ink.base) +
+    rect(16, 11.5, 7.5, 7.5, skin.base, 3.5) +
+    (cap ? pill(10, 5.5, 15, 5, yellow.base) + pill(21, 8, 5, 2.5, yellow.shade) : pill(11, 6.3, 6, 2, ink.light)) +
+    circle(20.8, 14.6, 1.1, ink.base) +
+    circle(21.4, 17.2, 1.1, coral.light)
+  );
+}
+
+/** Un pied : une capsule indigo, centrée en x = 16, posée au sol. */
+export function foot(ground: number, tone: 'ink' | 'toxic' = 'ink', size = 1): string {
+  const w = 6 * size;
+  const h = 3.6 * size;
+
+  return pill(16 - w / 2, ground - h, w, h, PALETTE[tone].shade);
+}
+
+/** L'arc de fortune : une branche jaune courbée, une corde indigo. */
+export function bow(x: number, top: number, bottom: number): string {
+  const middle = (top + bottom) / 2;
+
+  return curve(`M${x} ${top} Q${x + 7} ${middle} ${x} ${bottom}`, yellow.shade) + line(x, top, x, bottom, ink.light);
+}
+
+/** Réduit un corps d'adulte autour des pieds : c'est ainsi qu'on dessine un enfant. */
+export function scaledAround(x: number, y: number, factor: number, body: string): string {
+  return group(`translate(${x} ${y}) scale(${factor}) translate(${-x} ${-y})`, body);
+}
+
+export { svg };

@@ -8,42 +8,62 @@
  *                     bande morte sous le canvas quand la barre se replie.
  * overscroll-behavior aucun rebond élastique en haut de page.
  *
- * Direction de l'interface : des cadres 16 bits — un contour sombre d'un
- * trait, un liseré intérieur clair, une ombre portée dure, jamais floue — et
- * des couleurs tirées de `PALETTE` (`data/artDirection.ts`) : ambre et rouille
- * pour l'action, vert feuille pour ce qui va bien, rouge brique pour le danger.
+ * Direction de l'interface : les règles des sprites (docs/art-direction.md).
+ * Des capsules et des cartes très arrondies, blanches comme sur la maquette ;
+ * trois tons par forme — la couleur, une « face avant » pleine plus sombre
+ * de la même teinte en dessous (jamais une ombre floue, jamais du noir), un
+ * reflet en capsule en haut à gauche ; aucun contour. Toutes les couleurs
+ * sont celles de `PALETTE` (`data/artDirection.ts`) : corail pour l'action,
+ * menthe pour ce qui va bien, corail foncé pour le danger, indigo pour le texte.
  */
 
 :root {
-  --ink: #1b1523;
-  --night: #11161d;
-  --panel: rgba(27, 21, 35, 0.9);
-  --panel-solid: #221b2c;
-  --panel-raised: #2d2438;
-  --line: #4a3d55;
-  --line-light: rgba(241, 230, 208, 0.12);
-  --fg: #f1e6d0;
-  --muted: #b3a48c;
-  --accent: #d98b3a;
-  --accent-light: #f0b35a;
-  --accent-dark: #a5502c;
-  --good: #8fc460;
-  --good-dark: #4a8a3c;
-  --danger: #e2725b;
-  --danger-dark: #9a3f32;
-  --radioactive: #9ef01a;
+  --ink: #2b2d8f;
+  --ink-shade: #1f2070;
+  --ink-light: #3d40b8;
+  --paper: #ffffff;
+  --paper-shade: #dcdcff;
+  --violet: #7b5cff;
+  --violet-shade: #5a3fd6;
+  --violet-light: #a08bff;
+  --yellow: #ffd23f;
+  --yellow-shade: #ffa91a;
+  --yellow-light: #fff27a;
+  --coral: #ff4d6d;
+  --coral-shade: #d92a5b;
+  --coral-light: #ff8aa3;
+  --orange: #ff7b2e;
+  --orange-shade: #e05a1a;
+  --mint: #2fd67b;
+  --mint-shade: #15a866;
+  --mint-light: #8ff5b5;
+  --cyan: #45d6ff;
+  --cyan-shade: #2fb8ea;
+  --cyan-light: #b8f1ff;
+  --toxic: #7df25f;
+  --grass: #93e8ae;
 
-  /* Contour 16 bits : un trait sombre, un liseré clair dedans, une ombre dure dessous. */
-  --frame: 0 0 0 2px var(--ink), inset 0 0 0 1px var(--line-light), 0 4px 0 2px rgba(0, 0, 0, 0.35);
+  /* Rôles. */
+  --fg: var(--ink);
+  --muted: var(--violet-shade);
+  --accent: var(--coral);
+  --good: var(--mint-shade);
+  --danger: var(--coral-shade);
+
+  /* La face avant d'une carte : pleine, lavande, sous la carte — la vue 3/4. */
+  --face: 0 5px 0 var(--paper-shade);
+  --face-pressed: 0 2px 0 var(--paper-shade);
+  /* Voile des écrans plein cadre : l'indigo de la palette, pas du noir. */
+  --veil: rgb(43 45 143 / 0.55);
 
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
 
-  color-scheme: dark;
-  font-family: 'Jersey 15', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  /* Une seule graisse dans la police : pas de faux gras flou fabriqué par le navigateur. */
+  color-scheme: light;
+  font-family: 'Fredoka', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-weight: 600;
   font-synthesis: none;
 }
 
@@ -58,7 +78,7 @@ body {
   width: 100%;
   height: 100dvh;
   overflow: hidden;
-  background: var(--night);
+  background: var(--grass);
   color: var(--fg);
   touch-action: none;
   overscroll-behavior: none;
@@ -82,26 +102,19 @@ canvas {
 button {
   font: inherit;
   cursor: pointer;
+  color: inherit;
 }
 
 /*
- * Vignette : les bords de l'écran s'assombrissent, l'œil va au centre, là où
- * est Adam. En alerte, elle vire au rouge et respire.
+ * En alerte, les bords de l'écran virent au corail et respirent. Hors
+ * alerte, rien : la maquette n'a pas de vignette, l'herbe reste claire.
  */
-.hud::before,
 .hud::after {
   content: '';
   position: absolute;
   inset: 0;
   pointer-events: none;
-}
-
-.hud::before {
-  background: radial-gradient(ellipse at 50% 55%, transparent 55%, rgba(17, 12, 22, 0.55) 100%);
-}
-
-.hud::after {
-  background: radial-gradient(ellipse at 50% 55%, transparent 50%, rgba(170, 40, 30, 0.42) 100%);
+  background: radial-gradient(ellipse at 50% 55%, transparent 55%, rgb(255 77 109 / 0.45) 100%);
   opacity: 0;
   transition: opacity 600ms ease-out;
 }
@@ -127,7 +140,7 @@ button {
   pointer-events: none;
   padding: calc(var(--safe-top) + 8px) calc(var(--safe-right) + 8px)
     calc(var(--safe-bottom) + 8px) calc(var(--safe-left) + 8px);
-  font-size: 18px;
+  font-size: 17px;
 }
 
 /* Tant que l'écran titre est là, le HUD de jeu reste caché. */
@@ -147,12 +160,18 @@ button {
   pointer-events: none;
 }
 
+/* Une carte : blanche, très arrondie, posée sur sa face lavande. */
 .panel {
-  background: var(--panel);
-  border-radius: 6px;
-  box-shadow: var(--frame);
-  padding: 8px 12px;
-  line-height: 1.35;
+  background: var(--paper);
+  border-radius: 20px;
+  box-shadow: var(--face);
+  padding: 10px 14px;
+  line-height: 1.3;
+}
+
+/* Le pictogramme d'un bouton ou d'une ligne ne capte pas le doigt. */
+.icon-ui {
+  pointer-events: none;
 }
 
 /* ------------------------------------------------------------------ quête */
@@ -180,15 +199,15 @@ button {
 
 .hud-quest {
   width: min(380px, 100%);
-  padding: 8px 12px 10px;
+  padding: 10px 14px 12px;
 }
 
 .hud-quest-title {
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--accent-light);
+  color: var(--violet);
 }
 
 .hud-quest[data-mode='ready'] .hud-quest-title {
@@ -203,12 +222,12 @@ button {
 .hud-quest-body {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
   margin-top: 2px;
 }
 
 .hud-quest-goal {
-  font-size: 21px;
+  font-size: 20px;
   font-weight: 700;
 }
 
@@ -218,7 +237,7 @@ button {
 
 @keyframes ready-glow {
   50% {
-    box-shadow: var(--frame), 0 0 0 4px rgba(143, 196, 96, 0.55);
+    box-shadow: var(--face), 0 0 0 5px var(--mint-light);
   }
 }
 
@@ -230,7 +249,6 @@ button {
 
 .hud-quest-wave {
   flex: 1;
-  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
@@ -239,9 +257,12 @@ button {
 }
 
 .hud-quest-chip {
-  padding: 1px 7px;
-  border-radius: 4px;
-  background: var(--panel-raised);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px 2px 5px;
+  border-radius: 999px;
+  background: var(--paper-shade);
   font-size: 16px;
   font-variant-numeric: tabular-nums;
 }
@@ -255,32 +276,53 @@ button {
 }
 
 .hud-meter-label {
-  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   white-space: nowrap;
 }
 
 .hud-meter-value {
-  min-width: 44px;
+  min-width: 46px;
   text-align: right;
-  font-weight: 600;
 }
 
+/* Une barre : une capsule lavande, un remplissage en capsule, son reflet. */
 .hud-bar {
-  height: 10px;
-  border-radius: 2px;
-  background: var(--ink);
-  box-shadow: inset 0 0 0 1px var(--line);
+  height: 12px;
+  border-radius: 999px;
+  background: var(--paper-shade);
   overflow: hidden;
+  padding: 2px;
 }
 
 .hud-bar-fill {
+  position: relative;
   height: 100%;
-  background: linear-gradient(var(--accent-light) 0 40%, var(--accent) 40% 100%);
-  transition: width 180ms steps(6);
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--yellow-shade);
+  transition: width 220ms cubic-bezier(0.2, 1.2, 0.4, 1);
+}
+
+.hud-bar-fill::after,
+.building-panel-bar div::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  width: min(40%, 26px);
+  height: 3px;
+  border-radius: 999px;
+  background: var(--yellow-light);
 }
 
 .hud-meter[data-done='true'] .hud-bar-fill {
-  background: linear-gradient(#b5e08a 0 40%, var(--good) 40% 100%);
+  background: var(--mint);
+}
+
+.hud-meter[data-done='true'] .hud-bar-fill::after {
+  background: var(--mint-light);
 }
 
 .hud-meter[data-done='true'] .hud-meter-value {
@@ -288,7 +330,11 @@ button {
 }
 
 .hud-meter-hp .hud-bar-fill {
-  background: linear-gradient(#f29a86 0 40%, var(--danger) 40% 100%);
+  background: var(--coral);
+}
+
+.hud-meter-hp .hud-bar-fill::after {
+  background: var(--coral-light);
 }
 
 .hud-meter-hp[data-low='true'] {
@@ -304,19 +350,17 @@ button {
 /* --------------------------------------------------------------- conseil */
 
 .hud-hint {
-  margin-top: 8px;
-  padding: 5px 10px;
-  border-radius: 4px;
-  background: var(--fg);
-  color: var(--ink);
-  font-size: 18px;
-  font-weight: 600;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 6px 14px 6px 8px;
+  border-radius: 999px;
+  background: var(--yellow-light);
+  box-shadow: 0 3px 0 var(--yellow-shade);
+  font-size: 16px;
+  line-height: 1.25;
   animation: hint-in 320ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
-}
-
-.hud-hint::before {
-  content: '💡 ';
 }
 
 .hud-hint[hidden] {
@@ -335,38 +379,38 @@ button {
 .hud-buttons {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
+/* Les boutons ronds de la maquette : un disque blanc sur sa face lavande. */
 .hud-button {
-  width: 44px;
-  height: 44px;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
   border: none;
-  border-radius: 6px;
-  background: var(--panel);
-  box-shadow: var(--frame);
-  color: var(--fg);
-  font-size: 22px;
-  font-weight: 700;
+  border-radius: 50%;
+  background: var(--paper);
+  box-shadow: var(--face);
 }
 
 .hud-button:active {
-  transform: translateY(2px);
-  box-shadow: 0 0 0 2px var(--ink), inset 0 0 0 1px var(--line-light), 0 2px 0 2px rgba(0, 0, 0, 0.35);
+  transform: translateY(3px);
+  box-shadow: var(--face-pressed);
 }
 
 .hud-audio[data-muted='true'] {
-  opacity: 0.6;
+  background: var(--paper-shade);
 }
 
 /* ------------------------------------------------------------------- sac */
 
 .hud-bag {
-  min-width: 104px;
+  min-width: 112px;
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  padding: 7px 10px 8px;
+  gap: 6px;
+  padding: 8px 12px 10px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -374,11 +418,11 @@ button {
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--violet);
 }
 
 .hud-bag-title[data-full='true'] .hud-bag-count {
@@ -386,20 +430,20 @@ button {
 }
 
 .hud-bag-fill {
-  height: 4px;
-  border-radius: 2px;
-  background: linear-gradient(90deg, var(--accent) var(--fill, 0%), var(--ink) var(--fill, 0%));
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--yellow-shade) var(--fill, 0%), var(--paper-shade) var(--fill, 0%));
 }
 
 .hud-bag-fill[data-full='true'] {
-  background: var(--danger);
+  background: var(--coral);
   animation: blink 0.8s steps(2) infinite;
 }
 
 .hud-bag-items {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 
 .hud-bag[data-empty='true'] .hud-bag-items {
@@ -411,34 +455,48 @@ button {
 .hud-toasts {
   position: absolute;
   left: 50%;
-  bottom: calc(var(--safe-bottom) + 92px);
+  bottom: calc(var(--safe-bottom) + 100px);
   transform: translateX(-50%);
   width: min(340px, calc(100% - 24px));
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   pointer-events: none;
 }
 
 .hud-toast {
-  padding: 6px 12px;
-  border-radius: 6px;
-  background: var(--panel-solid);
-  box-shadow: var(--frame);
-  border-left: 4px solid var(--accent);
-  font-size: 18px;
-  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 16px 7px 10px;
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow: var(--face);
+  font-size: 16px;
   text-align: center;
   animation: toast-in 280ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
 }
 
-.hud-toast[data-tone='good'] {
-  border-left-color: var(--good);
+/* La pastille de couleur dit le ton de la bulle. */
+.hud-toast::before {
+  content: '';
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--yellow);
+  box-shadow: inset -2px -2px 0 var(--yellow-shade);
 }
 
-.hud-toast[data-tone='bad'] {
-  border-left-color: var(--danger);
+.hud-toast[data-tone='good']::before {
+  background: var(--mint);
+  box-shadow: inset -2px -2px 0 var(--mint-shade);
+}
+
+.hud-toast[data-tone='bad']::before {
+  background: var(--coral);
+  box-shadow: inset -2px -2px 0 var(--coral-shade);
 }
 
 .hud-toast[data-leaving='true'] {
@@ -466,16 +524,11 @@ button {
   top: 38%;
   left: 50%;
   transform: translate(-50%, -50%);
-  font-size: 120px;
+  font-size: 128px;
+  font-weight: 700;
   line-height: 1;
-  color: var(--danger);
-  text-shadow:
-    4px 0 var(--ink),
-    -4px 0 var(--ink),
-    0 4px var(--ink),
-    0 -4px var(--ink),
-    0 9px var(--danger-dark),
-    0 12px var(--ink);
+  color: var(--coral);
+  text-shadow: 0 8px 0 var(--coral-shade);
   opacity: 0;
   pointer-events: none;
   animation: countdown-hit 900ms cubic-bezier(0.2, 1.3, 0.4, 1) forwards;
@@ -505,6 +558,7 @@ button {
 
 /* -------------------------------------------------------- gains flottants */
 
+/* La bulle de récolte : une capsule blanche, l'icône et le gain. */
 .hud-floats {
   position: absolute;
   inset: 0;
@@ -517,21 +571,19 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 3px;
+  padding: 1px 6px 1px 9px;
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow: 0 3px 0 var(--paper-shade);
   transform: translateX(-50%);
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 700;
-  color: #fff4dc;
-  text-shadow:
-    1px 0 var(--ink),
-    -1px 0 var(--ink),
-    0 1px var(--ink),
-    0 -1px var(--ink),
-    0 2px var(--ink);
+  color: var(--mint-shade);
   animation: hud-float-up 1000ms cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
 }
 
 .hud-float[data-out='true'] {
-  color: var(--accent-light);
+  color: var(--coral-shade);
 }
 
 @keyframes hud-float-up {
@@ -556,11 +608,12 @@ button {
 
 .hud-stats {
   position: absolute;
-  bottom: calc(var(--safe-bottom) + 80px);
+  bottom: calc(var(--safe-bottom) + 88px);
   left: calc(var(--safe-left) + 8px);
   font-family: ui-monospace, monospace;
   font-size: 10px;
-  opacity: 0.7;
+  font-weight: 400;
+  opacity: 0.85;
   font-variant-numeric: tabular-nums;
   white-space: pre;
 }
@@ -571,10 +624,8 @@ button {
 
 /* ------------------------------------------------------------------ icônes */
 
-/* Icônes pixel art : agrandies sans lissage, comme le canvas. */
+/* Les icônes sont des SVG : nettes à toutes les densités, sans rien à régler. */
 .icon {
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
   vertical-align: middle;
   flex: none;
 }
@@ -584,7 +635,6 @@ button {
   align-items: center;
   gap: 5px;
   font-variant-numeric: tabular-nums;
-  font-weight: 600;
 }
 
 .item-amount[data-done='true'] {
@@ -592,38 +642,111 @@ button {
 }
 
 .item-amount[data-done='false'] {
-  color: var(--accent-light);
+  color: var(--orange-shade);
 }
 
 /* ------------------------------------------------------------- boutons pleins */
 
+/*
+ * Un bouton plein : une capsule de couleur, sa face avant plus sombre en
+ * dessous, son reflet en capsule en haut à gauche. Enfoncé, il descend sur sa
+ * face. Aucun contour.
+ */
 .button-primary,
-.button-secondary {
-  min-height: 50px;
-  padding: 0 22px;
+.button-secondary,
+.build-toggle,
+.build-armed button,
+.building-panel-actions button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 0 24px;
   border: none;
-  border-radius: 6px;
-  font-size: 21px;
+  border-radius: 999px;
+  font-size: 20px;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
 }
 
-.button-primary {
-  background: linear-gradient(var(--accent-light) 0 45%, var(--accent) 45% 100%);
+.button-primary::before,
+.build-toggle::before,
+.build-armed button::before,
+.building-panel-actions button::before {
+  content: '';
+  position: absolute;
+  top: 7px;
+  left: 16px;
+  width: 26px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--coral-light);
+  pointer-events: none;
+}
+
+.button-primary,
+.build-toggle {
+  background: var(--coral);
+  color: var(--paper);
+  box-shadow: 0 5px 0 var(--coral-shade);
+}
+
+.button-secondary,
+.build-armed button,
+.building-panel-actions button {
+  background: var(--paper);
   color: var(--ink);
-  box-shadow: 0 0 0 2px var(--ink), inset 0 -4px 0 var(--accent-dark), 0 4px 0 2px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 5px 0 var(--paper-shade);
 }
 
-.button-secondary {
-  background: var(--panel-raised);
-  color: var(--fg);
-  box-shadow: 0 0 0 2px var(--ink), inset 0 -4px 0 rgba(0, 0, 0, 0.35), 0 4px 0 2px rgba(0, 0, 0, 0.35);
+.build-armed button::before,
+.building-panel-actions button::before {
+  display: none;
+}
+
+.build-armed button[data-confirm='true'],
+.building-panel-actions button[data-confirm='true'] {
+  background: var(--mint);
+  color: var(--paper);
+  box-shadow: 0 5px 0 var(--mint-shade);
+}
+
+.build-armed button[data-confirm='true']::before,
+.building-panel-actions button[data-confirm='true']::before {
+  display: block;
+  background: var(--mint-light);
 }
 
 .button-primary:active,
-.button-secondary:active {
+.button-secondary:active,
+.build-toggle:active,
+.build-armed button:active,
+.building-panel-actions button:active {
   transform: translateY(3px);
-  box-shadow: 0 0 0 2px var(--ink), inset 0 -1px 0 rgba(0, 0, 0, 0.3), 0 1px 0 2px rgba(0, 0, 0, 0.35);
+}
+
+.button-primary:active,
+.build-toggle:active {
+  box-shadow: 0 2px 0 var(--coral-shade);
+}
+
+.button-secondary:active,
+.build-armed button:active,
+.building-panel-actions button:active {
+  box-shadow: 0 2px 0 var(--paper-shade);
+}
+
+.build-armed button[data-confirm='true']:active,
+.building-panel-actions button[data-confirm='true']:active {
+  box-shadow: 0 2px 0 var(--mint-shade);
+}
+
+.build-armed button[disabled],
+.building-panel-actions button[disabled] {
+  opacity: 0.45;
+  transform: none;
 }
 
 /* ------------------------------------------------------ menu de construction */
@@ -631,7 +754,7 @@ button {
 .build-menu {
   position: absolute;
   right: calc(var(--safe-right) + 10px);
-  bottom: calc(var(--safe-bottom) + 12px);
+  bottom: calc(var(--safe-bottom) + 14px);
   left: calc(var(--safe-left) + 10px);
   display: flex;
   flex-direction: column;
@@ -650,31 +773,21 @@ button {
 
 /* 56 px minimum : sous cette taille, une cible tactile se rate au pouce. */
 .build-toggle {
-  min-width: 156px;
-  min-height: 58px;
-  border: none;
-  border-radius: 8px;
-  background: linear-gradient(var(--accent-light) 0 45%, var(--accent) 45% 100%);
-  color: var(--ink);
-  font-size: 22px;
-  font-weight: 700;
-  box-shadow: 0 0 0 2px var(--ink), inset 0 -5px 0 var(--accent-dark), 0 5px 0 2px rgba(0, 0, 0, 0.35);
-}
-
-.build-toggle:active {
-  transform: translateY(3px);
-  box-shadow: 0 0 0 2px var(--ink), inset 0 -2px 0 var(--accent-dark), 0 2px 0 2px rgba(0, 0, 0, 0.35);
+  min-width: 164px;
+  min-height: 60px;
+  padding: 0 22px 0 16px;
+  font-size: 21px;
 }
 
 .build-drawer {
   pointer-events: auto;
   width: 100%;
   max-height: 60dvh;
-  padding: 10px 12px 12px;
+  padding: 12px 14px 14px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  background: var(--panel-solid);
+  gap: 10px;
+  border-radius: 26px;
   animation: drawer-in 260ms cubic-bezier(0.2, 1.2, 0.4, 1) both;
 }
 
@@ -694,25 +807,25 @@ button {
 .build-drawer-title {
   font-size: 22px;
   font-weight: 700;
-  color: var(--accent-light);
+  color: var(--violet);
 }
 
 .build-drawer-close,
 .building-panel-close {
-  width: 40px;
-  height: 40px;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
   border: none;
-  border-radius: 6px;
-  background: var(--panel-raised);
-  color: var(--fg);
-  font-size: 20px;
+  border-radius: 50%;
+  background: var(--paper-shade);
 }
 
 .build-drawer-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 10px;
-  padding: 2px;
+  gap: 12px;
+  padding: 2px 2px 8px;
   overflow-y: auto;
   touch-action: pan-y;
 }
@@ -721,33 +834,28 @@ button {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 68px;
-  padding: 8px 10px;
+  min-height: 72px;
+  padding: 8px 12px 8px 8px;
   border: none;
-  border-radius: 6px;
-  background: var(--panel-raised);
-  box-shadow: 0 0 0 2px var(--ink), inset 0 0 0 1px var(--line-light), 0 3px 0 2px rgba(0, 0, 0, 0.3);
-  color: var(--fg);
+  border-radius: 18px;
+  background: var(--paper);
+  box-shadow: 0 0 0 2px var(--paper-shade) inset, 0 4px 0 var(--paper-shade);
+  color: var(--ink);
   text-align: left;
 }
 
 .build-card:active,
 .build-card[data-active='true'] {
-  background: var(--accent);
-  color: var(--ink);
-}
-
-.build-card:active .item-amount,
-.build-card[data-active='true'] .item-amount {
-  color: var(--ink);
+  background: var(--yellow-light);
+  box-shadow: 0 4px 0 var(--yellow-shade);
 }
 
 .build-card .icon-building {
   /* Les bâtiments sont plus hauts que larges : la vignette les loge sans les écraser. */
   object-fit: contain;
-  border-radius: 4px;
-  background: rgba(0, 0, 0, 0.3);
-  box-shadow: inset 0 0 0 1px var(--line);
+  padding: 2px;
+  border-radius: 12px;
+  background: var(--grass);
 }
 
 .build-card-body {
@@ -758,7 +866,7 @@ button {
 }
 
 .build-card-name {
-  font-size: 19px;
+  font-size: 18px;
   font-weight: 700;
   line-height: 1.15;
 }
@@ -771,8 +879,9 @@ button {
 }
 
 .build-card-meta {
-  font-size: 15px;
-  opacity: 0.7;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--muted);
 }
 
 .build-armed {
@@ -781,44 +890,20 @@ button {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 10px;
+  padding: 8px 8px 8px 16px;
+  border-radius: 999px;
 }
 
 .build-armed-label {
   flex: 1;
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 17px;
 }
 
-.build-armed button,
-.building-panel-actions button {
-  min-width: 88px;
+.build-armed button {
+  min-width: 92px;
   min-height: 48px;
-  border: none;
-  border-radius: 6px;
-  background: var(--panel-raised);
-  color: var(--fg);
-  font-size: 20px;
-  font-weight: 700;
-  box-shadow: 0 0 0 2px var(--ink), inset 0 -4px 0 rgba(0, 0, 0, 0.35);
-}
-
-.build-armed button[data-confirm='true'],
-.building-panel-actions button[data-confirm='true'] {
-  background: linear-gradient(#b5e08a 0 45%, var(--good) 45% 100%);
-  color: var(--ink);
-  box-shadow: 0 0 0 2px var(--ink), inset 0 -4px 0 var(--good-dark);
-}
-
-.build-armed button:active,
-.building-panel-actions button:active {
-  transform: translateY(2px);
-}
-
-.build-armed button[disabled],
-.building-panel-actions button[disabled] {
-  opacity: 0.4;
-  transform: none;
+  padding: 0 18px;
+  font-size: 19px;
 }
 
 /* ------------------------------------------------------- fenêtre de bâtiment */
@@ -826,11 +911,11 @@ button {
 .building-panel {
   position: absolute;
   left: 50%;
-  bottom: calc(var(--safe-bottom) + 86px);
+  bottom: calc(var(--safe-bottom) + 92px);
   transform: translateX(-50%);
-  width: min(330px, calc(100vw - 28px));
-  padding: 12px 14px;
-  background: var(--panel-solid);
+  width: min(340px, calc(100vw - 28px));
+  padding: 14px 16px 16px;
+  border-radius: 24px;
   animation: panel-in 220ms cubic-bezier(0.2, 1.3, 0.4, 1) both;
 }
 
@@ -850,8 +935,9 @@ button {
 
 .building-panel h2 {
   margin: 0;
-  font-size: 22px;
-  color: var(--accent-light);
+  font-size: 23px;
+  font-weight: 700;
+  color: var(--violet);
 }
 
 .building-panel-close {
@@ -860,26 +946,34 @@ button {
 
 .building-panel-description {
   margin: 6px 0 10px;
-  font-size: 16px;
+  font-size: 15px;
+  font-weight: 500;
   color: var(--muted);
 }
 
 .building-panel-bar {
-  height: 10px;
-  border-radius: 2px;
-  background: var(--ink);
-  box-shadow: inset 0 0 0 1px var(--line);
+  height: 14px;
+  padding: 2px;
+  border-radius: 999px;
+  background: var(--paper-shade);
   overflow: hidden;
 }
 
 .building-panel-bar div {
+  position: relative;
   height: 100%;
-  background: linear-gradient(var(--accent-light) 0 40%, var(--accent) 40% 100%);
-  transition: width 160ms steps(6);
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--yellow-shade);
+  transition: width 200ms cubic-bezier(0.2, 1.2, 0.4, 1);
 }
 
 .building-panel-bar[data-kind='hp'] div {
-  background: linear-gradient(#f29a86 0 40%, var(--danger) 40% 100%);
+  background: var(--coral);
+}
+
+.building-panel-bar[data-kind='hp'] div::after {
+  background: var(--coral-light);
 }
 
 .building-panel-items {
@@ -897,7 +991,7 @@ button {
 .building-panel-actions {
   display: flex;
   gap: 10px;
-  margin-top: 12px;
+  margin-top: 14px;
 }
 
 .building-panel-actions[hidden] {
@@ -906,6 +1000,8 @@ button {
 
 .building-panel-actions button {
   flex: 1;
+  padding: 0 12px;
+  font-size: 18px;
 }
 
 .building-panel-actions button[hidden] {
@@ -915,7 +1011,7 @@ button {
 .building-panel-lines {
   margin: 8px 0 0;
   font: inherit;
-  font-size: 18px;
+  font-size: 17px;
   font-variant-numeric: tabular-nums;
   white-space: pre-wrap;
 }
@@ -930,7 +1026,7 @@ button {
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(17, 12, 22, 0.72);
+  background: var(--veil);
   pointer-events: auto;
   animation: overlay-in 300ms ease-out both;
 }
@@ -949,11 +1045,12 @@ button {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 12px;
-  width: min(320px, 100%);
-  padding: 22px 22px 20px;
+  gap: 14px;
+  width: min(330px, 100%);
+  padding: 24px 22px 24px;
+  border-radius: 28px;
   text-align: center;
-  background: var(--panel-solid);
+  box-shadow: 0 7px 0 var(--paper-shade);
   animation: panel-pop 360ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
 }
 
@@ -967,51 +1064,53 @@ button {
 .overlay-title {
   margin: 0;
   font-size: 32px;
-  color: var(--accent-light);
+  font-weight: 700;
+  color: var(--violet);
 }
 
 .hud-defeat .overlay-title {
-  color: var(--danger);
+  color: var(--coral);
 }
 
 .overlay-text {
   margin: 0;
+  font-weight: 500;
   color: var(--muted);
 }
 
 .overlay-stats {
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 6px 16px;
+  gap: 8px 16px;
   margin: 4px 0 6px;
-  padding: 12px 14px;
-  border-radius: 4px;
-  background: var(--ink);
+  padding: 12px 16px;
+  border-radius: 18px;
+  background: var(--paper-shade);
   text-align: left;
   font-variant-numeric: tabular-nums;
 }
 
 .overlay-stats dt {
-  color: var(--muted);
+  font-weight: 500;
+  color: var(--violet-shade);
 }
 
 .overlay-stats dd {
   margin: 0;
   font-weight: 700;
   text-align: right;
-  color: var(--accent-light);
+  color: var(--ink);
 }
 
 .hud-defeat {
-  background: radial-gradient(ellipse at center, rgba(60, 12, 12, 0.7), rgba(17, 12, 22, 0.92));
+  background: rgb(217 42 91 / 0.5);
 }
 
 /* ------------------------------------------------------------- écran titre */
 
+/* La carte reste visible derrière un voile léger : on voit le monde où l'on va entrer. */
 .title-screen {
-  background:
-    radial-gradient(ellipse at 50% 35%, rgba(158, 240, 26, 0.12), transparent 60%),
-    linear-gradient(rgba(17, 12, 22, 0.45), rgba(17, 12, 22, 0.92) 70%);
+  background: rgb(43 45 143 / 0.3);
 }
 
 .title-screen[data-leaving='true'] {
@@ -1035,31 +1134,27 @@ button {
 }
 
 .title-kicker {
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: 0.3em;
+  padding: 4px 16px;
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow: 0 3px 0 var(--paper-shade);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: var(--radioactive);
-  text-shadow: 0 0 12px rgba(158, 240, 26, 0.6);
+  color: var(--violet);
 }
 
+/* Le logo : jaune, sur sa face orange, puis indigo — des volumes, pas des contours. */
 .title-logo {
   margin: 0;
-  font-size: clamp(56px, 17vw, 80px);
+  font-size: clamp(56px, 17vw, 82px);
   font-weight: 700;
   line-height: 0.95;
-  color: var(--accent-light);
+  color: var(--yellow);
   text-shadow:
-    3px 0 var(--ink),
-    -3px 0 var(--ink),
-    0 3px var(--ink),
-    0 -3px var(--ink),
-    3px 3px var(--ink),
-    -3px -3px var(--ink),
-    3px -3px var(--ink),
-    -3px 3px var(--ink),
-    0 7px var(--accent-dark),
-    0 9px var(--ink);
+    0 5px 0 var(--yellow-shade),
+    0 10px 0 var(--ink);
   animation: logo-float 3.2s ease-in-out infinite;
 }
 
@@ -1071,15 +1166,19 @@ button {
 
 .title-pitch {
   margin: 4px 0 6px;
-  font-size: 19px;
+  padding: 14px 18px;
+  border-radius: 22px;
+  background: var(--paper);
+  box-shadow: var(--face);
+  font-size: 17px;
+  font-weight: 500;
   line-height: 1.45;
-  color: var(--fg);
-  text-shadow: 0 2px 0 var(--ink);
+  color: var(--ink);
 }
 
 .title-play {
-  min-width: 200px;
-  min-height: 60px;
+  min-width: 210px;
+  min-height: 62px;
   font-size: 28px;
   animation: play-pulse 1.4s ease-in-out infinite;
 }
@@ -1093,15 +1192,16 @@ button {
 .title-controls {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   margin: 8px 0 0;
-  padding: 10px 14px;
-  border-radius: 6px;
-  background: rgba(27, 21, 35, 0.8);
-  box-shadow: var(--frame);
+  padding: 12px 16px;
+  border-radius: 22px;
+  background: var(--paper);
+  box-shadow: var(--face);
   list-style: none;
-  font-size: 16px;
-  color: var(--muted);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink);
   text-align: left;
 }
 
@@ -1109,6 +1209,10 @@ button {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.title-controls .icon-building {
+  object-fit: contain;
 }
 
 @media (prefers-reduced-motion: reduce) {

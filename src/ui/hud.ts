@@ -23,9 +23,10 @@
 import { BUILDINGS } from '../data/buildings.ts';
 import { ITEMS, type ItemId } from '../data/items.ts';
 import { LORE } from '../data/lore.ts';
+import type { AtlasStats } from '../render/spriteLibrary.ts';
 import type { PlacementRejection } from '../sim/commands.ts';
 import { TICKS_PER_SECOND, siteMissing, type World } from '../sim/world.ts';
-import { itemAmount, itemIcon } from './icons.ts';
+import { itemAmount, itemIcon, uiIcon } from './icons.ts';
 
 const REJECTION_LABELS: Record<PlacementRejection, string> = {
   occupied: 'Emplacement déjà occupé',
@@ -58,6 +59,7 @@ export class Hud {
   private readonly questTitle: HTMLElement;
   private readonly questBody: HTMLElement;
   private readonly hint: HTMLElement;
+  private readonly hintText: HTMLElement;
   private readonly bag: HTMLElement;
   private readonly floats: HTMLElement;
   private readonly stats: HTMLElement;
@@ -93,6 +95,8 @@ export class Hud {
 
     this.hint = element('div', 'hud-hint');
     this.hint.hidden = true;
+    this.hintText = element('span', 'hud-hint-text');
+    this.hint.append(uiIcon('hint', 22), this.hintText);
 
     this.bag = element('div', 'panel hud-bag');
     this.floats = element('div', 'hud-floats');
@@ -107,7 +111,7 @@ export class Hud {
     this.pauseButton = element('button', 'hud-button hud-pause');
     this.pauseButton.type = 'button';
     this.pauseButton.setAttribute('aria-label', 'Pause');
-    this.pauseButton.textContent = 'II';
+    this.pauseButton.append(uiIcon('pause'));
 
     this.audioButton = element('button', 'hud-button hud-audio');
     this.audioButton.type = 'button';
@@ -198,7 +202,7 @@ export class Hud {
 
   /** L'icône du bouton son suit l'état du moteur audio. */
   public setMuted(muted: boolean): void {
-    this.audioButton.textContent = muted ? '🔇' : '🔊';
+    this.audioButton.replaceChildren(uiIcon(muted ? 'soundOff' : 'soundOn'));
     this.audioButton.dataset['muted'] = String(muted);
   }
 
@@ -250,14 +254,14 @@ export class Hud {
     window.setTimeout(() => floater.remove(), FLOAT_MS);
   }
 
-  /** `fps` et `chunks` viennent du renderer : le monde ne les connaît pas. */
-  public update(fps: number, chunks: number): void {
+  /** `fps`, `chunks` et `atlas` viennent du renderer : le monde ne les connaît pas. */
+  public update(fps: number, chunks: number, atlas: AtlasStats): void {
     this.updateQuest();
     this.updateHint();
     this.updateBag();
     this.root.dataset['danger'] = String(this.mutantCount() > 0 && !this.world.defeated);
 
-    if (this.debug) this.updateStats(fps, chunks);
+    if (this.debug) this.updateStats(fps, chunks, atlas);
   }
 
   private mutantCount(): number {
@@ -322,7 +326,9 @@ export class Hud {
     this.questTitle.textContent = mutants > 0 ? 'Attaque !' : 'Défendre la colonie';
 
     const hp = element('div', 'hud-meter hud-meter-hp');
-    const hpLabel = text('hud-meter-label', `♥ ${name}`);
+    const hpLabel = text('hud-meter-label', name);
+
+    hpLabel.prepend(uiIcon('heart', 18));
     const hpBar = bar(hall.hp / max);
     const hpValue = text('hud-meter-value', `${hall.hp}/${max}`);
 
@@ -333,11 +339,7 @@ export class Hud {
     const wave = text('hud-quest-wave', status);
 
     wave.dataset['urgent'] = String(mutants > 0 || seconds <= WAVE_WARNING_SECONDS);
-    line.append(
-      wave,
-      text('hud-quest-chip', `☺ ${people + workers}`),
-      text('hud-quest-chip', `☠ ${world.kills}`),
-    );
+    line.append(wave, chip('people', people + workers, 'Habitants'), chip('mutant', world.kills, 'Mutants abattus'));
     this.questBody.replaceChildren(hp, line);
   }
 
@@ -363,14 +365,14 @@ export class Hud {
       if (siteMissing(hall) === 0) return 'Tapez le chantier, puis « Construire ».';
       if (inventory.freeSpace() <= 0) return 'Sac plein ! Marchez contre le chantier pour livrer.';
       if (!this.harvestedWood && needs('wood')) return 'Marchez contre un arbre pour couper du bois.';
-      if (!this.harvestedStone && needs('stone')) return 'Il faut de la pierre : foncez dans un rocher gris.';
+      if (!this.harvestedStone && needs('stone')) return 'Il faut de la pierre : foncez dans un rocher rose.';
       if (carries && !this.delivered) return 'Marchez contre le chantier pour livrer — ou tapez-le.';
       return null;
     }
 
     const towers = [...world.entities.values()].some((entity) => entity.kind === 'tower');
 
-    if (world.wave === 0 && !towers) return 'Les mutants arrivent : construisez une tour de guet 🔨';
+    if (world.wave === 0 && !towers) return 'Les mutants arrivent : construisez une tour de guet.';
     if (this.mutantCount() > 0 && world.wave <= 2) return 'Restez près d’eux : votre arc tire tout seul.';
     return null;
   }
@@ -381,7 +383,7 @@ export class Hud {
     if (hint === this.lastHint) return;
     this.lastHint = hint;
     this.hint.hidden = hint === '';
-    this.hint.textContent = hint;
+    this.hintText.textContent = hint;
 
     // Relance l'animation d'entrée à chaque nouveau conseil.
     this.hint.style.animation = 'none';
@@ -438,11 +440,12 @@ export class Hud {
 
   /* ------------------------------------------------------------------ debug */
 
-  private updateStats(fps: number, chunks: number): void {
+  private updateStats(fps: number, chunks: number, atlas: AtlasStats): void {
     const { cx, cy } = this.world.playerChunk();
     const lines = [
       `tick ${this.world.tickCount}   ${fps.toFixed(0)} fps   seed ${this.world.seed}`,
-      `chunk ${cx},${cy}   ${chunks} bakés   ${this.world.resources.size()} tuiles entamées`,
+      `chunk ${cx},${cy}   ${chunks} blocs de sol   ${this.world.resources.size()} tuiles entamées`,
+      `atlas ${atlas.images} images → ${atlas.pages} texture(s), ${atlas.megapixels.toFixed(1)} Mpx @${atlas.resolution}x, ${atlas.ms} ms`,
       `${this.world.entities.size} bâtiment(s)   ${this.world.mobiles.size} mobile(s)   ${this.world.pendingWakes()} réveil(s)`,
     ];
 
@@ -489,6 +492,15 @@ function bar(ratio: number): HTMLElement {
   fill.style.width = `${Math.round(Math.max(0, Math.min(1, ratio)) * 100)}%`;
   track.append(fill);
   return track;
+}
+
+/** Une pastille « pictogramme + nombre » : habitants, mutants abattus. */
+function chip(icon: 'people' | 'mutant', value: number, label: string): HTMLElement {
+  const node = text('hud-quest-chip', String(value));
+
+  node.title = label;
+  node.prepend(uiIcon(icon, 18));
+  return node;
 }
 
 /** Une ligne de quête : icône, barre, « 7/20 ». */

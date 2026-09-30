@@ -11,15 +11,15 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
-    <meta name="theme-color" content="#11161d" />
+    <meta name="theme-color" content="#93e8ae" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <!--
-      L'icône du jeu vient de SalvadorCardona/brand-assets ; `favicon.png` en
-      est la réduction 64×64, pour ne pas télécharger 1024×1024 à chaque
-      chargement. Vite préfixe ces chemins absolus par sa `base`, mais pas ceux
-      du manifeste : celui-ci est un fichier de `public/`, copié tel quel, et
-      ses chemins y sont donc relatifs.
+      L'icône du jeu est une scène SVG de `src/art/brand.ts`, rastérisée par
+      `npm run art:brand` : `icon.png` en 1024×1024, `favicon.png` en 64×64,
+      pour ne pas télécharger 1024×1024 à chaque chargement. Vite préfixe ces
+      chemins absolus par sa `base`, mais pas ceux du manifeste : celui-ci est
+      un fichier de `public/`, copié tel quel, et ses chemins y sont donc relatifs.
     -->
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/icon.png" />

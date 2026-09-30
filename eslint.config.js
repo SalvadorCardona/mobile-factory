@@ -28,14 +28,16 @@ export default tseslint.config(
 
   /*
    * Le garde-fou. C'est la seule règle non négociable du projet : `sim/` et
-   * `data/` ne connaissent ni Pixi, ni le rendu, ni l'UI, ni le DOM.
+   * `data/` ne connaissent ni Pixi, ni le rendu, ni l'UI, ni le DOM. `art/`,
+   * les sprites en SVG, non plus : ce sont des chaînes, lues aussi par les
+   * tests en Node.
    *
    * Sans elle, la règle s'érode en trois semaines et on perd d'un coup les
    * tests headless, la sauvegarde par sérialisation et la possibilité de
    * déplacer la simulation dans un Web Worker.
    */
   {
-    files: ['src/sim/**', 'src/data/**'],
+    files: ['src/sim/**', 'src/data/**', 'src/art/**'],
     rules: {
       /*
        * Variante typescript-eslint plutôt que la règle de base : elle voit

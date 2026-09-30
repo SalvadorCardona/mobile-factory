@@ -6,18 +6,20 @@
  * se perd dès qu'on part couper du bois. Un jeu pro ne laisse pas le joueur
  * deviner — il montre la direction.
  *
- * Deux sortes de repères, en pixels écran, plaqués contre le bord :
- * - une flèche rouge par mutant hors champ, plus opaque quand il approche ;
- * - une flèche ambre vers la mairie (ou son chantier) quand elle sort du
- *   champ, qui pulse tant que le chantier attend quelque chose.
+ * Deux sortes de repères, en pixels écran, plaqués contre le bord : une
+ * pastille ronde en trois tons, sans contour, qui pointe vers sa cible —
+ * - vert fluo, avec un gros œil, par mutant hors champ (la teinte des
+ *   mutants), plus opaque quand il approche ;
+ * - jaune, avec un petit toit, vers la mairie (ou son chantier) quand elle
+ *   sort du champ, qui pulse tant que le chantier attend quelque chose.
  *
  * Tout est redessiné à chaque frame dans un seul `Graphics` : quelques
- * triangles, pas de quoi justifier un pool.
+ * disques, pas de quoi justifier un pool.
  */
 
 import { Container, Graphics } from 'pixi.js';
 import { TILE_SIZE } from '../core/grid.ts';
-import { PALETTE } from '../data/artDirection.ts';
+import { PALETTE, hex, type Tone } from '../data/artDirection.ts';
 import type { World } from '../sim/world.ts';
 import type { Camera } from './camera.ts';
 
@@ -33,8 +35,6 @@ const MARGIN_SIDE = 22;
 /** Écart entre le bord du HUD et la pointe d'une flèche. */
 const INSET_GAP = 18;
 
-const DANGER = 0xe2725b;
-const HOME = PALETTE.accent;
 
 /** Au-delà de cette distance en tuiles, un mutant hors champ est dessiné au minimum d'opacité. */
 const FAR_TILES = 24;
@@ -77,7 +77,7 @@ export class IndicatorLayer {
       const distance = Math.hypot(x - px, y - py) / TILE_SIZE;
       const near = 1 - Math.min(1, distance / FAR_TILES);
 
-      this.arrow(camera, x, y - 16, DANGER, 0.45 + near * 0.55, 1);
+      this.arrow(camera, x, y - 16, 'toxic', 0.45 + near * 0.55, 1);
     }
 
     const hall = this.world.entities.get(this.world.townHallId);
@@ -87,12 +87,12 @@ export class IndicatorLayer {
       const y = (hall.ty + hall.height / 2) * TILE_SIZE;
       const pulse = hall.kind === 'site' ? 1 + Math.sin(this.elapsed / 180) * 0.12 : 1;
 
-      this.arrow(camera, x, y, HOME, 0.95, pulse, true);
+      this.arrow(camera, x, y, 'yellow', 1, pulse, true);
     }
   }
 
   /** Une flèche au bord, pointée vers (x, y) monde — rien si le point est à l'écran. */
-  private arrow(camera: Camera, x: number, y: number, color: number, opacity: number, scale: number, home = false): void {
+  private arrow(camera: Camera, x: number, y: number, tone: Tone, opacity: number, scale: number, home = false): void {
     const screen = camera.worldToScreen(x, y);
     const width = camera.viewWidth;
     const height = camera.viewHeight;
@@ -122,25 +122,32 @@ export class IndicatorLayer {
       ey + sin * along + cos * across,
     ];
 
-    const tip = point(size, 0);
-    const back1 = point(-size * 0.7, size * 0.8);
-    const back2 = point(-size * 0.7, -size * 0.8);
+    const colors = PALETTE[tone];
+    const g = this.graphics;
+    const [cx0, cy0] = point(-size * 0.4, 0);
+    const radius = 11 * scale;
 
-    this.graphics
-      .poly([...tip, ...back1, ...back2])
-      .fill({ color, alpha: opacity })
-      .stroke({ color: PALETTE.outline, width: 2, alpha: opacity });
+    // La pointe, puis la pastille : ombre en bas à droite, dessus, reflet en haut à gauche.
+    g.poly([...point(size, 0), ...point(-size * 0.2, size * 0.75), ...point(-size * 0.2, -size * 0.75)]).fill({
+      color: hex(colors.shade),
+      alpha: opacity,
+    });
+    g.circle(cx0, cy0, radius).fill({ color: hex(colors.shade), alpha: opacity });
+    g.circle(cx0 - 1, cy0 - 1.2, radius - 1.6).fill({ color: hex(colors.base), alpha: opacity });
+    g.roundRect(cx0 - radius * 0.6, cy0 - radius * 0.62, radius * 0.6, radius * 0.26, radius * 0.13).fill({
+      color: hex(colors.light),
+      alpha: opacity,
+    });
 
     if (home) {
-      // Un petit toit derrière la flèche : c'est la maison, pas un ennemi.
-      const [hx, hy] = point(-size * 1.9, 0);
-
-      this.graphics
-        .rect(hx - 5, hy - 2, 10, 7)
-        .fill({ color: PALETTE.plaster, alpha: opacity })
-        .poly([hx - 7, hy - 1, hx, hy - 8, hx + 7, hy - 1])
-        .fill({ color: PALETTE.roof, alpha: opacity })
-        .stroke({ color: PALETTE.outline, width: 1.5, alpha: opacity });
+      // Un petit toit corail et sa porte : c'est la maison, pas un ennemi.
+      g.poly([cx0 - 6.5, cy0, cx0, cy0 - 6.5, cx0 + 6.5, cy0]).fill({ color: hex(PALETTE.coral.base), alpha: opacity });
+      g.roundRect(cx0 - 4.5, cy0, 9, 6, 2).fill({ color: hex(PALETTE.yellow.light), alpha: opacity });
+      g.roundRect(cx0 - 1.5, cy0 + 1.5, 3, 4.5, 1.5).fill({ color: hex(PALETTE.violet.shade), alpha: opacity });
+    } else {
+      // Un gros œil de mutant, qui louche.
+      g.circle(cx0, cy0, 5).fill({ color: hex(PALETTE.paper.base), alpha: opacity });
+      g.circle(cx0 + 1.2, cy0 + 1.3, 2.3).fill({ color: hex(PALETTE.ink.base), alpha: opacity });
     }
   }
 

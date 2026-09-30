@@ -126,14 +126,19 @@ export class Camera {
    * l'écran : il est baké un cran à l'avance, hors du champ.
    */
   public visibleChunks(margin = 1): ChunkBounds {
+    return this.visibleCells(CHUNK_SIZE, margin);
+  }
+
+  /** Cellules carrées de `size` pixels monde intersectant le viewport, marge comprise. */
+  public visibleCells(size: number, margin = 1): ChunkBounds {
     const halfW = this.viewWidth / (2 * this.zoom);
     const halfH = this.viewHeight / (2 * this.zoom);
 
     return {
-      minCx: floorDiv(this.x - halfW, CHUNK_SIZE) - margin,
-      minCy: floorDiv(this.y - halfH, CHUNK_SIZE) - margin,
-      maxCx: floorDiv(this.x + halfW, CHUNK_SIZE) + margin,
-      maxCy: floorDiv(this.y + halfH, CHUNK_SIZE) + margin,
+      minCx: floorDiv(this.x - halfW, size) - margin,
+      minCy: floorDiv(this.y - halfH, size) - margin,
+      maxCx: floorDiv(this.x + halfW, size) + margin,
+      maxCy: floorDiv(this.y + halfH, size) + margin,
     };
   }
 }

@@ -3,23 +3,23 @@
  *
  * TypeScript attrape déjà les ids inconnus. Ce qu'il n'attrape pas, ce sont les
  * incohérences entre tables : une recette dont le bâtiment n'existe plus, une
- * quantité nulle, un libellé dupliqué, une planche de sprites dont le
- * placeholder n'a pas la taille annoncée. Tout ça se voit ici, au chargement,
+ * quantité nulle, un libellé dupliqué, un sprite à qui il manque un morceau
+ * ou qui enfreint la direction artistique. Tout ça se voit ici, au chargement,
  * plutôt qu'en jeu trois semaines plus tard.
  *
  * Plus tard s'ajouteront les cycles dans l'arbre techno et les déblocages en
  * double, quand `technologies.ts` existera.
  */
 
-import { ART_PIXELS_PER_TILE, PALETTE } from './artDirection.ts';
+import { TILE_SIZE } from '../core/grid.ts';
+import { auditSvg } from './artDirection.ts';
 import { BUILDINGS } from './buildings.ts';
 import { ENEMIES, WAVES } from './enemies.ts';
 import { ICON_SIZE, ITEM_ICONS } from './icons.ts';
 import { ITEMS } from './items.ts';
-import { PIXEL_MAPS } from './pixelmaps.ts';
 import { RECIPES } from './recipes.ts';
 import { RESOURCES } from './resources.ts';
-import { SPRITES, type AnimationProto } from './sprites.ts';
+import { BUILDING_PARTS, RESOURCE_PARTS, SPRITES, WALKER_PARTS, type SpriteProto } from './sprites.ts';
 import { WEAPONS } from './weapons.ts';
 
 export function validatePrototypes(): string[] {
@@ -30,27 +30,13 @@ export function validatePrototypes(): string[] {
       errors.push(`ITEMS.${id} : stack doit être strictement positif`);
     }
 
-    // TypeScript garantit qu'une icône existe ; on vérifie ici qu'elle a la bonne taille et sa palette.
+    // TypeScript garantit qu'une icône existe ; on vérifie ici son cadre et la direction artistique.
     const icon = ITEM_ICONS[id as keyof typeof ITEM_ICONS];
 
-    if (icon.rows.length !== ICON_SIZE) {
-      errors.push(`ITEM_ICONS.${id} : ${icon.rows.length} lignes au lieu de ${ICON_SIZE}`);
+    if (!icon.includes(`width="${ICON_SIZE}" height="${ICON_SIZE}"`)) {
+      errors.push(`ITEM_ICONS.${id} : l'icône doit faire ${ICON_SIZE} × ${ICON_SIZE}`);
     }
-    for (const [y, row] of icon.rows.entries()) {
-      if (row.length !== ICON_SIZE) {
-        errors.push(`ITEM_ICONS.${id} ligne ${y} : ${row.length} pixels au lieu de ${ICON_SIZE}`);
-      }
-      for (const char of row) {
-        if (char === '.') continue;
-
-        const key = icon.palette[char];
-
-        if (key === undefined || !(key in PALETTE)) {
-          errors.push(`ITEM_ICONS.${id} : caractère « ${char} » hors palette`);
-          break;
-        }
-      }
-    }
+    for (const problem of auditSvg(icon)) errors.push(`ITEM_ICONS.${id} : ${problem}`);
   }
 
   for (const [id, building] of Object.entries(BUILDINGS)) {
@@ -83,20 +69,23 @@ export function validatePrototypes(): string[] {
     if (!(building.sprite in SPRITES)) {
       errors.push(`BUILDINGS.${id} : planche inconnue « ${building.sprite} »`);
     } else {
-      const sprite = SPRITES[building.sprite];
-      const expectedW = building.width * ART_PIXELS_PER_TILE;
-      const expectedH = building.height * ART_PIXELS_PER_TILE;
+      const sprite: SpriteProto = SPRITES[building.sprite];
+      const expectedW = building.width * TILE_SIZE;
+      const expectedH = building.height * TILE_SIZE;
 
-      // Vue 3/4 : aussi large que l'emprise, au moins aussi haute — le toit dépasse.
-      if (sprite.frameWidth !== expectedW || sprite.frameHeight < expectedH) {
+      // Vue 3/4 : aussi large que l'emprise, au moins aussi haut — le toit dépasse.
+      if (sprite.width !== expectedW || sprite.height < expectedH) {
         errors.push(
-          `BUILDINGS.${id} : la planche « ${building.sprite} » fait ` +
-            `${sprite.frameWidth}×${sprite.frameHeight}, l'emprise demande ${expectedW} de large ` +
+          `BUILDINGS.${id} : le sprite « ${building.sprite} » fait ` +
+            `${sprite.width}×${sprite.height}, l'emprise demande ${expectedW} de large ` +
             `et au moins ${expectedH} de haut`,
         );
       }
       if (sprite.anchorX !== 0 || sprite.anchorY !== 1) {
-        errors.push(`BUILDINGS.${id} : la planche « ${building.sprite} » doit être ancrée en (0, 1)`);
+        errors.push(`BUILDINGS.${id} : le sprite « ${building.sprite} » doit être ancré en (0, 1)`);
+      }
+      for (const part of BUILDING_PARTS) {
+        if (!(part in sprite.parts)) errors.push(`BUILDINGS.${id} : le sprite « ${building.sprite} » n'a pas de morceau « ${part} »`);
       }
     }
   }
@@ -145,16 +134,16 @@ export function validatePrototypes(): string[] {
       errors.push(`RESOURCES.${id} : quantité ou cadence nulle`);
     }
     if ((resource.sprites as readonly string[]).length === 0) {
-      errors.push(`RESOURCES.${id} : aucune planche`);
+      errors.push(`RESOURCES.${id} : aucun sprite`);
     }
     for (const sprite of resource.sprites) {
       if (!(sprite in SPRITES)) {
-        errors.push(`RESOURCES.${id} : planche inconnue « ${sprite} »`);
+        errors.push(`RESOURCES.${id} : sprite inconnu « ${sprite} »`);
         continue;
       }
-      for (const stage of ['full', 'damaged']) {
-        if (!(stage in SPRITES[sprite].animations)) {
-          errors.push(`RESOURCES.${id} : la planche « ${sprite} » n'a pas d'animation « ${stage} »`);
+      for (const part of RESOURCE_PARTS) {
+        if (!(part in SPRITES[sprite].parts)) {
+          errors.push(`RESOURCES.${id} : le sprite « ${sprite} » n'a pas de morceau « ${part} »`);
         }
       }
     }
@@ -164,15 +153,15 @@ export function validatePrototypes(): string[] {
     if (enemy.hp <= 0 || enemy.speed <= 0 || enemy.damage <= 0 || enemy.attackTicks <= 0) {
       errors.push(`ENEMIES.${id} : points de vie, vitesse, dégâts ou cadence nuls`);
     }
-    if (enemy.halfW <= 0 || enemy.halfH <= 0 || enemy.halfW * 2 > ART_PIXELS_PER_TILE * 2) {
+    if (enemy.halfW <= 0 || enemy.halfH <= 0 || enemy.halfW * 2 > TILE_SIZE) {
       errors.push(`ENEMIES.${id} : boîte de collision invalide`);
     }
     if (!(enemy.sprite in SPRITES)) {
-      errors.push(`ENEMIES.${id} : planche inconnue « ${enemy.sprite} »`);
+      errors.push(`ENEMIES.${id} : sprite inconnu « ${enemy.sprite} »`);
     } else {
-      for (const name of ['idleDown', 'walkDown', 'idleUp', 'walkUp', 'idleSide', 'walkSide']) {
-        if (!(name in SPRITES[enemy.sprite].animations)) {
-          errors.push(`ENEMIES.${id} : la planche « ${enemy.sprite} » n'a pas d'animation « ${name} »`);
+      for (const part of WALKER_PARTS) {
+        if (!(part in SPRITES[enemy.sprite].parts)) {
+          errors.push(`ENEMIES.${id} : le sprite « ${enemy.sprite} » n'a pas de morceau « ${part} »`);
         }
       }
     }
@@ -188,53 +177,21 @@ export function validatePrototypes(): string[] {
     errors.push('WAVES : distances ou délais incohérents');
   }
 
-  for (const [id, sprite] of Object.entries(SPRITES)) {
-    const map = PIXEL_MAPS[id as keyof typeof PIXEL_MAPS];
+  for (const [id, sprite] of Object.entries(SPRITES) as [string, SpriteProto][]) {
+    const frame = `width="${sprite.width}" height="${sprite.height}"`;
 
-    const animations = sprite.animations as Record<string, AnimationProto>;
-
-    for (const [name, animation] of Object.entries(animations)) {
-      if (animation.frames <= 0 || animation.fps <= 0) {
-        errors.push(`SPRITES.${id}.${name} : frames ou fps nul`);
+    for (const [part, source] of Object.entries(sprite.parts)) {
+      // Tous les morceaux d'un sprite partagent son cadre : c'est ce qui les superpose.
+      if (!source.startsWith('<svg') || !source.includes(frame)) {
+        errors.push(`SPRITES.${id}.${part} : le SVG doit avoir le cadre du sprite (${sprite.width}×${sprite.height})`);
       }
-
-      const frames = map.animations[name];
-
-      if (!frames) {
-        errors.push(`PIXEL_MAPS.${id} : animation « ${name} » manquante`);
-        continue;
-      }
-      if (frames.length !== animation.frames) {
-        errors.push(
-          `PIXEL_MAPS.${id}.${name} : ${frames.length} image(s), la planche en annonce ${animation.frames}`,
-        );
-      }
-      for (const [index, rows] of frames.entries()) {
-        if (rows.length !== sprite.frameHeight) {
-          errors.push(`PIXEL_MAPS.${id}.${name}[${index}] : ${rows.length} lignes au lieu de ${sprite.frameHeight}`);
-        }
-        for (const [y, row] of rows.entries()) {
-          if (row.length !== sprite.frameWidth) {
-            errors.push(
-              `PIXEL_MAPS.${id}.${name}[${index}] ligne ${y} : ${row.length} pixels au lieu de ${sprite.frameWidth}`,
-            );
-          }
-          for (const char of row) {
-            if (char === '.') continue;
-
-            const key = map.palette[char];
-
-            if (key === undefined) {
-              errors.push(`PIXEL_MAPS.${id}.${name}[${index}] : caractère « ${char} » hors palette`);
-              break;
-            }
-            if (!(key in PALETTE)) {
-              errors.push(`PIXEL_MAPS.${id} : couleur « ${key} » inconnue de la direction artistique`);
-              break;
-            }
-          }
-        }
-      }
+      for (const problem of auditSvg(source)) errors.push(`SPRITES.${id}.${part} : ${problem}`);
+    }
+    for (const part of Object.keys(sprite.pivots ?? {})) {
+      if (!(part in sprite.parts)) errors.push(`SPRITES.${id} : pivot d'un morceau inconnu « ${part} »`);
+    }
+    if (sprite.anchorX < 0 || sprite.anchorX > 1 || sprite.anchorY < 0 || sprite.anchorY > 1) {
+      errors.push(`SPRITES.${id} : ancre hors du cadre`);
     }
   }
 
