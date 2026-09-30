@@ -29,7 +29,7 @@ import { World } from './world.ts';
  * `WorldState` ; une migration de l'ancienne version se branche alors dans
  * `decodeSave`, sinon l'ancienne sauvegarde est ignorée.
  */
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 /** Une entité telle qu'elle est rangée : son coffre devient un simple stock. */
 export type SavedEntity = Stored<Entity>;
@@ -59,6 +59,8 @@ export interface WorldState {
   contactTicks: number;
   wave: number;
   nextWaveTick: number;
+  /** Direction, en radians, d'où viendra la prochaine vague. */
+  nextWaveHeading: number;
   kills: number;
   defeated: boolean;
   defeatTick: number;
@@ -156,6 +158,7 @@ function parseState(raw: unknown): WorldState {
     contactTicks: int(state['contactTicks']),
     wave: int(state['wave']),
     nextWaveTick: int(state['nextWaveTick']),
+    nextWaveHeading: finite(state['nextWaveHeading']),
     kills: int(state['kills']),
     defeated: bool(state['defeated']),
     defeatTick: int(state['defeatTick']),
@@ -248,6 +251,7 @@ function parseMobile(raw: unknown): Mobile {
         proto: oneOf(mobile['proto'], ENEMIES) as EnemyId,
         hp: finite(mobile['hp']),
         attackCooldown: int(mobile['attackCooldown']),
+        emerge: int(mobile['emerge']),
       };
     case 'beast': {
       const state = mobile['state'];
@@ -316,6 +320,8 @@ function parseMobile(raw: unknown): Mobile {
         job: mobile['job'] === null ? null : parseJob(mobile['job']),
         searchTicks: int(mobile['searchTicks']),
       };
+    case 'pickup':
+      return { ...base, kind: 'pickup', item: oneOf(mobile['item'], ITEMS) as ItemId, ttl: int(mobile['ttl']) };
     default:
       throw new SaveError(`mobile inconnu : ${String(mobile['kind'])}`);
   }

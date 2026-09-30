@@ -18,6 +18,7 @@ function mutantAt(x: number, y: number): Mutant {
     moving: false,
     hp: ENEMIES.mutant.hp,
     attackCooldown: 0,
+    emerge: 0,
   };
 }
 

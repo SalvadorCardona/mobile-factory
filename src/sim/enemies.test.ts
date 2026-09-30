@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_SIZE, worldToTile } from '../core/grid.ts';
 import { BUILDINGS, NURSERY_BIRTH_TICKS } from '../data/buildings.ts';
-import { ENEMIES, WAVES, waveSize } from '../data/enemies.ts';
+import { ENEMIES, MUTANT_LOOT, WAVES, waveSize } from '../data/enemies.ts';
 import type { ItemId } from '../data/items.ts';
 import { WEAPONS } from '../data/weapons.ts';
+import { compassOf } from './enemies.ts';
 import { BUILD_REACH_TILES } from './player.ts';
-import type { Entity, EntityId, Mutant } from './types.ts';
+import { deserialize, serialize } from './save.ts';
+import type { Entity, EntityId, Mutant, Pickup } from './types.ts';
 import { World, siteMissing } from './world.ts';
 
 /** Place Adam sur une tuile libre collée à l'emprise, et renvoie l'axe qui pousse vers elle. */
@@ -92,6 +94,15 @@ function mutants(world: World): Mutant[] {
   return [...world.mobiles.values()].filter((mobile): mobile is Mutant => mobile.kind === 'mutant');
 }
 
+/** Laisse les mutants sortir de leur flaque, Adam au loin pour que son arc n'y touche pas, puis le ramène. */
+function waitEmergence(world: World): void {
+  const { x } = world.player;
+
+  world.player.x += 60 * TILE_SIZE;
+  for (let i = 0; i < 400 && mutants(world).some((mutant) => mutant.emerge > 0); i += 1) world.tick();
+  world.player.x = x;
+}
+
 /** Un monde dont la mairie est debout, et le tick où elle l'est devenue. */
 function worldWithTownHall(seed = 7): World {
   const world = new World(seed);
@@ -171,6 +182,205 @@ describe('vagues', () => {
   });
 });
 
+describe('mise en scène des vagues', () => {
+  it('annonce la vague trois secondes avant : son numéro, son effectif, d’où elle vient', () => {
+    const world = worldWithTownHall();
+    const center = townHallCenter(world);
+    const heading = world.nextWaveHeading;
+    const announces: { seconds: number; wave: number; count: number; from: string; x: number; y: number }[] = [];
+
+    world.events.on('waveCountdown', (event) => announces.push(event));
+    world.player.x += 60 * TILE_SIZE;
+
+    for (let i = 0; i < WAVES.firstDelay; i += 1) world.tick();
+
+    expect(announces.map(({ seconds }) => seconds)).toEqual([3, 2, 1]);
+    for (const announce of announces) {
+      expect(announce).toMatchObject({ wave: 1, count: waveSize(1), from: compassOf(heading) });
+    }
+    expect(Math.atan2(announces[0]!.y - center.y, announces[0]!.x - center.x)).toBeCloseTo(
+      Math.atan2(Math.sin(heading), Math.cos(heading)),
+    );
+
+    // Les mutants sortent bien du côté annoncé.
+    for (const mutant of mutants(world)) {
+      const angle = Math.atan2(mutant.y - center.y, mutant.x - center.x) - heading;
+      const gap = Math.abs(Math.atan2(Math.sin(angle), Math.cos(angle)));
+
+      expect(gap).toBeLessThanOrEqual(WAVES.spread + 1e-9);
+    }
+
+    // La suivante a déjà tiré son côté : l'annonce pourra le dire.
+    expect(world.nextWaveHeading).not.toBe(heading);
+  });
+
+  it('fait sortir chaque mutant de sa flaque, immobile et hors d’atteinte, l’un après l’autre', () => {
+    const world = worldWithTownHall();
+    let shots = 0;
+
+    world.events.on('arrowShot', () => (shots += 1));
+
+    // Une vague de trois : on avance le compteur.
+    world.wave = 1 + 2 * WAVES.growEvery - 1;
+    world.player.x += 60 * TILE_SIZE;
+    for (let i = 0; i < WAVES.firstDelay; i += 1) world.tick();
+
+    const wave = mutants(world);
+
+    expect(wave).toHaveLength(3);
+    const [a, b, c] = wave.map((mutant) => mutant.emerge);
+
+    expect(a).toBeGreaterThan(WAVES.emergeTicks - 2);
+    expect([b! - a!, c! - b!]).toEqual([WAVES.emergeStagger, WAVES.emergeStagger]);
+
+    // Adam colle au premier : son arc ne part pas tant qu'il émerge.
+    const [first] = wave;
+    const start = { x: first!.x, y: first!.y };
+
+    while (first!.emerge > 1) {
+      world.player.x = first!.x + 2 * TILE_SIZE;
+      world.player.y = first!.y;
+      world.tick();
+      expect(world.player.target).toBeNull();
+    }
+    expect(shots).toBe(0);
+    expect({ x: first!.x, y: first!.y }).toEqual(start);
+
+    // Debout : l'arc part aussitôt.
+    world.tick();
+    expect(first!.emerge).toBe(0);
+    expect(shots).toBe(1);
+    expect(world.player.target).toBe(first!.id);
+  });
+
+  it('laisse chaque mutant au moins deux secondes dans le champ quand Adam garde la mairie', () => {
+    const world = worldWithTownHall(42);
+    const hall = world.entities.get(world.townHallId)!;
+    const post = { x: (hall.tx + hall.width / 2) * TILE_SIZE, y: (hall.ty + hall.height + 0.5) * TILE_SIZE };
+
+    // Adam, une tour de guet à côté, et tout ce qui tire.
+    world.player.x = post.x;
+    world.player.y = post.y;
+    build(world, 'watchtower');
+
+    const born = new Map<number, number>();
+    const lifetimes: number[] = [];
+
+    world.events.on('waveStarted', () => {
+      for (const mutant of mutants(world)) {
+        if (born.has(mutant.id)) continue;
+        born.set(mutant.id, world.tickCount);
+
+        // Un téléphone tenu droit, caméra en recul : ~7,4 tuiles de part et d'autre d'Adam, ~16 au-dessus et en dessous.
+        expect(Math.abs(mutant.x - post.x) / TILE_SIZE).toBeLessThanOrEqual(7.5);
+        expect(Math.abs(mutant.y - post.y) / TILE_SIZE).toBeLessThanOrEqual(13);
+      }
+    });
+    world.events.on('mutantDied', ({ id }) => lifetimes.push(world.tickCount - born.get(id)!));
+
+    for (let i = 0; i < WAVES.firstDelay + WAVES.interval * 5 && !world.defeated; i += 1) {
+      world.player.x = post.x;
+      world.player.y = post.y;
+      world.tick();
+    }
+
+    expect(world.wave).toBeGreaterThanOrEqual(5);
+    expect(lifetimes.length).toBeGreaterThan(5);
+    for (const ticks of lifetimes) expect(ticks).toBeGreaterThanOrEqual(2 * 20);
+  });
+
+  it('déclare la vague repoussée au dernier mutant abattu, et chacun lâche un butin qu’Adam ramasse', () => {
+    const world = worldWithTownHall();
+    const cleared: number[] = [];
+    const dropped: Pickup[] = [];
+
+    world.events.on('waveCleared', ({ wave }) => cleared.push(wave));
+    world.events.on('lootDropped', ({ id }) => dropped.push(world.mobiles.get(id) as Pickup));
+
+    for (let i = 0; i < WAVES.firstDelay; i += 1) world.tick();
+    waitEmergence(world);
+
+    const [mutant] = mutants(world);
+
+    for (let i = 0; i < 200 && mutants(world).length > 0; i += 1) {
+      world.player.x = mutant!.x + 3 * TILE_SIZE;
+      world.player.y = mutant!.y;
+      world.tick();
+    }
+
+    expect(cleared).toEqual([1]);
+    expect(dropped).toHaveLength(1);
+
+    const loot = dropped[0]!;
+
+    expect(MUTANT_LOOT.items).toContain(loot.item);
+    expect(world.mobiles.get(loot.id)).toBe(loot);
+
+    const before = world.player.inventory.count(loot.item);
+    const picked: number[] = [];
+
+    world.events.on('lootPicked', ({ id }) => picked.push(id));
+    world.player.x = loot.x;
+    world.player.y = loot.y;
+    world.tick();
+
+    expect(picked).toEqual([loot.id]);
+    expect(world.player.inventory.count(loot.item)).toBe(before + 1);
+    expect(world.mobiles.has(loot.id)).toBe(false);
+  });
+
+  it('laisse le butin au sol quand le sac est plein, puis le fait disparaître s’il est oublié', () => {
+    const world = worldWithTownHall();
+
+    for (let i = 0; i < WAVES.firstDelay; i += 1) world.tick();
+    waitEmergence(world);
+
+    const [mutant] = mutants(world);
+    let loot: Pickup | undefined;
+
+    world.events.on('lootDropped', ({ id }) => (loot = world.mobiles.get(id) as Pickup));
+
+    for (let i = 0; i < 200 && !loot; i += 1) {
+      world.player.x = mutant!.x + 3 * TILE_SIZE;
+      world.player.y = mutant!.y;
+      world.tick();
+    }
+
+    world.player.inventory.add('wood', world.player.inventory.freeSpace());
+    world.player.x = loot!.x;
+    world.player.y = loot!.y;
+    world.tick();
+    expect(world.mobiles.has(loot!.id)).toBe(true);
+
+    world.player.x += 10 * TILE_SIZE;
+    for (let i = 0; i < MUTANT_LOOT.lifetimeTicks; i += 1) world.tick();
+    expect(world.mobiles.has(loot!.id)).toBe(false);
+  });
+
+  it('sauvegarde le côté de la prochaine vague, l’émergence des mutants et le butin au sol', () => {
+    const world = worldWithTownHall();
+
+    world.player.x += 60 * TILE_SIZE;
+    for (let i = 0; i < WAVES.firstDelay + 5; i += 1) world.tick();
+
+    const [mutant] = mutants(world);
+
+    // Un butin posé à la main : on n'attend pas qu'un mutant tombe.
+    const { x, y } = mutant!;
+
+    world.mobiles.set(9999, { kind: 'pickup', id: 9999, x, y, prevX: x, prevY: y, facing: 'down', moving: false, item: 'food', ttl: 42 });
+    // Les bêtes ne sont pas l'objet de ce test.
+    for (const mobile of world.mobiles.values()) if (mobile.kind === 'beast') world.mobiles.delete(mobile.id);
+
+    const restored = deserialize(JSON.parse(JSON.stringify(serialize(world))));
+
+    expect(restored.nextWaveHeading).toBe(world.nextWaveHeading);
+    expect((restored.mobiles.get(mutant!.id) as Mutant).emerge).toBe(mutant!.emerge);
+    expect(mutant!.emerge).toBeGreaterThan(0);
+    expect(restored.mobiles.get(9999)).toMatchObject({ kind: 'pickup', item: 'food', ttl: 42 });
+  });
+});
+
 describe('mutants', () => {
   it('marche droit sur la mairie, sans que rien d’autre ne l’arrête', () => {
     const world = worldWithTownHall();
@@ -180,6 +390,7 @@ describe('mutants', () => {
     world.player.x += 40 * TILE_SIZE;
 
     for (let i = 0; i < WAVES.firstDelay; i += 1) world.tick();
+    for (let i = 0; i < WAVES.emergeTicks; i += 1) world.tick();
 
     const [mutant] = mutants(world);
     const before = Math.hypot(mutant!.x - center.x, mutant!.y - center.y);
@@ -205,7 +416,7 @@ describe('mutants', () => {
 
     for (let i = 0; i < WAVES.firstDelay; i += 1) world.tick();
 
-    // Le trajet : au plus 20 tuiles à 1,7 tuile/s, puis les coups.
+    // La sortie de flaque, le trajet — au plus 8 tuiles à 1,2 tuile/s — puis les coups.
     for (let i = 0; i < 20 * 15 && damaged.length === 0; i += 1) world.tick();
     expect(damaged).toEqual([BUILDINGS.townHall.hp - ENEMIES.mutant.damage]);
 
@@ -236,6 +447,7 @@ describe('arc d’Adam', () => {
     world.events.on('mutantDied', () => (deaths += 1));
 
     for (let i = 0; i < WAVES.firstDelay; i += 1) world.tick();
+    waitEmergence(world);
 
     const [mutant] = mutants(world);
 
@@ -266,6 +478,7 @@ describe('arc d’Adam', () => {
     world.events.on('arrowShot', () => (shots += 1));
 
     for (let i = 0; i < WAVES.firstDelay; i += 1) world.tick();
+    waitEmergence(world);
 
     const [mutant] = mutants(world);
 

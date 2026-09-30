@@ -123,6 +123,7 @@ describe('Ève', () => {
       moving: false,
       hp: 999,
       attackCooldown: 0,
+      emerge: 0,
     });
     for (let i = 0; i < 60; i += 1) world.tick();
 

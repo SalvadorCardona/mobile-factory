@@ -26,7 +26,11 @@ export type SoundName =
   | 'open'
   | 'countdown'
   | 'bite'
-  | 'faint';
+  | 'faint'
+  | 'horn'
+  | 'gloop'
+  | 'victory'
+  | 'pickup';
 
 /** Une seconde de bruit blanc, partagée par tous les sons qui en ont besoin. */
 let noiseBuffer: AudioBuffer | null = null;
@@ -213,6 +217,36 @@ export const SOUNDS: Record<SoundName, (ctx: AudioContext, out: AudioNode, at: n
   faint(ctx, out, at) {
     tone(ctx, out, at, 'triangle', 660, 180, { attack: 0.02, decay: 0.5, peak: 0.35 });
     tone(ctx, out, at + 0.12, 'sine', 330, 110, { decay: 0.45, peak: 0.25 });
+  },
+
+  /** Une vague s'annonce : un cor grave qui enfle, et un grondement sous lui. */
+  horn(ctx, out, at) {
+    tone(ctx, out, at, 'sawtooth', 73, 69, { attack: 0.25, decay: 1.1, peak: 0.3 });
+    tone(ctx, out, at, 'triangle', 110, 104, { attack: 0.2, decay: 1, peak: 0.35 });
+    burst(ctx, out, at, 'lowpass', 220, 60, { attack: 0.3, decay: 1.1, peak: 0.5 });
+  },
+
+  /** Les flaques des mutants qui bouillonnent : des bulles qui remontent et éclatent. */
+  gloop(ctx, out, at) {
+    for (let i = 0; i < 4; i += 1) {
+      const v = vary(0.15);
+
+      tone(ctx, out, at + i * 0.09 * v, 'sine', 180 * v, 520 * v, { attack: 0.01, decay: 0.08, peak: 0.35 });
+    }
+  },
+
+  /** Vague repoussée : une petite fanfare qui monte et se pose. */
+  victory(ctx, out, at) {
+    for (const [i, f] of [392, 523, 659, 784].entries()) {
+      tone(ctx, out, at + i * 0.11, 'square', f, f, { attack: 0.01, decay: 0.16, peak: 0.14 });
+    }
+    tone(ctx, out, at + 0.44, 'triangle', 1047, 1047, { attack: 0.01, decay: 0.5, peak: 0.35 });
+  },
+
+  /** Du butin ramassé : deux notes vives. */
+  pickup(ctx, out, at) {
+    tone(ctx, out, at, 'triangle', 988, 988, { decay: 0.06, peak: 0.3 });
+    tone(ctx, out, at + 0.06, 'triangle', 1319, 1319, { decay: 0.12, peak: 0.3 });
   },
 
   /** Une fenêtre qui s'ouvre. */

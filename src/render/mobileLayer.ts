@@ -1,5 +1,5 @@
 /**
- * Mutants, bêtes sauvages, flèches, enfants, Ève et ouvriers.
+ * Mutants, bêtes sauvages, flèches, enfants, Ève, ouvriers et butin.
  *
  * Les mobiles n'ont pas d'événement de création : ils apparaissent dans
  * `world.mobiles`, et cette couche s'y synchronise à chaque frame — une vue
@@ -11,15 +11,19 @@
  * qui contourne la mairie passe derrière elle quand il est au-dessus, devant
  * quand il est en dessous — comme Adam.
  *
- * Un mutant touché fait la grimace (yeux en croix) et gicle ; un mutant qui
- * apparaît sort de la brume en fondu ; un mutant qui meurt s'écrase comme
- * une flaque et s'efface. Ce sont des minuteurs de vue : la simulation ne
+ * Un mutant touché fait la grimace (yeux en croix) et gicle ; un mutant de
+ * vague sort d'une flaque vert fluo qui bouillonne, se hisse hors d'elle à
+ * la fin de son émergence, et la flaque se résorbe derrière lui ; un mutant
+ * qui meurt s'écrase comme une flaque et s'efface. Ce sont des minuteurs de vue : la simulation ne
  * connaît que ses points de vie. Crabes et loups font de même, et frappent
  * (pinces qui claquent, bond) quand ils touchent Adam.
  *
  * Ève arrive sur son vélo-cargo : tant qu'elle roule, sa vue est le vélo,
  * roues qui tournent et cadre qui cahote ; à pied, c'est son pantin, qui
  * frappe le mur qu'elle répare.
+ *
+ * Le butin qu'il lâche saute hors de lui, puis sautille au-dessus de son
+ * ombre en attendant Adam ; il clignote quand il va disparaître.
  *
  * Le marqueur de cible — un anneau jaune au sol et une pointe au-dessus de
  * la tête — suit ce que l'arc d'Adam vise (`player.target`).
@@ -31,9 +35,9 @@
 import { Container, Graphics, Sprite, type Texture, type Ticker } from 'pixi.js';
 import { TILE_SIZE, floorDiv } from '../core/grid.ts';
 import { PALETTE, hex } from '../data/artDirection.ts';
-import { ENEMIES, WILDLIFE } from '../data/enemies.ts';
+import { ENEMIES, MUTANT_LOOT, WILDLIFE } from '../data/enemies.ts';
 import { SPRITES } from '../data/sprites.ts';
-import type { Mobile, MobileId } from '../sim/types.ts';
+import type { Mobile, MobileId, Mutant, Pickup } from '../sim/types.ts';
 import { terrainAt } from '../sim/terrain.ts';
 import type { World } from '../sim/world.ts';
 import { Puppet, type PuppetId } from './puppet.ts';
@@ -46,8 +50,26 @@ const HP_FG = hex(PALETTE.coral.base);
 const SPAWN_MS = 500;
 const DEATH_MS = 520;
 
+/** Derniers ticks de l'émergence : le mutant se hisse hors de la flaque. */
+const RISE_TICKS = 14;
+
+/** La flaque s'étale en autant de ms, et se résorbe en autant. */
+const PUDDLE_GROW_MS = 380;
+const PUDDLE_FADE_MS = 900;
+
+/** Bulles d'une flaque, et durée de vie d'une bulle, de sa naissance à son éclatement. */
+const BUBBLES = 4;
+const BUBBLE_MS = 620;
+
+/** Le saut du butin qui tombe d'un mutant, et son sautillement au sol. */
+const LOOT_DROP_MS = 420;
+const LOOT_HOP_PX = 3;
+
+/** Sous ce nombre de ticks restants, le butin oublié clignote. */
+const LOOT_BLINK_TICKS = 20 * 10;
+
 /** Le pantin de chaque marcheur : sprite, ombre, écart des pieds, allure. */
-function puppetOf(mobile: Exclude<Mobile, { kind: 'arrow' }>): { id: PuppetId; shadowWidth: number; stride: number; gait?: 'scuttle' } {
+function puppetOf(mobile: Exclude<Mobile, { kind: 'arrow' | 'pickup' }>): { id: PuppetId; shadowWidth: number; stride: number; gait?: 'scuttle' } {
   switch (mobile.kind) {
     case 'mutant':
       return { id: ENEMIES[mobile.proto].sprite, shadowWidth: 22, stride: 4 };
@@ -87,6 +109,18 @@ interface BikeView {
   clock: number;
 }
 
+/** La flaque d'un mutant qui sort de terre : elle reste où il est apparu, et se résorbe après lui. */
+interface Puddle {
+  root: Container;
+  pool: Sprite;
+  bubbles: Sprite[];
+  /** Le mutant qui en sort. */
+  mutant: MobileId;
+  age: number;
+  /** Ms restantes avant de disparaître, une fois le mutant sorti ; `null` tant qu'il émerge. */
+  fading: number | null;
+}
+
 /** Un mutant mort, qui s'écrase et s'efface là où il est tombé. */
 interface Corpse {
   puppet: Puppet;
@@ -96,6 +130,7 @@ interface Corpse {
 export class MobileLayer {
   private readonly views = new Map<MobileId, MobileView>();
   private readonly corpses: Corpse[] = [];
+  private readonly puddles: Puddle[] = [];
 
   private readonly world: World;
   private readonly library: SpriteLibrary;
@@ -171,6 +206,10 @@ export class MobileLayer {
           break;
         }
 
+        case 'pickup':
+          this.bob(view, mobile, y, deltaMs);
+          break;
+
         case 'mutant':
         case 'beast':
         case 'kid':
@@ -193,9 +232,15 @@ export class MobileLayer {
             if (mobile.hp < view.lastHp) puppet.hit();
             view.lastHp = mobile.hp;
 
-            if (view.age < SPAWN_MS) {
-              view.age = Math.min(SPAWN_MS, view.age + deltaMs);
-              view.root.alpha = view.age / SPAWN_MS;
+            if (mobile.kind === 'mutant' && mobile.emerge > 0) {
+              this.rise(view, mobile, alpha);
+            } else {
+              view.root.scale.set(1);
+
+              if (view.age < SPAWN_MS) {
+                view.age = Math.min(SPAWN_MS, view.age + deltaMs);
+                view.root.alpha = view.age / SPAWN_MS;
+              }
             }
           }
 
@@ -214,7 +259,103 @@ export class MobileLayer {
     }
 
     this.bury(deltaMs);
+    this.bubble(deltaMs);
     this.mark(alpha, deltaMs);
+  }
+
+  /**
+   * Un mutant qui émerge : invisible tant que la flaque bouillonne, puis il
+   * se hisse — il grandit du sol et se matérialise sur les derniers ticks.
+   */
+  private rise(view: MobileView, mutant: Mutant, alpha: number): void {
+    const left = Math.max(0, mutant.emerge - alpha);
+    const t = 1 - Math.min(1, left / RISE_TICKS);
+
+    // Sorti, il est déjà entier : pas de second fondu.
+    view.age = SPAWN_MS;
+    view.root.alpha = t;
+    view.root.scale.set(0.7 + t * 0.3, 0.25 + t * 0.75);
+  }
+
+  /** Le butin : un saut hors du mutant, puis un sautillement sur place ; il clignote avant de disparaître. */
+  private bob(view: MobileView, pickup: Pickup, y: number, deltaMs: number): void {
+    const icon = view.root.getChildAt(1);
+
+    view.age += deltaMs;
+    view.root.zIndex = y;
+
+    const drop = Math.min(1, view.age / LOOT_DROP_MS);
+    const hop = drop < 1 ? Math.sin(drop * Math.PI) * 14 : Math.abs(Math.sin(view.age / 260)) * LOOT_HOP_PX;
+
+    icon.y = -hop;
+    view.root.scale.set(0.4 + drop * 0.6);
+    view.root.alpha = pickup.ttl < LOOT_BLINK_TICKS && Math.floor(view.age / 180) % 2 === 0 ? 0.35 : 1;
+  }
+
+  /** Les flaques bouillonnent tant que leur mutant émerge, puis se résorbent. */
+  private bubble(deltaMs: number): void {
+    for (let i = this.puddles.length - 1; i >= 0; i -= 1) {
+      const puddle = this.puddles[i]!;
+      const mutant = this.world.mobiles.get(puddle.mutant);
+
+      puddle.age += deltaMs;
+
+      if (puddle.fading === null && (mutant?.kind !== 'mutant' || mutant.emerge <= 0)) puddle.fading = PUDDLE_FADE_MS;
+
+      const grow = Math.min(1, puddle.age / PUDDLE_GROW_MS);
+      let size = 1 - (1 - grow) * (1 - grow);
+
+      if (puddle.fading !== null) {
+        puddle.fading = Math.max(0, puddle.fading - deltaMs);
+        size *= puddle.fading / PUDDLE_FADE_MS;
+      }
+
+      // La mare respire un peu : elle bout.
+      const breath = 1 + Math.sin(puddle.age / 110) * 0.04;
+
+      puddle.pool.scale.set(size * breath, size * (2 - breath));
+
+      for (const [k, bubble] of puddle.bubbles.entries()) {
+        const phase = ((puddle.age + (k * BUBBLE_MS) / BUBBLES) % BUBBLE_MS) / BUBBLE_MS;
+        const spot = Math.sin(k * 2.4 + Math.floor((puddle.age + (k * BUBBLE_MS) / BUBBLES) / BUBBLE_MS) * 1.7);
+
+        bubble.position.set(spot * 13 * size, Math.cos(k * 1.9) * 3 * size - phase * 5);
+        // Elle gonfle, puis éclate d'un coup.
+        bubble.scale.set(phase < 0.85 ? (0.4 + phase * 0.9) * size : 0);
+        bubble.visible = puddle.fading === null || puddle.fading > PUDDLE_FADE_MS / 2;
+      }
+
+      if (puddle.fading === 0) {
+        puddle.root.destroy({ children: true });
+        this.puddles.splice(i, 1);
+      }
+    }
+  }
+
+  /** Une flaque sous un mutant qui sort de terre, à l'endroit où il sort. */
+  private spill(mutant: Mutant): void {
+    const root = new Container();
+    const pool = new Sprite(this.library.part('puddle', 'pool'));
+    const bubbles: Sprite[] = [];
+
+    pool.anchor.set(SPRITES.puddle.anchorX, SPRITES.puddle.anchorY);
+    pool.scale.set(0);
+    root.addChild(pool);
+
+    for (let k = 0; k < BUBBLES; k += 1) {
+      const bubble = new Sprite(this.library.part('puddle', 'bubble'));
+
+      bubble.anchor.set(0.5);
+      bubble.scale.set(0);
+      bubbles.push(bubble);
+      root.addChild(bubble);
+    }
+
+    root.position.set(mutant.x, mutant.y);
+    // Au sol : sous le mutant qui en sort, sous tout ce qui passe devant.
+    root.zIndex = mutant.y - 16;
+    this.container.addChild(root);
+    this.puddles.push({ root, pool, bubbles, mutant: mutant.id, age: 0, fading: null });
   }
 
   /** Pose le marqueur sur la cible de l'arc d'Adam, et le fait respirer. */
@@ -253,6 +394,21 @@ export class MobileLayer {
       sprite.anchor.set(SPRITES.arrow.anchorX, SPRITES.arrow.anchorY);
       root.addChild(sprite);
       view = { root, puppet: null, hp: null, lastHp: 0, age: SPAWN_MS, tile: '', bike: null };
+    } else if (mobile.kind === 'pickup') {
+      const tx = floorDiv(mobile.x, TILE_SIZE);
+      const ty = floorDiv(mobile.y, TILE_SIZE);
+      const shadow = new Sprite(this.tiles.shadow(terrainAt(this.world.seed, tx, ty)));
+      const icon = new Sprite(this.library.part('loot', mobile.item));
+
+      shadow.anchor.set(0.5);
+      shadow.width = 16;
+      shadow.height = 6;
+      icon.anchor.set(SPRITES.loot.anchorX, SPRITES.loot.anchorY);
+      root.addChild(shadow, icon);
+      // Butin rechargé d'une sauvegarde : déjà posé, pas de saut.
+      const fresh = MUTANT_LOOT.lifetimeTicks - mobile.ttl < 20;
+
+      view = { root, puppet: null, hp: null, lastHp: 0, age: fresh ? 0 : LOOT_DROP_MS, tile: '', bike: null };
     } else {
       const foe = mobile.kind === 'mutant' || mobile.kind === 'beast';
       const { id, ...options } = puppetOf(mobile);
@@ -275,6 +431,7 @@ export class MobileLayer {
         root.alpha = 0;
       }
       view = { root, puppet, hp, lastHp: foe ? mobile.hp : 0, age: foe ? 0 : SPAWN_MS, tile: '', bike };
+      if (mobile.kind === 'mutant' && mobile.emerge > 0) this.spill(mobile);
     }
 
     this.views.set(mobile.id, view);
@@ -346,8 +503,10 @@ export class MobileLayer {
       view.root.destroy({ children: true });
     }
     for (const corpse of this.corpses) corpse.puppet.destroy();
+    for (const puddle of this.puddles) puddle.root.destroy({ children: true });
     this.views.clear();
     this.corpses.length = 0;
+    this.puddles.length = 0;
   }
 }
 
