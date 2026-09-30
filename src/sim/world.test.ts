@@ -42,6 +42,16 @@ function worldWithOre(): { world: World; spot: { tx: number; ty: number } } {
   throw new Error('aucune seed testable — la génération de gisements a changé');
 }
 
+/**
+ * Retire les rochers et arbres autour de l'emplacement : sinon la récolte de
+ * proximité remplit le sac pendant qu'Adam livre un chantier ou vide la foreuse.
+ */
+function clearAround(world: World, spot: { tx: number; ty: number }): void {
+  for (let ty = spot.ty - 6; ty <= spot.ty + 6; ty += 1) {
+    for (let tx = spot.tx - 6; tx <= spot.tx + 6; tx += 1) world.resources.clear(tx, ty);
+  }
+}
+
 /** Première seed dont le point d'apparition peut avancer vers l'est sans butée. */
 function seedWithFreeMoveEast(): number {
   for (let seed = 1; seed < 400; seed += 1) {
@@ -332,6 +342,8 @@ describe('World', () => {
 
   it('ouvre un chantier, que le contact d’Adam remplit avec son sac', () => {
     const { world, spot } = worldWithOre();
+
+    clearAround(world, spot);
     const delivered: ItemId[] = [];
     const completed: EntityId[] = [];
 
@@ -499,6 +511,8 @@ describe('World', () => {
 
   it('vide une foreuse pleine qu’Adam heurte, dans la limite du sac, et la réveille', () => {
     const { world, spot } = worldWithOre();
+
+    clearAround(world, spot);
     const drill = buildDrill(world, spot);
     const taken: number[] = [];
     let full = 0;
@@ -536,6 +550,8 @@ describe('World', () => {
 
   it('« Prendre » vide le coffre dans le sac, à portée et dans la limite de la place', () => {
     const { world, spot } = worldWithOre();
+
+    clearAround(world, spot);
     const drill = buildDrill(world, spot);
     const rejected: string[] = [];
 
