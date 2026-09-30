@@ -54,7 +54,7 @@ jouable dans le navigateur, sur téléphone :
   et s'écrasent en mourant, arc qui se tend à chaque tir, éclats colorés à
   chaque construction, vignette qui vire au rouge pendant une attaque ;
 - sons et musique de fond synthétisés en Web Audio, sans fichier audio ;
-  police pixel (Jersey 15) embarquée dans le build, donc disponible hors ligne.
+  police arrondie (Fredoka) embarquée dans le build, donc disponible hors ligne.
 
 Entrepôt, porteurs, assembleur, recherche et électricité viendront ensuite.
 

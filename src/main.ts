@@ -6,11 +6,13 @@
  * gameplay finit dans ce fichier, elle est au mauvais endroit.
  */
 
-// Police pixel embarquée dans le build, pas chargée d'un CDN : le jeu est une
-// PWA, il doit avoir sa typo hors ligne. Jersey 15 plutôt qu'une autre : ses
-// chiffres ne se confondent pas (le 5 de Pixelify Sans se lit « S »), et un
-// HUD de ressources, c'est d'abord des chiffres.
-import '@fontsource/jersey-15/latin.css';
+// Police arrondie embarquée dans le build, pas chargée d'un CDN : le jeu est
+// une PWA, il doit avoir sa typo hors ligne. Fredoka plutôt qu'une autre :
+// ses formes rondes répondent aux capsules de la direction artistique, et ses
+// chiffres ne se confondent pas — un HUD de ressources, c'est d'abord des chiffres.
+import '@fontsource/fredoka/latin-500.css';
+import '@fontsource/fredoka/latin-600.css';
+import '@fontsource/fredoka/latin-700.css';
 import './style.css';
 import { AudioEngine } from './audio/engine.ts';
 import { assertPrototypes } from './data/validate.ts';

@@ -25,7 +25,7 @@
 import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
 import type { Placement } from '../input/placement.ts';
-import { buildingIcon, itemAmount } from './icons.ts';
+import { buildingIcon, itemAmount, uiIcon } from './icons.ts';
 
 export class BuildMenu {
   public readonly root: HTMLElement;
@@ -48,8 +48,9 @@ export class BuildMenu {
     this.root = document.createElement('div');
     this.root.className = 'build-menu';
 
-    this.toggleButton = button('🔨 Construire', () => this.toggle());
+    this.toggleButton = button('Construire', () => this.toggle());
     this.toggleButton.className = 'build-toggle';
+    this.toggleButton.prepend(uiIcon('hammer', 28));
 
     this.drawer = document.createElement('div');
     this.drawer.className = 'panel build-drawer';
@@ -60,9 +61,10 @@ export class BuildMenu {
     title.className = 'build-drawer-title';
     title.textContent = 'Bâtiments';
 
-    const close = button('✕', () => this.close());
+    const close = button('', () => this.close());
 
     close.className = 'build-drawer-close';
+    close.append(uiIcon('close'));
     close.setAttribute('aria-label', 'Fermer');
 
     const header = document.createElement('header');

@@ -12,6 +12,7 @@
  */
 
 import { LORE } from '../data/lore.ts';
+import { buildingIcon, itemIcon, uiIcon } from './icons.ts';
 
 export class TitleScreen {
   public readonly root: HTMLElement;
@@ -43,7 +44,7 @@ export class TitleScreen {
 
     play.type = 'button';
     play.className = 'button-primary title-play';
-    play.textContent = 'Jouer';
+    play.append(uiIcon('play', 26), 'Jouer');
     play.addEventListener('click', () => {
       this.root.dataset['leaving'] = 'true';
       window.setTimeout(() => this.root.remove(), 380);
@@ -53,15 +54,14 @@ export class TitleScreen {
     const controls = document.createElement('ul');
 
     controls.className = 'title-controls';
-    for (const [key, label] of [
-      ['👆', 'Glissez le pouce pour marcher (ZQSD / flèches sur PC)'],
-      ['🪓', 'Foncez dans un arbre ou un rocher pour récolter'],
-      ['🏠', 'Foncez dans un chantier pour le livrer'],
+    for (const [icon, label] of [
+      [uiIcon('move', 28), 'Glissez le pouce pour marcher (ZQSD / flèches sur PC)'],
+      [itemIcon('wood', 28), 'Foncez dans un arbre ou un rocher pour récolter'],
+      [buildingIcon('townHall', 28), 'Foncez dans un chantier pour le livrer'],
     ] as const) {
       const item = document.createElement('li');
-      const icon = document.createElement('span');
 
-      icon.textContent = key;
+      icon.alt = '';
       icon.setAttribute('aria-hidden', 'true');
       item.append(icon, label);
       controls.append(item);

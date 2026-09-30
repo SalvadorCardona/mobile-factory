@@ -70,10 +70,14 @@ Les règles, en résumé :
   sans icône ne compile pas ; `validatePrototypes()` vérifie cadre et règles.
 - `src/ui/hud.ts` : quête, conseil contextuel (le tutoriel), sac, bulles,
   gains flottants, défaite. `src/ui/screens.ts` : écran titre et pause — la
-  simulation ne tourne qu'après « Jouer » et hors pause. Police : Jersey 15,
-  embarquée via `@fontsource` (ses chiffres ne se confondent pas).
-  Couleurs de l'UI : `--accent`, `--good`, `--danger` dans `style.css`, tirées
-  de `PALETTE`. Le panneau de debug ne s'affiche qu'avec `?debug` en dev.
+  simulation ne tourne qu'après « Jouer » et hors pause. Police arrondie :
+  Fredoka, embarquée via `@fontsource` (ses chiffres ne se confondent pas).
+  L'interface suit les règles des sprites : cartes blanches et capsules,
+  trois tons (couleur, « face avant » pleine plus sombre, reflet en capsule),
+  aucun contour ; couleurs de `PALETTE` recopiées en variables dans
+  `style.css` (`--accent`, `--good`, `--danger`…). Pas d'emoji : les
+  pictogrammes sont des SVG de `src/art/ui.ts`. Le panneau de debug ne
+  s'affiche qu'avec `?debug` en dev.
 - `src/ui/icons.ts` sert icônes d'objets, vignettes de bâtiments et
   pictogrammes (`src/art/ui.ts`) en `data:` URL SVG pour le DOM. Le menu de construction est un tiroir derrière un
   seul bouton ; armer un bâtiment passe la carte en mode construction

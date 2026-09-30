@@ -84,8 +84,10 @@ export const UI_ICONS = {
     circle(15.5, 13.5, 1.6, paper.base),
     line(9, 17.5, 15, 17.5, ink.base),
   ),
+  /** Le joystick : un disque et son bouton, pour « glissez le pouce ». */
+  move: svg(S, S, circle(12, 12, 10, cyan.light), circle(12.8, 12.8, 5.5, cyan.shade), circle(12, 12, 5, cyan.base)),
   /** La flèche du bouton « Jouer ». */
-  play: svg(S, S, polygon([8, 5, 19, 12, 8, 19], orange.shade), polygon([7.5, 4.5, 18, 11.5, 7.5, 18], paper.base)),
+  play: svg(S, S, polygon([8.5, 5.5, 19.5, 12.5, 8.5, 19.5], orange.shade), polygon([7.5, 4.5, 18.5, 11.5, 7.5, 18.5], paper.base)),
 } as const;
 
 export type UiIcon = keyof typeof UI_ICONS;

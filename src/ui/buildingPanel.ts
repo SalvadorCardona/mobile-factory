@@ -20,7 +20,7 @@ import { ITEMS, type ItemId } from '../data/items.ts';
 import { WEAPONS } from '../data/weapons.ts';
 import type { Entity, EntityId } from '../sim/types.ts';
 import { TICKS_PER_SECOND, siteMissing, type World } from '../sim/world.ts';
-import { itemAmount } from './icons.ts';
+import { itemAmount, uiIcon } from './icons.ts';
 
 export class BuildingPanel {
   public readonly root: HTMLElement;
@@ -59,7 +59,7 @@ export class BuildingPanel {
     close.type = 'button';
     close.className = 'building-panel-close';
     close.setAttribute('aria-label', 'Fermer');
-    close.textContent = '✕';
+    close.append(uiIcon('close'));
     close.addEventListener('click', () => this.close());
 
     header.append(this.title, close);

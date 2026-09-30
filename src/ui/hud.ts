@@ -26,7 +26,7 @@ import { LORE } from '../data/lore.ts';
 import type { AtlasStats } from '../render/spriteLibrary.ts';
 import type { PlacementRejection } from '../sim/commands.ts';
 import { TICKS_PER_SECOND, siteMissing, type World } from '../sim/world.ts';
-import { itemAmount, itemIcon } from './icons.ts';
+import { itemAmount, itemIcon, uiIcon } from './icons.ts';
 
 const REJECTION_LABELS: Record<PlacementRejection, string> = {
   occupied: 'Emplacement déjà occupé',
@@ -59,6 +59,7 @@ export class Hud {
   private readonly questTitle: HTMLElement;
   private readonly questBody: HTMLElement;
   private readonly hint: HTMLElement;
+  private readonly hintText: HTMLElement;
   private readonly bag: HTMLElement;
   private readonly floats: HTMLElement;
   private readonly stats: HTMLElement;
@@ -94,6 +95,8 @@ export class Hud {
 
     this.hint = element('div', 'hud-hint');
     this.hint.hidden = true;
+    this.hintText = element('span', 'hud-hint-text');
+    this.hint.append(uiIcon('hint', 22), this.hintText);
 
     this.bag = element('div', 'panel hud-bag');
     this.floats = element('div', 'hud-floats');
@@ -108,7 +111,7 @@ export class Hud {
     this.pauseButton = element('button', 'hud-button hud-pause');
     this.pauseButton.type = 'button';
     this.pauseButton.setAttribute('aria-label', 'Pause');
-    this.pauseButton.textContent = 'II';
+    this.pauseButton.append(uiIcon('pause'));
 
     this.audioButton = element('button', 'hud-button hud-audio');
     this.audioButton.type = 'button';
@@ -199,7 +202,7 @@ export class Hud {
 
   /** L'icône du bouton son suit l'état du moteur audio. */
   public setMuted(muted: boolean): void {
-    this.audioButton.textContent = muted ? '🔇' : '🔊';
+    this.audioButton.replaceChildren(uiIcon(muted ? 'soundOff' : 'soundOn'));
     this.audioButton.dataset['muted'] = String(muted);
   }
 
@@ -323,7 +326,9 @@ export class Hud {
     this.questTitle.textContent = mutants > 0 ? 'Attaque !' : 'Défendre la colonie';
 
     const hp = element('div', 'hud-meter hud-meter-hp');
-    const hpLabel = text('hud-meter-label', `♥ ${name}`);
+    const hpLabel = text('hud-meter-label', name);
+
+    hpLabel.prepend(uiIcon('heart', 18));
     const hpBar = bar(hall.hp / max);
     const hpValue = text('hud-meter-value', `${hall.hp}/${max}`);
 
@@ -334,11 +339,7 @@ export class Hud {
     const wave = text('hud-quest-wave', status);
 
     wave.dataset['urgent'] = String(mutants > 0 || seconds <= WAVE_WARNING_SECONDS);
-    line.append(
-      wave,
-      text('hud-quest-chip', `☺ ${people + workers}`),
-      text('hud-quest-chip', `☠ ${world.kills}`),
-    );
+    line.append(wave, chip('people', people + workers, 'Habitants'), chip('mutant', world.kills, 'Mutants abattus'));
     this.questBody.replaceChildren(hp, line);
   }
 
@@ -371,7 +372,7 @@ export class Hud {
 
     const towers = [...world.entities.values()].some((entity) => entity.kind === 'tower');
 
-    if (world.wave === 0 && !towers) return 'Les mutants arrivent : construisez une tour de guet 🔨';
+    if (world.wave === 0 && !towers) return 'Les mutants arrivent : construisez une tour de guet.';
     if (this.mutantCount() > 0 && world.wave <= 2) return 'Restez près d’eux : votre arc tire tout seul.';
     return null;
   }
@@ -382,7 +383,7 @@ export class Hud {
     if (hint === this.lastHint) return;
     this.lastHint = hint;
     this.hint.hidden = hint === '';
-    this.hint.textContent = hint;
+    this.hintText.textContent = hint;
 
     // Relance l'animation d'entrée à chaque nouveau conseil.
     this.hint.style.animation = 'none';
@@ -491,6 +492,15 @@ function bar(ratio: number): HTMLElement {
   fill.style.width = `${Math.round(Math.max(0, Math.min(1, ratio)) * 100)}%`;
   track.append(fill);
   return track;
+}
+
+/** Une pastille « pictogramme + nombre » : habitants, mutants abattus. */
+function chip(icon: 'people' | 'mutant', value: number, label: string): HTMLElement {
+  const node = text('hud-quest-chip', String(value));
+
+  node.title = label;
+  node.prepend(uiIcon(icon, 18));
+  return node;
 }
 
 /** Une ligne de quête : icône, barre, « 7/20 ». */
