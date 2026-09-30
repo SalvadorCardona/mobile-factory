@@ -41,8 +41,8 @@ export const EVE_LINES = {
   /** Le conseil sous la quête — le tutoriel, dans sa bouche. Cf. `ui/hint.ts`. */
   hints: {
     bagFull: 'Ton sac déborde, Adam. Va vider tout ça sur le chantier !',
-    wood: 'Allô Adam ? Ici Ève. Fonce dans un arbre : il nous faut du bois.',
-    stone: 'De la pierre, maintenant. Les rochers roses, ça casse bien.',
+    wood: 'Allô Adam ? Ici Ève. Passe près des arbres : il nous faut du bois.',
+    stone: 'De la pierre, maintenant. Approche-toi des rochers roses.',
     deliver: 'Pose tout ça : marche contre le chantier, ou tape-le.',
     tower: 'Les mutants sortent la nuit ! Une tour de guet, vite.',
     bow: 'Reste près d’eux : ton arc tire tout seul.',

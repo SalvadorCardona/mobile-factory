@@ -276,7 +276,8 @@ export class EntityLayer {
 
     this.adam.root.position.set(x, y);
     this.adam.root.zIndex = y + PLAYER_FOOT;
-    this.adam.update(ticker.deltaMS, player.facing, player.harvesting ? 'act' : player.moving ? 'walk' : 'idle');
+    // La récolte se fait en marchant : on ne frappe qu'à l'arrêt.
+    this.adam.update(ticker.deltaMS, player.facing, player.moving ? 'walk' : player.harvesting ? 'act' : 'idle');
     this.updateShadow(x, y);
 
     if (player.hp !== this.adamHpShown) {

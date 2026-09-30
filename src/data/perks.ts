@@ -143,13 +143,16 @@ export function freeSites(perks: readonly PerkId[]): BuildingId[] {
 }
 
 /**
- * Ticks de contact entre deux unités d'une ressource, bonus compris. Au
- * moins un tick, arrondi au plus proche : 8 ticks à 10 % plus vite en font 7.
+ * Unités qu'un nœud donne au passage de récolte n° `pass`, bonus compris.
+ * Le surplus fractionnaire tombe en unités entières, réparties sur les
+ * passages : à 10 % plus vite, un passage sur dix donne une unité de plus.
+ * Sans état, tiré du seul numéro de passage : la partie reste rejouable.
  */
-export function harvestTicksWith(perks: readonly PerkId[], resource: ResourceId, ticks: number): number {
+export function harvestYieldWith(perks: readonly PerkId[], resource: ResourceId, units: number, pass: number): number {
   const speed = perks.reduce((sum, id) => sum + (effectOf(id).harvestSpeed?.[resource] ?? 0), 0);
+  const bonus = units * speed;
 
-  return Math.max(1, Math.round(ticks / (1 + speed)));
+  return units + Math.floor((pass + 1) * bonus) - Math.floor(pass * bonus);
 }
 
 function effectOf(id: PerkId): PerkEffect {

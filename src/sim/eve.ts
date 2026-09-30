@@ -144,9 +144,9 @@ export function isUnlocked(building: BuildingId, done: number): boolean {
   });
 }
 
-/** Ticks de contact entre deux unités récoltées, avec les outils déjà reçus. */
-export function harvestTicksWithTools(resource: ResourceId, base: number, done: number): number {
-  let ticks = base;
+/** Unités qu'un nœud donne à chaque passage de récolte, avec les outils déjà reçus. */
+export function harvestYieldWithTools(resource: ResourceId, done: number): number {
+  let units = 1;
 
   for (const id of QUEST_IDS.slice(0, done)) {
     const { reward } = QUESTS[id];
@@ -155,7 +155,7 @@ export function harvestTicksWithTools(resource: ResourceId, base: number, done: 
 
     const tool = TOOLS[reward.tool];
 
-    if ((tool.resources as readonly ResourceId[]).includes(resource)) ticks /= tool.harvestSpeed;
+    if ((tool.resources as readonly ResourceId[]).includes(resource)) units *= tool.harvestSpeed;
   }
-  return Math.max(1, Math.round(ticks));
+  return units;
 }

@@ -4,8 +4,7 @@ import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
 import { EVE } from '../data/eve.ts';
 import type { ItemId } from '../data/items.ts';
 import { QUEST_IDS } from '../data/quests.ts';
-import { RESOURCES } from '../data/resources.ts';
-import { harvestTicksWithTools, isUnlocked } from './eve.ts';
+import { harvestYieldWithTools, isUnlocked } from './eve.ts';
 import { BUILD_REACH_TILES } from './player.ts';
 import { deserialize } from './save.ts';
 import type { EntityId } from './types.ts';
@@ -216,8 +215,8 @@ describe('quêtes et récompenses', () => {
   it('récolte plus vite avec les outils reçus', () => {
     const all = QUEST_IDS.length;
 
-    expect(harvestTicksWithTools('tree', RESOURCES.tree.harvestTicks, 0)).toBe(RESOURCES.tree.harvestTicks);
-    expect(harvestTicksWithTools('tree', RESOURCES.tree.harvestTicks, all)).toBe(RESOURCES.tree.harvestTicks / 2);
-    expect(harvestTicksWithTools('ironRock', RESOURCES.ironRock.harvestTicks, all)).toBe(RESOURCES.ironRock.harvestTicks / 2);
+    expect(harvestYieldWithTools('tree', 0)).toBe(1);
+    expect(harvestYieldWithTools('tree', all)).toBe(2);
+    expect(harvestYieldWithTools('ironRock', all)).toBe(2);
   });
 });

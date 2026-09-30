@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { worldToTile } from '../core/grid.ts';
-import { harvestTicksWith, seedsFor, type PerkId } from '../data/perks.ts';
-import { RESOURCES } from '../data/resources.ts';
+import { harvestYieldWith, seedsFor, type PerkId } from '../data/perks.ts';
 import { BUILD_REACH_TILES, INVENTORY_CAPACITY } from './player.ts';
 import { decodeSave, encodeSave } from './save.ts';
 import type { EntityId } from './types.ts';
@@ -95,13 +94,16 @@ describe('bonus du jardin', () => {
   });
 
   it('la hache affûtée coupe plus vite, et seulement les arbres', () => {
-    const tree = RESOURCES.tree.harvestTicks;
+    const over = (perks: PerkId[], resource: 'tree' | 'stoneRock'): number => {
+      let total = 0;
 
-    expect(harvestTicksWith(['sharpAxe'], 'tree', tree)).toBeLessThan(tree);
-    expect(harvestTicksWith([], 'tree', tree)).toBe(tree);
-    expect(harvestTicksWith(['sharpAxe'], 'stoneRock', RESOURCES.stoneRock.harvestTicks)).toBe(
-      RESOURCES.stoneRock.harvestTicks,
-    );
+      for (let pass = 0; pass < 100; pass += 1) total += harvestYieldWith(perks, resource, 1, pass);
+      return total;
+    };
+
+    expect(over(['sharpAxe'], 'tree')).toBe(110);
+    expect(over([], 'tree')).toBe(100);
+    expect(over(['sharpAxe'], 'stoneRock')).toBe(100);
   });
 
   it('les bonus et le sac agrandi survivent à la sauvegarde', () => {

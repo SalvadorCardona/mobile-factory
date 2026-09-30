@@ -11,7 +11,7 @@
  * Deux couches, volontairement distinctes :
  * - le **filon** (`oreAt`) : ce qu'une foreuse extrait, inépuisable ;
  * - la **surface** (`resourceAt`) : les rochers posés sur le filon et les
- *   arbres des forêts, qu'Adam heurte et récolte à la main, et qui
+ *   arbres des forêts, qu'Adam récolte en passant à côté, et qui
  *   disparaissent une fois vidés.
  *
  * Tout est pur : mêmes entrées, mêmes sorties, sans état.
@@ -23,7 +23,7 @@ import { BUILDINGS } from '../data/buildings.ts';
 import { DECOR, DECOR_DENSITY, DECOR_IDS, type DecorId, type DecorTerrain } from '../data/decor.ts';
 import type { Habitat } from '../data/enemies.ts';
 import type { ItemId } from '../data/items.ts';
-import { ROCK_OF_ORE, type ResourceId } from '../data/resources.ts';
+import { RESOURCES, ROCK_OF_ORE, type ResourceId } from '../data/resources.ts';
 
 export type TerrainKind = 'water' | 'sand' | 'grass' | 'rock';
 
@@ -135,7 +135,9 @@ function inDisc(tx: number, ty: number, cx: number, cy: number, radius: number):
  * une tuile de marge autour. Sans ça, une seed qui met de l'eau en (0, 0)
  * fait apparaître le joueur dans un lac dont il ne peut pas sortir — ou la
  * mairie les pieds dedans. La clairière doit aussi pouvoir accueillir le
- * foyer (voir `Home`) : un îlot où ne tient aucun filon est écarté.
+ * foyer (voir `Home`) : un îlot où ne tient aucun filon est écarté. Et elle
+ * doit ouvrir sur le monde (`hasWayOut`) : pas de départ dans un cirque de
+ * rochers.
  *
  * Renvoie la tuile sous la mairie ; Adam apparaît juste en dessous.
  */
@@ -183,6 +185,9 @@ interface Home {
 const HOME_GROVE = { min: 3, max: 4.5, radius: 2 };
 const HOME_STONE = { min: 7, max: 9.5, radius: 2 };
 const HOME_IRON = { min: 13, max: 16, radius: 2 };
+
+/** Tuiles qu'Adam doit pouvoir atteindre depuis la clairière de départ : pas de départ enfermé. */
+const SPAWN_OPEN_TILES = 400;
 
 /** Assez large pour contenir le filon de fer le plus lointain. */
 const HOME_REACH = 20;
@@ -284,12 +289,52 @@ function planHome(seed: number, sx: number, sy: number, force = false): Home | n
     (force ? [ax + HOME_GROVE.min, ay] : null);
 
   if (!groveAt) return null;
+  if (!force && !hasWayOut(seed, sx, sy, [stone, iron])) return null;
 
   return { spawn: [sx, sy], ores: [stone, iron], grove: { tx: groveAt[0], ty: groveAt[1] } };
 }
 
 function homeNode(seed: number, item: ItemId, [tx, ty]: [number, number], radius: number): OreNode {
   return { id: hash3(seed ^ 0x2f8a6c1e, tx, ty), item, tx, ty, radius };
+}
+
+/**
+ * Depuis la tuile d'Adam, un remplissage par tuiles atteint-il
+ * `SPAWN_OPEN_TILES` tuiles ? L'eau et les rochers arrêtent, pas les arbres
+ * (Adam passe entre les troncs) ; la clairière est comptée dégagée et la
+ * mairie pleine, comme elles le seront. Les filons sont ceux du foyer en
+ * projet (`ores`), puis ceux des cellules : `oreAt` n'est pas encore prêt.
+ */
+function hasWayOut(seed: number, sx: number, sy: number, ores: readonly OreNode[]): boolean {
+  const blocked = (tx: number, ty: number): boolean => {
+    if (inClearing(sx, sy, tx, ty)) return tx >= sx - 1 && tx <= sx + 1 && ty < sy;
+    if (!isWalkable(terrainAt(seed, tx, ty))) return true;
+
+    const ore = ores.find((node) => inDisc(tx, ty, node.tx, node.ty, node.radius)) ?? nodeAt(seed, tx, ty);
+    const rock = ore ? rockOn(seed, ore, tx, ty) : null;
+
+    return rock !== null && RESOURCES[rock].hitbox === 'tile';
+  };
+  const seen = new Set([`${sx},${sy + 1}`]);
+  const queue: [number, number][] = [[sx, sy + 1]];
+
+  for (let i = 0; i < queue.length && seen.size < SPAWN_OPEN_TILES; i += 1) {
+    const [tx, ty] = queue[i]!;
+
+    for (const [nx, ny] of [
+      [tx + 1, ty],
+      [tx - 1, ty],
+      [tx, ty + 1],
+      [tx, ty - 1],
+    ] as const) {
+      const key = `${nx},${ny}`;
+
+      if (seen.has(key) || blocked(nx, ny)) continue;
+      seen.add(key);
+      queue.push([nx, ny]);
+    }
+  }
+  return seen.size >= SPAWN_OPEN_TILES;
 }
 
 /** Le gisement de cellule sur la tuile, sans les filons du foyer. */
@@ -352,8 +397,8 @@ export function oreNodesNear(seed: number, tx: number, ty: number, range: number
 
 /*
  * Forêts : un bruit large dessine les massifs, un tirage par tuile fait le
- * grain. Le seuil de massif est haut pour laisser des clairières : un joueur
- * qui ne peut pas traverser un arbre doit pouvoir contourner la forêt.
+ * grain. Le seuil de massif est haut pour laisser des clairières. Adam passe
+ * entre les troncs : une forêt se traverse, elle n'est jamais un mur.
  */
 const FOREST_CELL = 12;
 const FOREST_THRESHOLD = 0.58;
@@ -361,6 +406,15 @@ const TREE_DENSITY = 0.62;
 
 /** Sur un filon, un rocher par tuile sauf les trous : un patch se traverse à moitié. */
 const ROCK_DENSITY = 0.8;
+
+/** Le rocher posé sur ce filon à cette tuile, ou `null` (un trou du patch). */
+function rockOn(seed: number, ore: OreNode, tx: number, ty: number): ResourceId | null {
+  // Le cœur d'un filon porte toujours son rocher : celui du foyer ne peut pas sortir vide.
+  const roll = hash3(seed ^ 0x2545f491, tx, ty) / 4294967296;
+  const core = tx === ore.tx && ty === ore.ty;
+
+  return core || roll < ROCK_DENSITY ? (ROCK_OF_ORE[ore.item] ?? null) : null;
+}
 
 /**
  * La ressource de surface d'une tuile, telle que la carte la génère.
@@ -373,13 +427,7 @@ export function resourceAt(seed: number, tx: number, ty: number): ResourceId | n
 
   const ore = oreAt(seed, tx, ty);
 
-  if (ore) {
-    // Le cœur d'un filon porte toujours son rocher : celui du foyer ne peut pas sortir vide.
-    const roll = hash3(seed ^ 0x2545f491, tx, ty) / 4294967296;
-    const core = tx === ore.tx && ty === ore.ty;
-
-    return core || roll < ROCK_DENSITY ? (ROCK_OF_ORE[ore.item] ?? null) : null;
-  }
+  if (ore) return rockOn(seed, ore, tx, ty);
 
   const { grove } = homeOf(seed);
   const inGrove = inDisc(tx, ty, grove.tx, grove.ty, HOME_GROVE.radius);

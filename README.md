@@ -35,8 +35,10 @@ jouable dans le navigateur, sur téléphone :
   sans réglage entre AZERTY et QWERTY ;
 - une foreuse qui extrait le gisement sous elle dans son coffre interne ;
 - placement au tap en deux temps, avec aperçu fantôme ;
-- récolte par contact : Adam heurte un arbre ou un rocher, le frappe
-  (animation, éclats, tremblement, son), et livre le chantier de la mairie ;
+- récolte de proximité : Adam passe près d'un arbre ou d'un rocher et le
+  récolte en marchant (éclats, tremblement, son) ; il se faufile entre les
+  troncs, une forêt n'est jamais un mur ; il livre le chantier de la mairie
+  en le heurtant ;
 - une fenêtre d'inspection au tap sur un chantier ou un bâtiment ;
 - une **nurserie** qui fait naître un enfant toutes les dix minutes, et une
   **tour de guet** qui tire seule ;

@@ -5,10 +5,10 @@ import type { ItemId } from '../data/items.ts';
 import { RECIPES } from '../data/recipes.ts';
 import { RESOURCES } from '../data/resources.ts';
 import type { PlacementRejection } from './commands.ts';
-import { BUILD_REACH_TILES, INVENTORY_CAPACITY } from './player.ts';
+import { BUILD_REACH_TILES, INVENTORY_CAPACITY, PLAYER_SPEED_TILES } from './player.ts';
 import { oreAt, terrainAt } from './terrain.ts';
 import type { Entity, EntityId } from './types.ts';
-import { World, siteMissing } from './world.ts';
+import { HARVEST_MAX_NODES, HARVEST_PASS_TICKS, TICKS_PER_SECOND, World, siteMissing } from './world.ts';
 
 const DRILL = BUILDINGS.drill;
 const CYCLE = RECIPES.mineOre.duration;
@@ -684,72 +684,213 @@ describe('World', () => {
   });
 });
 
-describe('récolte par contact', () => {
-  it('bloque Adam sur une ressource et la récolte tant qu’il pousse', () => {
-    const { world, tx, ty, axis } = worldWithHarvestable();
-    const resource = world.resources.at(tx, ty)!;
-    const proto = RESOURCES[resource.id];
+describe('récolte de proximité', () => {
+  it('récolte ce qui est à portée, un passage toutes les 10 ticks, sans foncer dedans', () => {
+    const { world, tx, ty } = worldWithHarvestable();
+    const proto = RESOURCES[world.resources.at(tx, ty)!.id];
     const harvested: ItemId[] = [];
 
     world.events.on('resourceHarvested', ({ item }) => harvested.push(item));
-    world.push({ type: 'setMoveAxis', ...axis });
 
-    // Il faut d'abord arriver au contact, puis tenir `harvestTicks` ticks.
-    let ticks = 0;
+    for (let i = 1; i < HARVEST_PASS_TICKS; i += 1) world.tick();
+    expect(harvested).toEqual([]);
 
-    while (harvested.length === 0 && ticks < 100) {
-      world.tick();
-      ticks += 1;
-    }
-
-    expect(harvested).toEqual([proto.item]);
-    expect(world.player.inventory.count(proto.item)).toBe(1);
+    world.tick();
+    expect(harvested).toContain(proto.item);
+    expect(harvested.length).toBeLessThanOrEqual(HARVEST_MAX_NODES);
     expect(world.resources.at(tx, ty)?.remaining).toBe(proto.amount - 1);
-
-    // Adam n'a pas traversé la tuile.
-    const standing = worldToTile(world.player.x, world.player.y);
-
-    expect(standing.tx === tx && standing.ty === ty).toBe(false);
-
-    // La cadence est régulière : la suivante tombe `harvestTicks` ticks plus tard.
-    for (let i = 0; i < proto.harvestTicks; i += 1) world.tick();
-    expect(harvested.length).toBe(2);
+    expect(world.player.harvesting).toBe(true);
   });
 
   it('fait disparaître la ressource vidée, qui devient franchissable', () => {
-    const { world, tx, ty, axis } = worldWithHarvestable();
+    const { world, tx, ty } = worldWithHarvestable();
     const proto = RESOURCES[world.resources.at(tx, ty)!.id];
     const { cx, cy } = tileToChunk(tx, ty);
-    let remaining = -1;
 
-    world.events.on('resourceHarvested', (event) => (remaining = event.remaining));
-    world.push({ type: 'setMoveAxis', ...axis });
+    for (let i = 0; i < proto.amount * HARVEST_PASS_TICKS; i += 1) world.tick();
 
-    for (let i = 0; i < 40 + proto.amount * proto.harvestTicks; i += 1) {
-      world.tick();
-      if (remaining === 0) break;
-    }
-
-    expect(remaining).toBe(0);
     expect(world.resources.at(tx, ty)).toBeNull();
     expect(world.isSolid(tx, ty)).toBe(false);
     expect(world.chunks.peek(cx, cy)?.dirty).toBe(true);
-    expect(world.player.inventory.count(proto.item)).toBe(proto.amount);
+    expect(world.player.inventory.count(proto.item)).toBeGreaterThanOrEqual(proto.amount);
   });
 
   it('arrête de récolter quand le sac est plein', () => {
-    const { world, tx, ty, axis } = worldWithHarvestable();
+    const { world, tx, ty } = worldWithHarvestable();
     const before = world.resources.at(tx, ty)!.remaining;
     let full = 0;
 
     world.player.inventory.add('wood', INVENTORY_CAPACITY);
     world.events.on('inventoryFull', () => (full += 1));
-    world.push({ type: 'setMoveAxis', ...axis });
 
     for (let i = 0; i < 60; i += 1) world.tick();
 
     expect(full).toBeGreaterThan(0);
     expect(world.resources.at(tx, ty)?.remaining).toBe(before);
+  });
+});
+
+/** Une tuile libre dont les huit voisines sont des arbres, dans une forêt sans eau ni rocher alentour. */
+function closedGrove(): { seed: number; tx: number; ty: number } {
+  for (let seed = 1; seed < 100; seed += 1) {
+    const world = new World(seed);
+
+    for (let ty = -60; ty < 60; ty += 1) {
+      for (let tx = -60; tx < 60; tx += 1) {
+        if (world.resources.at(tx, ty) || !onlyTrees(world, tx, ty, 4)) continue;
+
+        let ring = 0;
+
+        for (let dy = -1; dy <= 1; dy += 1) {
+          for (let dx = -1; dx <= 1; dx += 1) {
+            if (world.resources.at(tx + dx, ty + dy)?.id === 'tree') ring += 1;
+          }
+        }
+        if (ring === 8) return { seed, tx, ty };
+      }
+    }
+  }
+  throw new Error('aucun bosquet fermé — la génération des forêts a changé');
+}
+
+/** Autour de la tuile, rien d'autre que de l'herbe, des arbres et du vide : ni eau, ni rocher, ni bâti. */
+function onlyTrees(world: World, tx: number, ty: number, radius: number): boolean {
+  for (let dy = -radius; dy <= radius; dy += 1) {
+    for (let dx = -radius; dx <= radius; dx += 1) {
+      const x = tx + dx;
+      const y = ty + dy;
+
+      if (terrainAt(world.seed, x, y) === 'water' || world.chunks.occupantAt(x, y) !== undefined) return false;
+      if (world.resources.at(x, y) && world.resources.at(x, y)?.id !== 'tree') return false;
+    }
+  }
+  return true;
+}
+
+/** Une rangée de 12 tuiles de forêt dense (au moins 60 % d'arbres sur trois rangées), sans autre obstacle. */
+function denseForestRow(): { seed: number; tx: number; ty: number } {
+  const length = 12;
+
+  for (let seed = 1; seed < 100; seed += 1) {
+    const world = new World(seed);
+
+    for (let ty = -60; ty < 60; ty += 1) {
+      for (let tx = -60; tx < 60; tx += 1) {
+        let trees = 0;
+
+        for (let dx = 0; dx < length; dx += 1) {
+          for (let dy = -1; dy <= 1; dy += 1) {
+            if (world.resources.at(tx + dx, ty + dy)) trees += 1;
+          }
+        }
+        if (trees < length * 3 * 0.6) continue;
+        if (!onlyTrees(world, tx + length / 2, ty, length / 2)) continue;
+        return { seed, tx, ty };
+      }
+    }
+  }
+  throw new Error('aucune forêt dense — la génération des forêts a changé');
+}
+
+/** Ticks pour qu'Adam, poussé vers l'ouest depuis le bout est de la rangée, parcoure `tiles` tuiles. */
+function crossWest(world: World, from: { tx: number; ty: number }, tiles: number): number {
+  world.player.x = (from.tx + 11.5) * TILE_SIZE;
+  world.player.y = (from.ty + 0.5) * TILE_SIZE;
+
+  const goal = world.player.x - tiles * TILE_SIZE;
+  let ticks = 0;
+
+  world.push({ type: 'setMoveAxis', x: -1, y: 0 });
+  while (world.player.x > goal && ticks < 1000) {
+    world.tick();
+    ticks += 1;
+  }
+  return ticks;
+}
+
+describe('forêt', () => {
+  const plain = Math.ceil((10 * TICKS_PER_SECOND) / PLAYER_SPEED_TILES);
+
+  it('n’enferme jamais Adam dans un bosquet fermé, sac plein', () => {
+    const grove = closedGrove();
+
+    for (const [x, y] of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ] as const) {
+      const world = new World(grove.seed);
+
+      world.player.x = (grove.tx + 0.5) * TILE_SIZE;
+      world.player.y = (grove.ty + 0.5) * TILE_SIZE;
+      world.player.inventory.add('wood', INVENTORY_CAPACITY);
+      world.push({ type: 'setMoveAxis', x, y });
+
+      for (let i = 0; i < 2 * TICKS_PER_SECOND; i += 1) world.tick();
+
+      const moved = (world.player.x - (grove.tx + 0.5) * TILE_SIZE) * x + (world.player.y - (grove.ty + 0.5) * TILE_SIZE) * y;
+
+      // Sorti du bosquet, et bien au-delà : les arbres n'ont rien pris, rien n'a bloqué.
+      expect(moved).toBeGreaterThan(3 * TILE_SIZE);
+      expect(world.player.inventory.freeSpace()).toBe(0);
+    }
+  });
+
+  it('se traverse au plus deux fois moins vite que la plaine', () => {
+    const row = denseForestRow();
+
+    // Sac plein : les arbres restent debout, c'est la forêt la plus dense possible.
+    const full = new World(row.seed);
+
+    full.player.inventory.add('wood', INVENTORY_CAPACITY);
+    expect(crossWest(full, row, 10)).toBeLessThanOrEqual(2 * plain);
+
+    // Sac vide : la récolte en chemin ne ralentit pas.
+    expect(crossWest(new World(row.seed), row, 10)).toBeLessThanOrEqual(2 * plain);
+  });
+
+  it('récolte en marchant', () => {
+    const row = denseForestRow();
+    const world = new World(row.seed);
+    let whileMoving = 0;
+
+    world.events.on('resourceHarvested', () => {
+      if (world.player.moving) whileMoving += 1;
+    });
+    crossWest(world, row, 10);
+
+    expect(whileMoving).toBeGreaterThan(0);
+    expect(world.player.inventory.count('wood')).toBeGreaterThan(0);
+  });
+
+  it('fait partir Adam d’une clairière qui ouvre sur le monde', () => {
+    for (let seed = 1; seed < 30; seed += 1) {
+      const world = new World(seed);
+      const start = worldToTile(world.player.x, world.player.y);
+      const seen = new Set([`${start.tx},${start.ty}`]);
+      const queue = [start];
+
+      // Les arbres ne comptent pas : Adam passe entre les troncs.
+      const open = (tx: number, ty: number): boolean =>
+        !world.isSolid(tx, ty) || world.resources.at(tx, ty)?.id === 'tree';
+
+      for (let i = 0; i < queue.length && seen.size < 400; i += 1) {
+        const { tx, ty } = queue[i]!;
+
+        for (const [nx, ny] of [
+          [tx + 1, ty],
+          [tx - 1, ty],
+          [tx, ty + 1],
+          [tx, ty - 1],
+        ] as const) {
+          if (seen.has(`${nx},${ny}`) || !open(nx, ny)) continue;
+          seen.add(`${nx},${ny}`);
+          queue.push({ tx: nx, ty: ny });
+        }
+      }
+      expect(seen.size).toBeGreaterThanOrEqual(400);
+    }
   });
 });
 

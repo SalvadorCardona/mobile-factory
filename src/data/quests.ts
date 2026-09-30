@@ -22,7 +22,7 @@ export interface ToolProto {
   label: string;
   /** Ressources que l'outil récolte plus vite. */
   resources: readonly ResourceId[];
-  /** Diviseur du temps de contact entre deux unités récoltées. */
+  /** Unités qu'un nœud donne à chaque passage de récolte, au lieu d'une. */
   harvestSpeed: number;
 }
 

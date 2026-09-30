@@ -38,14 +38,14 @@ import {
   PERKS,
   bagBonus,
   freeSites,
-  harvestTicksWith,
+  harvestYieldWith,
   startingItems,
   type ColonyScore,
   type PerkId,
 } from '../data/perks.ts';
 import type { QuestId } from '../data/quests.ts';
 import { RECIPES, type RecipeId, type RecipeProto } from '../data/recipes.ts';
-import { RESOURCES } from '../data/resources.ts';
+import { RESOURCES, type ResourceId } from '../data/resources.ts';
 import { WEAPONS } from '../data/weapons.ts';
 import { JOB_PRIORITY, PORTERS } from '../data/workers.ts';
 import { ChunkIndex } from './chunk.ts';
@@ -62,11 +62,11 @@ import type {
 } from './commands.ts';
 import type { WildlifeId } from '../data/enemies.ts';
 import { compassOf, spawnPoint, stepMutant, type Compass } from './enemies.ts';
-import { createEve, currentQuest, harvestTicksWithTools, isUnlocked, mostDamaged, questProgress, rideHome, walkTo } from './eve.ts';
+import { createEve, currentQuest, harvestYieldWithTools, isUnlocked, mostDamaged, questProgress, rideHome, walkTo } from './eve.ts';
 import { stepKid } from './kids.ts';
 import { rollLoot, stepPickup } from './loot.ts';
 import { denSize, densOfChunk, stepBeast, type Den } from './wildlife.ts';
-import { facingOf } from './motion.ts';
+import { FULL_TILE, facingOf, type TileBox } from './motion.ts';
 import {
   BUILD_REACH_TILES,
   INVENTORY_CAPACITY,
@@ -128,6 +128,22 @@ const FORGE_RECIPE: RecipeId = 'smeltPlate';
 
 /** Ticks de contact entre deux objets livrés sur un chantier. Court : le chantier se remplit à vue. */
 export const DELIVER_TICKS = 2;
+
+/**
+ * Récolte de proximité : un passage toutes les 10 ticks, les ressources dont
+ * le centre est à portée d'Adam, de la plus proche à la plus lointaine, une
+ * unité chacune, quatre au plus.
+ */
+export const HARVEST_PASS_TICKS = 10;
+export const HARVEST_REACH_TILES = 1.25;
+export const HARVEST_MAX_NODES = 4;
+
+/**
+ * Le tronc d'un arbre, en pixels dans sa tuile : le pied du sprite, au centre
+ * et en bas. Il laisse 22 px entre deux troncs voisins, dans un sens comme
+ * dans l'autre — assez pour la boîte d'Adam (20 × 14).
+ */
+const TRUNK: TileBox = { left: 11, top: 20, right: 21, bottom: 30, glide: true };
 
 /** Secondes annoncées avant chaque vague. */
 const WAVE_COUNTDOWN_SECONDS = 3;
@@ -488,9 +504,10 @@ export class World {
     this.tickCount += 1;
     this.drainCommands();
 
-    const contact = stepPlayer(this.player, this.moveX, this.moveY, this.isSolid, STEP_SECONDS);
+    const contact = stepPlayer(this.player, this.moveX, this.moveY, this.playerObstacleAt, STEP_SECONDS);
 
     this.handleContact(contact);
+    this.harvestNearby();
     this.stepClock();
     this.stepMobiles();
     this.recover();
@@ -756,6 +773,19 @@ export class World {
     this.resources.isSolid(tx, ty) ||
     this.chunks.occupantAt(tx, ty) !== undefined;
 
+  /**
+   * Ce qui arrête Adam, au pixel près : la tuile pleine, sauf sous un arbre
+   * où seul le tronc compte. Une forêt ne l'enferme jamais, sac plein ou non.
+   */
+  private readonly playerObstacleAt = (tx: number, ty: number): TileBox | null => {
+    if (!isWalkable(terrainAt(this.seed, tx, ty)) || this.chunks.occupantAt(tx, ty) !== undefined) return FULL_TILE;
+
+    const resource = this.resources.at(tx, ty);
+
+    if (!resource) return null;
+    return RESOURCES[resource.id].hitbox === 'trunk' ? TRUNK : FULL_TILE;
+  };
+
   /** Ce qui arrête une bête qui se faufile entre les arbres : l'eau et le bâti, rien d'autre. */
   private readonly isOpenGroundSolid = (tx: number, ty: number): boolean =>
     !isWalkable(terrainAt(this.seed, tx, ty)) || this.chunks.occupantAt(tx, ty) !== undefined;
@@ -763,14 +793,12 @@ export class World {
   /* ---------------------------------------------------------------- contact */
 
   /**
-   * Le contact est **la** mécanique du jeu : Adam n'a pas de bouton d'action.
-   * Il pousse contre quelque chose, et selon ce que c'est, il récolte ou il
-   * livre. Le compteur repart à zéro dès qu'il change de cible ou s'écarte,
-   * pour qu'on ne puisse pas « charger » une récolte contre un mur.
+   * Adam n'a pas de bouton d'action : il pousse contre un chantier, et le
+   * chantier se remplit ; contre une foreuse ou une ferme, et leur coffre
+   * passe dans son sac. Le compteur repart à zéro dès qu'il change de cible
+   * ou s'écarte, pour qu'on ne puisse pas « charger » une livraison ailleurs.
    */
   private handleContact(contact: Contact | null): void {
-    this.player.harvesting = false;
-
     if (!contact) {
       this.contactKey = '';
       this.contactTicks = 0;
@@ -785,23 +813,6 @@ export class World {
     }
     this.contactTicks += 1;
 
-    const resource = this.resources.at(contact.tx, contact.ty);
-
-    if (resource) {
-      this.player.harvesting = true;
-
-      const ticks = harvestTicksWith(
-        this.perks,
-        resource.id,
-        harvestTicksWithTools(resource.id, RESOURCES[resource.id].harvestTicks, this.questsDone),
-      );
-
-      if (this.contactTicks % ticks === 0) {
-        this.harvest(contact.tx, contact.ty);
-      }
-      return;
-    }
-
     const occupant = this.chunks.occupantAt(contact.tx, contact.ty);
     const entity = occupant === undefined ? undefined : this.entities.get(occupant);
 
@@ -814,14 +825,66 @@ export class World {
     else if (entity?.kind === 'forge' && !this.supplyOne(entity)) this.collect(entity);
   }
 
-  private harvest(tx: number, ty: number): void {
-    const { inventory } = this.player;
+  /**
+   * La récolte de proximité : Adam s'approche, la récolte est automatique,
+   * qu'il marche ou non. Seules les tuiles autour de lui sont interrogées,
+   * jamais la carte, et en distances au carré. Sac plein, rien n'est pris et
+   * le HUD le dit — rien n'est jeté.
+   */
+  private harvestNearby(): void {
+    if (this.tickCount % HARVEST_PASS_TICKS !== 0) return;
 
-    if (inventory.freeSpace() <= 0) {
+    const { player } = this;
+    const reach = HARVEST_REACH_TILES * TILE_SIZE;
+    const span = Math.ceil(HARVEST_REACH_TILES);
+    const px = floorDiv(player.x, TILE_SIZE);
+    const py = floorDiv(player.y, TILE_SIZE);
+    const nodes: { tx: number; ty: number; id: ResourceId; d2: number }[] = [];
+
+    player.harvesting = false;
+
+    for (let ty = py - span; ty <= py + span; ty += 1) {
+      for (let tx = px - span; tx <= px + span; tx += 1) {
+        const resource = this.resources.at(tx, ty);
+
+        if (!resource) continue;
+
+        const d2 = distanceSq(player.x, player.y, (tx + 0.5) * TILE_SIZE, (ty + 0.5) * TILE_SIZE);
+
+        if (d2 <= reach * reach) nodes.push({ tx, ty, id: resource.id, d2 });
+      }
+    }
+
+    if (nodes.length === 0) return;
+    if (player.inventory.freeSpace() <= 0) {
       this.events.emit('inventoryFull', {});
       return;
     }
 
+    nodes.sort((a, b) => a.d2 - b.d2);
+    player.harvesting = true;
+
+    for (const node of nodes.slice(0, HARVEST_MAX_NODES)) {
+      // Hache ou pioche reçues d'Ève : un nœud donne plus d'une unité par passage.
+      const units = harvestYieldWith(
+        this.perks,
+        node.id,
+        harvestYieldWithTools(node.id, this.questsDone),
+        this.tickCount / HARVEST_PASS_TICKS,
+      );
+
+      for (let i = 0; i < units; i += 1) {
+        if (player.inventory.freeSpace() <= 0) {
+          this.events.emit('inventoryFull', {});
+          return;
+        }
+        this.harvest(node.tx, node.ty);
+      }
+    }
+  }
+
+  private harvest(tx: number, ty: number): void {
+    const { inventory } = this.player;
     const taken = this.resources.take(tx, ty);
 
     if (!taken) return;
