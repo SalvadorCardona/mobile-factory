@@ -17,6 +17,7 @@
 
 import { LORE } from '../data/lore.ts';
 import { buildingIcon, itemIcon, uiIcon } from './icons.ts';
+import { seedLine } from './seed.ts';
 
 export interface TitleOptions {
   /** Une partie sauvegardée attend : « Continuer » et « Nouvelle partie » remplacent « Jouer ». */
@@ -126,7 +127,7 @@ export class PauseScreen {
   private readonly panel: HTMLElement;
   private readonly confirm: HTMLElement;
 
-  public constructor(onResume: () => void, onRestart: () => void) {
+  public constructor(seed: number, onResume: () => void, onRestart: () => void) {
     this.root = document.createElement('div');
     this.root.className = 'overlay pause-screen';
     this.root.hidden = true;
@@ -159,7 +160,7 @@ export class PauseScreen {
     restart.addEventListener('click', () => this.asking(true));
 
     this.confirm = confirmRestart(onRestart, () => this.asking(false));
-    this.panel.append(title, text, resume, restart);
+    this.panel.append(title, text, resume, restart, seedLine(seed));
     this.root.append(this.panel, this.confirm);
     this.asking(false);
   }

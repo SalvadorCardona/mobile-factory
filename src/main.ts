@@ -34,6 +34,7 @@ import { BuildingPanel } from './ui/buildingPanel.ts';
 import { BuildMenu } from './ui/buildMenu.ts';
 import { Hud } from './ui/hud.ts';
 import { PauseScreen, TitleScreen } from './ui/screens.ts';
+import { formatSeed, parseSeed } from './ui/seed.ts';
 
 /**
  * Clamp anti-spirale de la mort.
@@ -151,10 +152,10 @@ async function main(): Promise<void> {
 
   const autosave = wireSave(world, saves, () => started);
 
-  const pause = new PauseScreen(() => setPaused(false), () => autosave.restart());
+  const pause = new PauseScreen(world.seed, () => setPaused(false), () => autosave.restart());
   const title = new TitleScreen({
     resume: loaded.status === 'ok',
-    notice: LOAD_NOTICES[loaded.status],
+    notice: LOAD_NOTICES[loaded.status] ?? linkNotice(world),
     onPlay: () => {
       started = true;
       hud.root.dataset['started'] = 'true';
@@ -453,10 +454,19 @@ function wireShake(world: World, renderer: GameRenderer): void {
  * indispensable pour reproduire un bug de génération.
  */
 function readSeed(): number {
-  const raw = new URLSearchParams(window.location.search).get('seed');
-  const parsed = raw === null ? Number.NaN : Number.parseInt(raw, 10);
+  return parseSeed(window.location.search) ?? (Math.random() * 0xffffffff) >>> 0;
+}
 
-  return Number.isFinite(parsed) ? parsed : (Math.random() * 0xffffffff) >>> 0;
+/**
+ * Un lien partagé mène à une carte, mais une sauvegarde l'emporte : elle
+ * reprend sur la sienne. L'écran titre le dit, et « Nouvelle partie » ouvre
+ * la carte du lien.
+ */
+function linkNotice(world: World): string | undefined {
+  const linked = parseSeed(window.location.search);
+
+  if (linked === null || linked === world.seed) return undefined;
+  return `Le lien mène à la carte n° ${formatSeed(linked)} : « Nouvelle partie » pour la jouer.`;
 }
 
 void main();
