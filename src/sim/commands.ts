@@ -166,6 +166,8 @@ export type PlacementRejection =
   | 'resource'
   /** Le joueur est dans l'emprise : un bâtiment est solide, il y resterait coincé. */
   | 'onPlayer'
+  /** Une foreuse sans filon sous son emprise ne produirait jamais rien. */
+  | 'noOre'
   /**
    * Pas encore débloqué : il faut d'abord le plan, qu'Ève donne en récompense
    * d'une quête, ou voir tomber d'autres nuits (`unlockNight`).

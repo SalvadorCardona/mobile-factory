@@ -334,7 +334,7 @@ async function main(): Promise<void> {
     }
     if (started && !paused) autosave.update(ticker.deltaMS);
 
-    renderer.draw(accumulator / STEP_MS, placement.mode !== 'idle', placement.ghost);
+    renderer.draw(accumulator / STEP_MS, placement.armedBuilding(), placement.ghost);
     hud.update(ticker.FPS, renderer.bakedChunks, renderer.atlasStats, renderer.waterStats, renderer.weatherParticles);
 
     // Lire la mise en page force un reflow : une fois tous les dix cadres suffit.

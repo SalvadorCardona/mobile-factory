@@ -77,7 +77,7 @@ const SEEN_CELL = 4;
 const SEARCH_MS = 500;
 
 /** La teinte de famille de chaque objet (`FAMILY_TONES`) : corail pour la pierre, menthe pour le bois. */
-const ITEM_TONES: Record<ItemId, Tone> = {
+export const ITEM_TONES: Record<ItemId, Tone> = {
   wood: FAMILY_TONES.vegetation,
   stone: FAMILY_TONES.stone,
   ironOre: FAMILY_TONES.iron,
@@ -97,7 +97,7 @@ export function indicatorSources(): SvgSource[] {
   return ITEM_IDS.map((item) => ({ key: iconKey(item), svg: ITEM_ICONS[item], width: ICON_SIZE, height: ICON_SIZE }));
 }
 
-function iconKey(item: ItemId): string {
+export function iconKey(item: ItemId): string {
   return `icon.${item}`;
 }
 

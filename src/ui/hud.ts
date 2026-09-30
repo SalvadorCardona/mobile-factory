@@ -66,6 +66,7 @@ const REJECTION_LABELS: Record<PlacementRejection, string> = {
   outOfReach: 'Trop loin — rapprochez-vous',
   resource: 'Dégagez d’abord les arbres et rochers',
   onPlayer: 'Vous êtes sur l’emplacement',
+  noOre: 'Aucun filon ici — une foreuse se pose sur un filon',
   locked: 'Pas encore débloqué — il faut son plan, ou tenir encore une nuit',
   unique: 'Un seul par colonie — il y en a déjà un',
 };

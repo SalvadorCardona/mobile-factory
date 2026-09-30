@@ -5,6 +5,7 @@ import type { ItemId } from '../data/items.ts';
 import type { Command } from './commands.ts';
 import { BUILD_REACH_TILES } from './player.ts';
 import { SAVE_VERSION, decodeSave, deserialize, encodeSave, serialize } from './save.ts';
+import { oreAt } from './terrain.ts';
 import type { EntityId } from './types.ts';
 import { World } from './world.ts';
 
@@ -65,6 +66,30 @@ function build(world: World, building: BuildingId): void {
   throw new Error('aucune case posable à portée');
 }
 
+/** Mène Adam près du filon le plus proche et casse les rochers qui le couvrent. */
+function clearNearestOre(world: World): void {
+  const origin = worldToTile(world.player.x, world.player.y);
+
+  for (let r = 0; r <= 24; r += 1) {
+    for (let dy = -r; dy <= r; dy += 1) {
+      for (let dx = -r; dx <= r; dx += 1) {
+        const tx = origin.tx + dx;
+        const ty = origin.ty + dy;
+
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r || !oreAt(world.seed, tx, ty)) continue;
+
+        for (let y = ty - 2; y <= ty + 2; y += 1) {
+          for (let x = tx - 2; x <= tx + 2; x += 1) world.resources.clear(x, y);
+        }
+        world.player.x = (tx + 0.5) * TILE_SIZE;
+        world.player.y = (ty + 3.5) * TILE_SIZE;
+        return;
+      }
+    }
+  }
+  throw new Error('aucun filon près d’Adam');
+}
+
 /** Un axe qui tourne lentement : Adam se promène, heurte, récolte. */
 function wander(tick: number): Command {
   const angle = tick / 90;
@@ -99,6 +124,8 @@ function playedWorld(): World {
   world.tick();
 
   build(world, 'watchtower');
+  // Une foreuse ne se pose que sur un filon : on casse les rochers qui le couvrent.
+  clearNearestOre(world);
   build(world, 'drill');
 
   const hasKid = (): boolean => [...world.mobiles.values()].some((mobile) => mobile.kind === 'kid');

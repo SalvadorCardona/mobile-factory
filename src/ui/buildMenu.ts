@@ -50,7 +50,7 @@ import type { ItemId } from '../data/items.ts';
 import type { Placement } from '../input/placement.ts';
 import type { World } from '../sim/world.ts';
 import { buildingIcon, itemAmount, uiIcon } from './icons.ts';
-import { placementReason } from './placementReason.ts';
+import { placementOutput, placementReason } from './placementReason.ts';
 
 /** Position physique → mouvement dans la grille : flèches, et ZQSD/WASD comme pour marcher. */
 const MOVES: Readonly<Record<string, GridMove>> = {
@@ -390,10 +390,14 @@ export class BuildMenu {
       if (this.armedLabel.textContent !== label) this.armedLabel.textContent = label;
     }
     const block = this.placement.block();
-    const reason = block && placementReason(block, this.world);
     const confirmable = this.placement.isConfirmable();
+    const ghost = this.placement.ghost;
+    // Posable : une foreuse dit ce qu'elle extraira, en vert à la place du motif.
+    const output = confirmable && ghost ? placementOutput(ghost.building, ghost.tx, ghost.ty, this.world) : null;
+    const reason = block ? placementReason(block, this.world) : output ? { text: output, remedy: null } : null;
 
     this.reason.hidden = !reason;
+    this.reason.dataset['ok'] = String(!block);
     if (reason) {
       setText(this.reasonText, reason.text);
       setText(this.reasonRemedy, reason.remedy ?? '');

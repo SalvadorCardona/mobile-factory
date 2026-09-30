@@ -1572,6 +1572,12 @@ export class World {
       if (found.length > 0) return { reason, tiles: found };
     }
 
+    // Une foreuse posée à sec ne produirait jamais rien : le rocher d'un filon
+    // se casse d'abord (« resource »), la foreuse se pose ensuite à sa place.
+    if (proto.kind === 'drill' && this.oreUnder(building, tx, ty) === null) {
+      return { reason: 'noOre', tiles: tiles(() => true) };
+    }
+
     // Portée mesurée depuis le centre de l'emprise, en distances au carré.
     const centerX = (tx + proto.width / 2) * TILE_SIZE;
     const centerY = (ty + proto.height / 2) * TILE_SIZE;
@@ -1664,7 +1670,7 @@ export class World {
         building = {
           ...base,
           kind: 'drill',
-          output: this.oreUnder(site.tx, site.ty, site.width, site.height),
+          output: this.oreUnder(site.proto, site.tx, site.ty),
           blocked: false,
         };
         break;
@@ -1774,8 +1780,14 @@ export class World {
     }
   }
 
-  /** Le premier objet extractible sous l'emprise, ou `null` si aucun gisement. */
-  private oreUnder(tx: number, ty: number, width: number, height: number): ItemId | null {
+  /**
+   * Le premier objet extractible sous l'emprise de ce bâtiment posé en
+   * (tx, ty), ou `null` si aucun gisement. L'aperçu d'une foreuse le montre
+   * (« Extraira : … »), `placementBlock()` refuse sans.
+   */
+  public oreUnder(building: BuildingId, tx: number, ty: number): ItemId | null {
+    const { width, height } = BUILDINGS[building];
+
     for (let y = ty; y < ty + height; y += 1) {
       for (let x = tx; x < tx + width; x += 1) {
         const node = oreAt(this.seed, x, y);

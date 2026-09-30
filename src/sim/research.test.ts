@@ -155,7 +155,7 @@ describe('labo de recherche', () => {
     world.push({ type: 'placeBuilding', building: 'lab', tx, ty });
     world.tick();
 
-    const other = spot(world, 'drill');
+    const other = spot(world, 'nursery');
 
     expect(world.atLimit('lab')).toBe(true);
     expect(world.canPlace('lab', other.tx, other.ty)).toBe('unique');
@@ -345,7 +345,7 @@ describe('labo de recherche', () => {
     const built = withLab().world;
     // Une maison des constructeurs posée d'un coup (il faudrait son plan) : ses porteurs s'y installent au chargement.
     const state = built.snapshot();
-    const { tx, ty } = spot(built, 'drill');
+    const { tx, ty } = spot(built, 'nursery');
 
     state.entities.push({ kind: 'house', id: state.nextId, proto: 'builderHouse', tx, ty, width: 2, height: 2, store: {}, hp: BUILDINGS.builderHouse.hp, level: 1, paused: false, staff: BUILDINGS.builderHouse.workers });
     state.nextId += 1;
