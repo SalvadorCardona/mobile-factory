@@ -66,47 +66,58 @@ Les règles, en résumé :
 ## Icônes et HUD
 
 - Une ressource = une icône : `src/data/icons.ts` est un
-  `Record<ItemId, PixelIcon>` (12 × 12 px, palette du jeu). Un objet sans
-  icône ne compile pas ; `validatePrototypes()` vérifie taille et palette.
+  `Record<ItemId, string>` (un SVG de 24 × 24, helpers de la DA). Un objet
+  sans icône ne compile pas ; `validatePrototypes()` vérifie cadre et règles.
 - `src/ui/hud.ts` : quête, conseil contextuel (le tutoriel), sac, bulles,
   gains flottants, défaite. `src/ui/screens.ts` : écran titre et pause — la
   simulation ne tourne qu'après « Jouer » et hors pause. Police : Jersey 15,
   embarquée via `@fontsource` (ses chiffres ne se confondent pas).
   Couleurs de l'UI : `--accent`, `--good`, `--danger` dans `style.css`, tirées
   de `PALETTE`. Le panneau de debug ne s'affiche qu'avec `?debug` en dev.
-- `src/ui/icons.ts` bake icônes d'objets et vignettes de bâtiments en
-  `data:` URL pour le DOM. Le menu de construction est un tiroir derrière un
+- `src/ui/icons.ts` sert icônes d'objets, vignettes de bâtiments et
+  pictogrammes (`src/art/ui.ts`) en `data:` URL SVG pour le DOM. Le menu de construction est un tiroir derrière un
   seul bouton ; armer un bâtiment passe la carte en mode construction
   (grille + emprises, `render/ghostLayer.ts`).
 
 ## Système de sprites
 
-> Transitoire : le rendu affiche encore les placeholders pixel art de
-> `pixelmaps.ts` (palette de `legacyPixelArt.ts`) le temps de leur
-> migration en SVG. Aucun nouveau visuel ne s'y ajoute.
-
-- `src/data/sprites.ts` : une planche = une grille, une animation par ligne,
-  une image par colonne, taille d'image fixe, ancre, cadence.
-- `src/render/spriteLibrary.ts` : charge la planche PNG ou bake le
-  placeholder, et sert `Texture[]` par animation. Le reste du rendu ne sait
-  pas d'où viennent les textures.
-- `src/render/entityLayer.ts` : Adam (`AnimatedSprite`, direction + marche,
-  profil gauche = miroir du profil droit), chantiers, bâtiments animés.
-- Les bâtiments sont vus en 3/4 : planche large comme l'emprise, plus haute
-  qu'elle (le toit dépasse), ancrée en (0, 1) au pied de l'emprise.
-- Les ressources de surface sont bakées dans la RenderTexture du chunk
-  (`chunkLayer.ts`) et rebakées quand la simulation salit le chunk. Une
-  ressource peut avoir plusieurs planches (`RESOURCES[id].sprites` : feuillu,
-  sapin, arbre mort), tirées par tuile depuis la seed.
-- Le décor (`src/data/decor.ts`, planche `decor`) est tiré par `decorAt()`
-  (`sim/terrain.ts`) sur les tuiles nues et baké avec le terrain. Il ne se
-  heurte pas et n'est jamais de l'état.
-- Le sol vient de `render/terrainTiles.ts` : un tileset procédural seedé
-  (variantes, transitions entre terrains, ombres portées), dessiné à 16 px
-  source comme les sprites.
-- Ressenti (rebond, secousse, flash, tremblement de caméra) : des minuteurs
+- **Un sprite = un module de `src/art/`** qui construit son SVG avec les
+  helpers de `artDirection.ts`, en **morceaux** (`parts`) du même cadre :
+  un corps par direction et un pied pour un personnage ; `site`, `built`,
+  `damaged` pour un bâtiment (+ `wheel` pour la foreuse, `crops` pour la
+  ferme) ; `full`, `damaged` pour une ressource. Cadre et ancre en pixels
+  monde (tuile = 32 px). `src/data/sprites.ts` est le registre ; `art/` est
+  soumis à la même frontière que `data/` (ni Pixi ni DOM).
+- `src/render/spriteLibrary.ts` rastérise chaque morceau **une fois** au
+  chargement, à la résolution de l'écran (`devicePixelRatio`, plafonné à 3),
+  dans un atlas (une page de 2048 px de large ; ~100 images tiennent dans
+  une texture). Le reste du rendu ne voit que des `Texture`. Le panneau
+  `?debug` affiche pages, mégapixels et temps de chargement.
+- Animation **par morceaux**, pas par planches : `render/puppet.ts` anime
+  Adam, les mutants et les enfants (pieds qui alternent, rebond, écrasement
+  à la frappe, arc qui se tend, grimace au coup reçu) ; la roue de la foreuse
+  tourne, les cultures ondulent ; un mutant mort s'écrase et s'efface.
+- Les bâtiments sont vus en 3/4 : cadre large comme l'emprise, plus haut
+  qu'elle (le toit dépasse), ancré en (0, 1) au pied de l'emprise. Sous la
+  moitié de ses points de vie, un bâtiment montre `damaged`.
+- Arbres et rochers sont des sprites (`render/resourceLayer.ts`) triés en
+  profondeur avec les bâtiments et les personnages : ils montent au-dessus
+  de leur tuile, Adam passe derrière. Une ressource peut avoir plusieurs
+  sprites (`RESOURCES[id].sprites` : feuillu, sapin, arbre mort), tirés par
+  tuile depuis la seed.
+- Le sol (`src/art/terrain.ts` : damier d'herbe, sable, eau, roche,
+  transitions, coins arrondis) et le décor (`src/data/decor.ts`, sprite
+  `decor`, tiré par `decorAt()`) sont bakés par blocs de 16 × 16 tuiles
+  (`render/chunkLayer.ts`, résolution plafonnée à 2) et jamais rebakés : ils
+  ne changent pas. Le décor ne se heurte pas et n'est jamais de l'état.
+- Ombres portées : capsules pleines dans la teinte foncée du sol sous
+  l'objet (`TerrainTiles.shadow`), dans un conteneur sous tout le reste.
+- Ressenti (rebond, secousse, tremblement, flash, caméra) : des minuteurs
   de vue côté `render/`, jamais de l'état de simulation.
-  `render/indicatorLayer.ts` dessine les flèches de bord (mutants, mairie).
+  `render/indicatorLayer.ts` dessine les repères de bord (mutants, mairie).
+- Relire un visuel : `npm run art:sheet -- planche.svg`, puis
+  `google-chrome --headless --screenshot=planche.png --window-size=L,H planche.svg`
+  et ouvrir le PNG avec `Read`.
 
 ## Son
 

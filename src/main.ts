@@ -14,7 +14,7 @@ import '@fontsource/jersey-15/latin.css';
 import './style.css';
 import { AudioEngine } from './audio/engine.ts';
 import { assertPrototypes } from './data/validate.ts';
-import { PALETTE } from './data/legacyPixelArt.ts';
+import { PALETTE, hex } from './data/artDirection.ts';
 import { MENU_BUILDING_IDS } from './data/buildings.ts';
 import type { ItemId } from './data/items.ts';
 import { Inspect } from './input/inspect.ts';
@@ -48,11 +48,11 @@ const AXIS_EPSILON = 0.01;
 
 /** Couleurs des éclats projetés quand Adam entame une ressource. */
 const HARVEST_COLORS: Record<ItemId, readonly number[]> = {
-  wood: [PALETTE.trunk, PALETTE.beam, PALETTE.leavesLight],
-  stone: [PALETTE.rock, PALETTE.rockLight, PALETTE.rockDark],
-  ironOre: [PALETTE.rock, PALETTE.iron, PALETTE.ironLight],
-  coal: [PALETTE.rock, PALETTE.coal, PALETTE.coalLight],
-  food: [PALETTE.leaves, PALETTE.leavesLight, PALETTE.dirt],
+  wood: [PALETTE.mint.base, PALETTE.mint.light, PALETTE.orange.light, PALETTE.ink.light].map(hex),
+  stone: [PALETTE.coral.base, PALETTE.coral.light, PALETTE.coral.shade].map(hex),
+  ironOre: [PALETTE.cyan.base, PALETTE.cyan.light, PALETTE.cyan.shade].map(hex),
+  coal: [PALETTE.ink.base, PALETTE.ink.light, PALETTE.yellow.light].map(hex),
+  food: [PALETTE.yellow.base, PALETTE.mint.base, PALETTE.mint.light].map(hex),
 };
 
 /** Les gestes qui comptent comme une activation utilisateur pour l'audio. */
@@ -65,9 +65,9 @@ declare global {
   }
 }
 
-const MUTANT_COLORS = [PALETTE.radioactive, PALETTE.mutantSkin, PALETTE.mutantSkinShadow];
-const RUBBLE_COLORS = [PALETTE.plaster, PALETTE.brick, PALETTE.rockDark, PALETTE.beam];
-const CELEBRATION_COLORS = [PALETTE.accent, PALETTE.ironLight, PALETTE.plaster, PALETTE.leavesLight];
+const MUTANT_COLORS = [PALETTE.toxic.base, PALETTE.toxic.light, PALETTE.toxic.shade].map(hex);
+const RUBBLE_COLORS = [PALETTE.yellow.base, PALETTE.yellow.shade, PALETTE.orange.base, PALETTE.violet.light].map(hex);
+const CELEBRATION_COLORS = [PALETTE.yellow.base, PALETTE.coral.base, PALETTE.cyan.base, PALETTE.mint.base, PALETTE.violet.base].map(hex);
 
 async function main(): Promise<void> {
   // Le contrôle d'intégrité des prototypes ne tourne qu'en dev : en production
@@ -80,7 +80,7 @@ async function main(): Promise<void> {
 
   const world = new World(readSeed());
 
-  const renderer = await GameRenderer.create(world, mount, import.meta.env.BASE_URL);
+  const renderer = await GameRenderer.create(world, mount);
   const audio = new AudioEngine();
 
   // En dev seulement : le monde sous la main dans la console du navigateur,
@@ -174,7 +174,7 @@ async function main(): Promise<void> {
     }
 
     renderer.draw(accumulator / STEP_MS, placement.mode !== 'idle', placement.ghost, joystick.state);
-    hud.update(ticker.FPS, renderer.bakedChunks);
+    hud.update(ticker.FPS, renderer.bakedChunks, renderer.atlasStats);
 
     // Lire la mise en page force un reflow : une fois tous les dix cadres suffit.
     if (++frame % 10 === 0) renderer.setHudInsets(hud.topInset(), HUD_BOTTOM_INSET);

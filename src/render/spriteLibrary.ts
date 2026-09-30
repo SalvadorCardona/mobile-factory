@@ -1,104 +1,190 @@
 /**
- * Bibliothèque de sprites : une planche → des images par animation.
+ * Bibliothèque de sprites : des SVG → un atlas de textures.
  *
- * C'est le seul endroit qui sait d'où viennent les textures. Pour chaque
- * entrée de `data/sprites.ts` :
- * - si `file` est renseigné, la planche PNG est chargée depuis
- *   `public/sprites/` et découpée sur la grille annoncée ;
- * - sinon, le placeholder pixel art de `data/pixelmaps.ts` est baké.
+ * C'est le seul endroit qui sait d'où viennent les textures. Au chargement,
+ * chaque morceau de `data/sprites.ts` et chaque tuile de sol de
+ * `art/terrain.ts` est rastérisé **une fois**, à la résolution de l'écran
+ * (`devicePixelRatio`, plafonné), et rangé dans un atlas : quelques grandes
+ * textures plutôt que deux cents petites. Pixi batche alors les sprites qui
+ * partagent une page d'atlas en un seul appel de dessin.
  *
- * Les deux chemins donnent la même chose — `Texture[]` par animation, à
- * l'échelle source — et le reste du rendu ne fait pas la différence. Le jour
- * où un asset généré remplace un placeholder, seul `SPRITES[id].file` change.
+ * Le SVG n'est jamais rastérisé plus petit que l'écran puis agrandi : on
+ * réécrit sa taille intrinsèque à la taille finale en pixels, pour que
+ * Safari, qui rastérise une image SVG à sa taille déclarée, la rende nette.
+ *
+ * Les textures ont la taille du cadre en **pixels monde** : un sprite n'a pas
+ * d'échelle à appliquer, quelle que soit la densité de l'écran.
  */
 
-import { Assets, Rectangle, Texture, type Renderer } from 'pixi.js';
-import { ART_PIXELS_PER_TILE } from '../data/legacyPixelArt.ts';
-import { TILE_SIZE } from '../core/grid.ts';
-import { PIXEL_MAPS } from '../data/pixelmaps.ts';
-import { SPRITES, SPRITE_IDS, type AnimationOf, type SpriteId, type SpriteProto } from '../data/sprites.ts';
-import { bakePixelMap } from './placeholders.ts';
+import { CanvasSource, Rectangle, Texture } from 'pixi.js';
+import { SPRITES, SPRITE_IDS, type PartOf, type SpriteId, type SpriteProto } from '../data/sprites.ts';
 
-/** Facteur d'agrandissement des sprites : 16 px source → 32 px écran. */
-export const SPRITE_SCALE = TILE_SIZE / ART_PIXELS_PER_TILE;
+/** Largeur d'une page d'atlas, en pixels ; la hauteur suit, jusqu'à `MAX_PAGE`. */
+const PAGE_WIDTH = 2048;
+const MAX_PAGE = 4096;
+/** Marge entre deux images : le filtrage linéaire ne bave pas sur la voisine. */
+const GUTTER = 2;
+/** Au-delà, la mémoire d'un téléphone paie plus que l'œil ne gagne. */
+const MAX_RESOLUTION = 3;
 
-export interface AnimationFrames {
-  textures: Texture[];
-  fps: number;
-  loop: boolean;
+/** Une image à ranger : une clé, son SVG, son cadre en pixels monde. */
+export interface SvgSource {
+  key: string;
+  svg: string;
+  width: number;
+  height: number;
+}
+
+/** Ce que coûte l'atlas — le panneau de debug l'affiche. */
+export interface AtlasStats {
+  /** Nombre de pages, donc de textures GPU. */
+  pages: number;
+  images: number;
+  /** Pixels de toutes les pages, en millions. */
+  megapixels: number;
+  resolution: number;
+  /** Temps de rastérisation et de rangement au chargement. */
+  ms: number;
+}
+
+interface Slot {
+  source: SvgSource;
+  image: HTMLImageElement;
+  pw: number;
+  ph: number;
+}
+
+/** Résolution de rastérisation : celle de l'écran, entre 1 et `MAX_RESOLUTION`. */
+export function screenResolution(): number {
+  return Math.min(MAX_RESOLUTION, Math.max(1, window.devicePixelRatio || 1));
 }
 
 export class SpriteLibrary {
-  private readonly sheets = new Map<SpriteId, Record<string, Texture[]>>();
+  private readonly textures = new Map<string, Texture>();
+  private readonly sources: CanvasSource[] = [];
+  public stats: AtlasStats = { pages: 0, images: 0, megapixels: 0, resolution: 1, ms: 0 };
 
   private constructor() {}
 
-  public static async load(renderer: Renderer, baseUrl: string): Promise<SpriteLibrary> {
+  /** Tous les sprites du registre, plus les images supplémentaires (tuiles de sol). */
+  public static async load(extra: readonly SvgSource[], resolution = screenResolution()): Promise<SpriteLibrary> {
+    const started = performance.now();
     const library = new SpriteLibrary();
+    const sources = [...spriteSources(), ...extra];
+    const slots = await Promise.all(sources.map((source) => rasterize(source, resolution)));
 
-    await Promise.all(
-      SPRITE_IDS.map(async (id) => {
-        // Typé `SpriteProto` explicitement : dans `SPRITES`, `file` est `null`
-        // partout tant que rien n'est généré, et TypeScript en déduirait que
-        // la branche PNG est du code mort.
-        const proto: SpriteProto = SPRITES[id];
-        const frames = proto.file
-          ? sliceSheet(await Assets.load<Texture>(`${baseUrl}sprites/${proto.file}`), proto)
-          : bakePixelMap(renderer, PIXEL_MAPS[id]);
-
-        library.sheets.set(id, frames);
-      }),
-    );
-
+    library.pack(slots, resolution);
+    library.stats = {
+      pages: library.sources.length,
+      images: slots.length,
+      megapixels: library.sources.reduce((sum, source) => sum + source.pixelWidth * source.pixelHeight, 0) / 1e6,
+      resolution,
+      ms: Math.round(performance.now() - started),
+    };
     return library;
   }
 
-  /** Les images d'une animation, dans l'ordre, avec sa cadence. */
-  public animation<S extends SpriteId>(id: S, name: AnimationOf<S>): AnimationFrames {
-    const proto = SPRITES[id];
-    const animation = (proto.animations as Record<string, { fps: number; loop: boolean }>)[name]!;
-    const textures = this.sheets.get(id)?.[name];
+  /** La texture d'une clé quelconque (`terrain.grass.0`, `adam.down`…). */
+  public texture(key: string): Texture {
+    const texture = this.textures.get(key);
 
-    if (!textures) throw new Error(`SpriteLibrary : animation ${id}.${name} introuvable`);
-
-    return { textures, fps: animation.fps, loop: animation.loop };
+    if (!texture) throw new Error(`SpriteLibrary : image « ${key} » introuvable`);
+    return texture;
   }
 
-  /** La première image d'une animation — pour tout ce qui ne bouge pas. */
-  public still<S extends SpriteId>(id: S, name: AnimationOf<S>): Texture {
-    return this.animation(id, name).textures[0]!;
+  /** La texture d'un morceau de sprite. */
+  public part<S extends SpriteId>(id: S, part: PartOf<S>): Texture {
+    return this.texture(`${id}.${part}`);
+  }
+
+  /** Rangement en étagères, les plus hautes d'abord : simple, et bien assez dense ici. */
+  private pack(slots: Slot[], resolution: number): void {
+    const sorted = [...slots].sort((a, b) => b.ph - a.ph);
+    let placed: { slot: Slot; x: number; y: number }[] = [];
+    let x = GUTTER;
+    let y = GUTTER;
+    let shelf = 0;
+
+    const flush = (): void => {
+      if (placed.length === 0) return;
+      this.page(placed, y + shelf + GUTTER, resolution);
+      placed = [];
+      x = GUTTER;
+      y = GUTTER;
+      shelf = 0;
+    };
+
+    for (const slot of sorted) {
+      if (x + slot.pw + GUTTER > PAGE_WIDTH) {
+        x = GUTTER;
+        y += shelf + GUTTER;
+        shelf = 0;
+      }
+      if (y + slot.ph + GUTTER > MAX_PAGE) flush();
+      placed.push({ slot, x, y });
+      x += slot.pw + GUTTER;
+      shelf = Math.max(shelf, slot.ph);
+    }
+    flush();
+  }
+
+  /** Dessine une page d'atlas et découpe ses textures. */
+  private page(placed: { slot: Slot; x: number; y: number }[], height: number, resolution: number): void {
+    const canvas = document.createElement('canvas');
+
+    canvas.width = PAGE_WIDTH;
+    canvas.height = Math.ceil(height);
+
+    const context = canvas.getContext('2d');
+
+    if (!context) throw new Error('SpriteLibrary : canvas 2D indisponible');
+
+    for (const { slot, x, y } of placed) context.drawImage(slot.image, x, y, slot.pw, slot.ph);
+
+    const source = new CanvasSource({ resource: canvas, resolution, scaleMode: 'linear', autoGenerateMipmaps: false });
+
+    this.sources.push(source);
+
+    for (const { slot, x, y } of placed) {
+      const { key, width, height: h } = slot.source;
+
+      this.textures.set(
+        key,
+        new Texture({ source, frame: new Rectangle(x / resolution, y / resolution, width, h) }),
+      );
+    }
   }
 
   public destroy(): void {
-    for (const sheet of this.sheets.values()) {
-      for (const textures of Object.values(sheet)) {
-        for (const texture of textures) texture.destroy(true);
-      }
-    }
-    this.sheets.clear();
+    for (const texture of this.textures.values()) texture.destroy(false);
+    for (const source of this.sources) source.destroy();
+    this.textures.clear();
+    this.sources.length = 0;
   }
 }
 
-/** Découpe une planche PNG sur la grille : une ligne par animation, une colonne par image. */
-function sliceSheet(sheet: Texture, proto: SpriteProto): Record<string, Texture[]> {
-  const result: Record<string, Texture[]> = {};
+/** Chaque morceau de chaque sprite, sous la clé `id.morceau`. */
+function spriteSources(): SvgSource[] {
+  return SPRITE_IDS.flatMap((id) => {
+    const proto: SpriteProto = SPRITES[id];
 
-  sheet.source.scaleMode = 'nearest';
+    return Object.entries(proto.parts).map(([part, svg]) => ({
+      key: `${id}.${part}`,
+      svg,
+      width: proto.width,
+      height: proto.height,
+    }));
+  });
+}
 
-  for (const [name, animation] of Object.entries(proto.animations)) {
-    result[name] = Array.from(
-      { length: animation.frames },
-      (_, column) =>
-        new Texture({
-          source: sheet.source,
-          frame: new Rectangle(
-            column * proto.frameWidth,
-            animation.row * proto.frameHeight,
-            proto.frameWidth,
-            proto.frameHeight,
-          ),
-        }),
-    );
-  }
-  return result;
+/** Charge un SVG en image, à sa taille finale en pixels. */
+async function rasterize(source: SvgSource, resolution: number): Promise<Slot> {
+  const pw = Math.ceil(source.width * resolution);
+  const ph = Math.ceil(source.height * resolution);
+  const sized = source.svg.replace(/^<svg([^>]*?) width="[^"]*" height="[^"]*"/, `<svg$1 width="${pw}" height="${ph}"`);
+  const image = new Image(pw, ph);
+
+  image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(sized)}`;
+  await image.decode();
+  return { source, image, pw, ph };
 }

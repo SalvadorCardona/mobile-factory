@@ -190,9 +190,22 @@ export function polygon(points: readonly number[], color: Color): string {
   return `<polygon points="${points.map(n).join(' ')}" fill="${color}"/>`;
 }
 
-/** Chemin plein, pour les rares formes que les primitives ne couvrent pas (un croissant). */
-export function shape(d: string, color: Color): string {
-  return `<path d="${d}" fill="${color}"/>`;
+/**
+ * Chemin plein, pour les rares formes que les primitives ne couvrent pas (un
+ * quart de rond, un anneau). `evenOdd` perce les sous-chemins intérieurs.
+ */
+export function shape(d: string, color: Color, evenOdd = false): string {
+  return `<path d="${d}" fill="${color}"${evenOdd ? ' fill-rule="evenodd"' : ''}/>`;
+}
+
+/** Un anneau (un pneu, une bouée) : une ellipse percée d'une ellipse plus petite. */
+export function ring(cx: number, cy: number, rx: number, ry: number, thickness: number, color: Color): string {
+  const ix = rx - thickness;
+  const iy = ry - thickness * (ry / rx);
+  const loop = (a: number, b: number): string =>
+    `M${n(cx - a)} ${n(cy)}a${n(a)} ${n(b)} 0 1 0 ${n(a * 2)} 0a${n(a)} ${n(b)} 0 1 0 ${n(-a * 2)} 0Z`;
+
+  return shape(loop(rx, ry) + loop(ix, iy), color, true);
 }
 
 /** Un trait de détail : épaisseur unique, bouts ronds. */

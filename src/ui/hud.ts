@@ -23,6 +23,7 @@
 import { BUILDINGS } from '../data/buildings.ts';
 import { ITEMS, type ItemId } from '../data/items.ts';
 import { LORE } from '../data/lore.ts';
+import type { AtlasStats } from '../render/spriteLibrary.ts';
 import type { PlacementRejection } from '../sim/commands.ts';
 import { TICKS_PER_SECOND, siteMissing, type World } from '../sim/world.ts';
 import { itemAmount, itemIcon } from './icons.ts';
@@ -250,14 +251,14 @@ export class Hud {
     window.setTimeout(() => floater.remove(), FLOAT_MS);
   }
 
-  /** `fps` et `chunks` viennent du renderer : le monde ne les connaît pas. */
-  public update(fps: number, chunks: number): void {
+  /** `fps`, `chunks` et `atlas` viennent du renderer : le monde ne les connaît pas. */
+  public update(fps: number, chunks: number, atlas: AtlasStats): void {
     this.updateQuest();
     this.updateHint();
     this.updateBag();
     this.root.dataset['danger'] = String(this.mutantCount() > 0 && !this.world.defeated);
 
-    if (this.debug) this.updateStats(fps, chunks);
+    if (this.debug) this.updateStats(fps, chunks, atlas);
   }
 
   private mutantCount(): number {
@@ -363,7 +364,7 @@ export class Hud {
       if (siteMissing(hall) === 0) return 'Tapez le chantier, puis « Construire ».';
       if (inventory.freeSpace() <= 0) return 'Sac plein ! Marchez contre le chantier pour livrer.';
       if (!this.harvestedWood && needs('wood')) return 'Marchez contre un arbre pour couper du bois.';
-      if (!this.harvestedStone && needs('stone')) return 'Il faut de la pierre : foncez dans un rocher gris.';
+      if (!this.harvestedStone && needs('stone')) return 'Il faut de la pierre : foncez dans un rocher rose.';
       if (carries && !this.delivered) return 'Marchez contre le chantier pour livrer — ou tapez-le.';
       return null;
     }
@@ -438,11 +439,12 @@ export class Hud {
 
   /* ------------------------------------------------------------------ debug */
 
-  private updateStats(fps: number, chunks: number): void {
+  private updateStats(fps: number, chunks: number, atlas: AtlasStats): void {
     const { cx, cy } = this.world.playerChunk();
     const lines = [
       `tick ${this.world.tickCount}   ${fps.toFixed(0)} fps   seed ${this.world.seed}`,
-      `chunk ${cx},${cy}   ${chunks} bakés   ${this.world.resources.size()} tuiles entamées`,
+      `chunk ${cx},${cy}   ${chunks} blocs de sol   ${this.world.resources.size()} tuiles entamées`,
+      `atlas ${atlas.images} images → ${atlas.pages} texture(s), ${atlas.megapixels.toFixed(1)} Mpx @${atlas.resolution}x, ${atlas.ms} ms`,
       `${this.world.entities.size} bâtiment(s)   ${this.world.mobiles.size} mobile(s)   ${this.world.pendingWakes()} réveil(s)`,
     ];
 

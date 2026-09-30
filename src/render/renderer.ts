@@ -6,11 +6,18 @@
  * simulation avance à 20 TPS, l'écran affiche à 60 ou 120 Hz.
  *
  * Deux conteneurs seulement :
- * - `world`, translaté par la caméra, où vit tout ce qui a des coordonnées monde ;
+ * - `world`, translaté par la caméra, où vit tout ce qui a des coordonnées
+ *   monde : le sol baké, les ombres portées, puis le conteneur trié en
+ *   profondeur (bâtiments, arbres, rochers, personnages), les particules et
+ *   le fantôme de construction ;
  * - `hud`, en pixels écran, où vivent le joystick et les repères de bord.
+ *
+ * Tout est vectoriel, rastérisé à la résolution de l'écran : aucune texture
+ * n'est agrandie, aucune n'est en `nearest`.
  */
 
-import { Application, Container, Sprite, TextureSource } from 'pixi.js';
+import { Application, Container, Sprite } from 'pixi.js';
+import { GROUND, hex } from '../data/artDirection.ts';
 import type { JoystickState } from '../input/joystick.ts';
 import type { GhostState } from '../input/placement.ts';
 import { STEP_MS, type World } from '../sim/world.ts';
@@ -21,8 +28,9 @@ import { EntityLayer } from './entityLayer.ts';
 import { GhostLayer } from './ghostLayer.ts';
 import { IndicatorLayer } from './indicatorLayer.ts';
 import { ParticleLayer } from './particles.ts';
-import { SpriteLibrary } from './spriteLibrary.ts';
-import { createTerrainTiles, type TerrainTiles } from './terrainTiles.ts';
+import { ResourceLayer } from './resourceLayer.ts';
+import { SpriteLibrary, type AtlasStats } from './spriteLibrary.ts';
+import { TerrainTiles, terrainSources } from './terrainTiles.ts';
 
 export class GameRenderer {
   public readonly camera = new Camera();
@@ -30,7 +38,9 @@ export class GameRenderer {
   private readonly worldContainer = new Container();
   private readonly hudContainer = new Container();
   private readonly chunkLayer: ChunkLayer;
+  private readonly shadows = new Container();
   private readonly entityLayer: EntityLayer;
+  private readonly resourceLayer: ResourceLayer;
   private readonly ghostLayer: GhostLayer;
   public readonly particles = new ParticleLayer();
   private readonly joystickBase: Sprite;
@@ -47,14 +57,16 @@ export class GameRenderer {
     this.app = app;
     this.world = world;
     this.library = library;
-    this.tiles = createTerrainTiles(world.seed);
-    this.chunkLayer = new ChunkLayer(app.renderer, library, this.tiles);
-    this.entityLayer = new EntityLayer(world, library, this.tiles.footShadow);
+    this.tiles = new TerrainTiles(library);
+    this.chunkLayer = new ChunkLayer(app.renderer, library, this.tiles, world.seed);
+    this.entityLayer = new EntityLayer(world, library, this.tiles, this.shadows);
+    this.resourceLayer = new ResourceLayer(world, library, this.tiles, this.entityLayer.container, this.shadows);
     this.indicators = new IndicatorLayer(world);
     this.ghostLayer = new GhostLayer(world, library);
 
     this.worldContainer.addChild(
       this.chunkLayer.container,
+      this.shadows,
       this.entityLayer.container,
       this.particles.container,
       this.ghostLayer.container,
@@ -73,16 +85,14 @@ export class GameRenderer {
     this.camera.centerOn(world.player.x, world.player.y);
   }
 
-  public static async create(world: World, mount: HTMLElement, baseUrl: string): Promise<GameRenderer> {
-    // Pixel art : aucune texture n'est jamais lissée. Réglé avant la moindre
-    // création de texture, RenderTextures des chunks comprises.
-    TextureSource.defaultOptions.scaleMode = 'nearest';
-
+  public static async create(world: World, mount: HTMLElement): Promise<GameRenderer> {
     const app = new Application();
 
     await app.init({
       resizeTo: mount,
-      background: 0x11161d,
+      background: hex(GROUND.grass.base),
+      // Les sprites arrivent déjà lissés de la rastérisation SVG : l'anticrénelage
+      // du framebuffer ne servirait qu'aux barres, et coûte cher sur mobile.
       antialias: false,
       autoDensity: true,
       resolution: window.devicePixelRatio,
@@ -93,7 +103,7 @@ export class GameRenderer {
 
     mount.append(app.canvas);
 
-    const library = await SpriteLibrary.load(app.renderer, baseUrl);
+    const library = await SpriteLibrary.load(terrainSources());
 
     return new GameRenderer(app, world, createAtlas(app.renderer), library);
   }
@@ -135,11 +145,17 @@ export class GameRenderer {
       this.app.ticker.deltaMS,
     );
 
-    // Décalage arrondi au pixel : une caméra sub-pixel fait vibrer le pixel art.
-    this.worldContainer.position.set(Math.round(this.camera.offsetX()), Math.round(this.camera.offsetY()));
+    // Décalage arrondi au pixel d'écran : une caméra sub-pixel fait scintiller les bords des tuiles.
+    const resolution = this.app.renderer.resolution;
+
+    this.worldContainer.position.set(
+      Math.round(this.camera.offsetX() * resolution) / resolution,
+      Math.round(this.camera.offsetY() * resolution) / resolution,
+    );
     this.worldContainer.scale.set(this.camera.zoom);
 
-    this.chunkLayer.update(this.world, this.camera);
+    this.chunkLayer.update(this.camera);
+    this.resourceLayer.update(this.camera, this.app.ticker.deltaMS);
     this.entityLayer.update(alpha, this.app.ticker);
     this.particles.update(this.app.ticker.deltaMS);
     this.ghostLayer.update(building, ghost);
@@ -154,18 +170,23 @@ export class GameRenderer {
     }
   }
 
-  /** Nombre de chunks bakés — le HUD l'affiche. */
+  /** Nombre de blocs de sol bakés — le HUD de debug l'affiche. */
   public get bakedChunks(): number {
     return this.chunkLayer.drawn;
   }
 
+  /** Coût de l'atlas de sprites : pages, images, mémoire, temps de chargement. */
+  public get atlasStats(): AtlasStats {
+    return this.library.stats;
+  }
+
   public destroy(): void {
     this.chunkLayer.destroy();
+    this.resourceLayer.destroy();
     this.entityLayer.destroy();
     this.ghostLayer.destroy();
     this.indicators.destroy();
     this.particles.destroy();
-    this.tiles.destroy();
     this.library.destroy();
     this.app.destroy(true, { children: true });
   }

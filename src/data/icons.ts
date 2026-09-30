@@ -1,132 +1,67 @@
 /**
  * Icônes d'objets — contenu pur.
  *
- * Une ressource = une icône. `ITEM_ICONS` est un `Record<ItemId, PixelIcon>` :
+ * Une ressource = une icône. `ITEM_ICONS` est un `Record<ItemId, string>` :
  * ajouter un objet dans `items.ts` sans lui donner d'icône ici ne compile pas.
  * C'est la seule garantie qui tienne ; un `icon?: string` optionnel finit en
  * carré vide dans le sac au bout de trois objets.
  *
- * Même format que les placeholders (`pixelmaps.ts`) : une palette locale vers
- * `PALETTE`, une grille de caractères, `.` transparent. Le HUD les bake en
- * `data:` URL (`ui/icons.ts`) ; le rendu Pixi pourrait les baker en texture
- * exactement de la même façon. Les icônes suivent la direction artistique :
- * 12 × 12 pixels source, contour d'un pixel, palette du jeu.
+ * Chaque icône est un SVG de `ICON_SIZE` px de côté, construit avec les
+ * helpers de la direction artistique, et reprend la couleur de ce qu'elle
+ * représente : la pierre est corail comme son rocher, le fer cyan, le
+ * charbon indigo. Le HUD les affiche telles quelles (`ui/icons.ts`).
  */
 
-import type { PaletteKey } from './legacyPixelArt.ts';
+import { PALETTE, circle, cushion, line, pill, polygon, rect, shadedPill, svg } from './artDirection.ts';
 import type { ItemId } from './items.ts';
-import type { PixelPalette } from './pixelmaps.ts';
 
-/** Taille d'une icône, en pixels source. */
-export const ICON_SIZE = 12;
+/** Côté d'une icône, dans son propre repère. */
+export const ICON_SIZE = 24;
 
-export interface PixelIcon {
-  palette: PixelPalette;
-  rows: readonly string[];
-}
+const S = ICON_SIZE;
+const { ink, orange, yellow, cyan, mint } = PALETTE;
 
-const ICON_PALETTE: PixelPalette = {
-  o: 'outline',
-  t: 'trunk',
-  T: 'trunkShadow',
-  b: 'beam',
-  r: 'rock',
-  R: 'rockLight',
-  d: 'rockDark',
-  c: 'coal',
-  C: 'coalLight',
-  i: 'iron',
-  I: 'ironLight',
-  g: 'leaves',
-  G: 'leavesLight',
-  k: 'leavesDark',
-  a: 'accent',
-} satisfies Record<string, PaletteKey>;
-
-/** Deux bûches empilées, en coupe : on voit les cernes. */
-const WOOD = [
-  '............',
-  '............',
-  '..ooooooo...',
-  '.obbbbbbbTo.',
-  '.obtttttbTo.',
-  '.obtbbbtbTo.',
-  '.obtbbbtbTo.',
-  '.obtttttbTo.',
-  '.obbbbbbbTo.',
-  '..oTTTTTTTo.',
-  '...ooooooo..',
-  '............',
-];
-
-/** Une pierre taillée, un éclat de lumière en haut à gauche. */
-const STONE = [
-  '............',
-  '............',
-  '....oooo....',
-  '..ooRRRroo..',
-  '.oRRrrrrrdo.',
-  '.oRrrrrrrdo.',
-  '.orrrrrrrdo.',
-  '.orrrrrrddo.',
-  '.odrrrdddo..',
-  '..oddddoo...',
-  '...oooo.....',
-  '............',
-];
-
-/** Un morceau de charbon, noir et anguleux, une facette claire. */
-const COAL = [
-  '............',
-  '............',
-  '...ooooo....',
-  '..oCCcccoo..',
-  '.oCcccccoco.',
-  '.occccccoco.',
-  '.occcccccco.',
-  '.oocccccco..',
-  '..occccoo...',
-  '...ooooo....',
-  '............',
-  '............',
-];
-
-/** Une pierre veinée de minerai orangé. */
-const IRON_ORE = [
-  '............',
-  '............',
-  '....oooo....',
-  '..ooRRIroo..',
-  '.oRrIIrIrdo.',
-  '.oRrIrrrIdo.',
-  '.orIIrIIrdo.',
-  '.orrIrrrddo.',
-  '.odrIIdddo..',
-  '..oddddoo...',
-  '...oooo.....',
-  '............',
-];
-
-/** Une pousse verte dans un sillon : ce que la ferme produit. */
-const FOOD = [
-  '............',
-  '.....oo.....',
-  '....oGgo....',
-  '...oGgggo...',
-  '..oGgkoggo..',
-  '..ogkoGgko..',
-  '...oookoo...',
-  '.....oko....',
-  '....ookoo...',
-  '..ooTTTTToo.',
-  '.oTTtttttTo.',
-  '..ooooooooo.',
-];
-
-export const ITEM_ICONS: Record<ItemId, PixelIcon> = {
-  wood: { palette: ICON_PALETTE, rows: WOOD },
-  stone: { palette: ICON_PALETTE, rows: STONE },
-  coal: { palette: ICON_PALETTE, rows: COAL },
-  ironOre: { palette: ICON_PALETTE, rows: IRON_ORE },
-  food: { palette: ICON_PALETTE, rows: FOOD },
+export const ITEM_ICONS: Record<ItemId, string> = {
+  /** Une bûche orange, sa tranche jaune et ses cernes — comme sur la maquette. */
+  wood: svg(
+    S,
+    S,
+    shadedPill(3, 7, 18, 11, 3, 'orange'),
+    circle(19, 12, 5, yellow.shade),
+    circle(18.6, 11.6, 4.2, yellow.base),
+    circle(18.6, 11.6, 1.6, orange.light),
+    pill(5, 16.5, 6, 2, orange.shade),
+  ),
+  /** Un galet corail, la couleur des rochers de pierre. */
+  stone: svg(S, S, shadedPill(3, 6, 18, 14, 4, 'coral'), pill(6, 16.5, 4, 1.6, PALETTE.coral.shade)),
+  /** Un morceau de charbon indigo, facettes luisantes. */
+  coal: svg(
+    S,
+    S,
+    polygon([4, 14, 9, 5, 18, 6, 21, 15, 14, 20, 6, 19], ink.shade),
+    polygon([5, 13, 9.5, 5.5, 17.5, 6.5, 19.5, 13.5, 13, 16.5], ink.base),
+    polygon([8.5, 8.5, 11, 6.8, 13, 8.2, 10, 10.5], ink.light),
+    circle(17, 9.5, 1, yellow.light),
+  ),
+  /** Un bloc de fer cyan, clouté de pépites claires, comme son rocher. */
+  ironOre: svg(
+    S,
+    S,
+    shadedPill(3, 6, 18, 14, 4, 'cyan'),
+    circle(9.5, 12.5, 2.4, cyan.shade),
+    circle(9, 12, 1.9, cyan.light),
+    circle(15.5, 10.5, 1.8, cyan.shade),
+    circle(15.1, 10.1, 1.4, cyan.light),
+  ),
+  /** Un épi de maïs jaune dans ses feuilles menthe. */
+  food: svg(
+    S,
+    S,
+    rect(9, 3, 7, 16, yellow.shade, 3.5),
+    rect(9, 3, 6, 14, yellow.base, 3),
+    pill(10.5, 5, 2.4, 6, yellow.light),
+    cushion(8, 17, 8, 6),
+    cushion(16.5, 17, 8, 6),
+    line(12.5, 21, 12.5, 23, mint.shade),
+  ),
 };

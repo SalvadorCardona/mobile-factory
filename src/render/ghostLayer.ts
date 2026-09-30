@@ -20,13 +20,16 @@
 import { Container, Graphics, Sprite } from 'pixi.js';
 import { TILE_SIZE, worldToTile } from '../core/grid.ts';
 import { BUILDINGS } from '../data/buildings.ts';
+import { PALETTE, RADIUS, STROKE, hex } from '../data/artDirection.ts';
 import { BUILD_REACH_TILES } from '../sim/player.ts';
 import type { World } from '../sim/world.ts';
 import type { GhostState } from '../input/placement.ts';
-import { SPRITE_SCALE, type SpriteLibrary } from './spriteLibrary.ts';
+import type { SpriteLibrary } from './spriteLibrary.ts';
 
-const VALID = 0x7fc8a9;
-const INVALID = 0xe2725b;
+const VALID = hex(PALETTE.mint.base);
+const INVALID = hex(PALETTE.coral.base);
+const WHITE = hex(PALETTE.paper.base);
+const SITE = hex(PALETTE.yellow.base);
 
 /** Rayon de la grille autour du joueur, en tuiles : un peu plus que la portée. */
 const GRID_RADIUS = BUILD_REACH_TILES + 3;
@@ -48,8 +51,7 @@ export class GhostLayer {
   public constructor(world: World, library: SpriteLibrary) {
     this.world = world;
     this.library = library;
-    this.preview.alpha = 0.6;
-    this.preview.scale.set(SPRITE_SCALE);
+    this.preview.alpha = 0.7;
     // Ancré au pied de l'emprise : le toit dépasse vers le haut, comme le bâtiment fini.
     this.preview.anchor.set(0, 1);
 
@@ -94,19 +96,20 @@ export class GhostLayer {
     const proto = BUILDINGS[ghost.building];
     const color = rejection ? INVALID : VALID;
 
-    this.preview.texture = this.library.still(proto.sprite, 'idle');
+    this.preview.texture = this.library.texture(`${proto.sprite}.built`);
     this.preview.position.set(ghost.tx * TILE_SIZE, (ghost.ty + proto.height) * TILE_SIZE);
     this.preview.tint = color;
 
     this.outline
       .clear()
-      .rect(
+      .roundRect(
         ghost.tx * TILE_SIZE,
         ghost.ty * TILE_SIZE,
         proto.width * TILE_SIZE,
         proto.height * TILE_SIZE,
+        RADIUS.block,
       )
-      .stroke({ width: 3, color, alignment: 1 });
+      .stroke({ width: STROKE.width * 1.5, color, alignment: 1 });
 
     this.drawReach();
   }
@@ -115,7 +118,7 @@ export class GhostLayer {
     this.reach
       .clear()
       .circle(0, 0, BUILD_REACH_TILES * TILE_SIZE)
-      .stroke({ width: 2, color: 0xffffff, alpha: 0.25 });
+      .stroke({ width: STROKE.width, color: WHITE, alpha: 0.4 });
   }
 
   /**
@@ -141,16 +144,24 @@ export class GhostLayer {
       this.grid.moveTo(left + offset, top).lineTo(left + offset, top + span);
       this.grid.moveTo(left, top + offset).lineTo(left + span, top + offset);
     }
-    this.grid.stroke({ width: 1, color: 0xffffff, alpha: 0.14, pixelLine: true });
+    this.grid.stroke({ width: 1, color: WHITE, alpha: 0.35 });
 
     this.footprints.clear();
     for (const entity of this.world.entities.values()) {
       if (Math.abs(entity.tx - tx) > GRID_RADIUS + 3 || Math.abs(entity.ty - ty) > GRID_RADIUS + 3) continue;
 
+      const color = entity.kind === 'site' ? SITE : WHITE;
+
       this.footprints
-        .rect(entity.tx * TILE_SIZE, entity.ty * TILE_SIZE, entity.width * TILE_SIZE, entity.height * TILE_SIZE)
-        .fill({ color: entity.kind === 'site' ? 0xf0c060 : 0xffffff, alpha: 0.12 })
-        .stroke({ width: 2, color: entity.kind === 'site' ? 0xf0c060 : 0xffffff, alpha: 0.45, alignment: 1 });
+        .roundRect(
+          entity.tx * TILE_SIZE,
+          entity.ty * TILE_SIZE,
+          entity.width * TILE_SIZE,
+          entity.height * TILE_SIZE,
+          RADIUS.block,
+        )
+        .fill({ color, alpha: 0.18 })
+        .stroke({ width: STROKE.width, color, alpha: 0.6, alignment: 1 });
     }
   }
 

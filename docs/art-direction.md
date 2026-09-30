@@ -194,3 +194,34 @@ pieds, arc, halo, tête de foreuse…), chacun un SVG du même cadre, et le
 rendu les anime par transformation — rotation, rebond, écrasement. La marche
 alterne les pieds et fait rebondir le corps ; la récolte écrase et pousse le
 corps vers ce qu'il frappe ; un coup reçu fait gicler et reculer.
+
+## Le pipeline
+
+1. **Un module par sprite** dans `src/art/` (`adam.ts`, `townHall.ts`,
+   `trees.ts`…) : un objet `satisfies SpriteProto` — cadre, ancre, un SVG par
+   morceau, pivots des morceaux animés. Il n'utilise que les helpers de
+   `artDirection.ts`. Le sol est dans `art/terrain.ts`, les pictogrammes de
+   l'interface dans `art/ui.ts`, les icônes d'objets dans `data/icons.ts`.
+2. **Le registre** `src/data/sprites.ts` liste les sprites. `validatePrototypes()`
+   y vérifie les morceaux exigés, le cadre de chaque SVG, et passe
+   `auditSvg` sur tous ; `npm test` aussi, et vérifie que le vert fluo
+   n'apparaît que sur les mutants.
+3. **La rastérisation** (`render/spriteLibrary.ts`) : au chargement, chaque
+   SVG est converti une fois, à la résolution de l'écran (plafonnée à 3),
+   et rangé dans un atlas. Le sol et le décor sont bakés par blocs de 16 × 16
+   tuiles à une résolution plafonnée à 2.
+4. **La relecture** : `npm run art:sheet -- planche.svg` compose la planche
+   de tous les visuels ; `google-chrome --headless --screenshot=planche.png
+   --window-size=L,H planche.svg` la convertit en PNG, à ouvrir avec `Read`.
+
+Coût mesuré (Chrome, écran de téléphone 390 × 844) : ~100 images tiennent
+dans **une seule texture** d'atlas — 1,3 Mpx à DPR 2, 2,8 Mpx à DPR 3 — et se
+rastérisent en ~85 ms sur un portable ; compter trois à cinq fois plus sur un
+téléphone d'entrée de gamme. Un bloc de sol baké pèse 4 Mo à DPR 2 ; quatre à
+six sont à l'écran, vingt au plus restent en mémoire.
+
+## Exemples
+
+La planche de référence, générée par `npm run art:sheet` :
+
+![Planche des sprites](art-direction/planche-sprites.png)

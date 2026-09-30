@@ -2,7 +2,7 @@
  * Pitch et univers — contenu pur, aucune logique.
  *
  * Ce fichier est la référence narrative du projet. Tout texte affiché au
- * joueur, tout prompt de génération d'asset, tout nom de bâtiment ou de
+ * joueur, toute description d'un sprite, tout nom de bâtiment ou de
  * personnage part d'ici. Si l'univers évolue, c'est ce fichier qui change en
  * premier ; le reste suit.
  */
@@ -34,21 +34,23 @@ export const LORE = {
       name: 'Adam',
       role: 'héros, premier survivant, celui que le joueur incarne',
       description:
-        'Homme adulte, robuste, cheveux bruns en bataille, veste olive rapiécée, ' +
-        'pantalon gris et bottes de marche. Il porte ce qu’il ramasse sur le dos.',
+        'Homme adulte, cheveux indigo, tunique orange, écharpe corail au vent, ' +
+        'sac à dos violet où il porte ce qu’il ramasse, et son arc de fortune à la main.',
     },
     eve: {
       name: 'Ève',
       role: 'seconde survivante, rejoindra Adam plus tard',
       description:
-        'Femme adulte, cheveux roux courts, manteau de cuir, bottes. Pas encore en jeu.',
+        'Femme adulte, cheveux courts, tunique de survivante, création originale ' +
+        'comme Adam. Pas encore en jeu.',
     },
     mutant: {
       name: 'Mutant radioactif',
       role: 'humain irradié, hostile, marche droit sur la mairie pour la démolir',
       description:
-        'Silhouette humaine déformée, peau grise et verdâtre, lueur radioactive ' +
-        'vert acide dans les yeux et les fissures de la peau. Il arrive par vagues ' +
+        'Drôle plus qu’effrayant : tête bosselée, un œil énorme et un tout petit, ' +
+        'sourire idiot, un bras trop long qui traîne au sol, peau vert fluo et ' +
+        'halo radioactif. Il arrive par vagues ' +
         'dès que la mairie est debout, traverse tout, et ne s’arrête que devant ' +
         'un mur pour le casser.',
     },
@@ -56,7 +58,7 @@ export const LORE = {
       name: 'Enfant',
       role: 'né à la nurserie, premier signe que la colonie vit',
       description:
-        'Petit survivant en salopette grise et pull olive, cheveux bruns. Il joue ' +
+        'Petit survivant en tunique orange et casquette jaune, écharpe corail. Il joue ' +
         'autour de la nurserie et n’en va jamais loin.',
     },
   },

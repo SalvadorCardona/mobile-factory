@@ -8,11 +8,11 @@
  *
  * Comme les ressources, il n'est jamais stocké : `sim/terrain.ts` le tire
  * depuis la seed, tuile par tuile, sur les tuiles que la carte laisse nues.
- * Chaque élément est une ligne de la planche `decor` ; son id est le nom de
- * l'animation.
+ * Chaque élément est un morceau du sprite `decor` (`art/decor.ts`) ; son id
+ * est le nom du morceau.
  */
 
-import type { AnimationOf } from './sprites.ts';
+import type { PartOf } from './sprites.ts';
 
 /** Terrains où le décor peut apparaître : jamais sur l'eau. */
 export type DecorTerrain = 'grass' | 'sand' | 'rock';
@@ -34,7 +34,7 @@ export const DECOR = {
   rubble: { weights: { grass: 1, sand: 1, rock: 6 } },
   barrel: { weights: { grass: 1, sand: 1, rock: 3 } },
   ruin: { weights: { grass: 1, rock: 2 } },
-} as const satisfies Record<AnimationOf<'decor'>, DecorProto>;
+} as const satisfies Record<PartOf<'decor'>, DecorProto>;
 
 export type DecorId = keyof typeof DECOR;
 

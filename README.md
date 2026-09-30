@@ -18,9 +18,15 @@ jouable dans le navigateur, sur téléphone :
 
 - un **écran titre** (le pitch, les commandes, « Jouer ») et une **pause**
   — bouton, `Échap`/`P`, ou automatique quand l'onglet passe en arrière-plan ;
-- carte chunkée générée depuis une seed, terrain baké en RenderTexture, avec
-  un tileset procédural : variantes de sol (brins d'herbe, fleurs, cailloux,
-  débris), rives d'écume, franges d'herbe, rebords de falaise, ombres portées ;
+- une direction artistique **vectorielle « post-apo joyeux »** : chaque
+  sprite est un SVG construit avec les helpers de `src/data/artDirection.ts`
+  (formes pures, trois tons, palette courte, aucun contour), rastérisé une
+  fois à la résolution de l'écran dans un atlas, et animé par morceaux —
+  cf. [`docs/art-direction.md`](docs/art-direction.md) ;
+- carte chunkée générée depuis une seed, sol baké en RenderTexture : damier
+  d'herbe, sable, étangs et plateaux de roche aux coins arrondis, décor de
+  ruines fleuries ; arbres et rochers triés en profondeur, ombres portées
+  pleines ;
 - caméra amortie qui anticipe la marche et **tremble** aux impacts, culling
   et éviction par chunk ;
 - boucle à pas fixe 20 TPS, rendu interpolé à la fréquence de l'écran ;
@@ -29,8 +35,8 @@ jouable dans le navigateur, sur téléphone :
   sans réglage entre AZERTY et QWERTY ;
 - une foreuse qui extrait le gisement sous elle dans son coffre interne ;
 - placement au tap en deux temps, avec aperçu fantôme ;
-- récolte par contact : Adam heurte un arbre ou un rocher, le coupe à la
-  hache (animation, copeaux, son), et livre le chantier de la mairie ;
+- récolte par contact : Adam heurte un arbre ou un rocher, le frappe
+  (animation, éclats, tremblement, son), et livre le chantier de la mairie ;
 - une fenêtre d'inspection au tap sur un chantier ou un bâtiment ;
 - une **nurserie** qui fait naître un enfant toutes les dix minutes, et une
   **tour de guet** qui tire seule ;
@@ -43,9 +49,10 @@ jouable dans le navigateur, sur téléphone :
   sert de tutoriel ; des gains qui jaillissent de la tête d'Adam ; des bulles
   empilées ; des **flèches au bord de l'écran** vers les mutants hors champ
   et vers la mairie ; un bilan de partie à la défaite ;
-- du ressenti : bâtiments qui sortent du sol en rebondissant, qui rougissent
-  et tremblent sous les coups, mutants qui flashent à l'impact, éclats dorés
-  à chaque construction, vignette qui vire au rouge pendant une attaque ;
+- du ressenti : bâtiments qui sortent du sol en rebondissant, qui rougissent,
+  tremblent et se cabossent sous les coups, mutants qui grimacent à l'impact
+  et s'écrasent en mourant, arc qui se tend à chaque tir, éclats colorés à
+  chaque construction, vignette qui vire au rouge pendant une attaque ;
 - sons et musique de fond synthétisés en Web Audio, sans fichier audio ;
   police pixel (Jersey 15) embarquée dans le build, donc disponible hors ligne.
 
@@ -124,15 +131,17 @@ La variante `typescript-eslint` est volontaire : elle voit aussi les
 ```
 src/
   core/     rng, grid, events          — briques sans dépendance
-  data/     items, recipes, buildings, enemies, weapons, sprites, pixelmaps
-            — contenu pur, aucune logique
+  data/     items, recipes, buildings, enemies, weapons, sprites,
+            artDirection — contenu pur, aucune logique
+  art/      un module SVG par sprite, le sol, les pictogrammes
   sim/      world, scheduler, chunk, terrain, store, player, motion,
             enemies, combat, kids, commands
-  render/   renderer, camera, chunkLayer, entityLayer, mobileLayer,
-            particles, ghostLayer, spriteLibrary, atlas
+  render/   renderer, camera, chunkLayer, resourceLayer, entityLayer,
+            mobileLayer, puppet, particles, ghostLayer, spriteLibrary, atlas
   input/    joystick, keyboard, pointer, placement, inspect
   ui/       hud, buildMenu, buildingPanel
   audio/    engine, synth, music       — Web Audio, sons procéduraux
+  tools/    artSheet                   — planche de relecture des visuels
   main.ts   câblage uniquement
 ```
 

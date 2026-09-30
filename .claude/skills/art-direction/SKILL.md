@@ -66,6 +66,24 @@ Coordonnées en pixels monde (tuile = 32 px). Bâtiment : cadre large comme
 l'emprise, plus haut qu'elle, ancre (0, 1). Personnage : 32 × 48, ancre
 (0.5, 0.8). Décor et tuiles de sol : dans 32 × 32.
 
+## Ajouter ou modifier un sprite
+
+1. Lire `src/data/artDirection.ts` et un sprite voisin de `src/art/` (un
+   bâtiment pour un bâtiment, `people.ts` pour un personnage).
+2. Écrire le module dans `src/art/<id>.ts` : un objet `satisfies SpriteProto`
+   — cadre et ancre en pixels monde, un SVG par morceau (`svg(W, H, …)`),
+   rien que des helpers et des couleurs de `PALETTE`/`GROUND`. Les morceaux
+   exigés : `down`, `up`, `side`, `foot` (personnage) ; `site`, `built`,
+   `damaged` (bâtiment) ; `full`, `damaged` (ressource). Un morceau animé
+   (roue, halo, arc) déclare son pivot dans `pivots`.
+3. L'inscrire dans `SPRITES` (`src/data/sprites.ts`). `spriteLibrary` le
+   rastérise et le range dans l'atlas tout seul.
+4. `npm run art:sheet -- /tmp/planche.svg`, convertir en PNG avec
+   `google-chrome --headless --screenshot=/tmp/planche.png --window-size=L,H /tmp/planche.svg`
+   (L, H affichés par la commande), l'ouvrir avec `Read`, dérouler la
+   check-list ci-dessous.
+5. Vérifier en jeu (`npm run dev`), à la taille réelle, sur le sol.
+
 ## Check-list de relecture
 
 Regarder le rendu (capture PNG ouverte avec `Read`), pas seulement le code :
