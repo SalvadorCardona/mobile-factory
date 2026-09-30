@@ -11,7 +11,9 @@
  * au-dessus des arbres, des rochers et des murs.
  *
  * Une flèche est une ligne droite tirée vers la position du mutant au
- * moment du tir : pas d'anticipation. Un mutant lent et une flèche rapide
+ * moment du tir : pas d'anticipation. Par coup de vent, elle part en arc —
+ * le vent la pousse à chaque tick — et le tireur vise d'autant contre le
+ * vent : la courbe se voit, la cible reste touchée. Un mutant lent et une flèche rapide
  * suffisent à ce qu'elle touche presque toujours, et la rater de temps en
  * temps fait partie du charme — à condition que la collision soit balayée,
  * cf. `stepArrow`.
@@ -54,13 +56,45 @@ export function foeBox(foe: Foe): { halfW: number; halfH: number } {
   return foe.kind === 'mutant' ? ENEMIES[foe.proto] : WILDLIFE[foe.proto];
 }
 
-/** Fabrique une flèche partant de (x, y) vers la cible. L'id est donné par le monde. */
-export function shoot(id: number, weapon: WeaponId, x: number, y: number, target: { x: number; y: number }): Arrow {
+/** Poussée du vent sur une flèche, en pixels par tick² ; nulle par temps calme. */
+export interface Wind {
+  x: number;
+  y: number;
+}
+
+export const NO_WIND: Wind = { x: 0, y: 0 };
+
+/**
+ * Fabrique une flèche partant de (x, y) vers la cible. L'id est donné par le monde.
+ *
+ * Avec du vent, la visée se décale de ce qu'il poussera la flèche pendant
+ * son vol : après n ticks, une poussée `a` l'a déportée de a·n(n+1)/2. Le
+ * point visé change la durée du vol, qui change le point visé : trois
+ * passes suffisent à ce qu'une cible immobile à portée d'arc soit touchée.
+ * Au-delà, face au vent, la flèche retombe court.
+ */
+export function shoot(
+  id: number,
+  weapon: WeaponId,
+  x: number,
+  y: number,
+  target: { x: number; y: number },
+  wind: Wind = NO_WIND,
+): Arrow {
   const proto = WEAPONS[weapon];
-  const dx = target.x - x;
-  const dy = target.y - y;
-  const distance = Math.hypot(dx, dy) || 1;
   const pixelsPerTick = (proto.arrowSpeed * TILE_SIZE) / 20;
+  let dx = target.x - x;
+  let dy = target.y - y;
+
+  for (let pass = 0; pass < AIM_PASSES && (wind.x !== 0 || wind.y !== 0); pass += 1) {
+    const flight = Math.hypot(dx, dy) / pixelsPerTick;
+    const drift = (flight * (flight + 1)) / 2;
+
+    dx = target.x - wind.x * drift - x;
+    dy = target.y - wind.y * drift - y;
+  }
+
+  const distance = Math.hypot(dx, dy) || 1;
   // La flèche vole un peu plus loin que la portée : la cible bouge.
   const ttl = Math.ceil(((proto.range + 1) * TILE_SIZE) / pixelsPerTick);
 
@@ -81,10 +115,12 @@ export function shoot(id: number, weapon: WeaponId, x: number, y: number, target
 }
 
 /**
- * Un tick de flèche : avance, et renvoie l'ennemi touché s'il y en a un.
+ * Un tick de flèche : le vent la pousse, elle avance, et renvoie l'ennemi touché s'il y en a un.
  * `null` si elle vole encore ; `ttl` à zéro si elle s'est perdue.
  */
-export function stepArrow<T extends Foe>(arrow: Arrow, foes: Iterable<T>): T | null {
+export function stepArrow<T extends Foe>(arrow: Arrow, foes: Iterable<T>, wind: Wind = NO_WIND): T | null {
+  arrow.vx += wind.x;
+  arrow.vy += wind.y;
   arrow.prevX = arrow.x;
   arrow.prevY = arrow.y;
   arrow.x += arrow.vx;
@@ -112,6 +148,9 @@ export function stepArrow<T extends Foe>(arrow: Arrow, foes: Iterable<T>): T | n
   }
   return null;
 }
+
+/** Passes de correction de la visée contre le vent. */
+const AIM_PASSES = 3;
 
 /** Pas d'échantillonnage du trajet d'une flèche, en pixels : moins que la plus petite dimension d'une cible. */
 const SWEEP_STEP = 6;

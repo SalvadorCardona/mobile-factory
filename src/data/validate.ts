@@ -28,6 +28,7 @@ import { RESEARCH, RESEARCH_STATS, type ResearchProto } from './research.ts';
 import { RESOURCES } from './resources.ts';
 import { BUILDING_PARTS, RESOURCE_PARTS, SPRITES, UPGRADE_PARTS, WALKER_PARTS, type SpriteProto } from './sprites.ts';
 import { WEAPONS } from './weapons.ts';
+import { WEATHER, WEATHER_CALENDAR, type WeatherProto } from './weather.ts';
 
 export function validatePrototypes(): string[] {
   const errors: string[] = [];
@@ -365,6 +366,25 @@ export function validatePrototypes(): string[] {
 
   for (const [item, amount] of Object.entries(DAWN_REWARD)) {
     if (amount <= 0) errors.push(`DAWN_REWARD.${item} : quantité nulle`);
+  }
+
+  const { slotTicks, announceTicks, calmWeight, waveMarginTicks } = WEATHER_CALENDAR;
+
+  for (const [id, weather] of Object.entries(WEATHER) as [string, WeatherProto][]) {
+    // Une météo tient dans son créneau, annonce comprise de chaque côté : deux météos ne se chevauchent jamais.
+    if (weather.durationTicks <= 0 || weather.durationTicks + announceTicks * 2 > slotTicks) {
+      errors.push(`WEATHER.${id} : durée nulle ou trop longue pour un créneau`);
+    }
+    if (weather.weight <= 0) errors.push(`WEATHER.${id} : poids de tirage nul`);
+    if (weather.playerSpeed <= 0 || weather.harvestYield < 1 || weather.weaponRange <= 0) {
+      errors.push(`WEATHER.${id} : vitesse, récolte ou portée nulles`);
+    }
+    if (weather.corrosion && (weather.corrosion.everyTicks <= 0 || weather.corrosion.damage <= 0)) {
+      errors.push(`WEATHER.${id} : corrosion nulle`);
+    }
+  }
+  if (calmWeight < 0 || announceTicks <= 0 || waveMarginTicks >= slotTicks) {
+    errors.push('WEATHER_CALENDAR : poids du calme, annonce ou marge incohérents');
   }
 
   for (const [id, sprite] of Object.entries(SPRITES) as [string, SpriteProto][]) {

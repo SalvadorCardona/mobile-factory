@@ -31,6 +31,8 @@
  * Une clinique change le sort des mutants vaincus : certains tombent
  * assommés, suivent Adam qui les touche jusqu'à elle, et en ressortent
  * ex-mutants — des porteurs de plus (`data/clinic.ts`).
+ * Et le temps change : pluie acide, coup de vent, brouillard, arc-en-ciel,
+ * lus dans la seed (`sim/weather.ts`) ; le monde n'en garde rien.
  */
 
 import { Emitter } from '../core/events.ts';
@@ -57,8 +59,9 @@ import { RESEARCH, type ResearchId, type ResearchStat } from '../data/research.t
 import { RESOURCES, type ResourceId } from '../data/resources.ts';
 import { WEAPONS } from '../data/weapons.ts';
 import { JOB_PRIORITY, LUMBERJACKS, PORTERS } from '../data/workers.ts';
+import { WEATHER, WEATHER_CALENDAR, type WeatherId } from '../data/weather.ts';
 import { ChunkIndex } from './chunk.ts';
-import { nearestFoe, shoot, stepArrow } from './combat.ts';
+import { NO_WIND, nearestFoe, shoot, stepArrow, type Wind } from './combat.ts';
 import { clockAt, isWaveTick, ticksToNextWave, type DayClock } from './dayNight.ts';
 import type {
   Command,
@@ -110,6 +113,7 @@ import { findSpawn, habitatAt, isBuildable, isWalkable, oreAt, terrainAt } from 
 import { inLogisticRange } from './warehouse.ts';
 import { chopSpot, isTree, pickTree, treesInRange } from './lumberjacks.ts';
 import { carryOf, clearLine, standStill, walkToward, wander, wanderFrom } from './workers.ts';
+import { nextWeather, spoilsNight, weatherAt, type WeatherSpell } from './weather.ts';
 import type {
   Beast,
   Building,
@@ -219,8 +223,8 @@ export type WorldEvents = {
   placementRejected: { reason: PlacementRejection };
   drillBlocked: { id: EntityId };
   drillProduced: { id: EntityId; item: ItemId };
-  /** Adam a arraché une unité à la tuile. `remaining` à 0 : elle a disparu. */
-  resourceHarvested: { tx: number; ty: number; item: ItemId; remaining: number };
+  /** Adam a arraché une unité à la tuile, et `amount` objets sont allés dans le sac. `remaining` à 0 : elle a disparu. */
+  resourceHarvested: { tx: number; ty: number; item: ItemId; amount: number; remaining: number };
   /**
    * `amount` objets viennent d'être posés sur le chantier, pris dans le sac
    * d'Adam ou dans le stock de la ville (`source`). `missing` : ce qui manque
@@ -342,6 +346,12 @@ export type WorldEvents = {
   researchRejected: { id: EntityId; reason: ResearchRejection };
   /** `amount` objets viennent d'entrer au labo, pris dans le sac d'Adam ou dans le stock de la ville. */
   labSupplied: { id: EntityId; item: ItemId; amount: number; source: 'bag' | 'town' };
+  /** Une météo arrive dans `seconds` secondes. */
+  weatherAnnounced: { id: WeatherId; seconds: number };
+  weatherStarted: { id: WeatherId };
+  weatherEnded: { id: WeatherId };
+  /** La pluie acide a rongé un bâtiment abîmé ; `hp` est ce qui lui reste. */
+  buildingCorroded: { id: EntityId; hp: number };
 };
 
 export class World {
@@ -433,6 +443,9 @@ export class World {
 
   /** Le dernier compte d'arbres d'une cabane, cf. `treesLeft()`. */
   private treeCount: { id: EntityId; tick: number; count: number } | null = null;
+
+  /** La météo du tick en cours : relue dans la seed au début de chaque tick, jamais sauvegardée. */
+  private spell: WeatherSpell | null = null;
 
   public constructor(seed: number) {
     this.seed = seed >>> 0;
@@ -591,19 +604,23 @@ export class World {
   public tick(): void {
     this.tickCount += 1;
     this.drainCommands();
+    this.updateWeather();
 
+    const slowed = this.spell && !this.sheltered(this.player.x, this.player.y);
+    const speed = slowed && this.spell ? WEATHER[this.spell.id].playerSpeed : 1;
     const contact = stepPlayer(
       this.player,
       this.moveX,
       this.moveY,
       this.playerObstacleAt,
       STEP_SECONDS,
-      PLAYER_SPEED_TILES + this.bonus('walkSpeed'),
+      (PLAYER_SPEED_TILES + this.bonus('walkSpeed')) * speed,
     );
 
     this.handleContact(contact);
     this.harvestNearby();
     this.stepClock();
+    this.corrode();
     this.stepMobiles();
     this.recover();
     this.stepWildlife();
@@ -1126,13 +1143,13 @@ export class World {
     if (!taken) return;
 
     const item = RESOURCES[taken.resource.id].item;
-
-    inventory.add(item, 1);
+    // L'arc-en-ciel double la récolte ; ce qui ne tient pas dans le sac reste sur place, pas perdu : la tuile n'a perdu qu'une unité.
+    const amount = inventory.add(item, this.spell ? WEATHER[this.spell.id].harvestYield : 1);
 
     // Le chunk ne rebake que si l'aspect de la tuile change : entamé, ou disparu.
     if (taken.stageChanged) this.dirtyTile(tx, ty);
 
-    this.events.emit('resourceHarvested', { tx, ty, item, remaining: taken.resource.remaining });
+    this.events.emit('resourceHarvested', { tx, ty, item, amount, remaining: taken.resource.remaining });
   }
 
   /**
@@ -1927,7 +1944,7 @@ export class World {
 
     const x = (tower.tx + tower.width / 2) * TILE_SIZE;
     const y = (tower.ty + tower.height / 2) * TILE_SIZE;
-    const target = nearestFoe(this.mutants(), x, y, WEAPONS[weapon].range);
+    const target = nearestFoe(this.mutants(), x, y, WEAPONS[weapon].range * this.rangeFactor());
 
     if (target) this.fire(weapon, x, y, target);
     if (this.hasMutants()) this.armTower(tower, WEAPONS[weapon].cooldown);
@@ -2056,7 +2073,9 @@ export class World {
     for (const mobile of this.mobiles.values()) {
       switch (mobile.kind) {
         case 'mutant': {
-          const step = stepMutant(mobile, this.target, this.occupantAt, STEP_SECONDS);
+          const spell = this.spell;
+          const wind = spell && { windX: spell.windX, windY: spell.windY, downwind: WEATHER[spell.id].mutantDownwind };
+          const step = stepMutant(mobile, this.target, this.occupantAt, STEP_SECONDS, wind);
 
           if (step.strikes && step.blockedBy !== null) {
             this.damageBuilding(step.blockedBy, ENEMIES[mobile.proto].damage);
@@ -2073,7 +2092,7 @@ export class World {
         }
 
         case 'arrow': {
-          const hit = stepArrow(mobile, this.foes());
+          const hit = stepArrow(mobile, this.foes(), this.wind());
 
           if (hit) {
             this.mobiles.delete(mobile.id);
@@ -2128,7 +2147,7 @@ export class World {
 
     if (player.bowCooldown > 0) player.bowCooldown -= 1;
 
-    const target = nearestFoe(this.foes(), player.x, player.y, WEAPONS.bow.range);
+    const target = nearestFoe(this.foes(), player.x, player.y, WEAPONS.bow.range * this.rangeFactor());
 
     player.target = target?.id ?? null;
 
@@ -2147,7 +2166,7 @@ export class World {
 
   /** `extraDamage` : ce que la recherche ajoute aux dégâts de l'arme. */
   private fire(weapon: keyof typeof WEAPONS, x: number, y: number, target: Foe, extraDamage = 0): void {
-    const arrow = shoot(this.nextMobileId++, weapon, x, y, target);
+    const arrow = shoot(this.nextMobileId++, weapon, x, y, target, this.wind());
 
     arrow.damage += extraDamage;
     this.mobiles.set(arrow.id, arrow);
@@ -3285,6 +3304,96 @@ export class World {
       if (!worker.job || !broken.has(worker.job)) continue;
       if (worker.job.carried) this.reroute(worker, worker.job);
       else worker.job = null;
+    }
+  }
+
+  /* ----------------------------------------------------------------- météo */
+
+  /** La météo en cours, pour le rendu et le HUD : lue dans la seed, comme la carte. */
+  public weather(): WeatherSpell | null {
+    return this.weatherAt(this.tickCount);
+  }
+
+  /** La prochaine météo qui commence strictement après ce tick, pour l'annonce du HUD. */
+  public nextWeather(): WeatherSpell | null {
+    let spell = nextWeather(this.seed, this.tickCount);
+
+    // Une pluie qui gâcherait une nuit n'arrive pas : on regarde la suivante.
+    while (spell && this.spoils(spell)) spell = nextWeather(this.seed, spell.start);
+    return spell;
+  }
+
+  /** La météo au tick `tick` : celle de la seed, sauf une météo rude qui tomberait sur une nuit. */
+  private weatherAt(tick: number): WeatherSpell | null {
+    const spell = weatherAt(this.seed, tick);
+
+    return spell && !this.spoils(spell) ? spell : null;
+  }
+
+  private spoils(spell: WeatherSpell): boolean {
+    return spoilsNight(spell, this.cycleStartTick, WEATHER_CALENDAR.waveMarginTicks);
+  }
+
+  /** Relit la météo du tick, et annonce ce qui arrive, commence ou s'achève. */
+  private updateWeather(): void {
+    const previous = this.spell;
+    const announced = this.weatherAt(this.tickCount + WEATHER_CALENDAR.announceTicks);
+
+    this.spell = this.weatherAt(this.tickCount);
+
+    if (announced && announced.start === this.tickCount + WEATHER_CALENDAR.announceTicks) {
+      this.events.emit('weatherAnnounced', {
+        id: announced.id,
+        seconds: WEATHER_CALENDAR.announceTicks / TICKS_PER_SECOND,
+      });
+    }
+    if (previous && previous.start !== this.spell?.start) this.events.emit('weatherEnded', { id: previous.id });
+    if (this.spell?.start === this.tickCount) this.events.emit('weatherStarted', { id: this.spell.id });
+  }
+
+  /** (x, y) est-il à l'abri, près d'une mairie debout ? */
+  public sheltered(x: number, y: number): boolean {
+    const hall = this.entities.get(this.townHallId);
+    const radius = WEATHER_CALENDAR.shelterRadius * TILE_SIZE;
+
+    return hall?.kind === 'townHall' && distanceSq(x, y, this.target.x, this.target.y) <= radius * radius;
+  }
+
+  /** La poussée du vent sur une flèche ce tick. */
+  private wind(): Wind {
+    if (!this.spell) return NO_WIND;
+
+    const drift = WEATHER[this.spell.id].arrowDrift;
+
+    return drift === 0 ? NO_WIND : { x: this.spell.windX * drift, y: this.spell.windY * drift };
+  }
+
+  /** Le facteur de portée des arcs ce tick : le brouillard raccourcit la vue. */
+  private rangeFactor(): number {
+    return this.spell ? WEATHER[this.spell.id].weaponRange : 1;
+  }
+
+  /**
+   * La pluie acide ronge ce qui est déjà abîmé, hors de l'abri. Elle use,
+   * elle n'achève pas : un bâtiment garde toujours son dernier point de vie.
+   */
+  private corrode(): void {
+    const corrosion = this.spell ? WEATHER[this.spell.id].corrosion : null;
+
+    if (!this.spell || !corrosion || (this.tickCount - this.spell.start) % corrosion.everyTicks !== corrosion.everyTicks - 1) {
+      return;
+    }
+
+    for (const entity of this.entities.values()) {
+      if (entity.kind === 'site' || entity.hp >= BUILDINGS[entity.proto].hp || entity.hp <= 1) continue;
+
+      const x = (entity.tx + entity.width / 2) * TILE_SIZE;
+      const y = (entity.ty + entity.height / 2) * TILE_SIZE;
+
+      if (this.sheltered(x, y)) continue;
+
+      entity.hp = Math.max(1, entity.hp - corrosion.damage);
+      this.events.emit('buildingCorroded', { id: entity.id, hp: entity.hp });
     }
   }
 
