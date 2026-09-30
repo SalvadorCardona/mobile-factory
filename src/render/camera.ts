@@ -24,6 +24,9 @@
  * tenu quelques secondes puis relâché en douceur, en glissant un peu vers
  * un point à montrer — d'où arrive une vague. Court et discret : on peut
  * être en train de récolter.
+ *
+ * Tant que l'un ou l'autre fait glisser la carte d'elle-même, elle le dit
+ * (`drifting`) : un tap posé à ce moment viserait un point qui bouge.
  */
 
 import { CHUNK_SIZE, TILE_SIZE, floorDiv } from '../core/grid.ts';
@@ -52,6 +55,10 @@ const FOCUS_SHARE = 0.4;
 
 /** Au-delà de cette distance au point à montrer, en pixels monde, la caméra ne glisse pas : le joueur est ailleurs, occupé. */
 const FOCUS_RANGE = 14 * TILE_SIZE;
+
+/** En deçà de ces écarts à sa cible, le recul est posé : la carte ne glisse plus. */
+const SETTLED_ZOOM = 0.01;
+const SETTLED_SHIFT_PX = 2;
 
 export interface ChunkBounds {
   minCx: number;
@@ -87,6 +94,8 @@ export class Camera {
   private focus: { x: number; y: number } | null = null;
   private focusShiftX = 0;
   private focusShiftY = 0;
+  /** Le recul est encore en route vers sa cible, ou en revient. */
+  private zoomDrifting = false;
 
   public resize(width: number, height: number): void {
     this.viewWidth = width;
@@ -119,9 +128,14 @@ export class Camera {
     const toFocusX = zooming && this.focus ? this.focus.x - x : 0;
     const toFocusY = zooming && this.focus ? this.focus.y - y : 0;
     const shifting = Math.hypot(toFocusX, toFocusY) <= FOCUS_RANGE;
+    const shiftToX = shifting ? toFocusX * FOCUS_SHARE : 0;
+    const shiftToY = shifting ? toFocusY * FOCUS_SHARE : 0;
 
-    this.focusShiftX += ((shifting ? toFocusX * FOCUS_SHARE : 0) - this.focusShiftX) * ease;
-    this.focusShiftY += ((shifting ? toFocusY * FOCUS_SHARE : 0) - this.focusShiftY) * ease;
+    this.focusShiftX += (shiftToX - this.focusShiftX) * ease;
+    this.focusShiftY += (shiftToY - this.focusShiftY) * ease;
+    this.zoomDrifting =
+      Math.abs(zoomTo - this.zoom) > SETTLED_ZOOM ||
+      Math.hypot(shiftToX - this.focusShiftX, shiftToY - this.focusShiftY) > SETTLED_SHIFT_PX;
 
     const catchUp = 1 - Math.exp(-deltaMs / FOLLOW_MS);
     const targetX = x + this.leadX + this.focusShiftX;
@@ -150,6 +164,14 @@ export class Camera {
     this.peekX = x;
     this.peekY = y;
     this.peekElapsed = 0;
+  }
+
+  /**
+   * La carte glisse-t-elle d'elle-même — un recul ou un coup d'œil qui part
+   * ou revient ? Le suivi du joueur n'en est pas : c'est lui qui bouge.
+   */
+  public get drifting(): boolean {
+    return this.zoomDrifting || (this.peekWeight > 0 && this.peekWeight < 1);
   }
 
   /** Centre affiché : celui du suivi, tiré vers le coup d'œil en cours. */
