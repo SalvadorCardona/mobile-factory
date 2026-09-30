@@ -59,6 +59,12 @@ export function validatePrototypes(): string[] {
         errors.push(`BUILDINGS.${id} : coût nul ou négatif en « ${itemId} »`);
       }
     }
+    if (building.logisticRadius < 0) {
+      errors.push(`BUILDINGS.${id} : rayon logistique négatif`);
+    }
+    if (building.logisticRadius > 0 && Number.isFinite(building.storage)) {
+      errors.push(`BUILDINGS.${id} : un rayon logistique sans entrepôt (coffre Infinity) ne sert à rien`);
+    }
     if (building.hp <= 0) {
       errors.push(`BUILDINGS.${id} : points de vie nuls`);
     }

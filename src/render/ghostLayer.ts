@@ -7,6 +7,9 @@
  * posé « à peu près là » finit une tuile trop à gauche une fois sur deux ; la
  * grille rend la case lisible, et les emprises disent où on ne pourra pas poser.
  *
+ * Le cercle jaune autour de la mairie finie est son rayon logistique : un
+ * chantier posé dedans puisera dans le stock de la colonie.
+ *
  * Le fantôme dit trois choses en même temps : où le bâtiment ira, s'il est
  * posable, et jusqu'où le joueur peut construire. La couleur vient de
  * `world.placementBlock()` — le même juge que le tick, jamais une seconde
@@ -64,6 +67,7 @@ export class GhostLayer {
   private readonly outline = new Graphics();
   private readonly cells = new Graphics();
   private readonly reach = new Graphics();
+  private readonly warehouseReach = new Graphics();
   private readonly preview = new Sprite();
   /** Le fantôme lui-même — sprite, cases, liseré — : c'est lui qui secoue la tête. */
   private readonly ghost = new Container();
@@ -74,6 +78,7 @@ export class GhostLayer {
   private refuseLeft = 0;
   private readonly reducedMotion: MediaQueryList | null;
   private lastGridKey = '';
+  private lastWarehouseKey = '';
 
   private readonly world: World;
   private readonly library: SpriteLibrary;
@@ -88,7 +93,7 @@ export class GhostLayer {
     this.reducedMotion = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
 
     this.ghost.addChild(this.preview, this.cells, this.outline);
-    this.container.addChild(this.grid, this.footprints, this.reach, this.ghost);
+    this.container.addChild(this.grid, this.footprints, this.warehouseReach, this.reach, this.ghost);
     this.container.visible = false;
   }
 
@@ -103,11 +108,13 @@ export class GhostLayer {
       this.lastKey = '';
       this.lastGridKey = '';
       this.refuseLeft = 0;
+      this.lastWarehouseKey = '';
       return;
     }
 
     this.container.visible = true;
     this.updateGrid();
+    this.updateWarehouseReach();
 
     // Le cercle de portée suit le joueur en continu, lui.
     this.reach.position.set(this.world.player.x, this.world.player.y);
@@ -200,6 +207,24 @@ export class GhostLayer {
       .clear()
       .circle(0, 0, BUILD_REACH_TILES * TILE_SIZE)
       .stroke({ width: STROKE.width, color: WHITE, alpha: 0.4 });
+  }
+
+  /** Le rayon de la mairie : dessiné une fois, redessiné seulement si elle apparaît ou tombe. */
+  private updateWarehouseReach(): void {
+    const hall = this.world.warehouse();
+    const radius = hall ? BUILDINGS[hall.proto].logisticRadius : 0;
+    const key = hall && Number.isFinite(radius) ? `${hall.id}:${radius}` : '';
+
+    if (key === this.lastWarehouseKey) return;
+    this.lastWarehouseKey = key;
+    this.warehouseReach.clear();
+
+    if (!hall || key === '') return;
+
+    this.warehouseReach
+      .circle((hall.tx + hall.width / 2) * TILE_SIZE, (hall.ty + hall.height / 2) * TILE_SIZE, radius * TILE_SIZE)
+      .fill({ color: SITE, alpha: 0.08 })
+      .stroke({ width: STROKE.width, color: SITE, alpha: 0.7 });
   }
 
   /**
