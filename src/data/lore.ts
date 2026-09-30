@@ -58,6 +58,14 @@ export const LORE = {
         'dès que la mairie est debout, traverse tout, et ne s’arrête que devant ' +
         'un mur pour le casser.',
     },
+    exMutant: {
+      name: 'Ex-mutant',
+      role: 'mutant assommé, ramené à la clinique et guéri ; habitant et porteur',
+      description:
+        'Un humain de nouveau, tunique orange comme les autres, mais il lui reste ' +
+        'une touffe vert fluo sur le crâne, un œil qui louche et un pansement sur la joue. ' +
+        'Plus costaud qu’un porteur, plus lent aussi.',
+    },
     child: {
       name: 'Enfant',
       role: 'né à la nurserie, premier signe que la colonie vit',
@@ -149,6 +157,15 @@ export const LORE = {
         'Une tour de guet blindée de plaques de fer. Son arc porte plus loin ' +
         'et tire plus vite que celui d’une tour de planches.',
       effect: 'Tire sur les mutants à 10 cases, 30 % plus vite.',
+    },
+    clinic: {
+      name: 'Clinique',
+      site: 'Des murs à monter, un lit de camp qui attend déjà. Il faudra aussi de quoi nourrir les convalescents.',
+      description:
+        'Trois lits de camp, des bandages et une croix menthe sur la porte. Un mutant ' +
+        'assommé qu’Adam y ramène en ressort guéri après une nuit de soins — un ' +
+        'habitant, un peu vert sur les bords, qui porte plus lourd que les autres.',
+      effect: 'Soigne les mutants assommés : 3 places.',
     },
   },
 } as const;

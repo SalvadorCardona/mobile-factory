@@ -50,9 +50,15 @@ describe('sprites', () => {
   });
 
   it('réserve le vert fluo aux mutants', () => {
-    // Seuls ont le droit de le porter : le mutant, la flaque d'où il sort, son pictogramme, et la bannière, où il en passe un.
+    // Seuls ont le droit de le porter : le mutant, le patient (un mutant assommé), la flaque d'où il sort, son
+    // pictogramme, la bannière, où il en passe un — et l'ex-mutant, pour un seul détail (test suivant).
     const mutants = (name: string): boolean =>
-      name.startsWith('mutant.') || name.startsWith('puddle.') || name === 'ui.mutant' || name === 'brand.banner';
+      name.startsWith('mutant.') ||
+      name.startsWith('patient.') ||
+      name.startsWith('exMutant.') ||
+      name.startsWith('puddle.') ||
+      name === 'ui.mutant' ||
+      name === 'brand.banner';
 
     for (const [name, svg] of everySvg()) {
       if (mutants(name)) continue;
@@ -60,8 +66,27 @@ describe('sprites', () => {
     }
   });
 
+  it('garde l’ex-mutant humain : la tunique orange domine, le vert fluo n’est qu’un détail', () => {
+    const count = (svg: string, colors: readonly string[]): number =>
+      colors.reduce((total, color) => total + svg.split(color).length - 1, 0);
+
+    for (const part of WALKER_PARTS.filter((name) => name !== 'foot')) {
+      const svg = SPRITES.exMutant.parts[part];
+      const toxic = count(svg, TOXIC);
+
+      expect(toxic, `exMutant.${part} a perdu sa touffe`).toBeGreaterThan(0);
+      // La touffe : trois mèches, deux tons chacune. Au-delà, le fluo déborde du détail.
+      expect(toxic, `exMutant.${part} est trop vert`).toBeLessThanOrEqual(6);
+      expect(count(svg, Object.values(PALETTE.orange)), `exMutant.${part} n'a plus sa tunique`).toBeGreaterThan(0);
+    }
+    // Sa charge et ses pieds sont ceux d'un humain.
+    for (const [part, svg] of Object.entries(SPRITES.exMutant.parts)) {
+      if (part.startsWith('load.') || part === 'foot') expect(count(svg, TOXIC), `exMutant.${part}`).toBe(0);
+    }
+  });
+
   it('donne à chaque marcheur un corps par direction et un pied', () => {
-    for (const id of ['adam', 'mutant', 'kid', 'worker'] as const) {
+    for (const id of ['adam', 'mutant', 'kid', 'worker', 'patient', 'exMutant'] as const) {
       for (const part of WALKER_PARTS) expect(SPRITES[id].parts).toHaveProperty(part);
     }
   });

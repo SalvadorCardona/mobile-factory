@@ -74,6 +74,16 @@ ramasse en marchant dessus — sac plein, il reste au sol. L'arc d'Adam et la to
 La **nurserie** fait naître un enfant toutes les dix minutes, contre quatre
 nourritures (recette `raiseChild`) : sans elles, elle attend.
 
+**Clinique** (`src/data/clinic.ts`, débloquée après la vague 1) — tant
+qu'elle a une place, un mutant vaincu peut tomber **assommé** (étoiles, pas
+de butin) au lieu de s'évaporer : mobile `patient`, ni ennemi ni cible.
+Adam le touche, il le suit en boitillant jusqu'à la porte ; après une
+« nuit » de soins (deux minutes : pas de cycle jour-nuit), il en ressort
+**ex-mutant**, un porteur logé à la clinique, plus fort et plus lent
+(`EX_MUTANT`, `src/data/workers.ts`). Ses places comptent patients et
+ex-mutants logés : une clinique pleine n'assomme plus personne. Oublié dix
+secondes, ou sans clinique, l'assommé s'évapore et lâche son butin.
+
 **Ève** — ingénieure bricoleuse, taquine (`src/data/eve.ts`, `src/sim/eve.ts`).
 Elle **tutoie** Adam, qui reste muet ; le jeu (bulles, boutons, écrans)
 **vouvoie** le joueur. Les conseils du HUD sont ses répliques, par radio
@@ -120,7 +130,8 @@ Les règles, en résumé :
 - des détails qui racontent une vie plutôt que de la texture ;
 - ombres portées pleines, teinte foncée du sol ;
 - vue de dessus 3/4, grille lisible ;
-- une teinte dominante par famille, sans collision — vert fluo réservé aux mutants ;
+- une teinte dominante par famille, sans collision — vert fluo réservé aux
+  mutants (seule exception : la touffe de l'ex-mutant, un humain orange) ;
 - personnages lisibles à petite taille (Adam : sac à dos, écharpe, arc ;
   mutants : tête déformée, bras trop long, halo vert).
 
@@ -160,7 +171,7 @@ Les règles, en résumé :
   `?debug` affiche pages, mégapixels et temps de chargement.
 - Animation **par morceaux**, pas par planches : `render/puppet.ts` anime
   Adam, les mutants, les enfants et les ouvriers (pieds qui alternent, rebond, écrasement
-  à la frappe, arc qui se tend, grimace au coup reçu) ; la roue de la foreuse
+  à la frappe, arc qui se tend, grimace au coup reçu, boitillement d'un patient) ; la roue de la foreuse
   tourne, les cultures ondulent ; un mutant mort s'écrase et s'efface ; un
   porteur a sa charge (l'icône de l'objet) sur la tête.
 - Les bâtiments sont vus en 3/4 : cadre large comme l'emprise, plus haut

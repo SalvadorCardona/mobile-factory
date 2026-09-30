@@ -18,6 +18,16 @@ export const PORTERS = {
 } as const;
 
 /**
+ * Un ex-mutant, sorti guéri de la clinique, porte comme un ouvrier — mais
+ * pas tout à fait : il a gardé la carrure de sa vie d'avant, pas l'allure.
+ * Il porte plus lourd, et marche plus lentement.
+ */
+export const EX_MUTANT = {
+  speed: 1.7,
+  carry: 8,
+} as const;
+
+/**
  * Priorité d'un job. Un chantier qui attend passe avant tout ; vider un
  * coffre qui a de quoi remplir un voyage vient ensuite ; ramasser les restes
  * d'un coffre ne se fait que si personne n'a mieux à faire.

@@ -346,6 +346,10 @@ export class Hud {
     });
     world.events.on('buildingDestroyed', ({ proto }) => this.notify(`${BUILDINGS[proto].label} détruite`, 'bad'));
     world.events.on('childBorn', () => this.notify('Un enfant est né à la nurserie !', 'good'));
+    world.events.on('mutantStunned', () => this.notify('Un mutant assommé ! Touchez-le pour l’emmener à la clinique', 'good'));
+    world.events.on('patientFollowing', () => this.notify('Il vous suit en boitillant — direction la clinique', 'good'));
+    world.events.on('patientAdmitted', () => this.notify('Admis à la clinique : une nuit de soins', 'good'));
+    world.events.on('mutantHealed', () => this.notify('Un ex-mutant sort de la clinique : un porteur de plus !', 'good'));
     world.events.on('townHallDestroyed', () => this.showDefeat());
     world.events.on('playerKnockedOut', () => this.notify('Adam s’est évanoui — il se réveille à la mairie', 'bad'));
     world.events.on('eveArriving', () => this.notify('Quelqu’un arrive à vélo…', 'good'));

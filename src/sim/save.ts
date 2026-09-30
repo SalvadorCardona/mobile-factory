@@ -22,7 +22,7 @@ import { JOB_PRIORITY, type JobPriority } from '../data/workers.ts';
 import { PERKS, type PerkId } from '../data/perks.ts';
 import type { SchedulerSnapshot } from './scheduler.ts';
 import type { Store, StoreSnapshot } from './store.ts';
-import type { BeastState, Entity, EntityId, EveState, Facing, Job, Mobile, Player } from './types.ts';
+import type { BeastState, Entity, EntityId, EveState, Facing, Job, Mobile, PatientState, Player } from './types.ts';
 import { World } from './world.ts';
 
 /**
@@ -165,6 +165,8 @@ const BEAST_STATES: readonly BeastState[] = ['roam', 'chase', 'return'];
 
 const EVE_STATES: readonly EveState[] = ['arriving', 'idle', 'repair'];
 
+const PATIENT_STATES: readonly PatientState[] = ['stunned', 'following', 'care'];
+
 function parseState(raw: unknown): WorldState {
   const state = record(raw);
 
@@ -268,6 +270,7 @@ function parseEntity(raw: unknown): SavedEntity {
       return { ...built, kind, blocked: bool(entity['blocked']) };
     case 'townHall':
     case 'house':
+    case 'clinic':
       return { ...built, kind };
   }
 }
@@ -349,6 +352,8 @@ function parseMobile(raw: unknown): Mobile {
         ...base,
         kind: 'worker',
         homeId: int(mobile['homeId']),
+        // Absent des sauvegardes d'avant la clinique : aucun ex-mutant.
+        exMutant: mobile['exMutant'] === undefined ? false : bool(mobile['exMutant']),
         inside: bool(mobile['inside']),
         job: mobile['job'] === null ? null : parseJob(mobile['job']),
         searchTicks: int(mobile['searchTicks']),
@@ -363,6 +368,12 @@ function parseMobile(raw: unknown): Mobile {
         waitForLeave: mobile['waitForLeave'] === undefined ? false : bool(mobile['waitForLeave']),
         ttl: int(mobile['ttl']),
       };
+    case 'patient': {
+      const state = mobile['state'];
+
+      if (!PATIENT_STATES.includes(state as PatientState)) throw new SaveError(`patient inconnu : ${String(state)}`);
+      return { ...base, kind: 'patient', state: state as PatientState, clinicId: int(mobile['clinicId']), ticks: int(mobile['ticks']) };
+    }
     default:
       throw new SaveError(`mobile inconnu : ${String(mobile['kind'])}`);
   }

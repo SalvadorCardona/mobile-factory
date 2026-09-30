@@ -18,7 +18,7 @@ import type { SpriteId } from './sprites.ts';
 import type { WeaponId } from './weapons.ts';
 
 /** Comportement simulé associé au bâtiment. Un `kind` = un cas dans `sim/`. */
-export type BuildingKind = 'drill' | 'townHall' | 'nursery' | 'tower' | 'house' | 'farm' | 'forge';
+export type BuildingKind = 'drill' | 'townHall' | 'nursery' | 'tower' | 'house' | 'farm' | 'forge' | 'clinic';
 
 export interface BuildingProto {
   label: string;
@@ -206,6 +206,24 @@ export const BUILDINGS = {
     unlockNight: 1,
     sprite: 'reinforcedTower',
     weapon: 'reinforcedBow',
+  },
+  clinic: {
+    label: LORE.buildings.clinic.name,
+    siteDescription: LORE.buildings.clinic.site,
+    description: LORE.buildings.clinic.description,
+    effect: LORE.buildings.clinic.effect,
+    kind: 'clinic',
+    width: 2,
+    height: 2,
+    cost: { wood: 12, stone: 8, food: 4 },
+    storage: 0,
+    hp: 60,
+    workers: 0,
+    menu: true,
+    plan: false,
+    unlockWave: 1,
+    sprite: 'clinic',
+    weapon: null,
   },
 } as const satisfies Record<string, BuildingProto>;
 

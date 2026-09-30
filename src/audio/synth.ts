@@ -19,6 +19,7 @@ export type SoundName =
   | 'arrow'
   | 'hit'
   | 'die'
+  | 'dizzy'
   | 'thud'
   | 'collapse'
   | 'alarm'
@@ -163,6 +164,13 @@ export const SOUNDS: Record<SoundName, (ctx: AudioContext, out: AudioNode, at: n
   die(ctx, out, at) {
     tone(ctx, out, at, 'sawtooth', 260 * vary(0.08), 55, { attack: 0.02, decay: 0.32, peak: 0.28 });
     burst(ctx, out, at + 0.05, 'lowpass', 900, 200, { decay: 0.25, peak: 0.4 });
+  },
+
+  /** Un mutant assommé : un « boing » qui tangue, et deux petits gazouillis d'étoiles. */
+  dizzy(ctx, out, at) {
+    tone(ctx, out, at, 'sine', 520, 180, { attack: 0.01, decay: 0.3, peak: 0.3 });
+    tone(ctx, out, at + 0.26, 'triangle', 1319, 1568, { decay: 0.07, peak: 0.16 });
+    tone(ctx, out, at + 0.36, 'triangle', 1175, 1397, { decay: 0.07, peak: 0.16 });
   },
 
   /** Un coup de mutant sur un mur. */
