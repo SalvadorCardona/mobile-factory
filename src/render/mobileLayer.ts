@@ -1,5 +1,5 @@
 /**
- * Mutants, bêtes sauvages, flèches et enfants.
+ * Mutants, bêtes sauvages, flèches, enfants et Ève.
  *
  * Les mobiles n'ont pas d'événement de création : ils apparaissent dans
  * `world.mobiles`, et cette couche s'y synchronise à chaque frame — une vue
@@ -17,11 +17,15 @@
  * connaît que ses points de vie. Crabes et loups font de même, et frappent
  * (pinces qui claquent, bond) quand ils touchent Adam.
  *
+ * Ève arrive sur son vélo-cargo : tant qu'elle roule, sa vue est le vélo,
+ * roues qui tournent et cadre qui cahote ; à pied, c'est son pantin, qui
+ * frappe le mur qu'elle répare.
+ *
  * Le marqueur de cible — un anneau jaune au sol et une pointe au-dessus de
  * la tête — suit ce que l'arc d'Adam vise (`player.target`).
  */
 
-import { Container, Graphics, Sprite, type Ticker } from 'pixi.js';
+import { Container, Graphics, Sprite, type Texture, type Ticker } from 'pixi.js';
 import { TILE_SIZE, floorDiv } from '../core/grid.ts';
 import { PALETTE, hex } from '../data/artDirection.ts';
 import { ENEMIES, WILDLIFE } from '../data/enemies.ts';
@@ -46,6 +50,8 @@ function puppetOf(mobile: Exclude<Mobile, { kind: 'arrow' }>): { id: PuppetId; s
       return { id: ENEMIES[mobile.proto].sprite, shadowWidth: 22, stride: 4 };
     case 'kid':
       return { id: 'kid', shadowWidth: 15, stride: 3 };
+    case 'eve':
+      return { id: 'eve', shadowWidth: 20, stride: 4 };
     case 'beast':
       return mobile.proto === 'crab'
         ? { id: WILDLIFE.crab.sprite, shadowWidth: 22, stride: 8, gait: 'scuttle' }
@@ -63,6 +69,17 @@ interface MobileView {
   age: number;
   /** Tuile sous les pieds : l'ombre ne change de teinte qu'en changeant de sol. */
   tile: string;
+  /** Le vélo-cargo d'Ève, montré tant qu'elle roule. */
+  bike: BikeView | null;
+}
+
+/** Le vélo-cargo : une ombre, le cadre avec Ève en selle, deux roues qui tournent. */
+interface BikeView {
+  root: Container;
+  shadow: Sprite;
+  figure: Container;
+  wheels: Sprite[];
+  clock: number;
 }
 
 /** Un mutant mort, qui s'écrase et s'efface là où il est tombé. */
@@ -135,6 +152,19 @@ export class MobileLayer {
           // Une flèche vole au-dessus de tout ce qui marche.
           view.root.zIndex = y + 64;
           break;
+
+        case 'eve': {
+          const riding = mobile.state === 'arriving';
+
+          view.root.zIndex = y + 6;
+          this.ground(view, x, y);
+          view.puppet!.root.visible = !riding;
+          view.bike!.root.visible = riding;
+
+          if (riding) rideBike(view.bike!, mobile.facing === 'left', deltaMs);
+          else view.puppet!.update(deltaMs, mobile.facing, mobile.working ? 'act' : mobile.moving ? 'walk' : 'idle');
+          break;
+        }
 
         case 'mutant':
         case 'beast':
@@ -211,14 +241,18 @@ export class MobileLayer {
 
       sprite.anchor.set(SPRITES.arrow.anchorX, SPRITES.arrow.anchorY);
       root.addChild(sprite);
-      view = { root, puppet: null, hp: null, lastHp: 0, age: SPAWN_MS, tile: '' };
+      view = { root, puppet: null, hp: null, lastHp: 0, age: SPAWN_MS, tile: '', bike: null };
     } else {
-      const foe = mobile.kind !== 'kid';
+      const foe = mobile.kind === 'mutant' || mobile.kind === 'beast';
       const { id, ...options } = puppetOf(mobile);
       const puppet = new Puppet(this.library, id, this.tiles.shadow('grass'), options);
       let hp: Graphics | null = null;
 
       root.addChild(puppet.root);
+
+      const bike = mobile.kind === 'eve' ? this.bike(this.tiles.shadow('grass')) : null;
+
+      if (bike) root.addChild(bike.root);
 
       if (foe) {
         const proto = SPRITES[id];
@@ -229,7 +263,7 @@ export class MobileLayer {
         root.addChild(hp);
         root.alpha = 0;
       }
-      view = { root, puppet, hp, lastHp: foe ? mobile.hp : 0, age: foe ? 0 : SPAWN_MS, tile: '' };
+      view = { root, puppet, hp, lastHp: foe ? mobile.hp : 0, age: foe ? 0 : SPAWN_MS, tile: '', bike };
     }
 
     this.views.set(mobile.id, view);
@@ -246,6 +280,33 @@ export class MobileLayer {
     if (key === view.tile || !view.puppet) return;
     view.tile = key;
     view.puppet.setShadow(this.tiles.shadow(terrainAt(this.world.seed, tx, ty)));
+    if (view.bike) view.bike.shadow.texture = this.tiles.shadow(terrainAt(this.world.seed, tx, ty));
+  }
+
+  /** Le vélo-cargo, morceaux posés pour que le cadre du sprite tombe sur l'ancre commune. */
+  private bike(shadowTexture: Texture): BikeView {
+    const { width, height, anchorX, anchorY, pivots } = SPRITES.cargoBike;
+    const root = new Container();
+    const figure = new Container();
+    const shadow = new Sprite(shadowTexture);
+    const frame = new Sprite(this.library.part('cargoBike', 'frame'));
+    const wheels = (['wheelBack', 'wheelFront'] as const).map((name) => {
+      const wheel = new Sprite(this.library.part('cargoBike', name));
+      const [px, py] = pivots[name];
+
+      wheel.anchor.set(px / width, py / height);
+      wheel.position.set(px - anchorX * width, py - anchorY * height);
+      return wheel;
+    });
+
+    shadow.anchor.set(0.5);
+    shadow.width = 54;
+    shadow.height = 10;
+    shadow.position.set(3, 1);
+    frame.anchor.set(anchorX, anchorY);
+    figure.addChild(...wheels, frame);
+    root.addChild(shadow, figure);
+    return { root, shadow, figure, wheels, clock: 0 };
   }
 
   /** Les morts s'aplatissent comme une flaque, puis s'effacent. */
@@ -277,6 +338,14 @@ export class MobileLayer {
     this.views.clear();
     this.corpses.length = 0;
   }
+}
+
+/** Les roues tournent, le cadre cahote ; à gauche, le vélo se retourne. */
+function rideBike(bike: BikeView, left: boolean, deltaMs: number): void {
+  bike.clock += deltaMs;
+  bike.figure.scale.x = left ? -1 : 1;
+  bike.figure.y = -Math.abs(Math.sin(bike.clock * 0.02)) * 0.8;
+  for (const wheel of bike.wheels) wheel.rotation += deltaMs * 0.012;
 }
 
 /** Une capsule blanche et son remplissage corail, au-dessus de la tête. */

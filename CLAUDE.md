@@ -33,6 +33,16 @@ tout sauf le bâti, qu'ils cassent. L'arc d'Adam et la tour de guet
 (`src/data/weapons.ts`) tirent seuls. La mairie à zéro = partie perdue.
 La **nurserie** fait naître un enfant toutes les dix minutes.
 
+**Ève** — ingénieure bricoleuse, taquine (`src/data/eve.ts`, `src/sim/eve.ts`).
+Elle **tutoie** Adam, qui reste muet ; le jeu (bulles, boutons, écrans)
+**vouvoie** le joueur. Les conseils du HUD sont ses répliques, par radio
+tant qu'elle n'est pas là. Elle arrive en vélo-cargo une fois la vague 3
+repoussée (population : 2 adultes), vit devant la mairie, répare le bâti
+entre les vagues, et se tape pour lui parler (bulle au-dessus d'elle,
+jamais bloquante). Elle porte la chaîne de quêtes (`src/data/quests.ts`) :
+chaque quête récompense un **plan** (un bâtiment `plan: true` n'entre au
+menu qu'une fois donné) ou un **outil**. Seul `questsDone` est de l'état.
+
 **Faune** — en plus des mutants, des **crabes** vivent sur le sable et des
 **loups** au cœur des forêts (`WILDLIFE`, `src/data/enemies.ts` ;
 `src/sim/wildlife.ts`). Leurs tanières se tirent de la seed par chunk ; une

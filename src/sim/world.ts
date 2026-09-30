@@ -18,6 +18,8 @@
  * vagues et marchent droit dessus ; l'arc d'Adam et les tours de guet tirent
  * seuls. Si la mairie tombe, la partie est perdue. Loin du village, la faune
  * — crabes sur les plages, loups en forêt — s'en prend à Adam s'il approche.
+ * Après la troisième vague repoussée, Ève arrive : elle vit à la mairie,
+ * répare le bâti entre les vagues et donne les quêtes (`sim/eve.ts`).
  */
 
 import { Emitter } from '../core/events.ts';
@@ -25,7 +27,9 @@ import { CHUNK_TILES, TILE_SIZE, coordKey, distanceSq, floorDiv } from '../core/
 import { mulberry32, type StatefulRng } from '../core/rng.ts';
 import { BUILDINGS, NURSERY_BIRTH_TICKS, type BuildingId } from '../data/buildings.ts';
 import { ENEMIES, WAVES, WILDLIFE, WILDLIFE_SPAWN, waveSize } from '../data/enemies.ts';
+import { EVE } from '../data/eve.ts';
 import type { ItemId } from '../data/items.ts';
+import type { QuestId } from '../data/quests.ts';
 import { RECIPES, type RecipeId } from '../data/recipes.ts';
 import { RESOURCES } from '../data/resources.ts';
 import { WEAPONS } from '../data/weapons.ts';
@@ -34,6 +38,7 @@ import { nearestFoe, shoot, stepArrow } from './combat.ts';
 import type { Command, CommandLogEntry, PlacementRejection, SiteRejection, TakeRejection } from './commands.ts';
 import type { WildlifeId } from '../data/enemies.ts';
 import { spawnPoint, stepMutant } from './enemies.ts';
+import { createEve, currentQuest, harvestTicksWithTools, isUnlocked, mostDamaged, questProgress, rideHome, walkTo } from './eve.ts';
 import { stepKid } from './kids.ts';
 import { denSize, densOfChunk, stepBeast, type Den } from './wildlife.ts';
 import { facingOf } from './motion.ts';
@@ -57,6 +62,7 @@ import type {
   Contact,
   Drill,
   Entity,
+  Eve,
   EntityId,
   Farm,
   Foe,
@@ -145,6 +151,16 @@ export type WorldEvents = {
   playerKnockedOut: { x: number; y: number };
   /** La nurserie a produit un enfant. */
   childBorn: { nurseryId: EntityId; kidId: MobileId; x: number; y: number };
+  /** Ève part du bord de la carte sur son vélo-cargo. */
+  eveArriving: { id: MobileId };
+  /** Ève est arrivée à la mairie : la population compte deux adultes. */
+  eveArrived: { id: MobileId; x: number; y: number };
+  /** Ève donne une quête. */
+  questStarted: { quest: QuestId };
+  /** L'objectif est atteint : la récompense est donnée. */
+  questCompleted: { quest: QuestId };
+  /** Ève a rendu `hp` points de vie au bâtiment. */
+  buildingRepaired: { id: EntityId; hp: number };
 };
 
 export class World {
@@ -176,6 +192,12 @@ export class World {
 
   /** Tick où la mairie est tombée ; 0 tant qu'elle tient. */
   public defeatTick = 0;
+
+  /**
+   * Quêtes d'Ève déjà finies, dans l'ordre de `QUEST_IDS`. C'est tout l'état
+   * des quêtes : la quête en cours, les plans et les outils s'en déduisent.
+   */
+  public questsDone = 0;
 
   private readonly scheduler = new Scheduler();
   private readonly queue: Command[] = [];
@@ -268,6 +290,7 @@ export class World {
       kills: this.kills,
       defeated: this.defeated,
       defeatTick: this.defeatTick,
+      questsDone: this.questsDone,
       player: { ...player, inventory: inventory.toJSON() },
       resources: this.resources.toJSON(),
       entities: [...this.entities.values()].map(saveEntity),
@@ -309,6 +332,7 @@ export class World {
     this.kills = state.kills;
     this.defeated = state.defeated;
     this.defeatTick = state.defeatTick;
+    this.questsDone = state.questsDone;
 
     const { inventory, ...player } = state.player;
 
@@ -347,6 +371,7 @@ export class World {
     this.stepMobiles();
     this.recover();
     this.stepWildlife();
+    this.watchOverColony();
     this.shootPlayerBow();
 
     for (const id of this.scheduler.due(this.tickCount)) {
@@ -515,7 +540,9 @@ export class World {
     if (resource) {
       this.player.harvesting = true;
 
-      if (this.contactTicks % RESOURCES[resource.id].harvestTicks === 0) {
+      const ticks = harvestTicksWithTools(resource.id, RESOURCES[resource.id].harvestTicks, this.questsDone);
+
+      if (this.contactTicks % ticks === 0) {
         this.harvest(contact.tx, contact.ty);
       }
       return;
@@ -602,6 +629,9 @@ export class World {
    */
   public canPlace(building: BuildingId, tx: number, ty: number): PlacementRejection | null {
     const proto = BUILDINGS[building];
+
+    // Pas de plan, pas de chantier : le menu ne le propose pas, le tick non plus.
+    if (!isUnlocked(building, this.questsDone)) return 'locked';
 
     for (let y = ty; y < ty + proto.height; y += 1) {
       for (let x = tx; x < tx + proto.width; x += 1) {
@@ -925,9 +955,17 @@ export class World {
     return false;
   }
 
+  /** Ève, si elle a rejoint la colonie — en route ou arrivée. */
+  public eve(): Eve | undefined {
+    for (const mobile of this.mobiles.values()) {
+      if (mobile.kind === 'eve') return mobile;
+    }
+    return undefined;
+  }
+
   /**
-   * La population : Adam, les enfants nés aux nurseries, et les ouvriers
-   * qu'emploient les bâtiments finis. Un chantier n'emploie personne.
+   * La population : Adam et Ève, les enfants nés aux nurseries, et les
+   * ouvriers qu'emploient les bâtiments finis. Un chantier n'emploie personne.
    */
   public population(): { adults: number; children: number; workers: number } {
     let children = 0;
@@ -939,7 +977,7 @@ export class World {
     for (const entity of this.entities.values()) {
       if (entity.kind !== 'site') workers += BUILDINGS[entity.proto].workers;
     }
-    return { adults: 1, children, workers };
+    return { adults: this.eve() ? 2 : 1, children, workers };
   }
 
   private stepMobiles(): void {
@@ -977,6 +1015,10 @@ export class World {
 
         case 'kid':
           stepKid(mobile, { x: mobile.homeX, y: mobile.homeY }, this.isSolid, this.rng, STEP_SECONDS);
+          break;
+
+        case 'eve':
+          this.stepEve(mobile);
           break;
       }
     }
@@ -1028,6 +1070,107 @@ export class World {
     this.mobiles.delete(mutant.id);
     this.kills += 1;
     this.events.emit('mutantDied', { id: mutant.id, x: mutant.x, y: mutant.y });
+  }
+
+  /* -------------------------------------------------------------------- Ève */
+
+  /**
+   * Une fois par seconde : Ève arrive-t-elle, a-t-elle un mur à réparer, la
+   * quête en cours est-elle remplie ? Elle arrive quand la vague
+   * `EVE.arrivalWave` est repoussée ; elle ne répare qu'entre deux vagues.
+   */
+  private watchOverColony(): void {
+    if (this.tickCount % EVE.checkTicks !== 0 || this.defeated) return;
+
+    const eve = this.eve();
+
+    if (!eve) {
+      if (this.wave >= EVE.arrivalWave && !this.hasMutants()) this.sendEve();
+      return;
+    }
+    if (eve.state === 'arriving') return;
+
+    if (eve.state === 'idle' && !this.hasMutants()) {
+      const damaged = mostDamaged(this.entities.values());
+
+      if (damaged) {
+        eve.state = 'repair';
+        eve.targetId = damaged.id;
+      }
+    }
+
+    const quest = currentQuest(this.questsDone);
+
+    if (quest) {
+      const { have, need } = questProgress(quest, this.entities.values());
+
+      if (have >= need) {
+        this.questsDone += 1;
+        this.events.emit('questCompleted', { quest });
+        this.startQuest();
+      }
+    }
+  }
+
+  /** Ève part du bord de la carte, vers la tuile libre devant la mairie. */
+  private sendEve(): void {
+    const hall = this.entities.get(this.townHallId);
+
+    if (!hall) return;
+
+    const spot = this.freeTileAround(hall.tx, hall.ty, hall.width, hall.height);
+    const homeX = spot ? (spot.tx + 0.5) * TILE_SIZE : this.spawnX;
+    const homeY = spot ? (spot.ty + 0.5) * TILE_SIZE : this.spawnY;
+    const eve = createEve(this.nextMobileId++, homeX, homeY);
+
+    this.mobiles.set(eve.id, eve);
+    this.events.emit('eveArriving', { id: eve.id });
+  }
+
+  private startQuest(): void {
+    const quest = currentQuest(this.questsDone);
+
+    if (quest) this.events.emit('questStarted', { quest });
+  }
+
+  private stepEve(eve: Eve): void {
+    eve.working = false;
+
+    switch (eve.state) {
+      case 'arriving':
+        if (rideHome(eve, STEP_SECONDS)) {
+          eve.state = 'idle';
+          this.events.emit('eveArrived', { id: eve.id, x: eve.x, y: eve.y });
+          this.startQuest();
+        }
+        break;
+
+      case 'repair': {
+        const target = eve.targetId === null ? undefined : this.entities.get(eve.targetId);
+
+        // Réparé, rasé, ou une vague qui arrive : elle rentre.
+        if (!target || target.kind === 'site' || target.hp >= BUILDINGS[target.proto].hp || this.hasMutants()) {
+          eve.state = 'idle';
+          eve.targetId = null;
+          break;
+        }
+        if (!walkTo(eve, target, this.isOpenGroundSolid, STEP_SECONDS)) break;
+
+        eve.working = true;
+        if (eve.repairCooldown > 0) {
+          eve.repairCooldown -= 1;
+          break;
+        }
+        target.hp = Math.min(BUILDINGS[target.proto].hp, target.hp + EVE.repairAmount);
+        eve.repairCooldown = EVE.repairTicks;
+        this.events.emit('buildingRepaired', { id: target.id, hp: target.hp });
+        break;
+      }
+
+      case 'idle':
+        stepKid(eve, { x: eve.homeX, y: eve.homeY }, this.isOpenGroundSolid, this.rng, STEP_SECONDS, EVE.homeRange, EVE.walkSpeed / 2);
+        break;
+    }
   }
 
   /* ------------------------------------------------------------------ faune */

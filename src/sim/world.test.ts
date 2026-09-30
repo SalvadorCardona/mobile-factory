@@ -379,7 +379,7 @@ describe('World', () => {
     for (let y = spot.ty - 1; y < spot.ty + 3; y += 1) {
       for (let x = spot.tx - 1; x < spot.tx + 3; x += 1) world.resources.clear(x, y);
     }
-    world.push({ type: 'placeBuilding', building: 'builderHouse', tx: spot.tx, ty: spot.ty });
+    world.push({ type: 'placeBuilding', building: 'farm', tx: spot.tx, ty: spot.ty });
     world.tick();
 
     const id = Math.max(...world.entities.keys());
@@ -387,7 +387,7 @@ describe('World', () => {
     // Un chantier n'emploie personne.
     expect(world.population().workers).toBe(0);
     completeSite(world, id);
-    expect(world.population().workers).toBe(BUILDINGS.builderHouse.workers);
+    expect(world.population().workers).toBe(BUILDINGS.farm.workers);
   });
 
   it('achève la mairie quand Adam y a tout apporté', () => {

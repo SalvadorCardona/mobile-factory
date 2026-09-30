@@ -114,6 +114,20 @@ export const UI_ICONS = {
     line(9.5, 18.5, 14.5, 18.5, ink.base),
     circle(14.5, 7.5, 1.3, yellow.light),
   ),
+  /** Le portrait d'Ève — chignon, bandeau jaune, salopette cyan — devant ses répliques. */
+  eve: svg(
+    S,
+    S,
+    shadedPill(5, 17, 14, 7, 2, 'cyan'),
+    circle(12, 3.6, 3, ink.base),
+    rect(5, 5, 14, 13, ink.base, 5.5),
+    rect(7, 9.5, 10, 8.5, PALETTE.skin.base, 4),
+    pill(6, 6.2, 12, 2.6, yellow.base),
+    circle(9.8, 13, 1, ink.base),
+    circle(14.2, 13, 1, ink.base),
+    circle(8.6, 15.4, 1, coral.light),
+    circle(15.4, 15.4, 1, coral.light),
+  ),
   heart: svg(S, S, heart(12, 9.5, 4.6, coral.shade), heart(11.6, 9, 4.2, coral.base), pill(6.5, 6.5, 4, 2, coral.light)),
   /** Un habitant : la tête et la tunique orange des humains. */
   people: svg(S, S, shadedPill(5, 12, 14, 10, 3, 'orange'), circle(12, 8, 5, PALETTE.skin.base), pill(7, 3, 10, 5, ink.base)),

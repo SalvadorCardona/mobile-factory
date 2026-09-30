@@ -103,8 +103,8 @@ function playedWorld(): World {
 
   for (let dy = -BUILD_REACH_TILES; dy <= BUILD_REACH_TILES; dy += 1) {
     for (let dx = -BUILD_REACH_TILES; dx <= BUILD_REACH_TILES; dx += 1) {
-      if (world.canPlace('builderHouse', origin.tx + dx, origin.ty + dy) !== null) continue;
-      world.push({ type: 'placeBuilding', building: 'builderHouse', tx: origin.tx + dx, ty: origin.ty + dy });
+      if (world.canPlace('farm', origin.tx + dx, origin.ty + dy) !== null) continue;
+      world.push({ type: 'placeBuilding', building: 'farm', tx: origin.tx + dx, ty: origin.ty + dy });
       world.tick();
       dy = dx = BUILD_REACH_TILES + 1;
     }
