@@ -323,10 +323,12 @@ export class Hud {
       if (reason === 'nothingToGive') this.notify('Rien dans le sac que ce chantier attende', 'bad');
     });
     world.events.on('storeTaken', ({ item, amount }) => this.float(item, amount));
-    world.events.on('buildingSupplied', ({ item, amount }) => this.float(item, -amount));
+    world.events.on('buildingSupplied', ({ item, amount, source }) => {
+      if (source === 'bag') this.float(item, -amount);
+    });
     world.events.on('supplyRejected', ({ reason }) => {
       if (reason === 'outOfReach') this.notify(REJECTION_LABELS.outOfReach, 'bad');
-      if (reason === 'nothingToGive') this.notify('Rien dans le sac que ce bâtiment attende', 'bad');
+      if (reason === 'nothingToGive') this.notify('Rien dans le sac ni en ville que ce bâtiment attende', 'bad');
     });
     world.events.on('nurseryHungry', () => this.notify('La nurserie attend de la nourriture pour le prochain enfant', 'bad'));
     world.events.on('takeRejected', ({ reason }) => {

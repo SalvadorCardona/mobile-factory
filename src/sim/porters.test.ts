@@ -8,7 +8,7 @@ import { JOB_PRIORITY, WANDER } from '../data/workers.ts';
 import { doorOf } from './jobs.ts';
 import { decodeSave, encodeSave, type SavedEntity } from './save.ts';
 import { isWalkable, terrainAt } from './terrain.ts';
-import type { EntityId, Site, TownHall, Worker } from './types.ts';
+import type { EntityId, Forge, Site, TownHall, Worker } from './types.ts';
 import { clearLine } from './workers.ts';
 import { World } from './world.ts';
 
@@ -22,6 +22,10 @@ interface Layout {
   sites?: BuildingId[];
   /** Foreuses finies, coffre déjà garni. */
   drills?: Stock[];
+  /** Forges finies, coffre déjà garni, posées au plus près de la mairie — dans son rayon. */
+  forges?: Stock[];
+  /** Nurseries finies, affamées : l'heure de la naissance est passée. */
+  nurseries?: Stock[];
 }
 
 /** Les emplacements libres d'une colonie de test, en tuiles relatives à la mairie : une grille de 2 × 2 espacés. */
@@ -72,6 +76,31 @@ function colony(layout: Layout): World {
 
     return { id: nextId++, proto, tx: hx + dx, ty: hy + dy, width, height };
   };
+
+  // Les consommateurs d'abord, sur les emplacements les plus proches de la mairie.
+  const placeNear = (proto: BuildingId): ReturnType<typeof place> => {
+    slots.sort(([ax, ay], [bx, by]) => Math.abs(ax) + ay - (Math.abs(bx) + by));
+    return place(proto);
+  };
+
+  for (const store of layout.forges ?? []) {
+    entities.push({ ...placeNear('forge'), kind: 'forge', store, hp: BUILDINGS.forge.hp, level: 1, paused: false, staff: BUILDINGS.forge.workers, blocked: true });
+  }
+  for (const store of layout.nurseries ?? []) {
+    entities.push({
+      ...placeNear('nursery'),
+      kind: 'nursery',
+      store,
+      hp: BUILDINGS.nursery.hp,
+      level: 1,
+      paused: false,
+      staff: BUILDINGS.nursery.workers,
+      nextBirthTick: state.tick,
+      born: 0,
+      hungry: true,
+    });
+  }
+  slots.sort(([ax, ay], [bx, by]) => ay - by || ax - bx);
 
   for (let i = 0; i < layout.houses; i += 1) {
     entities.push({ ...place('builderHouse'), kind: 'house', store: {}, hp: BUILDINGS.builderHouse.hp, level: 1, paused: false, staff: BUILDINGS.builderHouse.workers });
@@ -451,5 +480,96 @@ describe('porteurs', () => {
 
     expect(clearLine(1, x - 5 * TILE_SIZE, y, x + 5 * TILE_SIZE, y)).toBe(false);
     expect(clearLine(1, x, y - 5 * TILE_SIZE, x, y + 5 * TILE_SIZE)).toBe(false);
+  });
+});
+
+describe('forge et nurserie ravitaillées par la ville', () => {
+  function forgeOf(world: World): Forge {
+    const forge = [...world.entities.values()].find((entity): entity is Forge => entity.kind === 'forge');
+
+    if (!forge) throw new Error('pas de forge');
+    return forge;
+  }
+
+  it('ville avec 10 fer et 5 charbon, forge vide dans le rayon : les porteurs la ravitaillent, elle fond des plaques — rien de perdu ni de dupliqué', () => {
+    const world = colony({ hall: { ironOre: 10, coal: 5 }, houses: 1, forges: [{}] });
+    const forge = forgeOf(world);
+
+    expect(world.inTownRange(forge)).toBe(true);
+    expect(forge.blocked).toBe(true);
+
+    run(world, 1500, () => {
+      const { ironOre, coal, ironPlate } = census(world);
+
+      // Une plaque, c'est deux fers et un charbon : le compte ne bouge pas.
+      expect(ironOre + 2 * ironPlate).toBe(10);
+      expect(coal + ironPlate).toBe(5);
+      expectCoveredPromises(world);
+    });
+
+    expect(forge.store.count('ironPlate')).toBeGreaterThanOrEqual(1);
+    // Adam, resté à l'écart, n'a rien porté.
+    expect(world.player.inventory.isEmpty()).toBe(true);
+  });
+
+  it('une forge en famine passe avant une foreuse à vider', () => {
+    const world = colony({ hall: { ironOre: 10, coal: 5 }, houses: 1, drills: [{ ironOre: 20 }], forges: [{}] });
+
+    run(world, 2);
+
+    const first = workers(world).find((worker) => worker.job !== null);
+
+    expect(first?.job?.priority).toBe(JOB_PRIORITY.starving);
+    expect(first?.job?.to).toBe(forgeOf(world).id);
+  });
+
+  it('une forge en pause n’est pas ravitaillée', () => {
+    const world = colony({ hall: { ironOre: 10, coal: 5 }, houses: 1, forges: [{}] });
+
+    world.push({ type: 'pauseBuilding', id: forgeOf(world).id, paused: true });
+    run(world, 600);
+
+    expect(forgeOf(world).store.isEmpty()).toBe(true);
+    expect(hallOf(world).store.count('ironOre')).toBe(10);
+  });
+
+  it('la nurserie affamée reçoit sa nourriture de la ville, et l’enfant naît', () => {
+    const world = colony({ hall: { food: 8 }, houses: 1, nurseries: [{}] });
+    const kids = (): number => [...world.mobiles.values()].filter((mobile) => mobile.kind === 'kid').length;
+
+    run(world, 1500, () => {
+      expect(census(world).food + 4 * kids()).toBe(8);
+      expectCoveredPromises(world);
+    });
+
+    expect(kids()).toBe(1);
+  });
+
+  it('« Transférer » prend le sac, puis la ville, dans la part du coffre', () => {
+    const world = colony({ hall: { ironOre: 28, coal: 4 }, houses: 0, forges: [{}] });
+    const forge = forgeOf(world);
+    const door = doorOf(forge);
+    const supplied: ['bag' | 'town', ItemId, number][] = [];
+
+    world.events.on('buildingSupplied', ({ source, item, amount }) => supplied.push([source, item, amount]));
+    world.player.x = door.x;
+    world.player.y = door.y + TILE_SIZE;
+    world.player.inventory.add('ironOre', 2);
+
+    expect(world.canSupply(forge)).toBe(true);
+    world.push({ type: 'supplyBuilding', id: forge.id });
+    world.tick();
+
+    const ironShare = (BUILDINGS.forge.storage * 2) / 3;
+
+    expect(supplied).toEqual([
+      ['bag', 'ironOre', 2],
+      ['town', 'ironOre', ironShare - 2],
+      ['town', 'coal', 4],
+    ]);
+    expect(world.player.inventory.count('ironOre')).toBe(0);
+    expect(hallOf(world).store.count('ironOre')).toBe(28 - (ironShare - 2));
+    expect(hallOf(world).store.count('coal')).toBe(0);
+    expect(forge.blocked).toBe(false);
   });
 });

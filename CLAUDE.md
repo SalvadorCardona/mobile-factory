@@ -28,8 +28,8 @@ chantier ouvre sa fenêtre : « Transférer » y vide d'un coup ce qu'il attend
 — le sac d'abord, puis le stock de la ville s'il est dans son rayon.
 **Le dernier objet livré achève le chantier**, sans bouton de validation
 (poussière, rebond, son, « Mairie bâtie ! » qui flotte).
-Une nurserie ou une forge heurtée (ou « Transférer le sac ») reçoit ce que
-sa recette consomme ; la forge (débloquée à la nuit 1, `unlockNight`)
+Une nurserie ou une forge heurtée (ou « Transférer » : le sac, puis la ville
+dans son rayon) reçoit ce que sa recette consomme ; la forge (débloquée à la nuit 1, `unlockNight`)
 fond fer + charbon en plaques de fer, qui renforcent la tour de guet :
 sa fenêtre propose « Renforcer » (niveaux d'amélioration, `upgrades` de
 `data/buildings.ts`, commande `upgradeBuilding`, payée sac puis ville).
@@ -57,8 +57,9 @@ ressource qu'on récolterait pour rien.
 constructeurs et la ferme en emploient quatre, comptés dans la population
 une fois le bâtiment fini. Ceux de la maison sont des **porteurs** (mobile
 `worker`, `src/sim/workers.ts`, `PORTERS` dans `src/data/workers.ts`) : ils
-vident foreuses, fermes et cabanes de bûcheron dans la mairie et livrent les chantiers depuis
-la mairie. Un job est réservé des deux côtés **à sa création**
+vident foreuses, fermes et cabanes de bûcheron dans la mairie et livrent les chantiers,
+la forge et la nurserie depuis la mairie (`sim/consumers.ts` ; une machine en
+famine d'abord, `JOB_PRIORITY.starving`). Un job est réservé des deux côtés **à sa création**
 (`src/sim/jobs.ts` : `Store.reserveOut`/`reserveIn`, registre des chantiers)
 — décider sur `available()`, jamais sur le stock brut. Ligne droite, jamais
 à travers l'eau ; à l'abri chez eux pendant une vague. Les réservations ne sont pas sauvegardées : elles se

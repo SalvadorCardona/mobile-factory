@@ -44,7 +44,7 @@ import { RECIPES, type RecipeProto } from '../data/recipes.ts';
 import { WEAPONS } from '../data/weapons.ts';
 import { LOGISTICIANS, LUMBERJACKS } from '../data/workers.ts';
 import { canPause } from '../sim/staffing.ts';
-import type { Building, Entity, EntityId } from '../sim/types.ts';
+import type { Building, Entity, EntityId, Forge, Nursery } from '../sim/types.ts';
 import { TICKS_PER_SECOND, siteMissing, type World } from '../sim/world.ts';
 import { itemAmount, uiIcon } from './icons.ts';
 import { ResearchPanel } from './researchPanel.ts';
@@ -341,7 +341,7 @@ export class BuildingPanel {
       this.pauseButton.dataset['tone'] = entity.paused ? 'resume' : 'pause';
       this.refreshCrew(entity);
       this.transferButton.hidden = !consumer;
-      this.transferButton.textContent = 'Transférer le sac';
+      this.transferButton.textContent = this.world.inTownRange(entity) ? 'Transférer' : 'Transférer le sac';
       this.transferButton.disabled = !inReach || !this.world.canSupply(entity);
       this.takeButton.hidden = !producer;
       this.takeButton.disabled =
@@ -376,7 +376,7 @@ export class BuildingPanel {
             entity.paused
               ? PAUSED
               : entity.hungry
-                ? 'En attente : il manque de quoi nourrir l’enfant — apportez de la nourriture.'
+                ? `En attente d’un repas. ${starvedLine(this.world, entity)}`
                 : `Prochain enfant dans ${clock(remaining)}`,
           );
           lines.push(`Enfants nés ici : ${entity.born}`);
@@ -389,7 +389,9 @@ export class BuildingPanel {
             entity.paused
               ? PAUSED
               : entity.blocked
-                ? 'À l’arrêt : il manque du fer ou du charbon — heurtez-la ou transférez le sac.'
+                ? this.world.supplyStatus(entity)
+                  ? `À l’arrêt. ${starvedLine(this.world, entity)}`
+                  : BLOCKED
                 : 'Le four chauffe.',
           );
           break;
@@ -638,6 +640,27 @@ export function upgradeEffect(from: BuildingLevel, to: BuildingLevel): string {
 }
 
 /** « 2 minerai de fer + 1 charbon » à partir des quantités d'une recette. */
+/**
+ * D'où vient la famine d'une forge ou d'une nurserie : ce qui manque est-il
+ * en route, en ville, dans le sac — ou nulle part ?
+ */
+function starvedLine(world: World, consumer: Nursery | Forge): string {
+  const status = world.supplyStatus(consumer);
+
+  if (!status) return '';
+
+  const label = ITEMS[status.item].label;
+
+  if (status.coming) return `${label} : les porteurs l’apportent.`;
+  if (status.inTown > 0) {
+    return status.porters
+      ? `${label} en ville : ${status.inTown} — les porteurs arrivent.`
+      : `${label} en ville : ${status.inTown} — aucun porteur : ${world.inTownRange(consumer) ? 'transférez-le' : 'apportez-le'}.`;
+  }
+  if (world.player.inventory.count(status.item) > 0) return `${label} dans le sac — heurtez-la ou transférez.`;
+  return `Plus de ${label.toLowerCase()} nulle part — récoltez-en.`;
+}
+
 function recipeLine(amounts: RecipeProto['inputs']): string {
   return (Object.entries(amounts) as [ItemId, number][])
     .map(([item, amount]) => `${amount} ${ITEMS[item].label.toLowerCase()}`)
