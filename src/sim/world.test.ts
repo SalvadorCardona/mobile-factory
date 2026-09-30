@@ -1160,7 +1160,7 @@ describe('forge', () => {
   it('fait de la place dans le sac pour le fer et le charbon qu’elle accepte', () => {
     const world = new World(7);
 
-    world.wave = FORGE.unlockWave;
+    world.night = FORGE.unlockNight;
 
     const forge = buildNear(world, 'forge');
     const coal = world.accepts(forge, 'coal');
