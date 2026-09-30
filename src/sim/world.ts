@@ -93,7 +93,7 @@ import {
   playerOverlaps,
   stepPlayer,
 } from './player.ts';
-import { JobBoard, doorOf, type LineTest } from './jobs.ts';
+import { JobBoard, PORTER_CREW, doorOf, inDepotRange, isProducer, type Crew, type LineTest } from './jobs.ts';
 import {
   extraUnits,
   isCollecting,
@@ -120,6 +120,7 @@ import type {
   Building,
   Clinic,
   Contact,
+  Depot,
   Drill,
   Entity,
   Eve,
@@ -610,7 +611,7 @@ export class World {
 
     // Une maison d'une sauvegarde d'avant les porteurs : ses ouvriers s'y installent.
     for (const entity of this.entities.values()) {
-      if (entity.kind === 'house') this.staff(entity);
+      if (entity.kind === 'house' || entity.kind === 'depot') this.staff(entity);
       if (entity.kind === 'lumberCamp') this.staffCamp(entity);
     }
   }
@@ -1707,6 +1708,10 @@ export class World {
       case 'lumberCamp':
         building = { ...base, kind: 'lumberCamp' };
         break;
+
+      case 'depot':
+        building = { ...base, kind: 'depot' };
+        break;
     }
 
     this.entities.set(site.id, building);
@@ -1743,6 +1748,10 @@ export class World {
 
       case 'lumberCamp':
         this.staffCamp(building);
+        break;
+
+      case 'depot':
+        this.staff(building);
         break;
 
       case 'clinic':
@@ -1812,6 +1821,7 @@ export class World {
       case 'house':
       case 'clinic':
       case 'lumberCamp':
+      case 'depot':
         break;
     }
   }
@@ -2386,6 +2396,7 @@ export class World {
       moving: false,
       homeId: clinic.id,
       exMutant: true,
+      logistician: false,
       // Il reste un instant sur le seuil, qu'on le voie sortir, avant de chercher du travail.
       inside: false,
       job: null,
@@ -2882,6 +2893,16 @@ export class World {
     }
   }
 
+  /** Les producteurs — foreuses, fermes, cabanes de bûcheron — que les logisticiens du poste vident : ceux de son rayon. */
+  public depotProducers(depot: Depot): number {
+    let count = 0;
+
+    for (const entity of this.entities.values()) {
+      if (isProducer(entity) && inDepotRange(depot, entity)) count += 1;
+    }
+    return count;
+  }
+
   /** Ce que le chantier attend encore et qu'aucun porteur n'apporte — la fenêtre du chantier peut l'afficher. */
   public siteIncoming(id: EntityId, item: ItemId): number {
     return this.jobs.siteIncoming(id, item);
@@ -2889,8 +2910,11 @@ export class World {
 
   private readonly lineIsClear: LineTest = (x0, y0, x1, y1) => clearLine(this.seed, x0, y0, x1, y1);
 
-  /** Loge les ouvriers de la maison qui n'y sont pas encore. Ils sortent un par un, dès qu'il y a à porter. */
-  private staff(house: House): void {
+  /**
+   * Loge les ouvriers de la maison — ou les logisticiens du poste — qui n'y
+   * sont pas encore. Ils sortent un par un, dès qu'il y a à porter.
+   */
+  private staff(house: House | Depot): void {
     let lodged = 0;
 
     for (const worker of this.workers()) {
@@ -2911,6 +2935,7 @@ export class World {
         moving: false,
         homeId: house.id,
         exMutant: false,
+        logistician: house.kind === 'depot',
         inside: true,
         job: null,
         searchTicks: 1 + i * 8,
@@ -2941,7 +2966,14 @@ export class World {
     if (!worker.job && this.onDuty(worker)) {
       worker.searchTicks -= 1;
 
-      if (worker.searchTicks <= 0) {
+      // Un logisticien dont le poste est tombé ne cherche plus rien.
+      const crew: Crew | null = !worker.logistician
+        ? PORTER_CREW
+        : home?.kind === 'depot'
+          ? { kind: 'logistician', depot: home }
+          : null;
+
+      if (worker.searchTicks <= 0 && crew) {
         worker.searchTicks = PORTERS.retryTicks;
         worker.job = this.jobs.assign(
           this.entities,
@@ -2950,6 +2982,7 @@ export class World {
           homeDoor ?? worker,
           this.lineIsClear,
           carryOf(worker) + this.bonus('porterCarry'),
+          crew,
         );
       }
     }

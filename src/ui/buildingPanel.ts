@@ -42,7 +42,7 @@ import { CLINIC } from '../data/clinic.ts';
 import { ITEMS, type ItemId } from '../data/items.ts';
 import { RECIPES, type RecipeProto } from '../data/recipes.ts';
 import { WEAPONS } from '../data/weapons.ts';
-import { LUMBERJACKS } from '../data/workers.ts';
+import { LOGISTICIANS, LUMBERJACKS } from '../data/workers.ts';
 import { canPause } from '../sim/staffing.ts';
 import type { Building, Entity, EntityId } from '../sim/types.ts';
 import { TICKS_PER_SECOND, siteMissing, type World } from '../sim/world.ts';
@@ -436,6 +436,18 @@ export class BuildingPanel {
                     : 'Les haches résonnent.',
           );
           break;
+
+        case 'depot': {
+          const served = this.world.depotProducers(entity);
+
+          lines.push(`Les logisticiens vident les producteurs à ${LOGISTICIANS.radius} cases à la ronde.`);
+          lines.push(
+            served === 0
+              ? 'Aucun producteur à portée : ils flânent.'
+              : `${served} producteur${served > 1 ? 's' : ''} à portée : leur production part à la mairie.`,
+          );
+          break;
+        }
 
         case 'clinic': {
           const used = this.world.clinicBedsUsed(entity.id);

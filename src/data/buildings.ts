@@ -28,7 +28,8 @@ export type BuildingKind =
   | 'forge'
   | 'clinic'
   | 'lab'
-  | 'lumberCamp';
+  | 'lumberCamp'
+  | 'depot';
 
 export interface BuildingProto {
   label: string;
@@ -155,6 +156,28 @@ export const BUILDINGS = {
     plan: false,
     unlockNight: 0,
     sprite: 'lumberCamp',
+    weapon: null,
+    upgrades: [],
+  },
+  logisticsPost: {
+    label: LORE.buildings.logisticsPost.name,
+    siteDescription: LORE.buildings.logisticsPost.site,
+    description: LORE.buildings.logisticsPost.description,
+    effect: LORE.buildings.logisticsPost.effect,
+    kind: 'depot',
+    width: 2,
+    height: 2,
+    cost: { wood: 12, stone: 8 },
+    storage: 0,
+    logisticRadius: 0,
+    hp: 60,
+    workers: 4,
+    minWorkers: 0,
+    menu: true,
+    unique: false,
+    plan: false,
+    unlockNight: 0,
+    sprite: 'logisticsPost',
     weapon: null,
     upgrades: [],
   },

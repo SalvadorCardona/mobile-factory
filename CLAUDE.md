@@ -73,7 +73,14 @@ produit ni ne consomme, ses ouvriers finissent leur geste, bulle ⏸ et sprite
 pâli sur la carte), et un bâtiment qui emploie règle ses ouvriers entre
 `minWorkers` et `workers` (`setWorkers`, sélecteur − / + ; zéro vaut pause) :
 `sim/staffing.ts` répartit la population de la ville par id, un poste sans
-ouvrier libre reste vide, « ouvrier manquant ». Un ouvrier sans travail **flâne** devant chez
+ouvrier libre reste vide, « ouvrier manquant ».
+Le **poste de logistique** (`logisticsPost`, kind `depot`) loge quatre
+**logisticiens** (des `worker` à `logistician: true`, `LOGISTICIANS` dans
+`src/data/workers.ts`, caisse au dos) : ils ne font que vider les
+producteurs de son rayon (cercle cyan) dans la mairie, le coffre le plus
+rempli d'abord (`Crew` de `JobBoard.assign`). Un producteur couvert par un
+poste n'est plus l'affaire des porteurs, qui livrent les chantiers.
+Un ouvrier sans travail **flâne** devant chez
 lui (`wander()`, hachage de la seed, sans PRNG ni chemin) et ne rentre que
 le soir (crépuscule, nuit) ou pendant une vague.
 

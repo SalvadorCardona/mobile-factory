@@ -104,7 +104,8 @@ export class Puppet {
     this.body = this.part('down');
     this.bow = id === 'adam' ? this.part('bow') : null;
     this.claws = 'claws' in this.proto.parts ? this.part('claws') : null;
-    this.load = id === 'worker' || id === 'exMutant' || id === 'lumberjack' ? this.part('load.wood') : null;
+    this.load =
+      id === 'worker' || id === 'exMutant' || id === 'lumberjack' || id === 'logistician' ? this.part('load.wood') : null;
     this.axe = 'axe' in this.proto.parts ? this.part('axe') : null;
 
     if (this.halo) this.halo.alpha = 0.35;
@@ -330,5 +331,5 @@ export class Puppet {
 /** Sprites qui s'animent en pantin. */
 export type PuppetId = Extract<
   SpriteId,
-  'adam' | 'eve' | 'mutant' | 'kid' | 'worker' | 'lumberjack' | 'exMutant' | 'patient' | 'crab' | 'wolf'
+  'adam' | 'eve' | 'mutant' | 'kid' | 'worker' | 'logistician' | 'lumberjack' | 'exMutant' | 'patient' | 'crab' | 'wolf'
 >;

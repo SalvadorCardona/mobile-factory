@@ -65,6 +65,24 @@ export const LUMBERJACKS = {
 } as const;
 
 /**
+ * Logisticiens — les ouvriers du poste de logistique (`BUILDINGS.logisticsPost`).
+ *
+ * En boucle : choisir, parmi les producteurs (foreuses, fermes, cabanes de
+ * bûcheron) dans le rayon du poste, le coffre le plus rempli, en charger un
+ * voyage, le livrer à la mairie, revenir. Les producteurs qu'un poste
+ * couvre sont à lui : les porteurs de la maison des constructeurs ne les
+ * vident plus, ils livrent les chantiers.
+ */
+export const LOGISTICIANS = {
+  /** Rayon d'action, en tuiles, du centre du poste au centre du producteur : c'est le cercle affiché. */
+  radius: 10,
+  /** Vitesse de marche, en tuiles par seconde : celle d'un porteur. */
+  speed: 2.4,
+  /** Objets portés en un voyage : un peu plus qu'un porteur (5), c'est leur métier. */
+  carry: 7,
+} as const;
+
+/**
  * La flânerie d'un ouvrier sans travail : de petits trajets en ligne droite
  * autour de sa porte, entrecoupés de pauses. Aucun chemin à calculer — un
  * point tiré, une ligne vérifiée hors de l'eau, et c'est tout.

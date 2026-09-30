@@ -19,20 +19,48 @@
  * Premier périmètre : livrer les chantiers et le labo de recherche depuis la
  * mairie, et vider les coffres des foreuses, des fermes et des cabanes de
  * bûcheron dans la mairie.
+ *
+ * Deux équipes se partagent le travail (`Crew`). Un producteur dans le rayon
+ * d'un poste de logistique fini est à ses logisticiens, qui ne font que ça :
+ * le coffre le plus rempli d'abord. Les porteurs livrent chantiers et labo,
+ * et ne vident que les producteurs qu'aucun poste ne couvre.
  */
 
 import { TILE_SIZE, distanceSq } from '../core/grid.ts';
 import { BUILDINGS } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
-import { JOB_PRIORITY, PORTERS } from '../data/workers.ts';
+import { JOB_PRIORITY, LOGISTICIANS, PORTERS } from '../data/workers.ts';
 import { labSurplus, labWants, researchCost } from './research.ts';
-import type { Entity, EntityId, Job, Site } from './types.ts';
+import type { Store } from './store.ts';
+import type { Depot, Drill, Entity, EntityId, Farm, Job, LumberCamp, Site, TownHall } from './types.ts';
 
 /** Le trajet en ligne droite de (x0, y0) à (x1, y1) est-il praticable ? */
 export type LineTest = (x0: number, y0: number, x1: number, y1: number) => boolean;
 
 /** Un transport pas encore réservé : ce que le tableau propose. */
 type Offer = Omit<Job, 'carried'>;
+
+/**
+ * Qui cherche du travail : un porteur (maison des constructeurs, ex-mutant
+ * de la clinique) ou un logisticien, avec le poste qui le loge.
+ */
+export type Crew = { kind: 'porter' } | { kind: 'logistician'; depot: Depot };
+
+export const PORTER_CREW: Crew = { kind: 'porter' };
+
+/** Le producteur est-il dans le rayon du poste ? Mesuré de centre d'emprise à centre d'emprise, comme le cercle affiché. */
+export function inDepotRange(depot: Depot, entity: { tx: number; ty: number; width: number; height: number }): boolean {
+  const reach = LOGISTICIANS.radius * TILE_SIZE;
+  const x = (depot.tx + depot.width / 2) * TILE_SIZE;
+  const y = (depot.ty + depot.height / 2) * TILE_SIZE;
+
+  return distanceSq(x, y, (entity.tx + entity.width / 2) * TILE_SIZE, (entity.ty + entity.height / 2) * TILE_SIZE) <= reach * reach;
+}
+
+/** Un bâtiment qui produit dans son coffre, et que porteurs ou logisticiens vident dans la mairie. */
+export function isProducer(entity: Entity): entity is Drill | Farm | LumberCamp {
+  return entity.kind === 'drill' || entity.kind === 'farm' || entity.kind === 'lumberCamp';
+}
 
 /**
  * Le seuil d'une emprise : le milieu de son bord bas, juste dehors. C'est
@@ -64,6 +92,11 @@ export class JobBoard {
    * un trajet qui traverserait l'eau — jusqu'à la source, jusqu'à la
    * destination, puis jusqu'à la maison — n'est pas proposé. `carry` : ce
    * que le porteur prend en un voyage.
+   *
+   * Un logisticien ne regarde que les producteurs de son rayon, et va au
+   * coffre le plus rempli — ce qui reste à prendre, rapporté à sa capacité —
+   * avant le plus proche : un coffre plein, qui bloque son producteur, passe
+   * en premier.
    */
   public assign(
     entities: ReadonlyMap<EntityId, Entity>,
@@ -72,15 +105,17 @@ export class JobBoard {
     home: { x: number; y: number },
     clear: LineTest,
     carry: number = PORTERS.carry,
+    crew: Crew = PORTER_CREW,
   ): Job | null {
-    const offers = this.offers(entities, hallId, carry).map((offer) => {
+    const offers = this.offers(entities, hallId, carry, crew).map((offer) => {
       const source = entities.get(offer.from)!;
       const door = doorOf(source);
+      const fill = crew.kind === 'logistician' && source.kind !== 'site' ? fillOf(source.store) : 0;
 
-      return { offer, door, distance: distanceSq(from.x, from.y, door.x, door.y) };
+      return { offer, door, fill, distance: distanceSq(from.x, from.y, door.x, door.y) };
     });
 
-    offers.sort((a, b) => b.offer.priority - a.offer.priority || a.distance - b.distance);
+    offers.sort((a, b) => b.fill - a.fill || b.offer.priority - a.offer.priority || a.distance - b.distance);
 
     for (const { offer, door } of offers) {
       const target = doorOf(entities.get(offer.to)!);
@@ -96,16 +131,30 @@ export class JobBoard {
     return null;
   }
 
-  /** Tout ce qu'il y aurait à porter, calculé sur le disponible et la place libre, jamais sur le stock brut. */
-  private offers(entities: ReadonlyMap<EntityId, Entity>, hallId: EntityId, carry: number): Offer[] {
+  /**
+   * Tout ce qu'il y aurait à porter pour cette équipe, calculé sur le
+   * disponible et la place libre, jamais sur le stock brut.
+   */
+  private offers(entities: ReadonlyMap<EntityId, Entity>, hallId: EntityId, carry: number, crew: Crew): Offer[] {
     const hall = entities.get(hallId);
 
     // Pas de mairie debout, pas d'entrepôt : rien à porter.
     if (hall?.kind !== 'townHall') return [];
 
     const offers: Offer[] = [];
+    const depots: Depot[] = [];
 
     for (const entity of entities.values()) {
+      if (entity.kind === 'depot') depots.push(entity);
+    }
+
+    for (const entity of entities.values()) {
+      if (crew.kind === 'logistician') {
+        // Le logisticien ne fait qu'un travail : vider les producteurs de son rayon.
+        if (isProducer(entity) && inDepotRange(crew.depot, entity)) this.emptyOffers(entity, hall, carry, offers);
+        continue;
+      }
+
       switch (entity.kind) {
         case 'site':
           for (const item of Object.keys(BUILDINGS[entity.proto].cost) as ItemId[]) {
@@ -132,16 +181,9 @@ export class JobBoard {
         case 'drill':
         case 'farm':
         case 'lumberCamp':
-          for (const [item] of entity.store.entries()) {
-            const available = entity.store.available(item);
-            const amount = Math.min(carry, available, hall.store.freeSpace());
-
-            if (amount <= 0) continue;
-
-            const priority = available >= carry ? JOB_PRIORITY.empty : JOB_PRIORITY.surplus;
-
-            offers.push({ from: entity.id, to: hall.id, item, amount, priority });
-          }
+          // Un poste de logistique couvre ce producteur : ses logisticiens s'en chargent.
+          if (depots.some((depot) => inDepotRange(depot, entity))) break;
+          this.emptyOffers(entity, hall, carry, offers);
           break;
 
         default:
@@ -149,6 +191,20 @@ export class JobBoard {
       }
     }
     return offers;
+  }
+
+  /** Vider le coffre d'un producteur dans la mairie : un voyage par objet qu'il contient. */
+  private emptyOffers(entity: Drill | Farm | LumberCamp, hall: TownHall, carry: number, offers: Offer[]): void {
+    for (const [item] of entity.store.entries()) {
+      const available = entity.store.available(item);
+      const amount = Math.min(carry, available, hall.store.freeSpace());
+
+      if (amount <= 0) continue;
+
+      const priority = available >= carry ? JOB_PRIORITY.empty : JOB_PRIORITY.surplus;
+
+      offers.push({ from: entity.id, to: hall.id, item, amount, priority });
+    }
   }
 
   /**
@@ -225,4 +281,12 @@ export class JobBoard {
     }
     return broken;
   }
+}
+
+/** La part du coffre qui reste à prendre — ce qu'aucun job n'a déjà promis —, de 0 (vide) à 1 (plein). */
+function fillOf(store: Store): number {
+  let available = 0;
+
+  for (const [item] of store.entries()) available += store.available(item);
+  return store.capacity > 0 && store.capacity !== Infinity ? available / store.capacity : 0;
 }
