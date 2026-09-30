@@ -20,7 +20,10 @@
  * - la **quête d'Ève** en cours, une fois qu'elle est arrivée ;
  * - la **bulle** d'Ève au-dessus de sa tête : son arrivée, ses quêtes, ce
  *   qu'elle répond quand on la tape. Courte, jamais bloquante ;
- * - les boutons pause et son, et le **sac** d'Adam, à droite de la quête ;
+ * - les boutons pause et son à droite de la quête, et dessous les deux
+ *   stocks, en version compacte : la **ville** (le coffre de la mairie) et
+ *   le **sac** d'Adam avec son remplissage — un tap sur le sac ouvre le
+ *   panneau inventaire (`inventoryPanel.ts`) ;
  * - des **bulles** empilées pour les événements, des gains qui flottent
  *   au-dessus de la tête d'Adam, et le nom d'un bâtiment achevé qui monte
  *   de son toit (« Mairie bâtie ! ») ;
@@ -113,7 +116,10 @@ export class Hud {
   private readonly hint: HTMLElement;
   private readonly hintText: HTMLElement;
   private readonly hintBulb: HTMLButtonElement;
-  private readonly bag: HTMLElement;
+  /** Le sac, compact : un bouton qui ouvre le panneau inventaire. */
+  public readonly bag: HTMLButtonElement;
+  /** Le stock de la ville, compact. */
+  private readonly town: HTMLElement;
   private readonly buttons: HTMLElement;
   private readonly floats: HTMLElement;
   private readonly stats: HTMLElement;
@@ -135,6 +141,7 @@ export class Hud {
   public readonly audioButton: HTMLButtonElement;
   public readonly pauseButton: HTMLButtonElement;
   private lastBag = '';
+  private lastTown = '';
   private lastQuest = '';
   /** Le détail des ouvriers, déplié d'un tap sur leur compteur. */
   private crewOpen = false;
@@ -196,7 +203,9 @@ export class Hud {
     clip.append(this.hint);
     fold.append(clip);
 
-    this.bag = element('div', 'panel hud-bag');
+    this.bag = element('button', 'panel hud-stock hud-bag');
+    this.bag.type = 'button';
+    this.town = element('div', 'panel hud-stock hud-town');
     this.floats = element('div', 'hud-floats');
     this.stats = element('div', 'panel hud-stats');
     this.stats.hidden = !debug;
@@ -265,7 +274,7 @@ export class Hud {
     const side = element('div', 'hud-side');
 
     this.quest.append(fold);
-    side.append(buttons, this.bag);
+    side.append(buttons, this.town, this.bag);
     this.top.append(this.quest, side);
 
     this.root.append(
@@ -285,9 +294,16 @@ export class Hud {
       if (item === 'stone') this.harvestedStone = true;
       this.float(item, 1);
     });
-    world.events.on('siteDelivered', ({ item, amount }) => {
+    world.events.on('siteDelivered', ({ item, amount, source }) => {
       this.delivered = true;
-      this.float(item, -amount);
+      // Ce que la ville donne ne sort pas du sac : rien ne tombe de la tête d'Adam.
+      if (source === 'bag') this.float(item, -amount);
+    });
+    world.events.on('townDeposited', ({ item, amount }) => this.float(item, -amount));
+    world.events.on('itemDropped', ({ item, amount }) => this.float(item, -amount));
+    world.events.on('depositRejected', ({ reason }) => {
+      if (reason === 'outOfReach') this.notify('Trop loin de la mairie — rapprochez-vous pour déposer', 'bad');
+      if (reason === 'noTown') this.notify('Pas encore de ville : bâtissez d’abord la mairie', 'bad');
     });
     world.events.on('siteRejected', ({ reason }) => {
       if (reason === 'outOfReach') this.notify(REJECTION_LABELS.outOfReach, 'bad');
@@ -320,7 +336,7 @@ export class Hud {
     world.events.on('waveCleared', ({ wave }) =>
       this.showBanner('cleared', `Vague ${wave} repoussée !`, 'Ramassez ce que les mutants ont lâché', null, BANNER_CLEARED_MS),
     );
-    world.events.on('lootPicked', ({ item }) => this.float(item, 1));
+    world.events.on('lootPicked', ({ item, amount }) => this.float(item, amount));
     world.events.on('buildingDestroyed', ({ proto }) => this.notify(`${BUILDINGS[proto].label} détruite`, 'bad'));
     world.events.on('childBorn', () => this.notify('Un enfant est né à la nurserie !', 'good'));
     world.events.on('townHallDestroyed', () => this.showDefeat());
@@ -415,7 +431,7 @@ export class Hud {
 
   /** Les boutons et le sac, posés à droite de la quête : les repères de bord les contournent. */
   public obstacles(): DOMRect[] {
-    return [this.buttons.getBoundingClientRect(), this.bag.getBoundingClientRect()];
+    return [this.buttons.getBoundingClientRect(), this.town.getBoundingClientRect(), this.bag.getBoundingClientRect()];
   }
 
   /** La ressource que le conseil envoie chercher, ou `null` : le renderer y pointe un repère. */
@@ -548,6 +564,7 @@ export class Hud {
     this.updateQuest();
     this.updateHint();
     this.updateBag();
+    this.updateTown();
     this.updateSpeech();
     this.root.dataset['danger'] = String(this.mutantCount() > 0 && !this.world.defeated);
     if (!this.banner.hidden) this.aimBanner();
@@ -715,8 +732,9 @@ export class Hud {
   /* ------------------------------------------------------------------- sac */
 
   /**
-   * Le sac : une ligne « icône + quantité » par objet. Le DOM n'est reconstruit
-   * que si le contenu change — comparer une clé texte coûte moins qu'un diff.
+   * Le sac : son pictogramme, « 7/60 », la jauge de remplissage, et une
+   * pastille « icône + quantité » par objet. Le DOM n'est reconstruit que si
+   * le contenu change — comparer une clé texte coûte moins qu'un diff.
    */
   private updateBag(): void {
     const { inventory } = this.world.player;
@@ -730,16 +748,43 @@ export class Hud {
     const fill = element('div', 'hud-bag-fill');
     const ratio = inventory.total() / inventory.capacity;
 
-    title.append(text('', 'Sac'), text('hud-bag-count', `${inventory.total()}/${inventory.capacity}`));
+    title.append(uiIcon('bag', 20), text('hud-stock-name', 'Sac'), text('hud-bag-count', `${inventory.total()}/${inventory.capacity}`));
     title.dataset['full'] = String(inventory.freeSpace() <= 0);
+    this.bag.setAttribute('aria-label', `Ouvrir le sac : ${inventory.total()} objets sur ${inventory.capacity}`);
     fill.style.setProperty('--fill', `${Math.round(ratio * 100)}%`);
     fill.dataset['full'] = String(inventory.freeSpace() <= 0);
 
-    const items = element('div', 'hud-bag-items');
+    const items = element('div', 'hud-stock-items');
 
     items.append(...entries.map(([item, amount]) => itemAmount(item, amount)));
     this.bag.dataset['empty'] = String(entries.length === 0);
     this.bag.replaceChildren(title, fill, items);
+  }
+
+  /**
+   * La ville : le stock commun, ce que les chantiers et les porteurs
+   * consomment. Tant que la mairie est en chantier, il n'y a pas de ville —
+   * la carte le dit au lieu de montrer un stock vide.
+   */
+  private updateTown(): void {
+    const stock = this.world.townStock();
+    const entries = stock?.entries() ?? [];
+    const key = stock ? entries.map(([item, amount]) => `${item}:${amount}`).join(',') : 'none';
+
+    if (key === this.lastTown) return;
+    this.lastTown = key;
+
+    const title = element('div', 'hud-bag-title');
+
+    title.append(uiIcon('town', 20), text('hud-stock-name', 'Ville'));
+    if (!stock) title.append(text('hud-town-state', 'à bâtir'));
+
+    const items = element('div', 'hud-stock-items');
+
+    items.append(...entries.map(([item, amount]) => itemAmount(item, amount)));
+    this.town.dataset['empty'] = String(entries.length === 0);
+    this.town.title = 'Stock de la ville : ce qui paie les constructions';
+    this.town.replaceChildren(title, items);
   }
 
   /* ---------------------------------------------------------------- défaite */

@@ -58,7 +58,12 @@ export interface Drill extends Built {
   blocked: boolean;
 }
 
-/** La mairie : le premier toit de la colonie, son entrepôt, et ce que les mutants visent. */
+/**
+ * La mairie : le premier toit de la colonie, son entrepôt, et ce que les
+ * mutants visent. Son coffre est **le stock de la ville** : Adam y dépose
+ * son sac, les porteurs y vident foreuses et fermes, et c'est de là que
+ * partent les livraisons des chantiers.
+ */
 export interface TownHall extends Built {
   kind: 'townHall';
 }
@@ -133,7 +138,11 @@ export interface Player {
   hp: number;
   /** Ticks depuis le dernier coup reçu : Adam ne récupère qu'au calme. */
   calmTicks: number;
-  /** Le sac à dos. */
+  /**
+   * Le sac à dos : ce qu'Adam a récolté ou ramassé et pas encore déposé.
+   * Ce n'est pas le stock de la ville — celui-là est le coffre de la mairie
+   * (`World.townStock()`).
+   */
   inventory: Store;
 }
 
@@ -286,10 +295,20 @@ export interface Worker extends Moving {
   searchTicks: number;
 }
 
-/** Du butin lâché par un mutant : il attend au sol qu'Adam marche dessus. */
+/**
+ * Un tas au sol : du butin lâché par un ennemi abattu, ou ce qu'Adam a jeté
+ * de son sac. Il attend qu'Adam marche dessus.
+ */
 export interface Pickup extends Moving {
   kind: 'pickup';
   item: ItemId;
+  /** Combien d'exemplaires : un pour le butin, tout ce qu'Adam a jeté d'un objet pour un tas. */
+  amount: number;
+  /**
+   * Vrai pour un tas qu'Adam vient de jeter à ses pieds : il ne le reprend
+   * qu'après s'en être éloigné — sinon le sac l'avalerait aussitôt.
+   */
+  waitForLeave: boolean;
   /** Ticks avant qu'il ne disparaisse, oublié. */
   ttl: number;
 }

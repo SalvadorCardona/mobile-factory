@@ -20,12 +20,22 @@ pierre) ; un chantier heurté reçoit ce qu'il attend ; une foreuse ou une
 ferme heurtée vide son coffre dans le sac (bouton « Prendre » dans sa
 fenêtre), ce qui la relance si elle était bloquée. Les ressources et les
 bâtiments sont solides, on ne les traverse pas. Un tap sur un chantier ouvre
-sa fenêtre : « Transférer le sac » y vide d'un coup ce qu'il attend.
+sa fenêtre : « Transférer » y vide d'un coup ce qu'il attend — le sac
+d'abord, puis le stock de la ville.
 **Le dernier objet livré achève le chantier**, sans bouton de validation
 (poussière, rebond, son, « Mairie bâtie ! » qui flotte).
 Une nurserie ou une forge heurtée (ou « Transférer le sac ») reçoit ce que
 sa recette consomme ; la forge (débloquée après la vague 2, `unlockWave`)
 fond fer + charbon en plaques de fer, qui bâtissent la tour renforcée.
+
+**Ville et sac** — deux stocks. Le **sac** (`player.inventory`, plafonné)
+est ce qu'Adam porte ; la **ville** est le coffre de la mairie
+(`World.townStock()`), rempli par Adam (« Déposer en ville », à portée de
+la mairie) et par les porteurs. Les chantiers puisent dans les deux. Le HUD
+les montre en deux cartes compactes ; le sac (tap, ou touche I) ouvre
+`ui/inventoryPanel.ts`, sans pause, comme la fenêtre d'un bâtiment. Loin de
+la mairie, « Jeter » pose le sac au sol en tas (le mobile `pickup` du
+butin, avec `amount`), qu'Adam reprend après s'en être éloigné.
 
 **Débouchés** — tout objet entre dans un coût de bâtiment ou une entrée de
 recette (`src/data/recipes.ts`) ; `validatePrototypes()` refuse une

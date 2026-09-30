@@ -9,6 +9,7 @@
  */
 
 import type { BuildingId } from '../data/buildings.ts';
+import type { ItemId } from '../data/items.ts';
 import type { PerkId } from '../data/perks.ts';
 import type { EntityId } from './types.ts';
 
@@ -18,9 +19,10 @@ export type Command =
   /** Confirmation de construction, après l'aperçu fantôme. Ouvre un chantier. */
   | { type: 'placeBuilding'; building: BuildingId; tx: number; ty: number }
   /**
-   * Vide le sac dans un chantier : tout ce qu'il attend et qu'Adam possède
-   * y passe d'un coup. Le bouton « Transférer » de la fenêtre du bâtiment.
-   * Si c'était tout ce qui manquait, le chantier s'achève.
+   * Livre un chantier d'un coup : tout ce qu'il attend et qu'Adam porte,
+   * puis, s'il manque encore quelque chose, ce que le stock de la ville a de
+   * disponible. Le bouton « Transférer » de la fenêtre du bâtiment. Si
+   * c'était tout ce qui manquait, le chantier s'achève.
    */
   | { type: 'transferToSite'; id: EntityId }
   /**
@@ -34,6 +36,16 @@ export type Command =
    * « Transférer le sac » de sa fenêtre.
    */
   | { type: 'supplyBuilding'; id: EntityId }
+  /**
+   * Vide le sac dans le stock de la ville — le coffre de la mairie. Adam doit
+   * être à portée de la mairie. Sans `item`, tout le sac ; avec, cet objet seulement.
+   */
+  | { type: 'depositToTown'; item?: ItemId }
+  /**
+   * Jette à ses pieds, en tas ramassable, ce qu'Adam porte. Sans `item`, tout
+   * le sac ; avec, cet objet seulement.
+   */
+  | { type: 'dropItem'; item?: ItemId }
   /**
    * Les bonus plantés au jardin des souvenirs, au départ d'une nouvelle
    * colonie. Poussée avant le premier tick ; ignorée ensuite.
@@ -68,6 +80,15 @@ export type SupplyRejection =
   | 'outOfReach'
   /** Adam n'a rien dans le sac que le bâtiment attende, ou son coffre est plein. */
   | 'nothingToGive';
+
+/** Motif de refus d'un « Déposer en ville ». */
+export type DepositRejection =
+  /** La mairie n'est pas encore bâtie, ou elle est tombée : pas de ville où déposer. */
+  | 'noTown'
+  /** Adam est trop loin de la mairie. */
+  | 'outOfReach'
+  /** Rien à déposer : le sac est vide, ou ne contient pas cet objet. */
+  | 'empty';
 
 /** Motif de refus d'un placement — remonté à l'UI par un événement. */
 export type PlacementRejection =

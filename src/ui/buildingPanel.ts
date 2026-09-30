@@ -6,9 +6,10 @@
  * chantier, le compte à rebours de la nurserie, la veille d'une tour, les
  * points de vie de la mairie et sa population, les ouvriers.
  *
- * Sur un chantier, un bouton : « Transférer le sac » vide dans le chantier
- * tout ce qu'il attend et qu'Adam possède — le dernier objet livré achève le
- * chantier, la fenêtre montre alors le bâtiment. Sur une foreuse, une ferme
+ * Sur un chantier, un bouton : « Transférer » vide dans le chantier tout ce
+ * qu'il attend et qu'Adam porte, puis le complète avec le stock de la ville —
+ * le dernier objet livré achève le chantier, la fenêtre montre alors le
+ * bâtiment. La mairie montre le stock de la ville. Sur une foreuse, une ferme
  * ou une forge, « Prendre » vide son coffre dans le sac, dans la limite de la
  * place. Sur une nurserie ou une forge, « Transférer le sac » y verse ce que
  * sa recette consomme. La fenêtre ne modifie rien elle-même : chaque bouton
@@ -168,15 +169,14 @@ export class BuildingPanel {
     if (entity.kind === 'site') {
       const total = Object.values(proto.cost).reduce((sum, amount) => sum + amount, 0);
       const missing = siteMissing(entity);
-      const { inventory } = this.world.player;
-      const canGive = (Object.entries(proto.cost) as [ItemId, number][]).some(
-        ([item, needed]) => (entity.delivered[item] ?? 0) < needed && inventory.count(item) > 0,
-      );
+      const canGive = this.world.canTransfer(entity);
 
       ratio = total === 0 ? 1 : 1 - missing / total;
       barClass = 'progress';
       lines.push(
-        inReach ? 'Chantier en cours — transférez le sac, ou heurtez-le.' : 'Chantier en cours — rapprochez-vous pour livrer.',
+        inReach
+          ? 'Chantier en cours — transférez le sac et la ville, ou heurtez-le.'
+          : 'Chantier en cours — rapprochez-vous pour livrer.',
       );
       if (proto.workers > 0) lines.push(`Emploiera ${proto.workers} ouvriers.`);
 
@@ -188,6 +188,7 @@ export class BuildingPanel {
       );
       this.actions.hidden = false;
       this.transferButton.hidden = false;
+      this.transferButton.textContent = this.world.townStock() ? 'Transférer' : 'Transférer le sac';
       this.transferButton.disabled = !inReach || !canGive;
       this.takeButton.hidden = true;
     } else {
@@ -203,6 +204,7 @@ export class BuildingPanel {
 
       this.actions.hidden = !producer && !consumer;
       this.transferButton.hidden = !consumer;
+      this.transferButton.textContent = 'Transférer le sac';
       this.transferButton.disabled = !inReach || !this.world.canSupply(entity);
       this.takeButton.hidden = !producer;
       this.takeButton.disabled =
@@ -263,13 +265,13 @@ export class BuildingPanel {
           break;
       }
 
-      // La mairie a un coffre, mais rien n'y dépose encore : pas de ligne
-      // « Coffre » tant qu'elle ne sert pas d'entrepôt.
-      if (proto.storage > 0 && entity.kind !== 'townHall') {
+      // Le coffre de la mairie est le stock de la ville.
+      if (proto.storage > 0) {
         const capacity = Number.isFinite(proto.storage) ? `/${proto.storage}` : '';
         const entries = entity.store.entries();
+        const label = entity.kind === 'townHall' ? 'Stock de la ville' : `Coffre ${entity.store.total()}${capacity}`;
 
-        lines.push(`Coffre ${entity.store.total()}${capacity}${entries.length ? '' : ' : vide'}`);
+        lines.push(`${label}${entries.length ? '' : ' : vide'}`);
         this.setItems(
           entries.map(([item, amount]) => itemAmount(item, amount)),
           `store:${entity.id}:${entries.map(([item, amount]) => `${item}=${amount}`).join(',')}`,
