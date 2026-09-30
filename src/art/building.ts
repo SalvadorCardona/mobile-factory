@@ -18,6 +18,7 @@
  * | forge | bloc trapu, haute cheminée | indigo (cheminée) | four, fumée, enclume, plaques |
 | clinique | bloc bas, toit plat en toile blanche | menthe (croix sur médaillon blanc) | bandages, brancard, plante en pot |
  * | labo de recherche | bloc coiffé d'une coupole d'observatoire | violet (coupole) | fioles, antenne, cheminée qui fume en recherche |
+ * | cabane de bûcheron | cabane basse en rondins, toit pointu | orange (bardeaux, bûches) | pile de bûches, hache plantée dans la souche |
  *
  * Chacun existe en trois états, trois morceaux du même cadre :
  *

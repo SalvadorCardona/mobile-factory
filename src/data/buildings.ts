@@ -18,7 +18,17 @@ import type { SpriteId } from './sprites.ts';
 import type { WeaponId } from './weapons.ts';
 
 /** Comportement simulé associé au bâtiment. Un `kind` = un cas dans `sim/`. */
-export type BuildingKind = 'drill' | 'townHall' | 'nursery' | 'tower' | 'house' | 'farm' | 'forge' | 'clinic' | 'lab';
+export type BuildingKind =
+  | 'drill'
+  | 'townHall'
+  | 'nursery'
+  | 'tower'
+  | 'house'
+  | 'farm'
+  | 'forge'
+  | 'clinic'
+  | 'lab'
+  | 'lumberCamp';
 
 export interface BuildingProto {
   label: string;
@@ -118,6 +128,26 @@ export const BUILDINGS = {
     sprite: 'townHall',
     weapon: null,
     upgrades: [],
+  },
+  lumberCamp: {
+    label: LORE.buildings.lumberCamp.name,
+    siteDescription: LORE.buildings.lumberCamp.site,
+    description: LORE.buildings.lumberCamp.description,
+    effect: LORE.buildings.lumberCamp.effect,
+    kind: 'lumberCamp',
+    width: 2,
+    height: 2,
+    cost: { wood: 8, stone: 4 },
+    storage: 20,
+    logisticRadius: 0,
+    hp: 50,
+    workers: 2,
+    menu: true,
+    unique: false,
+    plan: false,
+    unlockNight: 0,
+    sprite: 'lumberCamp',
+    weapon: null,
   },
   drill: {
     label: LORE.buildings.drill.name,

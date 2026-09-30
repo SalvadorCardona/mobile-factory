@@ -23,7 +23,19 @@ import { PERKS, type PerkId } from '../data/perks.ts';
 import { RESEARCH, type ResearchId } from '../data/research.ts';
 import type { SchedulerSnapshot } from './scheduler.ts';
 import type { Store, StoreSnapshot } from './store.ts';
-import type { BeastState, Entity, EntityId, EveState, Facing, Job, Mobile, PatientState, Player } from './types.ts';
+import type {
+  BeastState,
+  Entity,
+  EntityId,
+  EveState,
+  Facing,
+  Job,
+  LumberjackState,
+  Mobile,
+  PatientState,
+  Player,
+  Wandering,
+} from './types.ts';
 import { World } from './world.ts';
 
 /**
@@ -224,6 +236,8 @@ const EVE_STATES: readonly EveState[] = ['arriving', 'idle', 'repair'];
 
 const PATIENT_STATES: readonly PatientState[] = ['stunned', 'following', 'care'];
 
+const LUMBERJACK_STATES: readonly LumberjackState[] = ['idle', 'toTree', 'chop', 'toCamp', 'wait'];
+
 function parseState(raw: unknown): WorldState {
   const state = record(raw);
 
@@ -330,6 +344,7 @@ function parseEntity(raw: unknown): SavedEntity {
     case 'townHall':
     case 'house':
     case 'clinic':
+    case 'lumberCamp':
       return { ...built, kind };
     case 'lab': {
       const research = entity['research'] === null ? null : (oneOf(entity['research'], RESEARCH) as ResearchId);
@@ -423,7 +438,26 @@ function parseMobile(raw: unknown): Mobile {
         inside: bool(mobile['inside']),
         job: mobile['job'] === null ? null : parseJob(mobile['job']),
         searchTicks: int(mobile['searchTicks']),
+        ...wandering(mobile, base),
       };
+    case 'lumberjack': {
+      const state = mobile['state'];
+      const tree = mobile['tree'];
+
+      if (!LUMBERJACK_STATES.includes(state as LumberjackState)) throw new SaveError(`bûcheron inconnu : ${String(state)}`);
+      return {
+        ...base,
+        kind: 'lumberjack',
+        homeId: int(mobile['homeId']),
+        inside: bool(mobile['inside']),
+        state: state as LumberjackState,
+        tree: tree === null ? null : { tx: int(record(tree)['tx']), ty: int(record(tree)['ty']) },
+        chopTicks: int(mobile['chopTicks']),
+        load: int(mobile['load']),
+        searchTicks: int(mobile['searchTicks']),
+        ...wandering(mobile, base),
+      };
+    }
     case 'pickup':
       // Une sauvegarde d'avant les tas : un butin, c'était un exemplaire.
       return {
@@ -443,6 +477,12 @@ function parseMobile(raw: unknown): Mobile {
     default:
       throw new SaveError(`mobile inconnu : ${String(mobile['kind'])}`);
   }
+}
+
+/** La flânerie d'un ouvrier. Absente des sauvegardes d'avant elle : il repart de là où il est. */
+function wandering(raw: Json, at: { x: number; y: number }): Wandering {
+  if (raw['wanderX'] === undefined) return { wanderX: at.x, wanderY: at.y, wanderTicks: 0 };
+  return { wanderX: finite(raw['wanderX']), wanderY: finite(raw['wanderY']), wanderTicks: int(raw['wanderTicks']) };
 }
 
 function parseDen(raw: unknown): SavedDen {

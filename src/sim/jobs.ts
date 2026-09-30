@@ -17,7 +17,8 @@
  * des coffres, dont la sauvegarde ne garde que le stock réel.
  *
  * Premier périmètre : livrer les chantiers et le labo de recherche depuis la
- * mairie, et vider les coffres des foreuses et des fermes dans la mairie.
+ * mairie, et vider les coffres des foreuses, des fermes et des cabanes de
+ * bûcheron dans la mairie.
  */
 
 import { TILE_SIZE, distanceSq } from '../core/grid.ts';
@@ -130,6 +131,7 @@ export class JobBoard {
 
         case 'drill':
         case 'farm':
+        case 'lumberCamp':
           for (const [item] of entity.store.entries()) {
             const available = entity.store.available(item);
             const amount = Math.min(carry, available, hall.store.freeSpace());

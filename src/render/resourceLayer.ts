@@ -9,7 +9,7 @@
  *
  * Seuls les chunks visibles ont leurs sprites ; au-delà d'une marge, ils sont
  * détruits. Une tuile heurtée est remise à jour à l'événement (entamée,
- * disparue), et elle **tremble** : un minuteur de vue, la simulation n'en
+ * disparue) — par Adam ou par la hache d'un bûcheron —, et elle **tremble** : un minuteur de vue, la simulation n'en
  * sait rien. Un chunk sali par la simulation est reconstruit en entier.
  *
  * Pendant un placement, l'arbre ou le rocher qui empêche de poser
@@ -69,10 +69,14 @@ export class ResourceLayer {
     this.sorted = sorted;
     this.shadows = shadows;
 
-    world.events.on('resourceHarvested', ({ tx, ty }) => {
+    const struck = ({ tx, ty }: TileCoord): void => {
       this.refresh(tx, ty);
       this.wobbles.set(coordKey(tx, ty), WOBBLE_MS);
-    });
+    };
+
+    world.events.on('resourceHarvested', struck);
+    // Un coup de hache de bûcheron fait trembler l'arbre comme un passage d'Adam.
+    world.events.on('treeChopped', struck);
   }
 
   /** `blocking` : les tuiles dont la ressource gêne le fantôme, à faire clignoter. */

@@ -36,6 +36,7 @@ import { CLINIC } from '../data/clinic.ts';
 import { ITEMS, type ItemId } from '../data/items.ts';
 import { RECIPES, type RecipeProto } from '../data/recipes.ts';
 import { WEAPONS } from '../data/weapons.ts';
+import { LUMBERJACKS } from '../data/workers.ts';
 import type { Entity, EntityId } from '../sim/types.ts';
 import { TICKS_PER_SECOND, siteMissing, type World } from '../sim/world.ts';
 import { itemAmount, uiIcon } from './icons.ts';
@@ -267,8 +268,9 @@ export class BuildingPanel {
       lines.push(`Points de vie ${entity.hp}/${level.hp}`);
       if (proto.workers > 0) lines.push(`${proto.workers} ouvriers y travaillent.`);
 
-      // Une foreuse, une ferme ou une forge produit dans son coffre : Adam vient le vider.
-      const producer = entity.kind === 'drill' || entity.kind === 'farm' || entity.kind === 'forge';
+      // Une foreuse, une ferme, une forge ou une cabane de bûcheron remplit son coffre : Adam vient le vider.
+      const producer =
+        entity.kind === 'drill' || entity.kind === 'farm' || entity.kind === 'forge' || entity.kind === 'lumberCamp';
       // Une nurserie ou une forge consomme : Adam vient la remplir.
       const consumer = entity.kind === 'nursery' || entity.kind === 'forge';
 
@@ -341,6 +343,17 @@ export class BuildingPanel {
 
         case 'lab':
           // Tout est dans le panneau Recherche, sous les points de vie.
+          break;
+
+        case 'lumberCamp':
+          lines.push(`Les bûcherons coupent les arbres à ${LUMBERJACKS.radius} cases à la ronde.`);
+          lines.push(
+            this.world.treesLeft(entity) === 0
+              ? 'Plus d’arbres à portée.'
+              : entity.store.total() > entity.store.capacity - LUMBERJACKS.carry
+                ? 'Coffre plein : les bûcherons attendent qu’on le vide.'
+                : 'Les haches résonnent.',
+          );
           break;
 
         case 'clinic': {

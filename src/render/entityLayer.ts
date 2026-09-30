@@ -13,7 +13,8 @@
  * ont pris la moitié de ses points de vie. Certains ont en plus un morceau
  * animé : la roue de la foreuse tourne quand elle travaille, les cultures de
  * la ferme ondulent, la cheminée du labo fume quand une recherche tourne. Une foreuse ou une ferme bloquée, coffre plein, porte
- * au-dessus du toit une bulle qui flotte : il faut venir la vider.
+ * au-dessus du toit une bulle qui flotte : il faut venir la vider. Une
+ * cabane de bûcheron aussi, quand son coffre n'a plus la place d'un voyage.
  *
  * Tri en profondeur : les enfants sont ordonnés par le bas de leur emprise,
  * pour qu'Adam passe derrière la mairie quand il est au-dessus d'elle et
@@ -33,6 +34,7 @@ import { TILE_SIZE, floorDiv } from '../core/grid.ts';
 import { LIGHT, PALETTE, hex } from '../data/artDirection.ts';
 import { BUILDINGS, buildingLevel } from '../data/buildings.ts';
 import { SPRITES, type SpriteId, type SpriteProto } from '../data/sprites.ts';
+import { LUMBERJACKS } from '../data/workers.ts';
 import type { Entity, EntityId } from '../sim/types.ts';
 import { terrainAt } from '../sim/terrain.ts';
 import { siteMissing, type World } from '../sim/world.ts';
@@ -226,7 +228,7 @@ export class EntityLayer {
 
     let full: Sprite | null = null;
 
-    if (entity.kind === 'drill' || entity.kind === 'farm') {
+    if (entity.kind === 'drill' || entity.kind === 'farm' || entity.kind === 'lumberCamp') {
       full = new Sprite(this.library.part('storeFull', 'bubble'));
       full.anchor.set(SPRITES.storeFull.anchorX, SPRITES.storeFull.anchorY);
       full.x = (entity.width * TILE_SIZE) / 2;
@@ -326,7 +328,11 @@ export class EntityLayer {
   private showFull(view: EntityView, entity: Entity, now: number): void {
     if (!view.full) return;
 
-    const blocked = (entity.kind === 'drill' && entity.output !== null && entity.blocked) || (entity.kind === 'farm' && entity.blocked);
+    const blocked =
+      (entity.kind === 'drill' && entity.output !== null && entity.blocked) ||
+      (entity.kind === 'farm' && entity.blocked) ||
+      // Plus la place d'un voyage au coffre : les bûcherons attendent un porteur.
+      (entity.kind === 'lumberCamp' && entity.store.total() > entity.store.capacity - LUMBERJACKS.carry);
 
     view.full.visible = blocked;
     if (!blocked) return;

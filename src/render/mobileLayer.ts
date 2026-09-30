@@ -30,7 +30,9 @@
  * la tête — suit ce que l'arc d'Adam vise (`player.target`).
  *
  * Un ouvrier chez lui n'est pas dessiné ; dehors, il porte sa charge sur la
- * tête tant que son job est ramassé. Un ex-mutant a son propre pantin.
+ * tête tant que son job est ramassé. Un ex-mutant a son propre pantin. Un
+ * bûcheron abat sa hache sur l'arbre qu'il coupe, et rapporte son bois sur
+ * la tête.
  *
  * Un mutant assommé est affalé, trois étoiles en ronde au-dessus de la tête,
  * qui tournent plus vite quand il va se réveiller ; touché par Adam, il le
@@ -104,6 +106,8 @@ function puppetOf(
       return mobile.exMutant
         ? { id: 'exMutant', shadowWidth: 18, stride: 3.5 }
         : { id: 'worker', shadowWidth: 16, stride: 3 };
+    case 'lumberjack':
+      return { id: 'lumberjack', shadowWidth: 16, stride: 3 };
     case 'beast':
       return mobile.proto === 'crab'
         ? { id: WILDLIFE.crab.sprite, shadowWidth: 22, stride: 8, gait: 'scuttle' }
@@ -250,6 +254,17 @@ export class MobileLayer {
           stars.orbit.visible = stunned;
           if (stunned) stars.spin.rotation += deltaMs * STARS_SPIN * (mobile.ticks < STARS_HURRY_TICKS ? 2 : 1);
           puppet.update(deltaMs, stunned ? 'down' : mobile.facing, mobile.moving ? 'walk' : 'idle');
+          break;
+        }
+
+        case 'lumberjack': {
+          const puppet = view.puppet!;
+
+          view.root.zIndex = y + 6;
+          view.root.visible = !mobile.inside;
+          this.ground(view, x, y);
+          puppet.carry(mobile.load > 0 ? 'wood' : null);
+          puppet.update(deltaMs, mobile.facing, mobile.state === 'chop' ? 'act' : mobile.moving ? 'walk' : 'idle');
           break;
         }
 

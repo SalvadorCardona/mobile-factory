@@ -61,6 +61,9 @@ const AXIS_EPSILON = 0.01;
 const STILL: KeyboardState = { active: false, axisX: 0, axisY: 0 };
 
 /** Couleurs des éclats projetés quand Adam entame une ressource. */
+/** Distance, en tuiles, à laquelle Adam entend la hache d'un bûcheron. */
+const CHOP_HEARING_TILES = 9;
+
 const HARVEST_COLORS: Record<ItemId, readonly number[]> = {
   wood: [PALETTE.mint.base, PALETTE.mint.light, PALETTE.orange.light, PALETTE.ink.light].map(hex),
   stone: [PALETTE.coral.base, PALETTE.coral.light, PALETTE.coral.shade].map(hex),
@@ -314,6 +317,7 @@ async function main(): Promise<void> {
     // Lire la mise en page force un reflow : une fois tous les dix cadres suffit.
     if (++frame % 10 === 0) renderer.setHudInsets(hud.topInset(), bottomInset(), hud.obstacles());
     renderer.setObjective(hud.wantedItem());
+    renderer.setSelected(panel.shown);
     buildMenu.refresh();
     panel.update();
     inventory.update();
@@ -383,6 +387,13 @@ function wireAudio(world: World, audio: AudioEngine, hud: Hud): void {
   hud.audioButton.addEventListener('click', () => hud.setMuted(audio.toggleMuted()));
 
   world.events.on('resourceHarvested', ({ item }) => audio.play(item === 'wood' ? 'chop' : 'rock'));
+  // Une hache de bûcheron ne s'entend qu'à côté d'Adam : dix cabanes au loin ne font pas un vacarme.
+  world.events.on('treeChopped', ({ tx, ty }) => {
+    const dx = (tx + 0.5) * TILE_SIZE - world.player.x;
+    const dy = (ty + 0.5) * TILE_SIZE - world.player.y;
+
+    if (dx * dx + dy * dy <= (CHOP_HEARING_TILES * TILE_SIZE) ** 2) audio.play('chop');
+  });
   world.events.on('siteDelivered', () => audio.play('deliver'));
   world.events.on('storeTaken', () => audio.play('deliver'));
   world.events.on('buildingSupplied', () => audio.play('deliver'));
@@ -528,6 +539,10 @@ function wireParticles(world: World, renderer: GameRenderer): void {
 
   world.events.on('resourceHarvested', ({ tx, ty, item }) =>
     particles.burst((tx + 0.5) * TILE_SIZE, (ty + 0.5) * TILE_SIZE, HARVEST_COLORS[item]),
+  );
+  // Les petits éclats d'un coup de hache de bûcheron, au pied du tronc.
+  world.events.on('treeChopped', ({ tx, ty, remaining }) =>
+    particles.burst((tx + 0.4) * TILE_SIZE, (ty + 0.8) * TILE_SIZE, HARVEST_COLORS.wood, remaining > 0 ? 3 : 8, 0.07),
   );
   world.events.on('mutantHit', ({ x, y }) => particles.burst(x, y - 12, MUTANT_COLORS, 4));
   world.events.on('mutantDied', ({ x, y }) => particles.burst(x, y - 12, MUTANT_COLORS, 12, 0.12));

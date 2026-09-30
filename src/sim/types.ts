@@ -8,7 +8,7 @@
  * Deux familles :
  * - les **entités** posées sur la grille — chantiers et bâtiments — qui
  *   dorment entre deux réveils du scheduler ;
- * - les **mobiles** — mutants, bêtes, flèches, enfants, Ève, ouvriers, butin, patients — qui bougent à chaque tick.
+ * - les **mobiles** — mutants, bêtes, flèches, enfants, Ève, ouvriers, bûcherons, butin, patients — qui bougent à chaque tick.
  *   Ils sont peu nombreux, et c'est ce qui rend le tick par mobile acceptable.
  */
 
@@ -145,7 +145,15 @@ export interface Lab extends Built {
   endTick: number;
 }
 
-export type Entity = Site | Drill | TownHall | Nursery | Tower | House | Farm | Forge | Clinic | Lab;
+/**
+ * La cabane de bûcheron : elle loge ses bûcherons, et son coffre reçoit le
+ * bois qu'ils rapportent. Les porteurs le vident dans la mairie.
+ */
+export interface LumberCamp extends Built {
+  kind: 'lumberCamp';
+}
+
+export type Entity = Site | Drill | TownHall | Nursery | Tower | House | Farm | Forge | Clinic | Lab | LumberCamp;
 
 export type Building = Exclude<Entity, Site>;
 
@@ -313,15 +321,26 @@ export interface Job {
 }
 
 /**
+ * Ce qu'un ouvrier sans travail garde de sa flânerie (`sim/workers.ts`) :
+ * le point où il va, et la pause qu'il s'accorde une fois arrivé.
+ */
+export interface Wandering {
+  wanderX: number;
+  wanderY: number;
+  /** Ticks de pause restants ; à zéro, il marche vers son point. */
+  wanderTicks: number;
+}
+
+/**
  * Un ouvrier de la maison des constructeurs : un porteur.
  *
- * Il dort chez lui (`inside`) tant qu'il n'y a rien à porter, sort dès qu'un
- * job se présente, et rentre s'y abriter pendant une vague.
+ * Sans rien à porter, il flâne devant chez lui ; il rentre dormir
+ * (`inside`) la nuit, et s'y abriter pendant une vague.
  *
  * Un ex-mutant sorti de la clinique est un ouvrier comme les autres, logé à
  * la clinique ; il porte plus lourd et marche plus lentement (`EX_MUTANT`).
  */
-export interface Worker extends Moving {
+export interface Worker extends Moving, Wandering {
   kind: 'worker';
   /** La maison qui le loge — la clinique, pour un ex-mutant. */
   homeId: EntityId;
@@ -331,6 +350,38 @@ export interface Worker extends Moving {
   inside: boolean;
   job: Job | null;
   /** Ticks avant de chercher à nouveau du travail. */
+  searchTicks: number;
+}
+
+/**
+ * Ce que fait un bûcheron :
+ * - `idle` : rien — il flâne devant la cabane, ou y dort la nuit ;
+ * - `toTree` : il marche vers l'arbre qu'il a réservé ;
+ * - `chop` : il le coupe, un coup de hache toutes les `LUMBERJACKS.chopTicks` ;
+ * - `toCamp` : il rapporte le bois à la cabane ;
+ * - `wait` : le coffre est plein — il attend devant la porte qu'un porteur le vide.
+ */
+export type LumberjackState = 'idle' | 'toTree' | 'chop' | 'toCamp' | 'wait';
+
+/**
+ * Un bûcheron de la cabane. Deux bûcherons ne visent jamais le même arbre :
+ * `tree` est réservé dès qu'il est choisi, et la réservation, qui n'est pas
+ * sauvegardée, se rejoue depuis les bûcherons au chargement — comme les jobs.
+ */
+export interface Lumberjack extends Moving, Wandering {
+  kind: 'lumberjack';
+  /** La cabane qui le loge, et dont le coffre reçoit son bois. */
+  homeId: EntityId;
+  /** Vrai s'il est chez lui : invisible, immobile. */
+  inside: boolean;
+  state: LumberjackState;
+  /** L'arbre visé, `null` hors d'un voyage de coupe. */
+  tree: { tx: number; ty: number } | null;
+  /** Ticks avant le prochain coup de hache. */
+  chopTicks: number;
+  /** Bois dans les bras. */
+  load: number;
+  /** Ticks avant de chercher à nouveau un arbre. */
   searchTicks: number;
 }
 
@@ -370,4 +421,4 @@ export interface Patient extends Moving {
   ticks: number;
 }
 
-export type Mobile = Mutant | Beast | Arrow | Kid | Eve | Worker | Pickup | Patient;
+export type Mobile = Mutant | Beast | Arrow | Kid | Eve | Worker | Lumberjack | Pickup | Patient;
