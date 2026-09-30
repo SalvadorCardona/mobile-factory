@@ -41,6 +41,8 @@ export const EVE_LINES = {
   /** Le conseil sous la quête — le tutoriel, dans sa bouche. Cf. `ui/hint.ts`. */
   hints: {
     bagFull: 'Ton sac déborde, Adam. Va vider tout ça sur le chantier !',
+    /** Sac plein d'un objet dont aucun chantier ne veut : livrer ne servirait à rien. `{item}` : l'objet. */
+    bagUseless: 'Ton sac est plein de {item}, Adam : pose un chantier qui en a besoin, ou tape le sac puis « Jeter ».',
     wood: 'Allô Adam ? Ici Ève. Passe près des arbres : il nous faut du bois.',
     stone: 'De la pierre, maintenant. Approche-toi des rochers roses.',
     deliver: 'Pose tout ça : marche contre le chantier, ou tape-le.',

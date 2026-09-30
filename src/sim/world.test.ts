@@ -5,7 +5,7 @@ import type { ItemId } from '../data/items.ts';
 import { RECIPES } from '../data/recipes.ts';
 import { RESOURCES } from '../data/resources.ts';
 import type { PlacementRejection } from './commands.ts';
-import { BUILD_REACH_TILES, INVENTORY_CAPACITY, PLAYER_SPEED_TILES } from './player.ts';
+import { BUILD_REACH_TILES, INVENTORY_CAPACITY, PLAYER_SPEED_TILES, SPARE_CARRY } from './player.ts';
 import { oreAt, terrainAt } from './terrain.ts';
 import type { Entity, EntityId } from './types.ts';
 import { HARVEST_MAX_NODES, HARVEST_PASS_TICKS, TICKS_PER_SECOND, World, siteMissing } from './world.ts';
@@ -736,7 +736,8 @@ describe('récolte de proximité', () => {
     const before = world.resources.at(tx, ty)!.remaining;
     let full = 0;
 
-    world.player.inventory.add('wood', INVENTORY_CAPACITY);
+    // De la nourriture : aucun rocher ni arbre n'en donne, le plafond par objet n'entre pas en jeu.
+    world.player.inventory.add('food', INVENTORY_CAPACITY);
     world.events.on('inventoryFull', () => (full += 1));
 
     for (let i = 0; i < 60; i += 1) world.tick();
@@ -910,6 +911,130 @@ describe('forêt', () => {
   });
 });
 
+/** Pousse Adam contre chaque arbre des environs, `ticks` ticks chacun : la traversée d'un bosquet. */
+function crossGrove(world: World, trees: number, ticks: number): number {
+  const origin = worldToTile(world.player.x, world.player.y);
+  let pushed = 0;
+
+  for (let dy = -20; dy <= 20 && pushed < trees; dy += 1) {
+    for (let dx = -20; dx <= 20 && pushed < trees; dx += 1) {
+      const tx = origin.tx + dx;
+      const ty = origin.ty + dy;
+
+      if (world.resources.at(tx, ty)?.id !== 'tree') continue;
+
+      const axis = standNextTo(world, tx, ty, 1, 1);
+
+      if (!axis) continue;
+      world.push({ type: 'setMoveAxis', ...axis });
+      for (let i = 0; i < ticks; i += 1) world.tick();
+      pushed += 1;
+    }
+  }
+  world.push({ type: 'setMoveAxis', x: 0, y: 0 });
+  world.tick();
+  return pushed;
+}
+
+describe('sac : ce qu’Adam accepte de porter', () => {
+  it('compte ce que les chantiers attendent encore, plus une petite réserve', () => {
+    const world = new World(1);
+    const cost = BUILDINGS.townHall.cost;
+
+    expect(world.wanted('wood')).toBe(cost.wood);
+    expect(world.wanted('coal')).toBe(0);
+    expect(world.carryLimit('wood')).toBe(cost.wood + SPARE_CARRY);
+    expect(world.carryLimit('coal')).toBe(SPARE_CARRY);
+
+    const hall = world.entities.get(world.townHallId);
+
+    if (hall?.kind !== 'site') throw new Error('pas de chantier de mairie');
+    hall.delivered = { wood: cost.wood };
+    expect(world.wanted('wood')).toBe(0);
+  });
+
+  it('ne plafonne plus rien une fois la mairie debout : la ville prend tout', () => {
+    const world = new World(1);
+
+    world.player.inventory.add('wood', 25);
+    world.player.inventory.add('stone', 12);
+    world.push({ type: 'transferToSite', id: world.townHallId });
+    world.tick();
+
+    expect(world.townStock()).not.toBeNull();
+    expect(world.carryLimit('coal')).toBe(Infinity);
+  });
+
+  it('refuse la récolte d’un objet dont Adam porte déjà assez, et le signale', () => {
+    const { world, tx, ty, axis } = worldWithHarvestable();
+    const resource = world.resources.at(tx, ty)!;
+    const item = RESOURCES[resource.id].item;
+    const limit = world.carryLimit(item);
+    const refused: ItemId[] = [];
+    let harvested = 0;
+
+    world.player.inventory.add(item, limit);
+    world.events.on('harvestRefused', (event) => refused.push(event.item));
+    // La récolte est de proximité : un voisin d'un autre objet peut encore donner.
+    world.events.on('resourceHarvested', (event) => (harvested += event.item === item ? 1 : 0));
+    world.push({ type: 'setMoveAxis', ...axis });
+
+    for (let i = 0; i < 60; i += 1) world.tick();
+
+    expect(harvested).toBe(0);
+    expect(refused.length).toBeGreaterThan(0);
+    expect(refused.every((id) => id === item)).toBe(true);
+    expect(world.player.inventory.count(item)).toBe(limit);
+    expect(world.resources.at(tx, ty)?.remaining).toBe(resource.remaining);
+  });
+
+  it('récolte encore juste sous le seuil', () => {
+    const { world, tx, ty, axis } = worldWithHarvestable();
+    const item = RESOURCES[world.resources.at(tx, ty)!.id].item;
+    let harvested = 0;
+
+    world.player.inventory.add(item, world.carryLimit(item) - 1);
+    world.events.on('resourceHarvested', (event) => (harvested += event.item === item ? 1 : 0));
+    world.push({ type: 'setMoveAxis', ...axis });
+
+    for (let i = 0; i < 60; i += 1) world.tick();
+
+    expect(harvested).toBe(1);
+    expect(world.player.inventory.count(item)).toBe(world.carryLimit(item));
+  });
+
+  /*
+   * Le playtest du 30/09/2026, ?seed=42 : 24 bois dans le sac, la mairie en
+   * veut 20 ; en traversant les bosquets vers les rochers roses, le sac se
+   * remplissait de bois et il n'y avait plus de place pour les 12 pierres.
+   */
+  it('seed 42 : après les bosquets, il reste la place des pierres de la mairie', () => {
+    for (const delivered of [false, true]) {
+      const world = new World(42);
+      const hall = world.entities.get(world.townHallId);
+
+      if (hall?.kind !== 'site') throw new Error('pas de chantier de mairie');
+      if (delivered) hall.delivered = { wood: BUILDINGS.townHall.cost.wood };
+      else world.player.inventory.add('wood', 24);
+
+      expect(crossGrove(world, 12, 200)).toBeGreaterThan(4);
+      expect(world.player.inventory.count('wood')).toBeLessThanOrEqual(world.carryLimit('wood'));
+      expect(world.player.inventory.freeSpace()).toBeGreaterThanOrEqual(BUILDINGS.townHall.cost.stone);
+    }
+  });
+
+  it('jette un objet du sac : la place revient pour la pierre', () => {
+    const world = new World(42);
+
+    world.player.inventory.add('wood', INVENTORY_CAPACITY);
+    world.push({ type: 'dropItem', item: 'wood' });
+    world.tick();
+
+    expect(world.player.inventory.count('wood')).toBe(0);
+    expect(world.player.inventory.freeSpace()).toBe(INVENTORY_CAPACITY);
+  });
+});
+
 describe('géométrie de placement', () => {
   it('couvre exactement l’emprise du prototype', () => {
     const { world, spot } = worldWithOre();
@@ -1030,6 +1155,19 @@ describe('forge', () => {
     // Plus de fer ni de charbon : elle ne se replanifie plus.
     expect(forge.blocked).toBe(true);
     expect(world.pendingWakes()).toBe(idleWakes);
+  });
+
+  it('fait de la place dans le sac pour le fer et le charbon qu’elle accepte', () => {
+    const world = new World(7);
+
+    world.wave = FORGE.unlockWave;
+
+    const forge = buildNear(world, 'forge');
+    const coal = world.accepts(forge, 'coal');
+
+    expect(coal).toBeGreaterThan(0);
+    expect(world.wanted('coal')).toBe(coal);
+    expect(world.carryLimit('coal')).toBe(coal + SPARE_CARRY);
   });
 
   it('ne rend que ses plaques, et garde le fer et le charbon au four', () => {

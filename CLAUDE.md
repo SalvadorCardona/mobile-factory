@@ -38,6 +38,10 @@ les montre en deux cartes compactes ; le sac (tap, ou touche I) ouvre
 `ui/inventoryPanel.ts`, sans pause, comme la fenêtre d'un bâtiment. Loin de
 la mairie, « Jeter » pose le sac au sol en tas (le mobile `pickup` du
 butin, avec `amount`), qu'Adam reprend après s'en être éloigné.
+Tant que la mairie n'est pas debout, Adam ne récolte d'un objet que ce
+qu'on en attend (`World.wanted` : chantiers, recettes) plus une réserve
+(`SPARE_CARRY`) ; au-delà, il n'en prend plus (`harvestRefused`,
+signalé). Le conseil ne dit de livrer que si le sac contient ce qu'on attend.
 
 **Débouchés** — tout objet entre dans un coût de bâtiment ou une entrée de
 recette (`src/data/recipes.ts`) ; `validatePrototypes()` refuse une

@@ -77,6 +77,7 @@ import {
   PLAYER_CALM_TICKS,
   PLAYER_MAX_HP,
   PLAYER_REGEN_TICKS,
+  SPARE_CARRY,
   createPlayer,
   playerOverlaps,
   stepPlayer,
@@ -218,6 +219,11 @@ export type WorldEvents = {
   takeRejected: { id: EntityId; reason: TakeRejection };
   /** Le sac est plein : la récolte s'arrête, il faut aller livrer. */
   inventoryFull: Record<string, never>;
+  /**
+   * Adam heurte un arbre ou un rocher mais porte déjà assez de cet objet
+   * (`carryLimit`) : rien n'est pris, et le joueur le voit.
+   */
+  harvestRefused: { tx: number; ty: number; item: ItemId };
   /**
    * Plus que `seconds` secondes avant la prochaine vague (3, 2, puis 1) : sa
    * nuit, son rang dans la nuit, son effectif, d'où elle vient et le point,
@@ -876,9 +882,20 @@ export class World {
     }
 
     nodes.sort((a, b) => a.d2 - b.d2);
-    player.harvesting = true;
+
+    const refused = new Set<ItemId>();
 
     for (const node of nodes.slice(0, HARVEST_MAX_NODES)) {
+      const { item } = RESOURCES[node.id];
+
+      // Assez de cet objet dans le sac : Adam n'en prend plus, et le joueur le voit.
+      if (player.inventory.count(item) >= this.carryLimit(item)) {
+        if (!refused.has(item)) this.events.emit('harvestRefused', { tx: node.tx, ty: node.ty, item });
+        refused.add(item);
+        continue;
+      }
+      player.harvesting = true;
+
       // Hache ou pioche reçues d'Ève : un nœud donne plus d'une unité par passage.
       const units = harvestYieldWith(
         this.perks,
@@ -892,6 +909,7 @@ export class World {
           this.events.emit('inventoryFull', {});
           return;
         }
+        if (player.inventory.count(item) >= this.carryLimit(item)) break;
         this.harvest(node.tx, node.ty);
       }
     }
@@ -911,6 +929,35 @@ export class World {
     if (taken.stageChanged) this.dirtyTile(tx, ty);
 
     this.events.emit('resourceHarvested', { tx, ty, item, remaining: taken.resource.remaining });
+  }
+
+  /**
+   * Ce qui attend encore cet objet : les chantiers ouverts, tous confondus,
+   * plus ce que nurseries et forges acceptent pour leur recette. Une fois la
+   * mairie debout, la ville prend tout — son coffre est sans fond : tout
+   * objet y est utile. C'est ce qui rend un objet utile dans le sac.
+   */
+  public wanted(item: ItemId): number {
+    if (this.townStock()) return Infinity;
+
+    let wanted = 0;
+
+    for (const entity of this.entities.values()) {
+      if (entity.kind !== 'site') {
+        wanted += this.accepts(entity, item);
+        continue;
+      }
+      wanted += this.siteNeeds(entity, item, 'bag');
+    }
+    return wanted;
+  }
+
+  /**
+   * Combien Adam accepte d'en porter : ce qui l'attend, plus une petite
+   * réserve. Au-delà, la récolte de cet objet est refusée.
+   */
+  public carryLimit(item: ItemId): number {
+    return this.wanted(item) + SPARE_CARRY;
   }
 
   /** Pose un objet du sac sur le chantier — le premier qui manque et qu'Adam possède. Au contact, le chantier se remplit à vue. */

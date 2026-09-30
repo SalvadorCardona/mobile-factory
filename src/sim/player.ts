@@ -27,6 +27,14 @@ export const BUILD_REACH_TILES = 7;
 /** Capacité du sac, en nombre total d'objets. */
 export const INVENTORY_CAPACITY = 60;
 
+/**
+ * Ce qu'Adam accepte de porter d'un objet en plus de ce que les chantiers en
+ * attendent, tant qu'il n'y a pas de ville où le déposer. Au-delà, il ne
+ * récolte plus cet objet : traverser un bosquet ne remplit plus le sac d'un
+ * bois dont personne ne veut, et il reste de la place pour la pierre.
+ */
+export const SPARE_CARRY = 10;
+
 /** Points de vie d'Adam. */
 export const PLAYER_MAX_HP = 10;
 
