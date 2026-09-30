@@ -59,7 +59,9 @@ restent des créations originales : on reprend une grammaire, pas un personnage.
    objets ; la grille reste lisible.
 9. **Lisibilité par couleur réservée** : chaque famille d'objets a sa teinte
    dominante, sans collision (ex. ruines violettes ≠ rochers ; vert fluo
-   radioactif réservé aux mutants et à leurs flaques).
+   radioactif réservé aux mutants et à leurs flaques). Seule exception :
+   l'ex-mutant, un mutant guéri à la clinique, garde **un** détail fluo — sa
+   touffe — sur un corps d'humain orange.
 10. **Personnages** : silhouettes simples et très lisibles à petite taille
     (Adam : sac à dos, écharpe, arc ; mutants : tête déformée, bras trop long,
     halo vert). Adam, Ève et les mutants restent des créations originales.
@@ -78,7 +80,7 @@ Valeurs relevées sur la maquette validée ; elles vivent dans `PALETTE`.
 | `orange` | `#ff7b2e` | `#e05a1a` | `#ffa84d` | les humains (tunique d'Adam, des enfants) |
 | `mint` — vert menthe | `#2fd67b` | `#15a866` | `#8ff5b5` | la végétation : feuillage, lianes, tiges |
 | `cyan` | `#45d6ff` | `#2fb8ea` | `#b8f1ff` | l'eau ; les rochers de fer ; drapeaux en accent |
-| `toxic` — vert fluo | `#7df25f` | `#3fcf6a` | `#d2ffb8` | **réservé** aux mutants et à leurs flaques |
+| `toxic` — vert fluo | `#7df25f` | `#3fcf6a` | `#d2ffb8` | **réservé** aux mutants et à leurs flaques (et à la touffe de l'ex-mutant) |
 | `skin` — peau | `#ffc9a3` | `#f29a8c` | `#ffe2cf` | visages et mains |
 | `paper` — blanc | `#ffffff` | `#dcdcff` | `#ffffff` | HUD, yeux, os ; son ombre est lavande |
 
@@ -125,7 +127,14 @@ partagent jamais la leur :
 | pierre | corail | rochers de pierre |
 | fer | cyan | rochers de fer — sur l'herbe ou la roche, jamais confondus avec l'eau, qui est un sol |
 | charbon | indigo | rochers de charbon |
-| mutants | vert fluo | mutants, leurs halos, leurs flaques |
+| mutants | vert fluo | mutants, leurs halos, leurs flaques, les patients de la clinique |
+
+L'**ex-mutant** — un mutant soigné à la clinique, devenu habitant — est un
+humain : tunique orange, cheveux indigo. Il ne garde du vert fluo qu'**un
+détail**, une touffe de trois mèches sur le crâne (avec un œil qui louche et
+un pansement sur la joue, qui ne sont pas verts). C'est la seule exception à
+la réserve, validée pour lui : `sprites.test.ts` vérifie que la touffe reste
+un détail et que sa charge et ses pieds n'en portent pas.
 
 ## Formes, rayons, trait, lumière
 
@@ -221,7 +230,7 @@ corps vers ce qu'il frappe ; un coup reçu fait gicler et reculer.
 2. **Le registre** `src/data/sprites.ts` liste les sprites. `validatePrototypes()`
    y vérifie les morceaux exigés, le cadre de chaque SVG, et passe
    `auditSvg` sur tous ; `npm test` aussi, et vérifie que le vert fluo
-   n'apparaît que sur les mutants.
+   n'apparaît que sur les mutants (et sur la touffe de l'ex-mutant).
 3. **La rastérisation** (`render/spriteLibrary.ts`) : au chargement, chaque
    SVG est converti une fois, à la résolution de l'écran (plafonnée à 3),
    et rangé dans un atlas. Le sol et le décor sont bakés par blocs de 16 × 16

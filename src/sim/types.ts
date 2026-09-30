@@ -8,7 +8,7 @@
  * Deux familles :
  * - les **entités** posées sur la grille — chantiers et bâtiments — qui
  *   dorment entre deux réveils du scheduler ;
- * - les **mobiles** — mutants, bêtes, flèches, enfants, Ève, ouvriers, butin — qui bougent à chaque tick.
+ * - les **mobiles** — mutants, bêtes, flèches, enfants, Ève, ouvriers, butin, patients — qui bougent à chaque tick.
  *   Ils sont peu nombreux, et c'est ce qui rend le tick par mobile acceptable.
  */
 
@@ -111,7 +111,16 @@ export interface Forge extends Built {
   blocked: boolean;
 }
 
-export type Entity = Site | Drill | TownHall | Nursery | Tower | House | Farm | Forge;
+/**
+ * La clinique : elle n'a pas d'autre état que ses murs. Ses patients et les
+ * ex-mutants qu'elle loge sont des mobiles qui la désignent (`clinicId`,
+ * `homeId`) ; ses places se comptent sur eux.
+ */
+export interface Clinic extends Built {
+  kind: 'clinic';
+}
+
+export type Entity = Site | Drill | TownHall | Nursery | Tower | House | Farm | Forge | Clinic;
 
 export type Building = Exclude<Entity, Site>;
 
@@ -283,11 +292,16 @@ export interface Job {
  *
  * Il dort chez lui (`inside`) tant qu'il n'y a rien à porter, sort dès qu'un
  * job se présente, et rentre s'y abriter pendant une vague.
+ *
+ * Un ex-mutant sorti de la clinique est un ouvrier comme les autres, logé à
+ * la clinique ; il porte plus lourd et marche plus lentement (`EX_MUTANT`).
  */
 export interface Worker extends Moving {
   kind: 'worker';
-  /** La maison qui le loge. */
+  /** La maison qui le loge — la clinique, pour un ex-mutant. */
   homeId: EntityId;
+  /** Vrai pour un ex-mutant : plus fort, plus lent. */
+  exMutant: boolean;
   /** Vrai s'il est chez lui : invisible, immobile. */
   inside: boolean;
   job: Job | null;
@@ -313,4 +327,22 @@ export interface Pickup extends Moving {
   ttl: number;
 }
 
-export type Mobile = Mutant | Beast | Arrow | Kid | Eve | Worker | Pickup;
+/**
+ * Ce qui arrive à un mutant vaincu qu'une clinique peut accueillir :
+ * - `stunned` : assommé, des étoiles plein la tête ; Adam n'a qu'à le toucher ;
+ * - `following` : il suit Adam en boitillant, jusqu'à la porte de la clinique ;
+ * - `care` : il y est soigné, invisible, jusqu'à devenir ex-mutant.
+ */
+export type PatientState = 'stunned' | 'following' | 'care';
+
+/** Un mutant vaincu mais pas perdu : ni ennemi, ni cible. Sa place à la clinique lui est gardée. */
+export interface Patient extends Moving {
+  kind: 'patient';
+  state: PatientState;
+  /** La clinique qui lui garde une place. */
+  clinicId: EntityId;
+  /** Ticks restants : avant de se réveiller (`stunned`), avant d'être guéri (`care`). */
+  ticks: number;
+}
+
+export type Mobile = Mutant | Beast | Arrow | Kid | Eve | Worker | Pickup | Patient;

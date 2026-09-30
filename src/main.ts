@@ -109,6 +109,7 @@ const BEAST_COLORS: Record<WildlifeId, readonly number[]> = {
   crab: [PALETTE.coral.base, PALETTE.orange.base, PALETTE.coral.light].map(hex),
   wolf: [PALETTE.violet.base, PALETTE.violet.light, PALETTE.ink.light].map(hex),
 };
+const STAR_COLORS = [PALETTE.yellow.base, PALETTE.yellow.light, PALETTE.paper.base].map(hex);
 const RUBBLE_COLORS = [PALETTE.yellow.base, PALETTE.yellow.shade, PALETTE.orange.base, PALETTE.violet.light].map(hex);
 const CELEBRATION_COLORS = [PALETTE.yellow.base, PALETTE.coral.base, PALETTE.cyan.base, PALETTE.mint.base, PALETTE.violet.base].map(hex);
 
@@ -388,6 +389,10 @@ function wireAudio(world: World, audio: AudioEngine, hud: Hud): void {
   world.events.on('arrowShot', () => audio.play('arrow'));
   world.events.on('mutantHit', () => audio.play('hit'));
   world.events.on('mutantDied', () => audio.play('die'));
+  world.events.on('mutantStunned', () => audio.play('dizzy'));
+  world.events.on('patientFollowing', () => audio.play('pickup'));
+  world.events.on('patientAdmitted', () => audio.play('open'));
+  world.events.on('mutantHealed', () => audio.play('baby'));
   world.events.on('beastHit', () => audio.play('hit'));
   world.events.on('beastDied', () => audio.play('die'));
   world.events.on('playerHurt', ({ hp }) => {
@@ -447,8 +452,14 @@ function wireSave(world: World, saves: LocalSave, started: () => boolean): Autos
   world.events.on('buildingCompleted', () => {
     due = true;
   });
-  world.events.on('mutantDied', () => {
+  const waveOver = (): void => {
     for (const mobile of world.mobiles.values()) if (mobile.kind === 'mutant') return;
+    due = true;
+  };
+
+  world.events.on('mutantDied', waveOver);
+  world.events.on('mutantStunned', waveOver);
+  world.events.on('mutantHealed', () => {
     due = true;
   });
   world.events.on('dawnBroke', () => {
@@ -536,6 +547,8 @@ function wireParticles(world: World, renderer: GameRenderer): void {
     particles.burst((tx + 1) * TILE_SIZE, (ty + 1) * TILE_SIZE, RUBBLE_COLORS, 16, 0.14),
   );
   world.events.on('lootDropped', ({ x, y }) => particles.burst(x, y - 6, CELEBRATION_COLORS, 5, 0.08));
+  world.events.on('mutantStunned', ({ x, y }) => particles.burst(x, y - 16, STAR_COLORS, 6, 0.1));
+  world.events.on('mutantHealed', ({ x, y }) => particles.burst(x, y - 12, CELEBRATION_COLORS, 10, 0.14));
   world.events.on('lootPicked', ({ item, x, y }) => particles.burst(x, y - 6, HARVEST_COLORS[item], 6, 0.1));
   world.events.on('waveCleared', () => {
     const hall = world.entities.get(world.townHallId);

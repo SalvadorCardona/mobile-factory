@@ -46,9 +46,20 @@ function body(facing: Facing): string {
 }
 
 /** La charge : l'icône de l'objet, posée en équilibre sur la tête. */
-function load(item: ItemId): string {
-  // L'icône a une marge dans son cadre : descendue de `LOAD_TOP`, elle touche les cheveux.
-  return embed(ITEM_ICONS[item], 16 - LOAD / 2, LOAD_TOP, LOAD / ICON_SIZE);
+function load(item: ItemId, top: number): string {
+  // L'icône a une marge dans son cadre : descendue de `top`, elle touche les cheveux.
+  return embed(ITEM_ICONS[item], 16 - LOAD / 2, top, LOAD / ICON_SIZE);
+}
+
+/**
+ * Un morceau `load.<objet>` par objet, la charge posée à `top` du haut du
+ * cadre : l'ex-mutant, plus grand, la porte plus haut.
+ */
+export function loadParts(top: number = LOAD_TOP): Record<`load.${ItemId}`, string> {
+  return Object.fromEntries(ITEM_IDS.map((item) => [`load.${item}`, svg(W, H, load(item, top))])) as Record<
+    `load.${ItemId}`,
+    string
+  >;
 }
 
 export const WORKER = {
@@ -61,9 +72,6 @@ export const WORKER = {
     up: body('up'),
     side: body('side'),
     foot: svg(W, H, foot(GROUND, 'ink', 0.9)),
-    ...(Object.fromEntries(ITEM_IDS.map((item) => [`load.${item}`, svg(W, H, load(item))])) as Record<
-      `load.${ItemId}`,
-      string
-    >),
+    ...loadParts(),
   },
 } satisfies SpriteProto;

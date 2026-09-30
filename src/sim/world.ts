@@ -24,12 +24,16 @@
  * répare le bâti entre les vagues et donne les quêtes (`sim/eve.ts`).
  * Les ouvriers de la maison des constructeurs portent : ils vident foreuses
  * et fermes dans la mairie, et livrent les chantiers depuis la mairie.
+ * Une clinique change le sort des mutants vaincus : certains tombent
+ * assommés, suivent Adam qui les touche jusqu'à elle, et en ressortent
+ * ex-mutants — des porteurs de plus (`data/clinic.ts`).
  */
 
 import { Emitter } from '../core/events.ts';
 import { CHUNK_TILES, TILE_SIZE, coordKey, distanceSq, floorDiv, type TileCoord } from '../core/grid.ts';
 import { mulberry32, type StatefulRng } from '../core/rng.ts';
 import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
+import { CLINIC } from '../data/clinic.ts';
 import { DAWN_REWARD } from '../data/dayNight.ts';
 import { ENEMIES, LOOT_DROPS, WAVES, WILDLIFE, WILDLIFE_SPAWN, waveSize, type LootTable } from '../data/enemies.ts';
 import { EVE } from '../data/eve.ts';
@@ -83,10 +87,11 @@ import type { SavedEntity, WorldState } from './save.ts';
 import { Scheduler } from './scheduler.ts';
 import { Store } from './store.ts';
 import { findSpawn, habitatAt, isBuildable, isWalkable, oreAt, terrainAt } from './terrain.ts';
-import { clearLine, standStill, walkToward } from './workers.ts';
+import { carryOf, clearLine, standStill, walkToward } from './workers.ts';
 import type {
   Beast,
   Building,
+  Clinic,
   Contact,
   Drill,
   Entity,
@@ -102,6 +107,7 @@ import type {
   MobileId,
   Mutant,
   Nursery,
+  Patient,
   Pickup,
   Player,
   Site,
@@ -255,6 +261,14 @@ export type WorldEvents = {
   buildingRepaired: { id: EntityId; hp: number };
   /** Un porteur a déposé sa charge : sur un chantier, ou dans la mairie. */
   porterDelivered: { workerId: MobileId; id: EntityId; item: ItemId; amount: number };
+  /** Un mutant vaincu est tombé assommé plutôt que de s'évaporer : `id` est le patient qu'il devient. */
+  mutantStunned: { id: MobileId; clinicId: EntityId; x: number; y: number };
+  /** Adam a touché le mutant assommé : il le suit en boitillant. */
+  patientFollowing: { id: MobileId; x: number; y: number };
+  /** Le patient est entré à la clinique : la nuit de soins commence. */
+  patientAdmitted: { id: MobileId; clinicId: EntityId };
+  /** Il en ressort guéri : `id` est l'ex-mutant, un ouvrier de plus. */
+  mutantHealed: { id: MobileId; clinicId: EntityId; x: number; y: number };
 };
 
 export class World {
@@ -1123,6 +1137,10 @@ export class World {
       case 'forge':
         building = { ...base, kind: 'forge', blocked: true };
         break;
+
+      case 'clinic':
+        building = { ...base, kind: 'clinic' };
+        break;
     }
 
     this.entities.set(site.id, building);
@@ -1154,6 +1172,10 @@ export class World {
 
       case 'house':
         this.staff(building);
+        break;
+
+      case 'clinic':
+        // Des lits vides : elle attend qu'un mutant tombe assommé.
         break;
 
       case 'townHall':
@@ -1209,6 +1231,7 @@ export class World {
       case 'site':
       case 'townHall':
       case 'house':
+      case 'clinic':
         break;
     }
   }
@@ -1414,7 +1437,8 @@ export class World {
 
   /**
    * La population : Adam et Ève, les enfants nés aux nurseries, et les
-   * ouvriers qu'emploient les bâtiments finis. Un chantier n'emploie personne.
+   * ouvriers qu'emploient les bâtiments finis — plus les ex-mutants sortis
+   * de la clinique. Un chantier n'emploie personne.
    */
   public population(): { adults: number; children: number; workers: number } {
     let children = 0;
@@ -1422,6 +1446,7 @@ export class World {
 
     for (const mobile of this.mobiles.values()) {
       if (mobile.kind === 'kid') children += 1;
+      if (mobile.kind === 'worker' && mobile.exMutant) workers += 1;
     }
     for (const entity of this.entities.values()) {
       if (entity.kind !== 'site') workers += BUILDINGS[entity.proto].workers;
@@ -1534,6 +1559,10 @@ export class World {
         case 'pickup':
           lootBlocked = this.stepPickup(mobile) || lootBlocked;
           break;
+
+        case 'patient':
+          this.stepPatient(mobile);
+          break;
       }
     }
 
@@ -1577,6 +1606,11 @@ export class World {
     this.events.emit('arrowShot', { x, y });
   }
 
+  /**
+   * Une flèche touche un mutant. À zéro, il s'évapore et lâche son butin —
+   * sauf si une clinique a une place pour lui et que le sort le veut : il
+   * tombe alors assommé, sans butin, mais avec une chance d'être recruté.
+   */
   private hurtMutant(mutant: Mutant, damage: number): void {
     mutant.hp -= damage;
 
@@ -1586,10 +1620,164 @@ export class World {
     }
     this.mobiles.delete(mutant.id);
     this.kills += 1;
-    this.events.emit('mutantDied', { id: mutant.id, x: mutant.x, y: mutant.y });
-    this.dropLoot(ENEMIES[mutant.proto].loot, mutant.x, mutant.y);
+
+    const clinic = this.freeClinic(mutant.x, mutant.y);
+
+    if (clinic && this.rng() < CLINIC.stunChance) {
+      this.stun(mutant, clinic);
+    } else {
+      this.events.emit('mutantDied', { id: mutant.id, x: mutant.x, y: mutant.y });
+      this.dropLoot(ENEMIES[mutant.proto].loot, mutant.x, mutant.y);
+    }
 
     if (!this.defeated && !this.hasMutants()) this.events.emit('waveCleared', { night: this.night });
+  }
+
+  /* --------------------------------------------------------------- clinique */
+
+  /**
+   * Places prises dans une clinique : ses patients, où qu'ils en soient, et
+   * les ex-mutants qu'elle loge.
+   */
+  public clinicBedsUsed(id: EntityId): number {
+    let used = 0;
+
+    for (const mobile of this.mobiles.values()) {
+      if (mobile.kind === 'patient' && mobile.clinicId === id) used += 1;
+      else if (mobile.kind === 'worker' && mobile.exMutant && mobile.homeId === id) used += 1;
+    }
+    return used;
+  }
+
+  /** La clinique finie la plus proche qui a encore une place, ou `null`. */
+  private freeClinic(x: number, y: number): Clinic | null {
+    let best: Clinic | null = null;
+    let bestDistance = Infinity;
+
+    for (const entity of this.entities.values()) {
+      if (entity.kind !== 'clinic' || this.clinicBedsUsed(entity.id) >= CLINIC.beds) continue;
+
+      const door = doorOf(entity);
+      const distance = distanceSq(x, y, door.x, door.y);
+
+      if (distance < bestDistance) {
+        best = entity;
+        bestDistance = distance;
+      }
+    }
+    return best;
+  }
+
+  /** Le mutant tombe assommé là où il est : un patient, à qui la clinique garde une place. */
+  private stun(mutant: Mutant, clinic: Clinic): void {
+    const patient: Patient = {
+      kind: 'patient',
+      id: this.nextMobileId++,
+      x: mutant.x,
+      y: mutant.y,
+      prevX: mutant.x,
+      prevY: mutant.y,
+      facing: 'down',
+      moving: false,
+      state: 'stunned',
+      clinicId: clinic.id,
+      ticks: CLINIC.stunTicks,
+    };
+
+    this.mobiles.set(patient.id, patient);
+    this.events.emit('mutantStunned', { id: patient.id, clinicId: clinic.id, x: patient.x, y: patient.y });
+  }
+
+  /**
+   * Un tick de patient. Assommé, il attend qu'Adam le touche ; après, il le
+   * suit en boitillant, en ligne droite comme un porteur, jusqu'à la porte
+   * de sa clinique ; dedans, il guérit. Si personne ne vient, ou si sa
+   * clinique tombe, il s'évapore comme un mutant abattu.
+   */
+  private stepPatient(patient: Patient): void {
+    const clinic = this.entities.get(patient.clinicId);
+
+    if (clinic?.kind !== 'clinic') {
+      this.evaporate(patient);
+      return;
+    }
+
+    const { player } = this;
+
+    switch (patient.state) {
+      case 'stunned': {
+        const reach = CLINIC.touchRadius * TILE_SIZE;
+
+        standStill(patient);
+        patient.ticks -= 1;
+
+        if (distanceSq(player.x, player.y, patient.x, patient.y) <= reach * reach) {
+          patient.state = 'following';
+          this.events.emit('patientFollowing', { id: patient.id, x: patient.x, y: patient.y });
+        } else if (patient.ticks <= 0) {
+          this.evaporate(patient);
+        }
+        break;
+      }
+
+      case 'following': {
+        const door = doorOf(clinic);
+        const admit = CLINIC.admitRadius * TILE_SIZE;
+        const gap = CLINIC.followGap * TILE_SIZE;
+
+        if (distanceSq(patient.x, patient.y, door.x, door.y) <= admit * admit) {
+          patient.state = 'care';
+          patient.ticks = CLINIC.careTicks;
+          patient.x = patient.prevX = door.x;
+          patient.y = patient.prevY = door.y;
+          patient.moving = false;
+          this.events.emit('patientAdmitted', { id: patient.id, clinicId: clinic.id });
+        } else if (distanceSq(player.x, player.y, patient.x, patient.y) <= gap * gap) {
+          standStill(patient);
+        } else {
+          walkToward(patient, player.x, player.y, STEP_SECONDS);
+        }
+        break;
+      }
+
+      case 'care':
+        standStill(patient);
+        patient.ticks -= 1;
+        if (patient.ticks <= 0) this.heal(patient, clinic);
+        break;
+    }
+  }
+
+  /** Oublié ou sans clinique : il s'évapore comme un mutant abattu, et lâche son butin. */
+  private evaporate(patient: Patient): void {
+    this.mobiles.delete(patient.id);
+    this.events.emit('mutantDied', { id: patient.id, x: patient.x, y: patient.y });
+    this.dropLoot(ENEMIES.mutant.loot, patient.x, patient.y);
+  }
+
+  /** La nuit de soins est finie : il sort sur le seuil, ex-mutant et porteur, logé à la clinique. */
+  private heal(patient: Patient, clinic: Clinic): void {
+    const door = doorOf(clinic);
+    const worker: Worker = {
+      kind: 'worker',
+      id: this.nextMobileId++,
+      x: door.x,
+      y: door.y,
+      prevX: door.x,
+      prevY: door.y,
+      facing: 'down',
+      moving: false,
+      homeId: clinic.id,
+      exMutant: true,
+      // Il reste un instant sur le seuil, qu'on le voie sortir, avant de chercher du travail.
+      inside: false,
+      job: null,
+      searchTicks: PORTERS.retryTicks,
+    };
+
+    this.mobiles.delete(patient.id);
+    this.mobiles.set(worker.id, worker);
+    this.events.emit('mutantHealed', { id: worker.id, clinicId: clinic.id, x: door.x, y: door.y });
   }
 
   /* ------------------------------------------------------------------ butin */
@@ -2104,6 +2292,7 @@ export class World {
         facing: 'down',
         moving: false,
         homeId: house.id,
+        exMutant: false,
         inside: true,
         job: null,
         searchTicks: 1 + i * 8,
@@ -2133,7 +2322,14 @@ export class World {
 
       if (worker.searchTicks <= 0) {
         worker.searchTicks = PORTERS.retryTicks;
-        worker.job = this.jobs.assign(this.entities, this.townHallId, worker, homeDoor ?? worker, this.lineIsClear);
+        worker.job = this.jobs.assign(
+          this.entities,
+          this.townHallId,
+          worker,
+          homeDoor ?? worker,
+          this.lineIsClear,
+          carryOf(worker),
+        );
       }
     }
 

@@ -14,7 +14,9 @@
  * - un **coup reçu** montre le corps « touché » un instant et le fait gicler ;
  * - un **tir** tend l'arc puis le relâche ;
  * - une **attaque** de bête fait claquer les pinces du crabe, bondir le loup ;
- * - un ouvrier qui **porte** a sa charge sur la tête, qui suit le rebond du pas.
+ * - un ouvrier qui **porte** a sa charge sur la tête, qui suit le rebond du pas ;
+ * - un patient **boitille** : le corps penche d'un côté à chaque pas, une
+ *   jambe traîne ; assommé, il prend une **pose** (`pose()`) qui remplace son corps.
  *
  * Le profil gauche est le miroir du profil droit ; l'ombre portée, elle, ne
  * se retourne pas : la lumière vient toujours d'en haut à gauche.
@@ -47,8 +49,8 @@ export interface PuppetOptions {
   shadowWidth: number;
   /** Écart des pieds de part et d'autre du centre. */
   stride: number;
-  /** `scuttle` : l'allure du crabe, de côté. Par défaut, la marche. */
-  gait?: 'walk' | 'scuttle';
+  /** `scuttle` : l'allure du crabe, de côté ; `limp` : le boitillement d'un patient. Par défaut, la marche. */
+  gait?: 'walk' | 'scuttle' | 'limp';
 }
 
 export class Puppet {
@@ -69,7 +71,7 @@ export class Puppet {
   private readonly id: PuppetId;
   private readonly proto: SpriteProto;
   private readonly stride: number;
-  private readonly gait: 'walk' | 'scuttle';
+  private readonly gait: 'walk' | 'scuttle' | 'limp';
 
   private phase = 0;
   private clock = Math.random() * 1000;
@@ -78,6 +80,9 @@ export class Puppet {
   private strikeLeft = 0;
   private view: View | '' = '';
   private hurtShown = false;
+  /** Le morceau qui remplace le corps, quelle que soit la direction ; `null` : le corps de la direction. */
+  private posed: string | null = null;
+  private poseShown: string | null = null;
 
   public constructor(library: SpriteLibrary, id: PuppetId, shadow: Texture, options: PuppetOptions) {
     this.library = library;
@@ -97,7 +102,7 @@ export class Puppet {
     this.body = this.part('down');
     this.bow = id === 'adam' ? this.part('bow') : null;
     this.claws = 'claws' in this.proto.parts ? this.part('claws') : null;
-    this.load = id === 'worker' ? this.part('load.wood') : null;
+    this.load = id === 'worker' || id === 'exMutant' ? this.part('load.wood') : null;
 
     if (this.halo) this.halo.alpha = 0.35;
     if (this.load) this.load.visible = false;
@@ -142,6 +147,11 @@ export class Puppet {
     if (item) this.load.texture = this.library.texture(`${this.id}.load.${item}`);
   }
 
+  /** Une pose qui remplace le corps — un patient assommé, affalé — ou `null` pour revenir à la marche. */
+  public pose(part: string | null): void {
+    this.posed = part;
+  }
+
   /** Attaque d'une bête : les pinces claquent, le loup bondit. */
   public strike(): void {
     this.strikeLeft = STRIKE_MS;
@@ -158,13 +168,15 @@ export class Puppet {
     this.shot = Math.max(0, this.shot - deltaMs);
     this.strikeLeft = Math.max(0, this.strikeLeft - deltaMs);
 
-    if (view !== this.view || hurting !== this.hurtShown) {
+    if (view !== this.view || hurting !== this.hurtShown || this.posed !== this.poseShown) {
       this.view = view;
       this.hurtShown = hurting;
+      this.poseShown = this.posed;
 
       const hurt = `${view}Hurt`;
+      const shown = this.posed ?? (hurting && hurt in this.proto.parts ? hurt : view);
 
-      this.body.texture = this.library.texture(`${this.id}.${hurting && hurt in this.proto.parts ? hurt : view}`);
+      this.body.texture = this.library.texture(`${this.id}.${shown}`);
     }
 
     this.figure.scale.x = facing === 'left' ? -1 : 1;
@@ -172,6 +184,7 @@ export class Puppet {
     const [left, right] = this.feet;
     let bodyX = 0;
     let bodyY = 0;
+    let tilt = 0;
     let squash: number;
 
     if (verb === 'walk' && this.gait === 'scuttle') {
@@ -193,12 +206,20 @@ export class Puppet {
       bodyY = -Math.abs(lift) * 1.6;
       squash = Math.cos(this.phase * 2) * 0.03;
 
+      // Le boitillement : la jambe droite traîne, le corps penche à chaque pas sur la gauche.
+      const drag = this.gait === 'limp' ? 0.3 : 1;
+
+      if (this.gait === 'limp') {
+        tilt = Math.max(0, lift) * 0.14;
+        bodyY -= Math.max(0, lift) * 1.2;
+      }
+
       if (view === 'side') {
         left.position.set(-1.5 + lift * 3.5, -Math.max(0, lift) * 2);
-        right.position.set(1.5 - lift * 3.5, -Math.max(0, -lift) * 2);
+        right.position.set(1.5 - lift * 3.5 * drag, -Math.max(0, -lift) * 2 * drag);
       } else {
         left.position.set(-this.stride, -Math.max(0, lift) * 2.4);
-        right.position.set(this.stride, -Math.max(0, -lift) * 2.4);
+        right.position.set(this.stride, -Math.max(0, -lift) * 2.4 * drag);
       }
     } else {
       if (view === 'side') {
@@ -241,6 +262,7 @@ export class Puppet {
 
     this.body.position.set(bodyX, bodyY);
     this.body.scale.set(1 - squash * 0.6, 1 + squash);
+    this.body.rotation = -tilt;
 
     // La charge suit la tête : le rebond du pas, et l'étirement du corps.
     this.load?.position.set(bodyX, bodyY - squash * this.proto.height * this.proto.anchorY);
@@ -292,4 +314,4 @@ export class Puppet {
 }
 
 /** Sprites qui s'animent en pantin. */
-export type PuppetId = Extract<SpriteId, 'adam' | 'eve' | 'mutant' | 'kid' | 'worker' | 'crab' | 'wolf'>;
+export type PuppetId = Extract<SpriteId, 'adam' | 'eve' | 'mutant' | 'kid' | 'worker' | 'exMutant' | 'patient' | 'crab' | 'wolf'>;

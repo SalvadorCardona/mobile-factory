@@ -30,7 +30,11 @@
  * la tête — suit ce que l'arc d'Adam vise (`player.target`).
  *
  * Un ouvrier chez lui n'est pas dessiné ; dehors, il porte sa charge sur la
- * tête tant que son job est ramassé.
+ * tête tant que son job est ramassé. Un ex-mutant a son propre pantin.
+ *
+ * Un mutant assommé est affalé, trois étoiles en ronde au-dessus de la tête,
+ * qui tournent plus vite quand il va se réveiller ; touché par Adam, il le
+ * suit en boitillant ; en soins, il n'est pas dessiné.
  */
 
 import { Container, Graphics, Sprite, type Texture, type Ticker } from 'pixi.js';
@@ -76,17 +80,30 @@ const LOOT_GLINT_SCALE = 0.55;
 /** Sous ce nombre de ticks restants, le butin oublié clignote. */
 const LOOT_BLINK_TICKS = 20 * 10;
 
+/** Les étoiles d'un assommé : hauteur de la ronde au-dessus des pieds, aplatissement, vitesse (radians par ms). */
+const STARS_Y = -24;
+const STARS_FLAT = 0.45;
+const STARS_SPIN = 0.004;
+/** Sous ce nombre de ticks avant le réveil, les étoiles tournent deux fois plus vite. */
+const STARS_HURRY_TICKS = 20 * 3;
+
 /** Le pantin de chaque marcheur : sprite, ombre, écart des pieds, allure. */
-function puppetOf(mobile: Exclude<Mobile, { kind: 'arrow' | 'pickup' }>): { id: PuppetId; shadowWidth: number; stride: number; gait?: 'scuttle' } {
+function puppetOf(
+  mobile: Exclude<Mobile, { kind: 'arrow' | 'pickup' }>,
+): { id: PuppetId; shadowWidth: number; stride: number; gait?: 'scuttle' | 'limp' } {
   switch (mobile.kind) {
     case 'mutant':
       return { id: ENEMIES[mobile.proto].sprite, shadowWidth: 22, stride: 4 };
+    case 'patient':
+      return { id: 'patient', shadowWidth: 22, stride: 4, gait: 'limp' };
     case 'kid':
       return { id: 'kid', shadowWidth: 15, stride: 3 };
     case 'eve':
       return { id: 'eve', shadowWidth: 20, stride: 4 };
     case 'worker':
-      return { id: 'worker', shadowWidth: 16, stride: 3 };
+      return mobile.exMutant
+        ? { id: 'exMutant', shadowWidth: 18, stride: 3.5 }
+        : { id: 'worker', shadowWidth: 16, stride: 3 };
     case 'beast':
       return mobile.proto === 'crab'
         ? { id: WILDLIFE.crab.sprite, shadowWidth: 22, stride: 8, gait: 'scuttle' }
@@ -106,6 +123,8 @@ interface MobileView {
   tile: string;
   /** Le vélo-cargo d'Ève, montré tant qu'elle roule. */
   bike: BikeView | null;
+  /** Les étoiles d'un patient : la ronde (aplatie) et l'étoile qui y tourne. */
+  stars: { orbit: Container; spin: Sprite } | null;
 }
 
 /** Le vélo-cargo : une ombre, le cadre avec Ève en selle, deux roues qui tournent. */
@@ -218,6 +237,21 @@ export class MobileLayer {
         case 'pickup':
           this.bob(view, mobile, y, deltaMs);
           break;
+
+        case 'patient': {
+          const puppet = view.puppet!;
+          const stunned = mobile.state === 'stunned';
+          const stars = view.stars!;
+
+          view.root.zIndex = y + 6;
+          view.root.visible = mobile.state !== 'care';
+          this.ground(view, x, y);
+          puppet.pose(stunned ? 'dazed' : null);
+          stars.orbit.visible = stunned;
+          if (stunned) stars.spin.rotation += deltaMs * STARS_SPIN * (mobile.ticks < STARS_HURRY_TICKS ? 2 : 1);
+          puppet.update(deltaMs, stunned ? 'down' : mobile.facing, mobile.moving ? 'walk' : 'idle');
+          break;
+        }
 
         case 'mutant':
         case 'beast':
@@ -415,7 +449,7 @@ export class MobileLayer {
 
       sprite.anchor.set(SPRITES.arrow.anchorX, SPRITES.arrow.anchorY);
       root.addChild(sprite);
-      view = { root, puppet: null, hp: null, lastHp: 0, age: SPAWN_MS, tile: '', bike: null };
+      view = { root, puppet: null, hp: null, lastHp: 0, age: SPAWN_MS, tile: '', bike: null, stars: null };
     } else if (mobile.kind === 'pickup') {
       const tx = floorDiv(mobile.x, TILE_SIZE);
       const ty = floorDiv(mobile.y, TILE_SIZE);
@@ -434,7 +468,7 @@ export class MobileLayer {
       // Butin rechargé d'une sauvegarde : déjà posé, pas de saut.
       const fresh = LOOT_DROPS.lifetimeTicks - mobile.ttl < 20;
 
-      view = { root, puppet: null, hp: null, lastHp: 0, age: fresh ? 0 : LOOT_DROP_MS, tile: '', bike: null };
+      view = { root, puppet: null, hp: null, lastHp: 0, age: fresh ? 0 : LOOT_DROP_MS, tile: '', bike: null, stars: null };
     } else {
       const foe = mobile.kind === 'mutant' || mobile.kind === 'beast';
       const { id, ...options } = puppetOf(mobile);
@@ -456,7 +490,10 @@ export class MobileLayer {
         root.addChild(hp);
         root.alpha = 0;
       }
-      view = { root, puppet, hp, lastHp: foe ? mobile.hp : 0, age: foe ? 0 : SPAWN_MS, tile: '', bike };
+      const stars = mobile.kind === 'patient' ? this.stars() : null;
+
+      if (stars) root.addChild(stars.orbit);
+      view = { root, puppet, hp, lastHp: foe ? mobile.hp : 0, age: foe ? 0 : SPAWN_MS, tile: '', bike, stars };
       if (mobile.kind === 'mutant' && mobile.emerge > 0) this.spill(mobile);
     }
 
@@ -475,6 +512,20 @@ export class MobileLayer {
     view.tile = key;
     view.puppet.setShadow(this.tiles.shadow(terrainAt(this.world.seed, tx, ty)));
     if (view.bike) view.bike.shadow.texture = this.tiles.shadow(terrainAt(this.world.seed, tx, ty));
+  }
+
+  /** Les étoiles d'un assommé : une ronde aplatie en ellipse, l'étoile tourne dedans. */
+  private stars(): { orbit: Container; spin: Sprite } {
+    const { width, height, pivots } = SPRITES.patient;
+    const [px, py] = pivots.stars;
+    const orbit = new Container();
+    const spin = new Sprite(this.library.part('patient', 'stars'));
+
+    spin.anchor.set(px / width, py / height);
+    orbit.addChild(spin);
+    orbit.position.set(0, STARS_Y);
+    orbit.scale.set(1, STARS_FLAT);
+    return { orbit, spin };
   }
 
   /** Le vélo-cargo, morceaux posés pour que le cadre du sprite tombe sur l'ancre commune. */

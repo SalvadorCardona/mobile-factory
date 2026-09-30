@@ -22,7 +22,7 @@ const GROUND = 38.4;
 const { toxic, ink, paper } = PALETTE;
 
 /** Deux cercles fondus en une tête bosselée, en trois tons. */
-function lumpyHead(cx: number, cy: number, bumpX: number, bumpY: number): string {
+export function lumpyHead(cx: number, cy: number, bumpX: number, bumpY: number): string {
   return (
     circle(cx + 0.8, cy + 0.8, 8, toxic.shade) +
     circle(bumpX + 0.6, bumpY + 0.6, 4.4, toxic.shade) +
@@ -38,11 +38,11 @@ function eye(x: number, y: number, r: number): string {
 }
 
 /** Un œil fermé par le choc : une croix. */
-function crossedEye(x: number, y: number, r: number): string {
+export function crossedEye(x: number, y: number, r: number): string {
   return line(x - r, y - r, x + r, y + r, ink.base) + line(x - r, y + r, x + r, y - r, ink.base);
 }
 
-function torso(x: number, w: number): string {
+export function torso(x: number, w: number): string {
   return (
     rect(x, 21, w, 14, toxic.shade, 5) +
     rect(x, 21, w, 10.5, toxic.base, 5) +
@@ -51,12 +51,11 @@ function torso(x: number, w: number): string {
   );
 }
 
-function body(facing: Facing, hurt: boolean): string {
+/** Le mutant vu dans une direction, sans le cadre : la clinique en réutilise la silhouette. */
+export function mutantFigure(facing: Facing, hurt: boolean): string {
   switch (facing) {
     case 'down':
-      return svg(
-        W,
-        H,
+      return [
         // Le bras court, puis le tronc, puis le bras trop long qui traîne au sol.
         pill(7, 22, 4.5, 8, toxic.shade),
         torso(10, 13),
@@ -67,12 +66,10 @@ function body(facing: Facing, hurt: boolean): string {
         hurt
           ? circle(15.5, 18, 2, ink.base)
           : curve('M11.5 17 Q15.2 20.2 19 17', ink.base) + rect(13.8, 17.6, 2, 1.8, paper.base, 0.6),
-      );
+      ].join('');
 
     case 'up':
-      return svg(
-        W,
-        H,
+      return [
         pill(21, 22, 4.5, 8, toxic.shade),
         torso(9.5, 13),
         pill(6, 21, 4.5, 15, toxic.shade),
@@ -80,12 +77,10 @@ function body(facing: Facing, hurt: boolean): string {
         lumpyHead(16, 12.5, 10.5, 7.5),
         // De dos, le choc se voit à la bosse qui pâlit.
         hurt ? circle(10.5, 7.5, 2.4, toxic.light) : '',
-      );
+      ].join('');
 
     case 'side':
-      return svg(
-        W,
-        H,
+      return [
         torso(10.5, 11.5),
         // De profil, le long bras pend devant lui jusqu'au sol.
         pill(16.5, 21, 4.5, 15, toxic.shade),
@@ -93,8 +88,12 @@ function body(facing: Facing, hurt: boolean): string {
         lumpyHead(17, 13, 11, 7),
         hurt ? crossedEye(21, 12.8, 2.2) : eye(21, 12.8, 3),
         hurt ? circle(22.5, 18.2, 1.8, ink.base) : curve('M19 17.5 Q21.5 19.6 24 17.2', ink.base),
-      );
+      ].join('');
   }
+}
+
+function body(facing: Facing, hurt: boolean): string {
+  return svg(W, H, mutantFigure(facing, hurt));
 }
 
 export const MUTANT = {

@@ -60,7 +60,8 @@ export class JobBoard {
    * Le meilleur job pour un porteur en (x, y), déjà réservé des deux côtés,
    * ou `null`. Le plus prioritaire d'abord, puis la source la plus proche ;
    * un trajet qui traverserait l'eau — jusqu'à la source, jusqu'à la
-   * destination, puis jusqu'à la maison — n'est pas proposé.
+   * destination, puis jusqu'à la maison — n'est pas proposé. `carry` : ce
+   * que le porteur prend en un voyage.
    */
   public assign(
     entities: ReadonlyMap<EntityId, Entity>,
@@ -68,8 +69,9 @@ export class JobBoard {
     from: { x: number; y: number },
     home: { x: number; y: number },
     clear: LineTest,
+    carry: number = PORTERS.carry,
   ): Job | null {
-    const offers = this.offers(entities, hallId).map((offer) => {
+    const offers = this.offers(entities, hallId, carry).map((offer) => {
       const source = entities.get(offer.from)!;
       const door = doorOf(source);
 
@@ -93,7 +95,7 @@ export class JobBoard {
   }
 
   /** Tout ce qu'il y aurait à porter, calculé sur le disponible et la place libre, jamais sur le stock brut. */
-  private offers(entities: ReadonlyMap<EntityId, Entity>, hallId: EntityId): Offer[] {
+  private offers(entities: ReadonlyMap<EntityId, Entity>, hallId: EntityId, carry: number): Offer[] {
     const hall = entities.get(hallId);
 
     // Pas de mairie debout, pas d'entrepôt : rien à porter.
@@ -105,7 +107,7 @@ export class JobBoard {
       switch (entity.kind) {
         case 'site':
           for (const item of Object.keys(BUILDINGS[entity.proto].cost) as ItemId[]) {
-            const amount = Math.min(PORTERS.carry, this.siteWants(entity, item), hall.store.available(item));
+            const amount = Math.min(carry, this.siteWants(entity, item), hall.store.available(item));
 
             if (amount > 0) offers.push({ from: hall.id, to: entity.id, item, amount, priority: JOB_PRIORITY.site });
           }
@@ -115,11 +117,11 @@ export class JobBoard {
         case 'farm':
           for (const [item] of entity.store.entries()) {
             const available = entity.store.available(item);
-            const amount = Math.min(PORTERS.carry, available, hall.store.freeSpace());
+            const amount = Math.min(carry, available, hall.store.freeSpace());
 
             if (amount <= 0) continue;
 
-            const priority = available >= PORTERS.carry ? JOB_PRIORITY.empty : JOB_PRIORITY.surplus;
+            const priority = available >= carry ? JOB_PRIORITY.empty : JOB_PRIORITY.surplus;
 
             offers.push({ from: entity.id, to: hall.id, item, amount, priority });
           }

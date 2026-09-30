@@ -20,9 +20,11 @@ import { ADAM } from '../art/adam.ts';
 import { ARROW } from '../art/arrow.ts';
 import { BUILDER_HOUSE } from '../art/builderHouse.ts';
 import { CARGO_BIKE } from '../art/cargoBike.ts';
+import { CLINIC_SPRITE } from '../art/clinic.ts';
 import { CRAB } from '../art/crab.ts';
 import { DECOR_ART } from '../art/decor.ts';
 import { DRILL } from '../art/drill.ts';
+import { EX_MUTANT_SPRITE } from '../art/exMutant.ts';
 import { EVE_SPRITE } from '../art/eve.ts';
 import { FARM } from '../art/farm.ts';
 import { FORGE } from '../art/forge.ts';
@@ -30,6 +32,7 @@ import { KID } from '../art/kid.ts';
 import { LOOT } from '../art/loot.ts';
 import { MUTANT } from '../art/mutant.ts';
 import { NURSERY } from '../art/nursery.ts';
+import { PATIENT } from '../art/patient.ts';
 import { PUDDLE } from '../art/puddle.ts';
 import { ROCK_COAL, ROCK_IRON, ROCK_STONE } from '../art/rocks.ts';
 import { STORE_FULL } from '../art/storeFull.ts';
@@ -63,6 +66,10 @@ export const SPRITES = {
   mutant: MUTANT,
   kid: KID,
   worker: WORKER,
+  /** Un mutant assommé, puis qui suit Adam jusqu'à la clinique. */
+  patient: PATIENT,
+  /** Un mutant guéri : un habitant, porteur, avec sa touffe fluo. */
+  exMutant: EX_MUTANT_SPRITE,
   crab: CRAB,
   wolf: WOLF,
   arrow: ARROW,
@@ -89,6 +96,7 @@ export const SPRITES = {
   watchtower: WATCHTOWER,
   forge: FORGE,
   reinforcedTower: REINFORCED_TOWER,
+  clinic: CLINIC_SPRITE,
 
   /** Décor de surface : un morceau par élément, cf. `data/decor.ts`. */
   decor: DECOR_ART,
@@ -101,7 +109,7 @@ export const SPRITE_IDS = Object.keys(SPRITES) as SpriteId[];
 /** Noms de morceaux valides pour un sprite donné. */
 export type PartOf<S extends SpriteId> = keyof (typeof SPRITES)[S]['parts'] & string;
 
-/** Les morceaux qu'un marcheur (Adam, Ève, mutant, enfant, ouvrier) doit fournir. */
+/** Les morceaux qu'un marcheur (Adam, Ève, mutant, enfant, ouvrier, patient, ex-mutant) doit fournir. */
 export const WALKER_PARTS = ['down', 'up', 'side', 'foot'] as const;
 
 /** Les morceaux qu'un bâtiment doit fournir. */

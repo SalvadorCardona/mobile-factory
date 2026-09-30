@@ -4,7 +4,8 @@
  * Elle s'ouvre au tap sur un chantier ou un bâtiment et dit ce qu'il est, ce
  * qu'il contient, et ce qu'il est en train de faire : l'avancement d'un
  * chantier, le compte à rebours de la nurserie, la veille d'une tour, les
- * points de vie de la mairie et sa population, les ouvriers.
+ * points de vie de la mairie et sa population, les ouvriers, les places de
+ * la clinique.
  *
  * Sur un chantier, un bouton : « Transférer » vide dans le chantier tout ce
  * qu'il attend et qu'Adam porte, puis le complète avec le stock de la ville —
@@ -21,6 +22,7 @@
  */
 
 import { BUILDINGS } from '../data/buildings.ts';
+import { CLINIC } from '../data/clinic.ts';
 import { ITEMS, type ItemId } from '../data/items.ts';
 import { RECIPES, type RecipeProto } from '../data/recipes.ts';
 import { WEAPONS } from '../data/weapons.ts';
@@ -263,6 +265,18 @@ export class BuildingPanel {
         case 'house':
           lines.push('Les ouvriers dorment ici entre deux journées.');
           break;
+
+        case 'clinic': {
+          const used = this.world.clinicBedsUsed(entity.id);
+
+          lines.push(`Places : ${used}/${CLINIC.beds}`);
+          lines.push(
+            used >= CLINIC.beds
+              ? 'Complète : les mutants vaincus ne tombent plus assommés pour elle.'
+              : 'Un mutant vaincu peut tomber assommé — touchez-le, il vous suivra jusqu’ici.',
+          );
+          break;
+        }
       }
 
       // Le coffre de la mairie est le stock de la ville.

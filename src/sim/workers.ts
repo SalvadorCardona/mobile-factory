@@ -13,23 +13,35 @@
  */
 
 import { TILE_SIZE, floorDiv } from '../core/grid.ts';
-import { PORTERS } from '../data/workers.ts';
+import { CLINIC } from '../data/clinic.ts';
+import { EX_MUTANT, PORTERS } from '../data/workers.ts';
 import { facingOf } from './motion.ts';
 import { isWalkable, terrainAt } from './terrain.ts';
-import type { Worker } from './types.ts';
+import type { Patient, Worker } from './types.ts';
 
 /** Pas d'échantillonnage d'une ligne droite, en pixels : moins d'un quart de tuile, aucun coin d'eau n'échappe. */
 const LINE_STEP = TILE_SIZE / 4;
 
+/** Vitesse de marche, en tuiles par seconde : un porteur, un ex-mutant, un patient qui boitille. */
+function speedOf(walker: Worker | Patient): number {
+  if (walker.kind === 'patient') return CLINIC.limpSpeed;
+  return walker.exMutant ? EX_MUTANT.speed : PORTERS.speed;
+}
+
+/** Ce qu'un ouvrier porte en un voyage : un ex-mutant, plus fort, en prend davantage. */
+export function carryOf(worker: Worker): number {
+  return worker.exMutant ? EX_MUTANT.carry : PORTERS.carry;
+}
+
 /**
  * Avance d'un tick vers (x, y), en ligne droite. Renvoie `true` à
- * l'arrivée — l'ouvrier est alors posé exactement sur le point.
+ * l'arrivée — le marcheur est alors posé exactement sur le point.
  */
-export function walkToward(worker: Worker, x: number, y: number, stepSeconds: number): boolean {
+export function walkToward(worker: Worker | Patient, x: number, y: number, stepSeconds: number): boolean {
   const dx = x - worker.x;
   const dy = y - worker.y;
   const distance = Math.hypot(dx, dy);
-  const speed = PORTERS.speed * TILE_SIZE * stepSeconds;
+  const speed = speedOf(worker) * TILE_SIZE * stepSeconds;
 
   worker.prevX = worker.x;
   worker.prevY = worker.y;
@@ -49,7 +61,7 @@ export function walkToward(worker: Worker, x: number, y: number, stepSeconds: nu
 }
 
 /** Reste sur place ce tick : le rendu n'interpole plus. */
-export function standStill(worker: Worker): void {
+export function standStill(worker: Worker | Patient): void {
   worker.prevX = worker.x;
   worker.prevY = worker.y;
   worker.moving = false;
