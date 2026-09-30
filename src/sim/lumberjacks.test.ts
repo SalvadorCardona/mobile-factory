@@ -101,7 +101,7 @@ function colony(layout: Layout = {}): World {
   let nextId = state.nextId;
   const campId = nextId++;
   const entities: SavedEntity[] = [
-    { kind: 'townHall', id: world.townHallId, proto: 'townHall', ...SPOT.hall, width: 3, height: 3, store: {}, hp: BUILDINGS.townHall.hp },
+    { kind: 'townHall', id: world.townHallId, proto: 'townHall', ...SPOT.hall, width: 3, height: 3, store: {}, hp: BUILDINGS.townHall.hp, level: 1 },
     {
       kind: 'lumberCamp',
       id: campId,
@@ -111,11 +111,12 @@ function colony(layout: Layout = {}): World {
       height: 2,
       store: layout.campStore ? { wood: layout.campStore } : {},
       hp: BUILDINGS.lumberCamp.hp,
+      level: 1,
     },
   ];
 
   if (layout.house && SPOT.house) {
-    entities.push({ kind: 'house', id: nextId++, proto: 'builderHouse', ...SPOT.house, width: 2, height: 2, store: {}, hp: BUILDINGS.builderHouse.hp });
+    entities.push({ kind: 'house', id: nextId++, proto: 'builderHouse', ...SPOT.house, width: 2, height: 2, store: {}, hp: BUILDINGS.builderHouse.hp, level: 1 });
   }
 
   if (layout.bare) {

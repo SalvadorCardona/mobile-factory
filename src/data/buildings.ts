@@ -148,6 +148,7 @@ export const BUILDINGS = {
     unlockNight: 0,
     sprite: 'lumberCamp',
     weapon: null,
+    upgrades: [],
   },
   drill: {
     label: LORE.buildings.drill.name,
