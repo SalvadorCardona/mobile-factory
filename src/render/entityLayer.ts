@@ -52,6 +52,8 @@ const PLAYER_FOOT = 7;
 
 const BAR_TRACK = hex(PALETTE.paper.base);
 const PROGRESS_FG = hex(PALETTE.yellow.shade);
+/** La construction au marteau, une fois tout livré : la teinte du cercle du poste de construction. */
+const BUILD_FG = hex(PALETTE.violet.base);
 const HP_FG = hex(PALETTE.coral.base);
 
 /** Durée du rebond d'un bâtiment achevé, et de la secousse d'un bâtiment frappé. */
@@ -282,7 +284,13 @@ export class EntityLayer {
     let ratio: number;
     let color: number;
 
-    if (entity.kind === 'site') {
+    if (entity.kind === 'site' && this.world.awaitsBuilders(entity)) {
+      // Tout est livré : la barre repart de zéro, et suit les coups de marteau des bâtisseurs.
+      const { done, total } = this.world.siteBuild(entity);
+
+      ratio = total === 0 ? 1 : done / total;
+      color = BUILD_FG;
+    } else if (entity.kind === 'site') {
       const total = Object.values(BUILDINGS[entity.proto].cost).reduce((sum, amount) => sum + amount, 0);
 
       ratio = total === 0 ? 1 : 1 - siteMissing(entity) / total;

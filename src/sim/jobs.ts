@@ -20,20 +20,23 @@
  * et la nurserie depuis la mairie, et vider les coffres des foreuses, des fermes et des cabanes de
  * bûcheron dans la mairie.
  *
- * Deux équipes se partagent le travail (`Crew`). Un producteur dans le rayon
+ * Trois équipes se partagent le travail (`Crew`). Un producteur dans le rayon
  * d'un poste de logistique fini est à ses logisticiens, qui ne font que ça :
- * le coffre le plus rempli d'abord. Les porteurs livrent chantiers, labo,
- * forge et nurserie, et ne vident que les producteurs qu'aucun poste ne couvre.
+ * le coffre le plus rempli d'abord. Un chantier dans le rayon d'un poste de
+ * construction qui tourne est à ses bâtisseurs, qui ne font que ça : le plus
+ * ancien d'abord. Les porteurs livrent le labo, la forge, la nurserie et les
+ * chantiers qu'aucun poste de construction ne couvre, et ne vident que les
+ * producteurs qu'aucun poste de logistique ne couvre.
  */
 
 import { TILE_SIZE, distanceSq } from '../core/grid.ts';
 import { BUILDINGS } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
-import { JOB_PRIORITY, LOGISTICIANS, PORTERS } from '../data/workers.ts';
+import { BUILDERS, JOB_PRIORITY, LOGISTICIANS, PORTERS } from '../data/workers.ts';
 import { labSurplus, labWants, researchCost } from './research.ts';
 import { consumerRecipe, consumerWants, isStarving } from './consumers.ts';
 import type { Store } from './store.ts';
-import type { Depot, Drill, Entity, EntityId, Farm, Job, LumberCamp, Quarry, Site, TownHall } from './types.ts';
+import type { Depot, Drill, Entity, EntityId, Farm, Job, LumberCamp, Quarry, Site, TownHall, Yard } from './types.ts';
 
 /** Le trajet en ligne droite de (x0, y0) à (x1, y1) est-il praticable ? */
 export type LineTest = (x0: number, y0: number, x1: number, y1: number) => boolean;
@@ -43,19 +46,51 @@ type Offer = Omit<Job, 'carried'>;
 
 /**
  * Qui cherche du travail : un porteur (maison des constructeurs, ex-mutant
- * de la clinique) ou un logisticien, avec le poste qui le loge.
+ * de la clinique), un logisticien ou un bâtisseur, avec le poste qui le loge.
  */
-export type Crew = { kind: 'porter' } | { kind: 'logistician'; depot: Depot };
+export type Crew = { kind: 'porter' } | { kind: 'logistician'; depot: Depot } | { kind: 'builder'; yard: Yard };
 
 export const PORTER_CREW: Crew = { kind: 'porter' };
 
-/** Le producteur est-il dans le rayon du poste ? Mesuré de centre d'emprise à centre d'emprise, comme le cercle affiché. */
-export function inDepotRange(depot: Depot, entity: { tx: number; ty: number; width: number; height: number }): boolean {
-  const reach = LOGISTICIANS.radius * TILE_SIZE;
-  const x = (depot.tx + depot.width / 2) * TILE_SIZE;
-  const y = (depot.ty + depot.height / 2) * TILE_SIZE;
+type Footprint = { tx: number; ty: number; width: number; height: number };
+
+/** `entity` est-il à `radius` tuiles de `post` ? Mesuré de centre d'emprise à centre d'emprise, comme le cercle affiché. */
+function inRadius(post: Footprint, entity: Footprint, radius: number): boolean {
+  const reach = radius * TILE_SIZE;
+  const x = (post.tx + post.width / 2) * TILE_SIZE;
+  const y = (post.ty + post.height / 2) * TILE_SIZE;
 
   return distanceSq(x, y, (entity.tx + entity.width / 2) * TILE_SIZE, (entity.ty + entity.height / 2) * TILE_SIZE) <= reach * reach;
+}
+
+/** Le producteur est-il dans le rayon du poste de logistique ? */
+export function inDepotRange(depot: Depot, entity: Footprint): boolean {
+  return inRadius(depot, entity, LOGISTICIANS.radius);
+}
+
+/** Le chantier est-il dans le rayon du poste de construction ? */
+export function inYardRange(yard: Yard, entity: Footprint): boolean {
+  return inRadius(yard, entity, BUILDERS.radius);
+}
+
+/**
+ * Le poste de construction tourne-t-il ? En pause, ou réglé à zéro
+ * bâtisseur, il ne couvre plus rien : ses chantiers reviennent aux porteurs
+ * et à Adam. Tout bâtiment qui emploie apporte ses ouvriers à la population,
+ * aussi un poste réglé à `staff` en a-t-il toujours `staff` en poste
+ * (`sim/staffing.ts`).
+ */
+export function yardWorks(yard: Yard): boolean {
+  return !yard.paused && yard.staff > 0;
+}
+
+/** Le travail d'un chantier, en ticks de bâtisseur : `BUILDERS.workPerItem` par objet de son coût. */
+export function siteWork(site: Site): number {
+  const cost: Partial<Record<ItemId, number>> = BUILDINGS[site.proto].cost;
+  let items = 0;
+
+  for (const amount of Object.values(cost)) items += amount;
+  return items * BUILDERS.workPerItem;
 }
 
 /** Un bâtiment qui produit dans son coffre, et que porteurs ou logisticiens vident dans la mairie. */
@@ -98,6 +133,10 @@ export class JobBoard {
    * coffre le plus rempli — ce qui reste à prendre, rapporté à sa capacité —
    * avant le plus proche : un coffre plein, qui bloque son producteur, passe
    * en premier.
+   *
+   * Un bâtisseur ne regarde que les chantiers de son rayon, le plus ancien —
+   * le plus petit id — d'abord : les chantiers se finissent dans l'ordre où
+   * on les a posés. Si la mairie n'a rien de ce qu'il attend, il passe au suivant.
    */
   public assign(
     entities: ReadonlyMap<EntityId, Entity>,
@@ -116,7 +155,12 @@ export class JobBoard {
       return { offer, door, fill, distance: distanceSq(from.x, from.y, door.x, door.y) };
     });
 
-    offers.sort((a, b) => b.fill - a.fill || b.offer.priority - a.offer.priority || a.distance - b.distance);
+    const age = (offer: Offer): number => (crew.kind === 'builder' ? offer.to : 0);
+
+    offers.sort(
+      (a, b) =>
+        b.fill - a.fill || age(a.offer) - age(b.offer) || b.offer.priority - a.offer.priority || a.distance - b.distance,
+    );
 
     for (const { offer, door } of offers) {
       const target = doorOf(entities.get(offer.to)!);
@@ -144,9 +188,11 @@ export class JobBoard {
 
     const offers: Offer[] = [];
     const depots: Depot[] = [];
+    const yards: Yard[] = [];
 
     for (const entity of entities.values()) {
       if (entity.kind === 'depot') depots.push(entity);
+      if (entity.kind === 'yard' && yardWorks(entity)) yards.push(entity);
     }
 
     for (const entity of entities.values()) {
@@ -156,13 +202,17 @@ export class JobBoard {
         continue;
       }
 
+      if (crew.kind === 'builder') {
+        // Le bâtisseur ne fait qu'un travail : livrer les chantiers de son rayon.
+        if (entity.kind === 'site' && inYardRange(crew.yard, entity)) this.siteOffers(entity, hall, carry, offers);
+        continue;
+      }
+
       switch (entity.kind) {
         case 'site':
-          for (const item of Object.keys(BUILDINGS[entity.proto].cost) as ItemId[]) {
-            const amount = Math.min(carry, this.siteWants(entity, item), hall.store.available(item));
-
-            if (amount > 0) offers.push({ from: hall.id, to: entity.id, item, amount, priority: JOB_PRIORITY.site });
-          }
+          // Un poste de construction couvre ce chantier : ses bâtisseurs s'en chargent.
+          if (yards.some((yard) => inYardRange(yard, entity))) break;
+          this.siteOffers(entity, hall, carry, offers);
           break;
 
         case 'lab':
@@ -209,6 +259,15 @@ export class JobBoard {
       }
     }
     return offers;
+  }
+
+  /** Livrer un chantier depuis la mairie : un voyage par objet qu'il attend encore et que la mairie a. */
+  private siteOffers(site: Site, hall: TownHall, carry: number, offers: Offer[]): void {
+    for (const item of Object.keys(BUILDINGS[site.proto].cost) as ItemId[]) {
+      const amount = Math.min(carry, this.siteWants(site, item), hall.store.available(item));
+
+      if (amount > 0) offers.push({ from: hall.id, to: site.id, item, amount, priority: JOB_PRIORITY.site });
+    }
   }
 
   /** Vider le coffre d'un producteur dans la mairie : un voyage par objet qu'il contient. */

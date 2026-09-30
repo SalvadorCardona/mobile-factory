@@ -10,7 +10,7 @@ function hall(): Entity {
 }
 
 function site(tx: number, ty: number): Entity {
-  return { kind: 'site', id: 2, proto: 'farm', tx, ty, width: 2, height: 2, delivered: {} };
+  return { kind: 'site', id: 2, proto: 'farm', tx, ty, width: 2, height: 2, delivered: {}, work: 0 };
 }
 
 describe('entrepôt', () => {

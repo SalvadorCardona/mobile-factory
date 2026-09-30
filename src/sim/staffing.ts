@@ -7,7 +7,8 @@
  * - **la pause** d'un bâtiment producteur (foreuse, ferme, carrière, forge,
  *   nurserie, cabane de bûcheron) : il ne produit plus et ne consomme plus rien ; ses
  *   ouvriers finissent leur geste en cours puis flânent, et les porteurs
- *   peuvent toujours vider son coffre ;
+ *   peuvent toujours vider son coffre. Le poste de construction se met en
+ *   pause aussi : ses chantiers reviennent aux porteurs et à Adam ;
  * - **l'effectif voulu** (`staff`) d'un bâtiment qui emploie, entre son
  *   minimum (`minWorkers`) et son maximum (`workers`). Zéro vaut pause.
  *
@@ -24,8 +25,11 @@
 import { BUILDINGS, type BuildingId, type BuildingKind } from '../data/buildings.ts';
 import type { EntityId } from './types.ts';
 
-/** Ce qu'un producteur fait tourner : ce qu'on peut mettre en pause. */
-const PAUSABLE: ReadonlySet<BuildingKind> = new Set<BuildingKind>(['drill', 'farm', 'quarry', 'forge', 'nursery', 'lumberCamp']);
+/**
+ * Ce qu'on peut mettre en pause : ce qu'un producteur fait tourner, et le
+ * poste de construction — en pause, ses chantiers reviennent aux porteurs.
+ */
+const PAUSABLE: ReadonlySet<BuildingKind> = new Set<BuildingKind>(['drill', 'farm', 'quarry', 'forge', 'nursery', 'lumberCamp', 'yard']);
 
 /** Le bâtiment produit-il quelque chose qu'on puisse arrêter ? */
 export function canPause(proto: BuildingId): boolean {

@@ -42,7 +42,7 @@ import { CLINIC } from '../data/clinic.ts';
 import { ITEMS, type ItemId } from '../data/items.ts';
 import { RECIPES, type RecipeProto } from '../data/recipes.ts';
 import { WEAPONS } from '../data/weapons.ts';
-import { LOGISTICIANS, LUMBERJACKS } from '../data/workers.ts';
+import { BUILDERS, LOGISTICIANS, LUMBERJACKS } from '../data/workers.ts';
 import { canPause } from '../sim/staffing.ts';
 import type { Building, Entity, EntityId, Forge, Nursery } from '../sim/types.ts';
 import { TICKS_PER_SECOND, siteMissing, type World } from '../sim/world.ts';
@@ -69,6 +69,9 @@ export class BuildingPanel {
   private readonly takeButton: HTMLButtonElement;
   private readonly depositButton: HTMLButtonElement;
   private readonly pauseButton: HTMLButtonElement;
+  /** « Annuler le chantier » : un premier tap arme, le second annule. */
+  private readonly cancelButton: HTMLButtonElement;
+  private cancelArmed = false;
   /** Le sélecteur d'ouvriers : −, les postes, +, et ce qui manque. */
   private readonly crew: HTMLElement;
   private readonly crewLess: HTMLButtonElement;
@@ -166,7 +169,19 @@ export class BuildingPanel {
       if (entity && entity.kind !== 'site') this.world.push({ type: 'pauseBuilding', id: entity.id, paused: !entity.paused });
     });
 
-    this.actions.append(this.pauseButton, this.transferButton, this.takeButton, this.depositButton);
+    this.cancelButton = document.createElement('button');
+    this.cancelButton.type = 'button';
+    this.cancelButton.dataset['tone'] = 'cancel';
+    this.cancelButton.addEventListener('click', () => {
+      if (this.entityId === null) return;
+      if (!this.cancelArmed) {
+        this.cancelArmed = true;
+        return;
+      }
+      this.world.push({ type: 'cancelSite', id: this.entityId });
+    });
+
+    this.actions.append(this.pauseButton, this.transferButton, this.takeButton, this.depositButton, this.cancelButton);
 
     this.crew = document.createElement('div');
     this.crew.className = 'building-panel-crew';
@@ -243,6 +258,7 @@ export class BuildingPanel {
     this.lastItems = '';
     this.lastUpgrade = '';
     this.lastCrew = '';
+    this.cancelArmed = false;
     this.refresh(entity);
     this.onOpen();
   }
@@ -291,17 +307,36 @@ export class BuildingPanel {
       const canGive = this.world.canTransfer(entity);
       const fromTown = this.world.inTownRange(entity);
 
+      const building = this.world.awaitsBuilders(entity);
+
       ratio = total === 0 ? 1 : 1 - missing / total;
       barClass = 'progress';
-      lines.push(
-        !inReach
-          ? 'Chantier en cours — rapprochez-vous pour livrer.'
-          : !fromTown
-            ? 'Chantier en cours — transférez le sac, ou heurtez-le.'
-            : this.world.shortfall(entity) === 0
-              ? 'Le stock de la ville couvre le reste : transférez pour l’achever.'
-              : 'Chantier en cours — transférez le sac et la ville, ou heurtez-le.',
-      );
+
+      if (building) {
+        // Tout est livré : la barre suit le marteau des bâtisseurs.
+        const { done, total: work } = this.world.siteBuild(entity);
+        const builders = this.world.siteBuilders(entity.id);
+
+        ratio = work === 0 ? 1 : done / work;
+        barClass = 'build';
+        lines.push(
+          builders === 0
+            ? 'Tout est livré : les bâtisseurs arrivent pour le bâtir.'
+            : `${builders} bâtisseur${builders > 1 ? 's' : ''} au marteau — ${Math.floor(ratio * 100)} %`,
+        );
+      } else {
+        lines.push(
+          this.world.builderYard(entity)
+            ? 'Les bâtisseurs du poste de construction le livrent depuis la mairie, puis le bâtiront.'
+            : !inReach
+              ? 'Chantier en cours — rapprochez-vous pour livrer.'
+              : !fromTown
+                ? 'Chantier en cours — transférez le sac, ou heurtez-le.'
+                : this.world.shortfall(entity) === 0
+                  ? 'Le stock de la ville couvre le reste : transférez pour l’achever.'
+                  : 'Chantier en cours — transférez le sac et la ville, ou heurtez-le.',
+        );
+      }
       if (proto.workers > 0) lines.push(`Emploiera ${proto.workers} ouvriers.`);
 
       this.setItems(
@@ -311,9 +346,12 @@ export class BuildingPanel {
         `site:${entity.id}:${JSON.stringify(entity.delivered)}`,
       );
       this.actions.hidden = false;
-      this.transferButton.hidden = false;
+      this.transferButton.hidden = building;
       this.transferButton.textContent = this.world.townStock() ? 'Transférer' : 'Transférer le sac';
       this.transferButton.disabled = !inReach || !canGive;
+      // Le chantier de la mairie ne s'annule pas.
+      this.cancelButton.hidden = entity.id === this.world.townHallId;
+      this.cancelButton.textContent = this.cancelArmed ? 'Vraiment annuler ?' : 'Annuler le chantier';
       this.takeButton.hidden = true;
       this.depositButton.hidden = true;
       this.pauseButton.hidden = true;
@@ -344,6 +382,7 @@ export class BuildingPanel {
       this.pauseButton.textContent = entity.paused ? 'Reprendre' : 'Pause';
       this.pauseButton.dataset['tone'] = entity.paused ? 'resume' : 'pause';
       this.refreshCrew(entity);
+      this.cancelButton.hidden = true;
       this.transferButton.hidden = !consumer;
       this.transferButton.textContent = this.world.inTownRange(entity) ? 'Transférer' : 'Transférer le sac';
       this.transferButton.disabled = !inReach || !this.world.canSupply(entity);
@@ -463,6 +502,22 @@ export class BuildingPanel {
             served === 0
               ? 'Aucun producteur à portée : ils flânent.'
               : `${served} producteur${served > 1 ? 's' : ''} à portée : leur production part à la mairie.`,
+          );
+          break;
+        }
+
+        case 'yard': {
+          const served = this.world.yardSites(entity);
+
+          lines.push(`Les bâtisseurs livrent et bâtissent les chantiers à ${BUILDERS.radius} cases à la ronde.`);
+          lines.push(
+            entity.paused
+              ? 'En pause : ses chantiers reviennent aux porteurs et à vous.'
+              : stopped
+                ? 'À l’arrêt : aucun bâtisseur — ajoutez un ouvrier.'
+                : served === 0
+                  ? 'Aucun chantier à portée : ils flânent.'
+                  : `${served} chantier${served > 1 ? 's' : ''} à portée : les bâtisseurs s’en chargent.`,
           );
           break;
         }

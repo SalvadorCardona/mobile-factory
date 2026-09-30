@@ -449,6 +449,7 @@ function wireAudio(world: World, audio: AudioEngine, hud: Hud): void {
     if (hp > 0) audio.play('thud');
   });
   world.events.on('buildingDestroyed', () => audio.play('collapse'));
+  world.events.on('siteCancelled', () => audio.play('deliver'));
   world.events.on('waveCountdown', ({ seconds }) => {
     if (seconds === WAVE_ANNOUNCE_SECONDS) audio.play('horn');
     audio.play('countdown');
@@ -496,6 +497,9 @@ function wireSave(world: World, saves: LocalSave, started: () => boolean): Autos
   };
 
   world.events.on('buildingCompleted', () => {
+    due = true;
+  });
+  world.events.on('siteCancelled', () => {
     due = true;
   });
   world.events.on('buildingUpgraded', () => {
@@ -615,6 +619,7 @@ function wireParticles(world: World, renderer: GameRenderer): void {
   world.events.on('buildingDestroyed', ({ tx, ty }) =>
     particles.burst((tx + 1) * TILE_SIZE, (ty + 1) * TILE_SIZE, RUBBLE_COLORS, 16, 0.14),
   );
+  world.events.on('siteCancelled', ({ tx, ty }) => particles.burst((tx + 1) * TILE_SIZE, (ty + 1) * TILE_SIZE, RUBBLE_COLORS, 8, 0.08));
   world.events.on('lootDropped', ({ x, y }) => particles.burst(x, y - 6, CELEBRATION_COLORS, 5, 0.08));
   world.events.on('mutantStunned', ({ x, y }) => particles.burst(x, y - 16, STAR_COLORS, 6, 0.1));
   world.events.on('mutantHealed', ({ x, y }) => particles.burst(x, y - 12, CELEBRATION_COLORS, 10, 0.14));

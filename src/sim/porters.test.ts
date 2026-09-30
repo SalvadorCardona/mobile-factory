@@ -105,7 +105,7 @@ function colony(layout: Layout): World {
   for (let i = 0; i < layout.houses; i += 1) {
     entities.push({ ...place('builderHouse'), kind: 'house', store: {}, hp: BUILDINGS.builderHouse.hp, level: 1, paused: false, staff: BUILDINGS.builderHouse.workers });
   }
-  for (const proto of layout.sites ?? []) entities.push({ ...place(proto), kind: 'site', delivered: {} });
+  for (const proto of layout.sites ?? []) entities.push({ ...place(proto), kind: 'site', delivered: {}, work: 0 });
   for (const store of layout.drills ?? []) {
     entities.push({ ...place('drill'), kind: 'drill', store, hp: BUILDINGS.drill.hp, level: 1, paused: false, staff: BUILDINGS.drill.workers, output: 'ironOre', blocked: true });
   }

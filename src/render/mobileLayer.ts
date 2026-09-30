@@ -105,6 +105,7 @@ function puppetOf(
       return { id: 'eve', shadowWidth: 20, stride: 4 };
     case 'worker':
       if (mobile.logistician) return { id: 'logistician', shadowWidth: 17, stride: 3 };
+      if (mobile.builder) return { id: 'builder', shadowWidth: 16, stride: 3 };
       return mobile.exMutant
         ? { id: 'exMutant', shadowWidth: 18, stride: 3.5 }
         : { id: 'worker', shadowWidth: 16, stride: 3 };
@@ -304,7 +305,10 @@ export class MobileLayer {
             }
           }
 
-          puppet.update(deltaMs, mobile.facing, mobile.moving ? 'walk' : 'idle');
+          // Un bâtisseur arrivé au chantier tape du marteau.
+          const hammering = mobile.kind === 'worker' && mobile.build !== null && !mobile.moving;
+
+          puppet.update(deltaMs, mobile.facing, mobile.moving ? 'walk' : hammering ? 'act' : 'idle');
           break;
         }
       }

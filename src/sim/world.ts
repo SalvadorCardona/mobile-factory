@@ -58,7 +58,7 @@ import { RECIPES, type RecipeId, type RecipeProto } from '../data/recipes.ts';
 import { RESEARCH, type ResearchId, type ResearchStat } from '../data/research.ts';
 import { RESOURCES, type ResourceId } from '../data/resources.ts';
 import { WEAPONS } from '../data/weapons.ts';
-import { JOB_PRIORITY, LUMBERJACKS, PORTERS } from '../data/workers.ts';
+import { BUILDERS, JOB_PRIORITY, LUMBERJACKS, PORTERS } from '../data/workers.ts';
 import { WEATHER, WEATHER_CALENDAR, type WeatherId } from '../data/weather.ts';
 import { ChunkIndex } from './chunk.ts';
 import { consumerRecipe, consumerRoom, consumerWants, isConsumer } from './consumers.ts';
@@ -94,7 +94,18 @@ import {
   playerOverlaps,
   stepPlayer,
 } from './player.ts';
-import { JobBoard, PORTER_CREW, doorOf, inDepotRange, isProducer, type Crew, type LineTest } from './jobs.ts';
+import {
+  JobBoard,
+  PORTER_CREW,
+  doorOf,
+  inDepotRange,
+  inYardRange,
+  isProducer,
+  siteWork,
+  yardWorks,
+  type Crew,
+  type LineTest,
+} from './jobs.ts';
 import {
   extraUnits,
   isCollecting,
@@ -147,6 +158,7 @@ import type {
   Tower,
   TownHall,
   Worker,
+  Yard,
 } from './types.ts';
 
 /** Ce qui remplit un coffre qu'Adam vient vider : foreuse, ferme, forge, cabane de bûcheron. */
@@ -245,6 +257,8 @@ export type WorldEvents = {
   siteDelivered: { id: EntityId; item: ItemId; amount: number; missing: number; source: 'bag' | 'town' };
   /** Un chantier offert par le jardin des souvenirs vient d'ouvrir déjà livré. */
   siteReady: { id: EntityId };
+  /** Le chantier a été annulé : ce qui y était livré est retourné à la ville (`toTown`), ou posé au sol. */
+  siteCancelled: { id: EntityId; proto: BuildingId; tx: number; ty: number; toTown: boolean };
   /**
    * Le bâtiment est passé au niveau `level`, sous le même id : le rendu
    * change de sprite. `fromBag` : ce qui est sorti du sac pour le payer.
@@ -596,7 +610,7 @@ export class World {
     for (const saved of state.entities) {
       const entity: Entity =
         saved.kind === 'site'
-          ? { ...saved, delivered: { ...saved.delivered } }
+          ? { ...saved, delivered: { ...saved.delivered }, work: saved.work }
           : { ...saved, store: Store.fromJSON(BUILDINGS[saved.proto].storage, saved.store) };
 
       this.entities.set(entity.id, entity);
@@ -613,14 +627,13 @@ export class World {
     this.restoreJobs();
     this.restoreLumberjacks();
 
-    // Une sauvegarde d'avant l'achèvement automatique peut garder un chantier livré : il s'achève au chargement.
-    for (const entity of [...this.entities.values()]) {
-      if (entity.kind === 'site' && siteMissing(entity) === 0) this.complete(entity);
-    }
+    // Une sauvegarde d'avant l'achèvement automatique peut garder un chantier livré : il s'achève au
+    // chargement — sauf s'il attend les bâtisseurs d'un poste de construction.
+    this.settleSites();
 
     // Une maison d'une sauvegarde d'avant les porteurs : ses ouvriers s'y installent.
     for (const entity of this.entities.values()) {
-      if (entity.kind === 'house' || entity.kind === 'depot') this.staff(entity);
+      if (entity.kind === 'house' || entity.kind === 'depot' || entity.kind === 'yard') this.staff(entity);
       if (entity.kind === 'lumberCamp') this.staffCamp(entity);
     }
   }
@@ -733,6 +746,10 @@ export class World {
       case 'setWorkers':
         this.setStaff(command.id, command.count);
         break;
+
+      case 'cancelSite':
+        this.cancelSite(command.id);
+        break;
     }
   }
 
@@ -804,7 +821,7 @@ export class World {
       this.events.emit('siteRejected', { id, reason: 'nothingToGive' });
       return;
     }
-    if (siteMissing(site) === 0) this.complete(site);
+    this.settle(site);
   }
 
   /**
@@ -1250,8 +1267,9 @@ export class World {
 
       this.events.emit('siteDelivered', { id: site.id, item, amount: 1, missing, source: 'bag' });
 
-      // Le dernier objet posé achève le chantier : le joueur a déjà fait l'effort.
-      if (missing === 0) this.complete(site);
+      // Le dernier objet posé achève le chantier : le joueur a déjà fait l'effort. Sauf dans le rayon
+      // d'un poste de construction, où les bâtisseurs viennent le bâtir.
+      if (missing === 0) this.settle(site);
       return;
     }
   }
@@ -1680,6 +1698,7 @@ export class World {
       width: proto.width,
       height: proto.height,
       delivered: {},
+      work: 0,
     };
 
     this.entities.set(id, site);
@@ -1780,12 +1799,24 @@ export class World {
       case 'depot':
         building = { ...base, kind: 'depot' };
         break;
+
+      case 'yard':
+        building = { ...base, kind: 'yard' };
+        break;
     }
 
     this.entities.set(site.id, building);
     this.dirtyTile(site.tx, site.ty);
     this.duty = null;
     this.events.emit('buildingCompleted', { id: site.id });
+
+    // Le bâtiment est debout : ses bâtisseurs posent le marteau et repartent.
+    for (const worker of this.workers()) {
+      if (worker.build === site.id) {
+        worker.build = null;
+        worker.searchTicks = 0;
+      }
+    }
 
     switch (building.kind) {
       case 'drill':
@@ -1820,6 +1851,7 @@ export class World {
         break;
 
       case 'depot':
+      case 'yard':
         this.staff(building);
         break;
 
@@ -1898,6 +1930,7 @@ export class World {
       case 'clinic':
       case 'lumberCamp':
       case 'depot':
+      case 'yard':
         break;
     }
   }
@@ -2475,6 +2508,8 @@ export class World {
       homeId: clinic.id,
       exMutant: true,
       logistician: false,
+      builder: false,
+      build: null,
       // Il reste un instant sur le seuil, qu'on le voie sortir, avant de chercher du travail.
       inside: false,
       job: null,
@@ -2989,10 +3024,10 @@ export class World {
   private readonly lineIsClear: LineTest = (x0, y0, x1, y1) => clearLine(this.seed, x0, y0, x1, y1);
 
   /**
-   * Loge les ouvriers de la maison — ou les logisticiens du poste — qui n'y
-   * sont pas encore. Ils sortent un par un, dès qu'il y a à porter.
+   * Loge les ouvriers de la maison — ou les logisticiens, ou les bâtisseurs
+   * du poste — qui n'y sont pas encore. Ils sortent un par un, dès qu'il y a à porter.
    */
-  private staff(house: House | Depot): void {
+  private staff(house: House | Depot | Yard): void {
     let lodged = 0;
 
     for (const worker of this.workers()) {
@@ -3014,6 +3049,8 @@ export class World {
         homeId: house.id,
         exMutant: false,
         logistician: house.kind === 'depot',
+        builder: house.kind === 'yard',
+        build: null,
         inside: true,
         job: null,
         searchTicks: 1 + i * 8,
@@ -3040,16 +3077,35 @@ export class World {
       return;
     }
 
+    if (worker.build !== null) {
+      this.stepBuild(worker);
+      return;
+    }
+
     // Sans poste — on l'a retiré de la maison —, il finit sa livraison puis ne cherche plus rien.
     if (!worker.job && this.onDuty(worker)) {
       worker.searchTicks -= 1;
 
-      // Un logisticien dont le poste est tombé ne cherche plus rien.
-      const crew: Crew | null = !worker.logistician
-        ? PORTER_CREW
-        : home?.kind === 'depot'
+      // Un logisticien ou un bâtisseur dont le poste est tombé — ou, pour un bâtisseur, arrêté — ne cherche plus rien.
+      const crew: Crew | null = worker.logistician
+        ? home?.kind === 'depot'
           ? { kind: 'logistician', depot: home }
-          : null;
+          : null
+        : worker.builder
+          ? home?.kind === 'yard' && yardWorks(home)
+            ? { kind: 'builder', yard: home }
+            : null
+          : PORTER_CREW;
+
+      // Un bâtisseur bâtit d'abord ce qui a tout reçu, puis livre le reste.
+      if (worker.searchTicks <= 0 && crew?.kind === 'builder') {
+        worker.build = this.siteToBuild(worker, crew.yard);
+        if (worker.build !== null) {
+          worker.inside = false;
+          this.stepBuild(worker);
+          return;
+        }
+      }
 
       if (worker.searchTicks <= 0 && crew) {
         worker.searchTicks = PORTERS.retryTicks;
@@ -3175,8 +3231,8 @@ export class World {
     if (accepted > 0) {
       this.events.emit('porterDelivered', { workerId: worker.id, id: target.id, item: job.item, amount: accepted });
 
-      // Le dernier objet posé achève le chantier, qu'il vienne d'Adam ou d'un porteur.
-      if (target.kind === 'site' && siteMissing(target) === 0) this.complete(target);
+      // Le dernier objet posé achève le chantier, qu'il vienne d'Adam ou d'un porteur — ou l'ouvre aux bâtisseurs.
+      if (target.kind === 'site') this.settle(target);
       // Au labo, il lance le compte à rebours.
       if (target.kind === 'lab') this.startCountdown(target);
       // À la nurserie ou à la forge, il réveille ce qui attendait.
@@ -3209,6 +3265,151 @@ export class World {
     const rerouted: Job = { ...job, to: this.townHallId, priority: JOB_PRIORITY.surplus, carried: true };
 
     worker.job = job.to !== this.townHallId && this.jobs.open(this.entities, rerouted) ? rerouted : null;
+  }
+
+  /* -------------------------------------------------------------- bâtisseurs */
+
+  /**
+   * Le poste de construction qui bâtit ce chantier : le premier, par id, qui
+   * tourne et l'a dans son rayon. `null` : aucun — le chantier s'achève au
+   * dernier objet livré, comme avant les postes.
+   */
+  public builderYard(site: Site): Yard | null {
+    for (const entity of this.entities.values()) {
+      if (entity.kind === 'yard' && yardWorks(entity) && inYardRange(entity, site)) return entity;
+    }
+    return null;
+  }
+
+  /** Le chantier a tout reçu et attend ses bâtisseurs : on y construit. */
+  public awaitsBuilders(site: Site): boolean {
+    return siteMissing(site) === 0 && this.builderYard(site) !== null;
+  }
+
+  /** L'avancement de la construction, en ticks de bâtisseur : fait, et à faire en tout. */
+  public siteBuild(site: Site): { done: number; total: number } {
+    return { done: site.work, total: siteWork(site) };
+  }
+
+  /** Les chantiers du rayon du poste : la fenêtre du poste en dit le nombre. */
+  public yardSites(yard: Yard): number {
+    let count = 0;
+
+    for (const entity of this.entities.values()) {
+      if (entity.kind === 'site' && inYardRange(yard, entity)) count += 1;
+    }
+    return count;
+  }
+
+  /** Les bâtisseurs qui travaillent sur ce chantier, ou y vont. */
+  public siteBuilders(id: EntityId): number {
+    let count = 0;
+
+    for (const worker of this.workers()) {
+      if (worker.build === id) count += 1;
+    }
+    return count;
+  }
+
+  /**
+   * Un chantier qui a tout reçu s'achève — sauf si un poste de construction
+   * le couvre : il attend alors ses bâtisseurs.
+   */
+  private settle(site: Site): void {
+    if (siteMissing(site) === 0 && this.builderYard(site) === null) this.complete(site);
+  }
+
+  /**
+   * Un poste de construction s'arrête ou tombe : les chantiers prêts qu'il
+   * devait bâtir s'achèvent. Une partie ne reste jamais bloquée sur un poste
+   * qu'on a mis en pause.
+   */
+  private settleSites(): void {
+    for (const entity of [...this.entities.values()]) {
+      if (entity.kind === 'site') this.settle(entity);
+    }
+  }
+
+  /**
+   * Le chantier que ce bâtisseur va bâtir : le plus ancien du rayon de son
+   * poste qui a tout reçu, où ils ne sont pas déjà `BUILDERS.perSite`, et
+   * qu'il rejoint sans traverser l'eau. `null` : rien à bâtir.
+   */
+  private siteToBuild(worker: Worker, yard: Yard): EntityId | null {
+    let best: Site | null = null;
+
+    for (const entity of this.entities.values()) {
+      if (entity.kind !== 'site' || (best && entity.id > best.id)) continue;
+      if (!inYardRange(yard, entity) || !this.awaitsBuilders(entity)) continue;
+      if (this.siteBuilders(entity.id) >= BUILDERS.perSite) continue;
+
+      const spot = this.buildSpot(worker, entity);
+
+      if (this.lineIsClear(worker.x, worker.y, spot.x, spot.y)) best = entity;
+    }
+    return best?.id ?? null;
+  }
+
+  /** Où le bâtisseur se tient pour bâtir : devant le chantier, chacun à sa place pour ne pas s'empiler. */
+  private buildSpot(worker: Worker, site: Site): { x: number; y: number } {
+    const door = doorOf(site);
+    const slot = (worker.id % BUILDERS.perSite) - (BUILDERS.perSite - 1) / 2;
+
+    return { x: door.x + slot * (site.width * TILE_SIZE) / BUILDERS.perSite, y: door.y };
+  }
+
+  /**
+   * Un tick de bâtisseur au chantier : y aller, puis taper — chaque tick sur
+   * place avance le chantier d'un tick de travail ; à plusieurs, il avance
+   * d'autant plus vite. Le dernier coup achève le bâtiment.
+   */
+  private stepBuild(worker: Worker): void {
+    const site = worker.build === null ? undefined : this.entities.get(worker.build);
+
+    // Chantier annulé, ou plus à bâtir par ses soins : il repart chercher du travail.
+    if (site?.kind !== 'site' || !this.awaitsBuilders(site)) {
+      worker.build = null;
+      worker.searchTicks = 0;
+      standStill(worker);
+      return;
+    }
+
+    const spot = this.buildSpot(worker, site);
+
+    if (!walkToward(worker, spot.x, spot.y, STEP_SECONDS)) return;
+
+    worker.facing = 'up';
+    site.work += 1;
+    if (site.work >= siteWork(site)) this.complete(site);
+  }
+
+  /**
+   * « Annuler le chantier » : l'emprise se libère, ce qui y était livré
+   * retourne au stock de la ville — en tas au sol, sans mairie. Les ouvriers
+   * qui y portaient quelque chose le rapportent à la mairie (`abandon`), ceux
+   * qui le bâtissaient repartent. Rien ne se perd, rien ne se double.
+   */
+  private cancelSite(id: EntityId): void {
+    const site = this.entities.get(id);
+
+    if (site?.kind !== 'site' || id === this.townHallId) {
+      this.events.emit('siteRejected', { id, reason: 'missing' });
+      return;
+    }
+
+    const town = this.townStock();
+    const door = doorOf(site);
+
+    for (const [item, amount] of Object.entries(site.delivered) as [ItemId, number][]) {
+      if (amount <= 0) continue;
+      if (town) town.add(item, amount);
+      else this.spawnPickup(item, amount, door.x, door.y - TILE_SIZE / 2, false);
+    }
+
+    this.entities.delete(id);
+    this.chunks.release(id, site.tx, site.ty, site.width, site.height);
+    this.dirtyTile(site.tx, site.ty);
+    this.events.emit('siteCancelled', { id, proto: site.proto, tx: site.tx, ty: site.ty, toTown: town !== null });
   }
 
   /* -------------------------------------------------------------- bûcherons */
@@ -3591,6 +3792,7 @@ export class World {
     this.restartFarms();
     this.chunks.release(building.id, building.tx, building.ty, building.width, building.height);
     this.dirtyTile(building.tx, building.ty);
+    if (building.kind === 'yard') this.settleSites();
     this.events.emit('buildingDestroyed', {
       id: building.id,
       proto: building.proto,
@@ -3617,6 +3819,8 @@ export class World {
     this.events.emit('buildingPaused', { id, paused });
     // En pause, rien à faire : le prochain réveil trouvera la machine arrêtée et ne se replanifiera pas.
     if (!paused) this.restart(entity);
+    // Un poste de construction arrêté ne bâtit plus : ses chantiers prêts s'achèvent.
+    if (entity.kind === 'yard') this.settleSites();
   }
 
   /** La commande `setWorkers` : l'effectif voulu, ramené dans les bornes du bâtiment. */
@@ -3633,6 +3837,7 @@ export class World {
     this.duty = null;
     this.events.emit('workersChanged', { id, staff });
     this.restartFarms();
+    if (entity.kind === 'yard') this.settleSites();
   }
 
   /**

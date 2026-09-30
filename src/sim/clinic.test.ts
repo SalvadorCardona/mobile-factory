@@ -54,7 +54,7 @@ function colony(setup: Setup): { world: World; clinicId: number; siteId: number;
     entities.push({ kind: 'clinic', id: clinicId, proto: 'clinic', tx: hx + 4, ty: hy + 6, width: 2, height: 2, store: {}, hp: BUILDINGS.clinic.hp, level: 1, paused: false, staff: BUILDINGS.clinic.workers });
   }
   if (setup.site) {
-    entities.push({ kind: 'site', id: siteId, proto: 'nursery', tx: hx - 4, ty: hy + 6, width: 2, height: 2, delivered: {} });
+    entities.push({ kind: 'site', id: siteId, proto: 'nursery', tx: hx - 4, ty: hy + 6, width: 2, height: 2, delivered: {}, work: 0 });
   }
 
   state.entities = entities;
@@ -79,7 +79,7 @@ function patient(x: number, y: number, clinicId: number, state: Patient['state']
 }
 
 function exMutant(id: number, clinicId: number, x: number, y: number): Worker {
-  return { kind: 'worker', id, x, y, prevX: x, prevY: y, facing: 'down', moving: false, homeId: clinicId, exMutant: true, logistician: false, inside: true, job: null, searchTicks: 1, wanderX: x, wanderY: y, wanderTicks: 0 };
+  return { kind: 'worker', id, x, y, prevX: x, prevY: y, facing: 'down', moving: false, homeId: clinicId, exMutant: true, logistician: false, builder: false, build: null, inside: true, job: null, searchTicks: 1, wanderX: x, wanderY: y, wanderTicks: 0 };
 }
 
 function mobilesOf<K extends Mobile['kind']>(world: World, kind: K): Extract<Mobile, { kind: K }>[] {

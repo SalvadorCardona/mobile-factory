@@ -21,6 +21,7 @@
  * | cabane de bûcheron | cabane basse en rondins, toit pointu | orange (bardeaux, bûches) | pile de bûches, hache plantée dans la souche |
  * | carrière | pan de ruine violette, abri bas, grue au trait | corail (moellons taillés) | pile de moellons, grue et son bloc, pioche plantée |
  * | poste de logistique | bloc bas sous un auvent sur poteaux | blanc et corail (auvent rayé, festons) | panneau fléché, caisses empilées, charrette |
+ * | poste de construction | atelier bas à toit plat de planches, haut échafaudage | indigo et blanc (barrière rayée) | établi, scie, casque, tas de planches |
  *
  * Chacun existe en trois états, trois morceaux du même cadre :
  *

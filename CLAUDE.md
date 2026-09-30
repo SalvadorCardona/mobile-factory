@@ -27,7 +27,10 @@ l'arrête et il glisse autour — une forêt n'est jamais un mur. Un tap sur un
 chantier ouvre sa fenêtre : « Transférer » y vide d'un coup ce qu'il attend
 — le sac d'abord, puis le stock de la ville s'il est dans son rayon.
 **Le dernier objet livré achève le chantier**, sans bouton de validation
-(poussière, rebond, son, « Mairie bâtie ! » qui flotte).
+(poussière, rebond, son, « Mairie bâtie ! » qui flotte) — sauf dans le
+rayon d'un poste de construction, où ses bâtisseurs le bâtissent ensuite.
+« Annuler le chantier » (`cancelSite`, pas la mairie) rend le livré à la
+ville, ou le pose au sol sans mairie.
 Une nurserie ou une forge heurtée (ou « Transférer » : le sac, puis la ville
 dans son rayon) reçoit ce que sa recette consomme ; la forge (débloquée à la nuit 1, `unlockNight`)
 fond fer + charbon en plaques de fer, qui renforcent la tour de guet :
@@ -88,6 +91,15 @@ Le **poste de logistique** (`logisticsPost`, kind `depot`) loge quatre
 producteurs de son rayon (cercle cyan) dans la mairie, le coffre le plus
 rempli d'abord (`Crew` de `JobBoard.assign`). Un producteur couvert par un
 poste n'est plus l'affaire des porteurs, qui livrent les chantiers.
+Le **poste de construction** (`constructionPost`, kind `yard`) loge quatre
+**bâtisseurs** (des `worker` à `builder: true`, `BUILDERS` dans
+`src/data/workers.ts`, casque jaune et marteau) : ils livrent depuis la
+mairie les chantiers de son rayon (cercle violet), le plus ancien d'abord,
+puis, tout reçu, les bâtissent au marteau (`Site.work` jusqu'à
+`siteWork()`, `BUILDERS.perSite` ensemble au plus ; `Worker.build`). Un
+chantier couvert par un poste qui tourne n'est plus l'affaire des porteurs ;
+poste en pause, à zéro ou tombé : ses chantiers prêts s'achèvent aussitôt,
+les autres reviennent aux porteurs et à Adam.
 Un ouvrier sans travail **flâne** devant chez
 lui (`wander()`, hachage de la seed, sans PRNG ni chemin) et ne rentre que
 le soir (crépuscule, nuit) ou pendant une vague.
