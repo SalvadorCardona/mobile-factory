@@ -24,7 +24,7 @@ function worldWith(tree: boolean): { world: World; tx: number; ty: number } {
 describe('placementReason', () => {
   it('donne un motif en français pour chaque refus', () => {
     const world = new World(1);
-    const reasons: PlacementRejection[] = ['terrain', 'occupied', 'resource', 'onPlayer', 'outOfReach'];
+    const reasons: PlacementRejection[] = ['terrain', 'occupied', 'resource', 'onPlayer', 'outOfReach', 'locked'];
 
     for (const reason of reasons) {
       const tiles = reason === 'resource' ? [] : [{ tx: 0, ty: 0 }];

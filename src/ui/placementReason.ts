@@ -11,6 +11,7 @@
  */
 
 import type { ResourceId } from '../data/resources.ts';
+import type { PlacementRejection } from '../sim/commands.ts';
 import type { PlacementBlock, World } from '../sim/world.ts';
 
 export interface PlacementReason {
@@ -20,12 +21,13 @@ export interface PlacementReason {
   remedy: string | null;
 }
 
-const LABELS = {
+const LABELS: Readonly<Record<Exclude<PlacementRejection, 'resource'>, string>> = {
+  locked: 'Il vous manque le plan',
   terrain: 'Pas sur l’eau',
   occupied: 'Case occupée',
   onPlayer: 'Vous êtes sur l’emplacement',
   outOfReach: 'Trop loin — rapprochez-vous',
-} as const;
+};
 
 export function placementReason(block: PlacementBlock, world: World): PlacementReason {
   if (block.reason !== 'resource') return { text: LABELS[block.reason], remedy: null };
