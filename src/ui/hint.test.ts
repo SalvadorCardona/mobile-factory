@@ -63,7 +63,7 @@ describe('tutorialHint', () => {
     expect(tutorialAdvice(world, FRESH, true, 0)).toBeNull();
 
     // Tant qu'Ève annonce son arrivée par radio, c'est elle qui parle d'abord.
-    world.wave = Math.max(BUILDINGS.forge.unlockWave, EVE.arrivalWave);
+    world.night = Math.max(BUILDINGS.forge.unlockNight, EVE.arrivalNight);
     expect(tutorialAdvice(world, FRESH, true, 0)?.wants).toBe('coal');
     // Pendant une vague, l'arc d'abord.
     expect(tutorialAdvice(world, FRESH, true, 3)?.wants).not.toBe('coal');

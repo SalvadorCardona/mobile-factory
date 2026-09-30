@@ -428,7 +428,7 @@ interface Autosave {
  * titre ne doit pas écraser la sauvegarde qu'il propose de continuer — et
  * jamais une partie perdue : à la chute de la mairie, elle est effacée.
  *
- * Les moments clés (un bâtiment terminé, une vague repoussée) arrivent en
+ * Les moments clés (un bâtiment terminé, une vague repoussée, l'aube) arrivent en
  * plein tick ; ils ne font que lever un drapeau, et l'écriture attend la fin
  * du tick, quand l'état est cohérent.
  */
@@ -449,6 +449,9 @@ function wireSave(world: World, saves: LocalSave, started: () => boolean): Autos
   });
   world.events.on('mutantDied', () => {
     for (const mobile of world.mobiles.values()) if (mobile.kind === 'mutant') return;
+    due = true;
+  });
+  world.events.on('dawnBroke', () => {
     due = true;
   });
   world.events.on('townHallDestroyed', () => saves.clear());
@@ -508,6 +511,7 @@ function wireParticles(world: World, renderer: GameRenderer): void {
   );
   world.events.on('mutantHit', ({ x, y }) => particles.burst(x, y - 12, MUTANT_COLORS, 4));
   world.events.on('mutantDied', ({ x, y }) => particles.burst(x, y - 12, MUTANT_COLORS, 12, 0.12));
+  world.events.on('mutantFled', ({ x, y }) => particles.burst(x, y - 12, MUTANT_COLORS, 6, 0.1));
   world.events.on('beastHit', ({ proto, x, y }) => particles.burst(x, y - 8, BEAST_COLORS[proto], 4));
   world.events.on('beastDied', ({ proto, x, y }) => particles.burst(x, y - 8, BEAST_COLORS[proto], 10, 0.12));
   world.events.on('buildingDamaged', ({ id }) => {

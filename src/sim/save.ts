@@ -30,7 +30,7 @@ import { World } from './world.ts';
  * `WorldState` ; une migration de l'ancienne version se branche alors dans
  * `decodeSave`, sinon l'ancienne sauvegarde est ignorée.
  */
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 
 /** Une entité telle qu'elle est rangée : son coffre devient un simple stock. */
 export type SavedEntity = Stored<Entity>;
@@ -58,8 +58,10 @@ export interface WorldState {
   moveY: number;
   contactKey: string;
   contactTicks: number;
-  wave: number;
-  nextWaveTick: number;
+  /** Dernière nuit tombée ; 0 avant la première. */
+  night: number;
+  /** Lever du premier jour, cf. `World.cycleStartTick` ; 0 tant que la mairie est en chantier. */
+  cycleStartTick: number;
   /** Direction, en radians, d'où viendra la prochaine vague. */
   nextWaveHeading: number;
   kills: number;
@@ -120,13 +122,28 @@ export function decodeSave(text: string): DecodedSave {
   }
 
   if (!isRecord(file) || typeof file['version'] !== 'number') return { ok: false, reason: 'corrupt' };
-  if (file['version'] !== SAVE_VERSION) return { ok: false, reason: 'version' };
+  if (file['version'] !== SAVE_VERSION && file['version'] !== 4) return { ok: false, reason: 'version' };
 
   try {
-    return { ok: true, world: deserialize(file['state']), savedAt: finite(file['savedAt']) };
+    const state = file['version'] === 4 ? migrateV4(file['state']) : file['state'];
+
+    return { ok: true, world: deserialize(state), savedAt: finite(file['savedAt']) };
   } catch {
     return { ok: false, reason: 'corrupt' };
   }
+}
+
+/**
+ * Version 4 : des vagues à cadence fixe, sans jour ni nuit. La vague devient
+ * la nuit, et si la mairie était debout, un jour se lève au rechargement.
+ * Le réveil de vague qui traîne dans le scheduler ne réveille plus personne.
+ */
+function migrateV4(raw: unknown): unknown {
+  if (!isRecord(raw)) return raw;
+
+  const { wave, nextWaveTick, ...rest } = raw;
+
+  return { ...rest, night: wave, cycleStartTick: typeof nextWaveTick === 'number' && nextWaveTick > 0 ? raw['tick'] : 0 };
 }
 
 /* ------------------------------------------------------------- validation */
@@ -161,8 +178,8 @@ function parseState(raw: unknown): WorldState {
     moveY: finite(state['moveY']),
     contactKey: string(state['contactKey']),
     contactTicks: int(state['contactTicks']),
-    wave: int(state['wave']),
-    nextWaveTick: int(state['nextWaveTick']),
+    night: int(state['night']),
+    cycleStartTick: int(state['cycleStartTick']),
     nextWaveHeading: finite(state['nextWaveHeading']),
     kills: int(state['kills']),
     defeated: bool(state['defeated']),

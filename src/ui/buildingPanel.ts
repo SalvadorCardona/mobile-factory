@@ -217,7 +217,7 @@ export class BuildingPanel {
           lines.push(
             `Population : ${adults} adulte${adults > 1 ? 's' : ''}, ${children} enfant${children > 1 ? 's' : ''}, ${workers} ouvrier${workers > 1 ? 's' : ''}`,
           );
-          lines.push(this.world.wave === 0 ? 'Aucune vague pour l’instant.' : `Vague ${this.world.wave} passée.`);
+          lines.push(this.world.night === 0 ? 'Aucune nuit pour l’instant.' : `Nuits affrontées : ${this.world.night}.`);
           break;
         }
 

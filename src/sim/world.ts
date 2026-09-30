@@ -15,9 +15,10 @@
  * **contact** — un arbre ou un rocher heurté se récolte, un chantier heurté
  * reçoit ce qu'il attend, une foreuse ou une ferme heurtée donne ce que son
  * coffre contient, une nurserie ou une forge heurtée reçoit ce que sa recette
- * consomme. Une fois la mairie debout, les mutants arrivent par
- * vagues et marchent droit dessus ; l'arc d'Adam et les tours de guet tirent
- * seuls. Si la mairie tombe, la partie est perdue. Loin du village, la faune
+ * consomme. Une fois la mairie debout, le jour et la nuit
+ * alternent (`sim/dayNight.ts`) : on bâtit le jour, et la nuit les mutants
+ * arrivent par vagues et marchent droit dessus ; l'arc d'Adam et les tours de
+ * guet tirent seuls. À l'aube, les survivants fuient et le butin tombe. Si la mairie tombe, la partie est perdue. Loin du village, la faune
  * — crabes sur les plages, loups en forêt — s'en prend à Adam s'il approche.
  * Après la troisième vague repoussée, Ève arrive : elle vit à la mairie,
  * répare le bâti entre les vagues et donne les quêtes (`sim/eve.ts`).
@@ -29,6 +30,7 @@ import { Emitter } from '../core/events.ts';
 import { CHUNK_TILES, TILE_SIZE, coordKey, distanceSq, floorDiv, type TileCoord } from '../core/grid.ts';
 import { mulberry32, type StatefulRng } from '../core/rng.ts';
 import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
+import { DAWN_REWARD } from '../data/dayNight.ts';
 import { ENEMIES, LOOT_DROPS, WAVES, WILDLIFE, WILDLIFE_SPAWN, waveSize, type LootTable } from '../data/enemies.ts';
 import { EVE } from '../data/eve.ts';
 import type { ItemId } from '../data/items.ts';
@@ -48,6 +50,7 @@ import { WEAPONS } from '../data/weapons.ts';
 import { JOB_PRIORITY, PORTERS } from '../data/workers.ts';
 import { ChunkIndex } from './chunk.ts';
 import { nearestFoe, shoot, stepArrow } from './combat.ts';
+import { clockAt, isWaveTick, ticksToNextWave, type DayClock } from './dayNight.ts';
 import type {
   Command,
   CommandLogEntry,
@@ -139,12 +142,6 @@ const DROP_SPACING = 14;
 /** Le bâtiment que la partie ouvre en chantier au démarrage. */
 export const STARTING_BUILDING: BuildingId = 'townHall';
 
-/**
- * Id de réveil réservé aux vagues de mutants. Les entités commencent à 1 :
- * le scheduler ne fait pas la différence, `wake()` si.
- */
-const WAVE_WAKE_ID = 0;
-
 /** Un refus de placement, et les cases de l'emprise qui le causent. */
 export interface PlacementBlock {
   reason: PlacementRejection;
@@ -200,15 +197,17 @@ export type WorldEvents = {
   /** Le sac est plein : la récolte s'arrête, il faut aller livrer. */
   inventoryFull: Record<string, never>;
   /**
-   * Plus que `seconds` secondes avant la prochaine vague (3, 2, puis 1) :
-   * son numéro, son effectif, d'où elle vient et le point, en pixels monde,
-   * où elle va surgir.
+   * Plus que `seconds` secondes avant la prochaine vague (3, 2, puis 1) : sa
+   * nuit, son rang dans la nuit, son effectif, d'où elle vient et le point,
+   * en pixels monde, où elle va surgir.
    */
-  waveCountdown: { seconds: number; wave: number; count: number; from: Compass; x: number; y: number };
-  /** Une vague de mutants vient d'apparaître autour de la mairie, du côté `from`. */
-  waveStarted: { wave: number; count: number; from: Compass; x: number; y: number };
-  /** Le dernier mutant en vie vient de tomber : la vague `wave` est repoussée. */
-  waveCleared: { wave: number };
+  waveCountdown: { seconds: number; night: number; wave: number; count: number; from: Compass; x: number; y: number };
+  /** Le crépuscule commence : la nuit `night` tombe dans `DAY_CYCLE.dusk` ticks. */
+  duskFell: { night: number };
+  /** Une vague de mutants vient d'apparaître autour de la mairie, du côté `from` ; `wave` compte à partir de 1 dans la nuit. */
+  waveStarted: { night: number; wave: number; count: number; from: Compass; x: number; y: number };
+  /** Le dernier mutant en vie vient de tomber : la vague de la nuit `night` est repoussée. */
+  waveCleared: { night: number };
   /** Un mutant abattu a lâché du butin en (x, y). */
   lootDropped: { id: MobileId; item: ItemId; x: number; y: number };
   /** Adam a ramassé `amount` exemplaires d'un tas au sol, qui sont allés dans son sac. */
@@ -219,6 +218,10 @@ export type WorldEvents = {
   depositRejected: { reason: DepositRejection };
   /** Adam a jeté `amount` objets de son sac : un tas `id` à ses pieds, en (x, y). */
   itemDropped: { id: MobileId; item: ItemId; amount: number; x: number; y: number };
+  /** L'aube : la nuit `night` est survécue, les mutants restants ont fui, `reward` est entré dans le sac. */
+  dawnBroke: { night: number; reward: [ItemId, number][] };
+  /** Un mutant a fui le jour : il disparaît sans compter comme abattu. */
+  mutantFled: { id: MobileId; x: number; y: number };
   /** Un arc a tiré, depuis (x, y). */
   arrowShot: { x: number; y: number };
   /** Une flèche a touché un mutant ; `hp` est ce qui lui reste. */
@@ -269,14 +272,14 @@ export class World {
   /** Tick courant. Sert d'horodatage aux commandes et de base au scheduler. */
   public tickCount = 0;
 
-  /** Numéro de la dernière vague apparue ; 0 tant que la mairie est en chantier. */
-  public wave = 0;
+  /** Numéro de la dernière nuit tombée ; 0 tant que la première n'est pas venue. */
+  public night = 0;
 
   /** Vrai une fois la mairie détruite. La simulation continue, les vagues s'arrêtent. */
   public defeated = false;
 
-  /** Tick d'apparition de la prochaine vague ; 0 tant qu'aucune n'est planifiée. */
-  public nextWaveTick = 0;
+  /** Tick où le toit de la mairie a été posé : le lever du premier jour. 0 tant qu'elle est en chantier. */
+  public cycleStartTick = 0;
 
   /** Direction, en radians depuis la mairie, d'où viendra la prochaine vague : tirée dès qu'elle est planifiée. */
   public nextWaveHeading = 0;
@@ -388,8 +391,8 @@ export class World {
       moveY: this.moveY,
       contactKey: this.contactKey,
       contactTicks: this.contactTicks,
-      wave: this.wave,
-      nextWaveTick: this.nextWaveTick,
+      night: this.night,
+      cycleStartTick: this.cycleStartTick,
       nextWaveHeading: this.nextWaveHeading,
       kills: this.kills,
       defeated: this.defeated,
@@ -433,8 +436,8 @@ export class World {
     this.moveY = state.moveY;
     this.contactKey = state.contactKey;
     this.contactTicks = state.contactTicks;
-    this.wave = state.wave;
-    this.nextWaveTick = state.nextWaveTick;
+    this.night = state.night;
+    this.cycleStartTick = state.cycleStartTick;
     this.nextWaveHeading = state.nextWaveHeading;
     this.kills = state.kills;
     this.defeated = state.defeated;
@@ -488,7 +491,7 @@ export class World {
     const contact = stepPlayer(this.player, this.moveX, this.moveY, this.isSolid, STEP_SECONDS);
 
     this.handleContact(contact);
-    this.announceWave();
+    this.stepClock();
     this.stepMobiles();
     this.recover();
     this.stepWildlife();
@@ -496,11 +499,6 @@ export class World {
     this.shootPlayerBow();
 
     for (const id of this.scheduler.due(this.tickCount)) {
-      if (id === WAVE_WAKE_ID) {
-        this.spawnWave();
-        continue;
-      }
-
       const entity = this.entities.get(id);
 
       if (entity) this.wake(entity);
@@ -1029,10 +1027,10 @@ export class World {
 
   /**
    * Le bâtiment est-il débloqué ? Il faut son plan, s'il en demande un (quêtes
-   * d'Ève), et avoir vu passer `unlockWave` vagues.
+   * d'Ève), et avoir vu tomber la nuit `unlockNight`.
    */
   public isUnlocked(building: BuildingId): boolean {
-    return isUnlocked(building, this.questsDone) && this.wave >= BUILDINGS[building].unlockWave;
+    return isUnlocked(building, this.questsDone) && this.night >= BUILDINGS[building].unlockNight;
   }
 
   /** Réserve l'emprise et ouvre le chantier. Un coût vide le termine sur-le-champ. */
@@ -1159,8 +1157,11 @@ export class World {
         break;
 
       case 'townHall':
-        // Le toit est posé : les mutants savent maintenant où aller.
-        if (building.id === this.townHallId) this.scheduleWave(WAVES.firstDelay);
+        // Le toit est posé : le premier jour se lève, les mutants sauront où aller la nuit venue.
+        if (building.id === this.townHallId) {
+          this.cycleStartTick = this.tickCount;
+          this.nextWaveHeading = this.rng() * Math.PI * 2;
+        }
         break;
     }
   }
@@ -1462,7 +1463,7 @@ export class World {
   }
 
   /**
-   * Le bilan de la colonie, lu par le barème des graines : vagues
+   * Le bilan de la colonie, lu par le barème des graines : nuits
    * repoussées, enfants encore là, bâtiments finis — la mairie comptée même
    * tombée, puisqu'elle a tenu jusqu'à la défaite.
    */
@@ -1475,7 +1476,7 @@ export class World {
     if (this.defeated) buildings += 1;
 
     return {
-      waves: Math.max(0, this.wave - 1),
+      waves: Math.max(0, this.night - 1),
       children: this.population().children,
       buildings,
     };
@@ -1588,7 +1589,7 @@ export class World {
     this.events.emit('mutantDied', { id: mutant.id, x: mutant.x, y: mutant.y });
     this.dropLoot(ENEMIES[mutant.proto].loot, mutant.x, mutant.y);
 
-    if (!this.defeated && !this.hasMutants()) this.events.emit('waveCleared', { wave: this.wave });
+    if (!this.defeated && !this.hasMutants()) this.events.emit('waveCleared', { night: this.night });
   }
 
   /* ------------------------------------------------------------------ butin */
@@ -1673,8 +1674,9 @@ export class World {
 
   /**
    * Une fois par seconde : Ève arrive-t-elle, a-t-elle un mur à réparer, la
-   * quête en cours est-elle remplie ? Elle arrive quand la vague
-   * `EVE.arrivalWave` est repoussée ; elle ne répare qu'entre deux vagues.
+   * quête en cours est-elle remplie ? Elle arrive quand la nuit
+   * `EVE.arrivalNight` est repoussée, une fois la nuit finie ; elle ne
+   * répare qu'entre deux vagues.
    */
   private watchOverColony(): void {
     if (this.tickCount % EVE.checkTicks !== 0 || this.defeated) return;
@@ -1682,7 +1684,7 @@ export class World {
     const eve = this.eve();
 
     if (!eve) {
-      if (this.wave >= EVE.arrivalWave && !this.hasMutants()) this.sendEve();
+      if (this.night >= EVE.arrivalNight && this.clock()?.phase !== 'night' && !this.hasMutants()) this.sendEve();
       return;
     }
     if (eve.state === 'arriving') return;
@@ -1951,53 +1953,82 @@ export class World {
     this.dens.set(den.id, { members: size, readyTick: 0 });
   }
 
-  /* ----------------------------------------------------------------- vagues */
+  /* ------------------------------------------------------ jour, nuit, vagues */
+
+  /** L'heure qu'il est, ou `null` tant que la mairie est en chantier : le cycle n'a pas commencé. */
+  public clock(): DayClock | null {
+    return this.cycleStartTick === 0 ? null : clockAt(this.tickCount - this.cycleStartTick);
+  }
+
+  /** Les changements de phase, le compte à rebours et les vagues de la nuit. */
+  private stepClock(): void {
+    const clock = this.clock();
+
+    if (!clock || this.defeated) return;
+
+    if (clock.elapsed === 0) {
+      if (clock.phase === 'dusk') this.events.emit('duskFell', { night: clock.cycle });
+      if (clock.phase === 'night') this.night = clock.cycle;
+      if (clock.phase === 'dawn') this.dawn();
+    }
+
+    const left = ticksToNextWave(clock);
+
+    if (left > 0 && left <= WAVE_COUNTDOWN_SECONDS * TICKS_PER_SECOND && left % TICKS_PER_SECOND === 0) {
+      // Trois secondes avant, on est au crépuscule pour la première vague, dans la nuit pour les suivantes.
+      this.events.emit('waveCountdown', {
+        seconds: left / TICKS_PER_SECOND,
+        night: clock.cycle,
+        wave: clock.phase === 'night' ? Math.floor(clock.elapsed / WAVES.interval) + 2 : 1,
+        count: waveSize(clock.cycle),
+        from: compassOf(this.nextWaveHeading),
+        ...this.waveOrigin(),
+      });
+    }
+
+    if (isWaveTick(clock)) this.spawnWave(Math.floor(clock.elapsed / WAVES.interval) + 1);
+  }
 
   /**
-   * Une vague : `waveSize(n)` mutants du côté annoncé, qui sortent de leur
-   * flaque l'un après l'autre, puis la suivante est planifiée.
+   * Une vague : `waveSize(nuit)` mutants du côté annoncé, qui sortent de leur
+   * flaque l'un après l'autre, et les tours s'éveillent. Le côté de la
+   * vague suivante est tiré aussitôt, pour que son annonce puisse le donner.
    */
-  private spawnWave(): void {
-    if (this.defeated) return;
-
-    this.wave += 1;
-
-    const count = waveSize(this.wave);
+  private spawnWave(wave: number): void {
+    const count = waveSize(this.night);
     const origin = this.waveOrigin();
+    const from = compassOf(this.nextWaveHeading);
 
     for (let i = 0; i < count; i += 1) this.spawnMutant(WAVES.emergeTicks + i * WAVES.emergeStagger);
 
-    this.events.emit('waveStarted', { wave: this.wave, count, from: compassOf(this.nextWaveHeading), ...origin });
+    this.events.emit('waveStarted', { night: this.night, wave, count, from, ...origin });
 
     for (const entity of this.entities.values()) {
       if (entity.kind === 'tower') this.armTower(entity, 1);
     }
 
-    this.scheduleWave(WAVES.interval);
-  }
-
-  /** Les trois dernières secondes avant une vague, une par une. */
-  private announceWave(): void {
-    if (this.nextWaveTick === 0 || this.defeated) return;
-
-    const left = this.nextWaveTick - this.tickCount;
-
-    if (left > 0 && left <= WAVE_COUNTDOWN_SECONDS * TICKS_PER_SECOND && left % TICKS_PER_SECOND === 0) {
-      this.events.emit('waveCountdown', {
-        seconds: left / TICKS_PER_SECOND,
-        wave: this.wave + 1,
-        count: waveSize(this.wave + 1),
-        from: compassOf(this.nextWaveHeading),
-        ...this.waveOrigin(),
-      });
-    }
-  }
-
-  /** Planifie la prochaine vague, et tire dès maintenant le côté d'où elle viendra. */
-  private scheduleWave(delay: number): void {
-    this.nextWaveTick = this.tickCount + delay;
     this.nextWaveHeading = this.rng() * Math.PI * 2;
-    this.scheduler.schedule(WAVE_WAKE_ID, this.nextWaveTick, this.tickCount);
+  }
+
+  /**
+   * L'aube : les mutants encore debout fuient le jour — une journée reste
+   * sans mutant — et la nuit survécue paie son butin, dans la limite du sac.
+   */
+  private dawn(): void {
+    for (const mobile of [...this.mobiles.values()]) {
+      if (mobile.kind !== 'mutant') continue;
+      this.mobiles.delete(mobile.id);
+      this.events.emit('mutantFled', { id: mobile.id, x: mobile.x, y: mobile.y });
+    }
+
+    const reward: [ItemId, number][] = [];
+
+    for (const [item, amount] of Object.entries(DAWN_REWARD) as [ItemId, number][]) {
+      const added = this.player.inventory.add(item, amount);
+
+      if (added > 0) reward.push([item, added]);
+    }
+    this.events.emit('dawnBroke', { night: this.night, reward });
   }
 
   /** Le point, en pixels monde, d'où surgira la prochaine vague : ce que l'annonce montre du doigt. */
@@ -2263,7 +2294,6 @@ export class World {
     if (building.id === this.townHallId && !this.defeated) {
       this.defeated = true;
       this.defeatTick = this.tickCount;
-      this.nextWaveTick = 0;
       this.events.emit('townHallDestroyed', {});
     }
   }

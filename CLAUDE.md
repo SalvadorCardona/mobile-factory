@@ -25,7 +25,7 @@ d'abord, puis le stock de la ville.
 **Le dernier objet livré achève le chantier**, sans bouton de validation
 (poussière, rebond, son, « Mairie bâtie ! » qui flotte).
 Une nurserie ou une forge heurtée (ou « Transférer le sac ») reçoit ce que
-sa recette consomme ; la forge (débloquée après la vague 2, `unlockWave`)
+sa recette consomme ; la forge (débloquée à la nuit 1, `unlockNight`)
 fond fer + charbon en plaques de fer, qui bâtissent la tour renforcée.
 
 **Ville et sac** — deux stocks. Le **sac** (`player.inventory`, plafonné)
@@ -53,12 +53,20 @@ la mairie. Un job est réservé des deux côtés **à sa création**
 n'y a rien à porter. Les réservations ne sont pas sauvegardées : elles se
 rejouent depuis les jobs au chargement.
 
-**Menace** — dès que la mairie est debout, des **mutants** arrivent par
-vagues (`src/data/enemies.ts`) et marchent droit sur elle ; ils traversent
+**Jour et nuit** — dès que la mairie est debout, le cycle démarre
+(`src/data/dayNight.ts`, horloge pure dans `src/sim/dayNight.ts`) : une
+journée sans mutant (~3 min), un crépuscule (carte teintée indigo, lampions
+allumés, « La nuit tombe — rentrez »), une nuit de vagues (~1 min), puis
+l'aube : les mutants restants fuient et le butin tombe dans le sac. Le rendu
+(`render/nightLayer.ts`) n'applique que la teinte : un quad `multiply` et des
+lueurs `add`, pas de filtre.
+
+**Menace** — la nuit, des **mutants** arrivent par
+vagues (`src/data/enemies.ts`) et marchent droit sur la mairie ; ils traversent
 tout sauf le bâti, qu'ils cassent. Une vague s'annonce trois secondes avant
 (bandeau avec sa direction, cor grave, léger recul de caméra vers elle),
 surgit dans le champ d'une flaque vert fluo — un mutant qui émerge
-(`WAVES.emergeTicks`) n'est pas visable — et finit sur « Vague repoussée ! » ;
+(`WAVES.emergeTicks`) n'est pas visable — et finit sur « Nuit N — vague repoussée ! » ;
 tout ennemi abattu (mutant, crabe, loup) lâche au sol le butin de sa table
 (`loot`, tirée du PRNG du monde ; `LOOT_DROPS`, `src/sim/loot.ts`) qu'Adam
 ramasse en marchant dessus — sac plein, il reste au sol. L'arc d'Adam et la tour de guet
@@ -69,7 +77,7 @@ nourritures (recette `raiseChild`) : sans elles, elle attend.
 **Ève** — ingénieure bricoleuse, taquine (`src/data/eve.ts`, `src/sim/eve.ts`).
 Elle **tutoie** Adam, qui reste muet ; le jeu (bulles, boutons, écrans)
 **vouvoie** le joueur. Les conseils du HUD sont ses répliques, par radio
-tant qu'elle n'est pas là. Elle arrive en vélo-cargo une fois la vague 3
+tant qu'elle n'est pas là. Elle arrive en vélo-cargo une fois la nuit 3
 repoussée (population : 2 adultes), vit devant la mairie, répare le bâti
 entre les vagues, et se tape pour lui parler (bulle au-dessus d'elle,
 jamais bloquante). Elle porte la chaîne de quêtes (`src/data/quests.ts`) :

@@ -36,6 +36,7 @@ import { FAMILY_TONES, PALETTE, hex, type Tone } from '../data/artDirection.ts';
 import { ICON_SIZE, ITEM_ICONS } from '../data/icons.ts';
 import { ITEM_IDS, type ItemId } from '../data/items.ts';
 import { findDeposit, type Deposit } from '../sim/deposits.ts';
+import { ticksToNextWave } from '../sim/dayNight.ts';
 import { TICKS_PER_SECOND, type World } from '../sim/world.ts';
 import type { Camera } from './camera.ts';
 import type { SpriteLibrary, SvgSource } from './spriteLibrary.ts';
@@ -231,9 +232,10 @@ export class IndicatorLayer {
     }
 
     const { world } = this;
-    const left = world.nextWaveTick - world.tickCount;
+    const clock = world.clock();
+    const left = clock ? ticksToNextWave(clock) : 0;
 
-    if (world.nextWaveTick > 0 && !world.defeated && left > 0 && left <= ANNOUNCE_SECONDS * TICKS_PER_SECOND) {
+    if (!world.defeated && left > 0 && left <= ANNOUNCE_SECONDS * TICKS_PER_SECOND) {
       const origin = world.waveOrigin();
 
       this.arrow(camera, zone, origin.x, origin.y, 'toxic', 1, 1.25 + Math.sin(this.elapsed / 120) * 0.15, 'eye');

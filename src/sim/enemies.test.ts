@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_SIZE, worldToTile } from '../core/grid.ts';
 import { BUILDINGS } from '../data/buildings.ts';
+import { DAWN_REWARD, DAY_CYCLE } from '../data/dayNight.ts';
 import { ENEMIES, LOOT_DROPS, WAVES, waveSize } from '../data/enemies.ts';
 import type { ItemId } from '../data/items.ts';
 import { RECIPES } from '../data/recipes.ts';
 import { WEAPONS } from '../data/weapons.ts';
+import { CYCLE_TICKS } from './dayNight.ts';
 import { compassOf } from './enemies.ts';
 import { BUILD_REACH_TILES } from './player.ts';
 import { deserialize, serialize } from './save.ts';
@@ -110,6 +112,38 @@ function worldWithTownHall(seed = 7): World {
   return world;
 }
 
+/**
+ * Retire la faune : en une journée, crabes et loups ont peuplé leurs
+ * tanières, et l'arc d'Adam vise l'ennemi le plus proche, bête ou mutant.
+ */
+function withoutWildlife(world: World): void {
+  for (const mobile of [...world.mobiles.values()]) {
+    if (mobile.kind === 'beast') world.mobiles.delete(mobile.id);
+  }
+}
+
+/** Une mairie qui tient la nuit sans défenseur : l'aube doit arriver. */
+function sturdy(world: World): void {
+  const hall = world.entities.get(world.townHallId);
+
+  if (hall && hall.kind !== 'site') hall.hp = 1_000_000;
+}
+
+/**
+ * Pose Adam à `tiles` tuiles devant le mutant, sur son chemin vers la
+ * mairie : la flèche vole à sa rencontre, quel que soit le côté d'où il vient.
+ */
+function standInFrontOf(world: World, mutant: Mutant, tiles: number): void {
+  const center = townHallCenter(world);
+  const distance = Math.hypot(center.x - mutant.x, center.y - mutant.y) || 1;
+
+  world.player.x = mutant.x + ((center.x - mutant.x) / distance) * tiles * TILE_SIZE;
+  world.player.y = mutant.y + ((center.y - mutant.y) / distance) * tiles * TILE_SIZE;
+}
+
+/** Ticks entre le lever du premier jour et la tombée de la première nuit. */
+const NIGHTFALL = DAY_CYCLE.day + DAY_CYCLE.dusk;
+
 function townHallCenter(world: World): { x: number; y: number } {
   const hall = world.entities.get(world.townHallId)!;
 
@@ -120,51 +154,112 @@ describe('vagues', () => {
   it('n’envoie aucun mutant tant que la mairie est en chantier', () => {
     const world = new World(7);
 
-    for (let i = 0; i < WAVES.firstDelay + WAVES.interval; i += 1) world.tick();
+    for (let i = 0; i < CYCLE_TICKS; i += 1) world.tick();
 
     expect(mutants(world)).toHaveLength(0);
-    expect(world.wave).toBe(0);
+    expect(world.night).toBe(0);
+    expect(world.clock()).toBeNull();
   });
 
-  it('lance la première vague un délai après l’achèvement de la mairie, puis les suivantes à cadence fixe', () => {
+  it('une journée sans mutant, le crépuscule, puis les vagues de la nuit', () => {
     const world = worldWithTownHall();
-    const waves: number[] = [];
-
-    const waveTicks: number[] = [];
+    const started = world.cycleStartTick;
+    const waves: string[] = [];
     const countdown: number[] = [];
+    const dusk: number[] = [];
 
     world.events.on('waveCountdown', ({ seconds }) => countdown.push(seconds));
-
-    world.events.on('waveStarted', ({ wave, count }) => {
-      waves.push(wave * 100 + count);
-      waveTicks.push(world.tickCount);
+    world.events.on('duskFell', ({ night }) => dusk.push(night));
+    world.events.on('waveStarted', ({ night, wave, count }) => {
+      waves.push(`${world.tickCount - started}:${night}.${wave}:${count}`);
     });
 
-    // Le compte à rebours du HUD lit ce tick : il doit tomber pile sur l'apparition.
-    const firstWaveTick = world.nextWaveTick;
+    expect(world.clock()?.phase).toBe('day');
 
-    expect(firstWaveTick).toBeGreaterThan(world.tickCount);
-
-    for (let i = 0; i < WAVES.firstDelay - 2; i += 1) world.tick();
+    for (let i = world.tickCount; i < started + DAY_CYCLE.day; i += 1) world.tick();
+    expect(world.clock()?.phase).toBe('dusk');
+    expect(dusk).toEqual([1]);
     expect(mutants(world)).toHaveLength(0);
 
-    for (let i = 0; i < 2; i += 1) world.tick();
-    expect(mutants(world)).toHaveLength(waveSize(1));
-    expect(waves).toEqual([100 + waveSize(1)]);
-    expect(waveTicks).toEqual([firstWaveTick]);
+    for (let i = world.tickCount; i < started + NIGHTFALL - 1; i += 1) world.tick();
+    expect(mutants(world)).toHaveLength(0);
     expect(countdown).toEqual([3, 2, 1]);
-    expect(world.nextWaveTick).toBe(firstWaveTick + WAVES.interval);
+
+    world.tick();
+    expect(world.clock()?.phase).toBe('night');
+    expect(world.night).toBe(1);
+    expect(mutants(world)).toHaveLength(waveSize(1));
 
     for (let i = 0; i < WAVES.interval; i += 1) world.tick();
-    expect(world.wave).toBe(2);
-    expect(waves).toHaveLength(2);
+    expect(waves).toEqual(
+      Array.from({ length: Math.min(2, WAVES.perNight) }, (_, k) => `${NIGHTFALL + k * WAVES.interval}:1.${k + 1}:${waveSize(1)}`),
+    );
+  });
+
+  it('à l’aube, les mutants fuient, le butin tombe, et la journée suivante est calme', () => {
+    const world = worldWithTownHall();
+    const started = world.cycleStartTick;
+    const fled: number[] = [];
+    const dawns: { night: number; reward: [string, number][] }[] = [];
+
+    sturdy(world);
+
+    // Adam loin : aucun mutant ne tombe sous son arc.
+    world.player.x += 60 * TILE_SIZE;
+    world.events.on('mutantFled', ({ id }) => fled.push(id));
+    world.events.on('dawnBroke', (event) => dawns.push(event));
+
+    for (let i = world.tickCount; i < started + NIGHTFALL + DAY_CYCLE.night - 1; i += 1) world.tick();
+
+    const alive = mutants(world).map((mutant) => mutant.id);
+
+    expect(alive.length).toBeGreaterThan(0);
+    expect(world.clock()?.phase).toBe('night');
+
+    world.tick();
+    expect(world.clock()?.phase).toBe('dawn');
+    expect(mutants(world)).toHaveLength(0);
+    expect(fled).toEqual(alive);
+    expect(world.kills).toBe(0);
+    expect(dawns).toHaveLength(1);
+    expect(dawns[0]!.night).toBe(1);
+    for (const [item, amount] of dawns[0]!.reward) {
+      expect(amount).toBeLessThanOrEqual(DAWN_REWARD[item as keyof typeof DAWN_REWARD]);
+    }
+
+    // Toute la journée suivante, et le crépuscule : pas un mutant.
+    for (let i = 0; i < DAY_CYCLE.dawn + DAY_CYCLE.day + DAY_CYCLE.dusk - 1; i += 1) {
+      world.tick();
+      expect(mutants(world)).toHaveLength(0);
+    }
+
+    world.tick();
+    expect(world.night).toBe(2);
+    expect(mutants(world)).toHaveLength(waveSize(2));
+  });
+
+  it('ne verse au sac que ce qui y tient', () => {
+    const world = worldWithTownHall();
+    const { inventory } = world.player;
+    let reward: [string, number][] = [];
+
+    sturdy(world);
+
+    world.player.x += 60 * TILE_SIZE;
+    inventory.add('coal', inventory.freeSpace() - 2);
+    world.events.on('dawnBroke', (event) => (reward = event.reward));
+
+    for (let i = 0; i < NIGHTFALL + DAY_CYCLE.night; i += 1) world.tick();
+
+    expect(reward.reduce((total, [, amount]) => total + amount, 0)).toBe(2);
+    expect(inventory.freeSpace()).toBe(0);
   });
 
   it('fait apparaître les mutants à distance de la mairie, jamais sur elle', () => {
     const world = worldWithTownHall();
     const center = townHallCenter(world);
 
-    for (let i = 0; i < WAVES.firstDelay; i += 1) world.tick();
+    for (let i = 0; i < NIGHTFALL; i += 1) world.tick();
 
     for (const mutant of mutants(world)) {
       const distance = Math.hypot(mutant.x - center.x, mutant.y - center.y) / TILE_SIZE;
@@ -174,7 +269,7 @@ describe('vagues', () => {
     }
   });
 
-  it('grossit l’effectif avec les vagues, jusqu’au plafond', () => {
+  it('grossit l’effectif avec les nuits, jusqu’au plafond', () => {
     expect(waveSize(1)).toBe(1);
     expect(waveSize(1 + WAVES.growEvery)).toBe(2);
     expect(waveSize(1000)).toBe(WAVES.maxSize);
@@ -182,20 +277,20 @@ describe('vagues', () => {
 });
 
 describe('mise en scène des vagues', () => {
-  it('annonce la vague trois secondes avant : son numéro, son effectif, d’où elle vient', () => {
+  it('annonce la vague trois secondes avant : sa nuit, son effectif, d’où elle vient', () => {
     const world = worldWithTownHall();
     const center = townHallCenter(world);
     const heading = world.nextWaveHeading;
-    const announces: { seconds: number; wave: number; count: number; from: string; x: number; y: number }[] = [];
+    const announces: { seconds: number; night: number; wave: number; count: number; from: string; x: number; y: number }[] = [];
 
     world.events.on('waveCountdown', (event) => announces.push(event));
     world.player.x += 60 * TILE_SIZE;
 
-    for (let i = 0; i < WAVES.firstDelay; i += 1) world.tick();
+    for (let i = 0; i < NIGHTFALL; i += 1) world.tick();
 
     expect(announces.map(({ seconds }) => seconds)).toEqual([3, 2, 1]);
     for (const announce of announces) {
-      expect(announce).toMatchObject({ wave: 1, count: waveSize(1), from: compassOf(heading) });
+      expect(announce).toMatchObject({ night: 1, wave: 1, count: waveSize(1), from: compassOf(heading) });
     }
     expect(Math.atan2(announces[0]!.y - center.y, announces[0]!.x - center.x)).toBeCloseTo(
       Math.atan2(Math.sin(heading), Math.cos(heading)),
@@ -217,12 +312,14 @@ describe('mise en scène des vagues', () => {
     const world = worldWithTownHall();
     let shots = 0;
 
-    world.events.on('arrowShot', () => (shots += 1));
+    // Une vague de trois : on attend la nuit qui les envoie, la mairie tient d'ici là.
+    const night = 1 + 2 * WAVES.growEvery;
 
-    // Une vague de trois : on avance le compteur.
-    world.wave = 1 + 2 * WAVES.growEvery - 1;
+    sturdy(world);
     world.player.x += 60 * TILE_SIZE;
-    for (let i = 0; i < WAVES.firstDelay; i += 1) world.tick();
+    for (let i = 0; i < night * CYCLE_TICKS && world.night < night; i += 1) world.tick();
+    withoutWildlife(world);
+    world.events.on('arrowShot', () => (shots += 1));
 
     const wave = mutants(world);
 
@@ -264,8 +361,10 @@ describe('mise en scène des vagues', () => {
 
     const born = new Map<number, number>();
     const lifetimes: number[] = [];
+    let waves = 0;
 
     world.events.on('waveStarted', () => {
+      waves += 1;
       for (const mutant of mutants(world)) {
         if (born.has(mutant.id)) continue;
         born.set(mutant.id, world.tickCount);
@@ -277,13 +376,13 @@ describe('mise en scène des vagues', () => {
     });
     world.events.on('mutantDied', ({ id }) => lifetimes.push(world.tickCount - born.get(id)!));
 
-    for (let i = 0; i < WAVES.firstDelay + WAVES.interval * 5 && !world.defeated; i += 1) {
+    for (let i = 0; i < 2 * CYCLE_TICKS + NIGHTFALL + WAVES.interval && !world.defeated; i += 1) {
       world.player.x = post.x;
       world.player.y = post.y;
       world.tick();
     }
 
-    expect(world.wave).toBeGreaterThanOrEqual(5);
+    expect(waves).toBeGreaterThanOrEqual(5);
     expect(lifetimes.length).toBeGreaterThan(5);
     for (const ticks of lifetimes) expect(ticks).toBeGreaterThanOrEqual(2 * 20);
   });
@@ -293,17 +392,17 @@ describe('mise en scène des vagues', () => {
     const cleared: number[] = [];
     const dropped: Pickup[] = [];
 
-    world.events.on('waveCleared', ({ wave }) => cleared.push(wave));
+    world.events.on('waveCleared', ({ night }) => cleared.push(night));
     world.events.on('lootDropped', ({ id }) => dropped.push(world.mobiles.get(id) as Pickup));
 
-    for (let i = 0; i < WAVES.firstDelay; i += 1) world.tick();
+    for (let i = 0; i < NIGHTFALL; i += 1) world.tick();
+    withoutWildlife(world);
     waitEmergence(world);
 
     const [mutant] = mutants(world);
 
     for (let i = 0; i < 200 && mutants(world).length > 0; i += 1) {
-      world.player.x = mutant!.x + 3 * TILE_SIZE;
-      world.player.y = mutant!.y;
+      standInFrontOf(world, mutant!, 3);
       world.tick();
     }
 
@@ -333,7 +432,8 @@ describe('mise en scène des vagues', () => {
   it('laisse le butin au sol quand le sac est plein, puis le fait disparaître s’il est oublié', () => {
     const world = worldWithTownHall();
 
-    for (let i = 0; i < WAVES.firstDelay; i += 1) world.tick();
+    for (let i = 0; i < NIGHTFALL; i += 1) world.tick();
+    withoutWildlife(world);
     waitEmergence(world);
 
     const [mutant] = mutants(world);
@@ -343,8 +443,7 @@ describe('mise en scène des vagues', () => {
     world.events.on('lootDropped', ({ id }) => (loot ??= world.mobiles.get(id) as Pickup));
 
     for (let i = 0; i < 200 && !loot; i += 1) {
-      world.player.x = mutant!.x + 3 * TILE_SIZE;
-      world.player.y = mutant!.y;
+      standInFrontOf(world, mutant!, 3);
       world.tick();
     }
 
@@ -363,7 +462,7 @@ describe('mise en scène des vagues', () => {
     const world = worldWithTownHall();
 
     world.player.x += 60 * TILE_SIZE;
-    for (let i = 0; i < WAVES.firstDelay + 5; i += 1) world.tick();
+    for (let i = 0; i < NIGHTFALL + 5; i += 1) world.tick();
 
     const [mutant] = mutants(world);
 
@@ -391,7 +490,7 @@ describe('mutants', () => {
     // Adam loin : son arc ne doit pas fausser la mesure.
     world.player.x += 40 * TILE_SIZE;
 
-    for (let i = 0; i < WAVES.firstDelay; i += 1) world.tick();
+    for (let i = 0; i < NIGHTFALL; i += 1) world.tick();
     for (let i = 0; i < WAVES.emergeTicks; i += 1) world.tick();
 
     const [mutant] = mutants(world);
@@ -416,7 +515,7 @@ describe('mutants', () => {
     world.events.on('buildingDamaged', ({ hp }) => damaged.push(hp));
     world.events.on('townHallDestroyed', () => (destroyed += 1));
 
-    for (let i = 0; i < WAVES.firstDelay; i += 1) world.tick();
+    for (let i = 0; i < NIGHTFALL; i += 1) world.tick();
 
     // La sortie de flaque, le trajet — au plus 8 tuiles à 1,2 tuile/s — puis les coups.
     for (let i = 0; i < 20 * 15 && damaged.length === 0; i += 1) world.tick();
@@ -429,7 +528,7 @@ describe('mutants', () => {
 
     expect(world.defeated).toBe(true);
     expect(world.defeatTick).toBe(world.tickCount);
-    expect(world.nextWaveTick).toBe(0);
+    expect(world.clock()?.phase).not.toBe('dawn');
     expect(destroyed).toBe(1);
     expect(world.entities.has(world.townHallId)).toBe(false);
     expect(world.chunks.occupantAt(hall.tx, hall.ty)).toBeUndefined();
@@ -448,21 +547,20 @@ describe('arc d’Adam', () => {
     world.events.on('mutantHit', ({ hp }) => hits.push(hp));
     world.events.on('mutantDied', () => (deaths += 1));
 
-    for (let i = 0; i < WAVES.firstDelay; i += 1) world.tick();
+    for (let i = 0; i < NIGHTFALL; i += 1) world.tick();
+    withoutWildlife(world);
     waitEmergence(world);
 
     const [mutant] = mutants(world);
 
     // On le pose à mi-portée : l'arc doit partir au tick suivant.
-    world.player.x = mutant!.x + 3 * TILE_SIZE;
-    world.player.y = mutant!.y;
+    standInFrontOf(world, mutant!, 3);
     world.tick();
     expect(shots).toBe(1);
 
     for (let i = 0; i < 200 && deaths === 0; i += 1) {
-      // Le mutant marche : on garde Adam à sa hauteur.
-      world.player.x = mutant!.x + 3 * TILE_SIZE;
-      world.player.y = mutant!.y;
+      // Le mutant marche : on garde Adam devant lui.
+      standInFrontOf(world, mutant!, 3);
       world.tick();
     }
 
@@ -479,13 +577,13 @@ describe('arc d’Adam', () => {
 
     world.events.on('arrowShot', () => (shots += 1));
 
-    for (let i = 0; i < WAVES.firstDelay; i += 1) world.tick();
+    for (let i = 0; i < NIGHTFALL; i += 1) world.tick();
+    withoutWildlife(world);
     waitEmergence(world);
 
     const [mutant] = mutants(world);
 
-    world.player.x = mutant!.x + 2 * TILE_SIZE;
-    world.player.y = mutant!.y;
+    standInFrontOf(world, mutant!, 2);
     world.tick();
     expect(shots).toBe(1);
 
@@ -503,7 +601,7 @@ describe('arc d’Adam', () => {
     world.events.on('arrowShot', () => (shots += 1));
     world.player.x += 60 * TILE_SIZE;
 
-    for (let i = 0; i < WAVES.firstDelay + 40; i += 1) world.tick();
+    for (let i = 0; i < NIGHTFALL + 40; i += 1) world.tick();
 
     expect(mutants(world).length).toBeGreaterThan(0);
     expect(shots).toBe(0);
@@ -524,7 +622,7 @@ describe('tour de guet', () => {
     world.player.x += 60 * TILE_SIZE;
     expect(tower.armed).toBe(false);
 
-    for (let i = 0; i < WAVES.firstDelay; i += 1) world.tick();
+    for (let i = 0; i < NIGHTFALL; i += 1) world.tick();
     expect(tower.armed).toBe(true);
 
     // On amène le mutant sous la tour.
@@ -674,14 +772,14 @@ describe('déterminisme des vagues', () => {
     const scenario = (): World => {
       const world = worldWithTownHall(11);
 
-      for (let i = 0; i < WAVES.firstDelay + 200; i += 1) world.tick();
+      for (let i = 0; i < NIGHTFALL + 200; i += 1) world.tick();
       return world;
     };
     const first = scenario();
     const second = scenario();
 
-    expect(first.wave).toBe(1);
-    expect(second.wave).toBe(first.wave);
+    expect(first.night).toBe(1);
+    expect(second.night).toBe(first.night);
     expect([...second.mobiles.values()]).toEqual([...first.mobiles.values()]);
     expect(second.commandLog()).toEqual(first.commandLog());
   });

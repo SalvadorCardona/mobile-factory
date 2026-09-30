@@ -40,7 +40,7 @@ export const LORE = {
     eve: {
       name: 'Ève',
       role:
-        'seconde survivante, ingénieure bricoleuse ; arrive après la troisième vague, ' +
+        'seconde survivante, ingénieure bricoleuse ; arrive après la troisième nuit, ' +
         'vit à la mairie, répare le bâti et donne les quêtes',
       description:
         'Femme adulte, taquine et bienveillante, création originale comme Adam. ' +

@@ -15,6 +15,7 @@
 import { TILE_SIZE } from '../core/grid.ts';
 import { auditSvg } from './artDirection.ts';
 import { BUILDINGS } from './buildings.ts';
+import { DAWN_REWARD, DAY_CYCLE } from './dayNight.ts';
 import { ENEMIES, LOOT_DROPS, WAVES, WILDLIFE, WILDLIFE_SPAWN, type LootTable, type WildlifeProto } from './enemies.ts';
 import { EVE } from './eve.ts';
 import { ICON_SIZE, ITEM_ICONS } from './icons.ts';
@@ -64,8 +65,8 @@ export function validatePrototypes(): string[] {
     if (building.workers < 0 || !Number.isInteger(building.workers)) {
       errors.push(`BUILDINGS.${id} : nombre d'ouvriers invalide`);
     }
-    if (building.unlockWave < 0 || !Number.isInteger(building.unlockWave)) {
-      errors.push(`BUILDINGS.${id} : vague de déblocage invalide`);
+    if (building.unlockNight < 0 || !Number.isInteger(building.unlockNight)) {
+      errors.push(`BUILDINGS.${id} : nuit de déblocage invalide`);
     }
     if (building.weapon !== null && !(building.weapon in WEAPONS)) {
       errors.push(`BUILDINGS.${id} : arme inconnue « ${String(building.weapon)} »`);
@@ -264,13 +265,13 @@ export function validatePrototypes(): string[] {
     errors.push('LOOT_DROPS : durée, rayons, vitesse, dispersion ou plafond incohérents');
   }
 
-  if (WAVES.minDistance > WAVES.maxDistance || WAVES.firstDelay <= 0 || WAVES.interval <= 0) {
+  if (WAVES.minDistance > WAVES.maxDistance || WAVES.perNight <= 0 || WAVES.interval <= 0) {
     errors.push('WAVES : distances ou délais incohérents');
   }
 
   if (QUEST_IDS.length < 3) errors.push('QUESTS : Ève doit donner au moins trois quêtes');
-  if (EVE.arrivalWave < 1 || EVE.rideSpeed <= 0 || EVE.walkSpeed <= 0 || EVE.repairTicks <= 0 || EVE.repairAmount <= 0) {
-    errors.push('EVE : vague d’arrivée, vitesses ou cadence de réparation nulles');
+  if (EVE.arrivalNight < 1 || EVE.rideSpeed <= 0 || EVE.walkSpeed <= 0 || EVE.repairTicks <= 0 || EVE.repairAmount <= 0) {
+    errors.push('EVE : nuit d’arrivée, vitesses ou cadence de réparation nulles');
   }
 
   const plansGiven = new Set<string>();
@@ -299,6 +300,19 @@ export function validatePrototypes(): string[] {
 
   for (const [id, tool] of Object.entries(TOOLS)) {
     if (tool.harvestSpeed <= 1 || (tool.resources as readonly string[]).length === 0) errors.push(`TOOLS.${id} : l'outil ne sert à rien`);
+  }
+
+  for (const [phase, ticks] of Object.entries(DAY_CYCLE)) {
+    if (!Number.isInteger(ticks) || ticks <= 0) errors.push(`DAY_CYCLE.${phase} : durée nulle ou fractionnaire`);
+  }
+
+  // Toutes les vagues d'une nuit tombent avant l'aube : une journée reste sans mutant.
+  if ((WAVES.perNight - 1) * WAVES.interval >= DAY_CYCLE.night) {
+    errors.push('WAVES : la dernière vague de la nuit tomberait après l’aube');
+  }
+
+  for (const [item, amount] of Object.entries(DAWN_REWARD)) {
+    if (amount <= 0) errors.push(`DAWN_REWARD.${item} : quantité nulle`);
   }
 
   for (const [id, sprite] of Object.entries(SPRITES) as [string, SpriteProto][]) {
