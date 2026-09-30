@@ -35,8 +35,12 @@ export const EX_MUTANT = {
 export const JOB_PRIORITY = {
   /** Livrer un chantier en attente, depuis la mairie. */
   site: 2,
+  /** Ravitailler depuis la mairie une forge ou une nurserie à qui il manque de quoi tourner. */
+  starving: 2,
   /** Vider une foreuse ou une ferme qui a un plein voyage à donner. */
   empty: 1,
+  /** Compléter depuis la mairie le coffre d'une forge ou d'une nurserie qui tourne encore. */
+  refill: 1,
   /** Rapporter un reste — moins d'un voyage — à la mairie. */
   surplus: 0,
 } as const;

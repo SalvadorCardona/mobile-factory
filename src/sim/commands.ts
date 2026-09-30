@@ -33,8 +33,9 @@ export type Command =
   | { type: 'takeFromBuilding'; id: EntityId }
   /**
    * Vide dans le coffre d'une nurserie ou d'une forge ce que sa recette
-   * consomme et qu'Adam porte, dans la limite de la place. Le bouton
-   * « Transférer le sac » de sa fenêtre.
+   * consomme, dans la limite de la place : le sac d'abord, puis la ville si
+   * le bâtiment est dans le rayon de la mairie. Le bouton « Transférer » de
+   * sa fenêtre.
    */
   | { type: 'supplyBuilding'; id: EntityId }
   /**
@@ -113,13 +114,13 @@ export type TakeRejection =
   /** Le sac est plein : rien n'est pris, rien n'est jeté. */
   | 'bagFull';
 
-/** Motif de refus d'un « Transférer le sac » vers une nurserie ou une forge. */
+/** Motif de refus d'un « Transférer » vers une nurserie ou une forge. */
 export type SupplyRejection =
   /** Le bâtiment n'existe plus, ou ne consomme rien. */
   | 'missing'
   /** Adam est trop loin de l'emprise. */
   | 'outOfReach'
-  /** Adam n'a rien dans le sac que le bâtiment attende, ou son coffre est plein. */
+  /** Ni le sac ni la ville à portée n'ont rien que le bâtiment attende, ou son coffre est plein. */
   | 'nothingToGive';
 
 /** Motif de refus d'une commande sur le labo de recherche. */

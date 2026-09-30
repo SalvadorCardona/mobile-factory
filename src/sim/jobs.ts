@@ -16,14 +16,14 @@
  * recalcule depuis les jobs des ouvriers (`rebuild`), comme les réservations
  * des coffres, dont la sauvegarde ne garde que le stock réel.
  *
- * Premier périmètre : livrer les chantiers et le labo de recherche depuis la
- * mairie, et vider les coffres des foreuses, des fermes et des cabanes de
+ * Premier périmètre : livrer les chantiers, le labo de recherche, la forge
+ * et la nurserie depuis la mairie, et vider les coffres des foreuses, des fermes et des cabanes de
  * bûcheron dans la mairie.
  *
  * Deux équipes se partagent le travail (`Crew`). Un producteur dans le rayon
  * d'un poste de logistique fini est à ses logisticiens, qui ne font que ça :
- * le coffre le plus rempli d'abord. Les porteurs livrent chantiers et labo,
- * et ne vident que les producteurs qu'aucun poste ne couvre.
+ * le coffre le plus rempli d'abord. Les porteurs livrent chantiers, labo,
+ * forge et nurserie, et ne vident que les producteurs qu'aucun poste ne couvre.
  */
 
 import { TILE_SIZE, distanceSq } from '../core/grid.ts';
@@ -31,6 +31,7 @@ import { BUILDINGS } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
 import { JOB_PRIORITY, LOGISTICIANS, PORTERS } from '../data/workers.ts';
 import { labSurplus, labWants, researchCost } from './research.ts';
+import { consumerRecipe, consumerWants, isStarving } from './consumers.ts';
 import type { Store } from './store.ts';
 import type { Depot, Drill, Entity, EntityId, Farm, Job, LumberCamp, Site, TownHall } from './types.ts';
 
@@ -177,6 +178,22 @@ export class JobBoard {
             if (amount > 0) offers.push({ from: entity.id, to: hall.id, item, amount, priority: JOB_PRIORITY.surplus });
           }
           break;
+
+        case 'forge':
+        case 'nursery': {
+          // En pause, elle ne consomme rien : inutile de la remplir.
+          if (entity.paused) break;
+
+          // Une machine en famine passe avant un ravitaillement préventif.
+          const priority = isStarving(entity) ? JOB_PRIORITY.starving : JOB_PRIORITY.refill;
+
+          for (const item of Object.keys(consumerRecipe(entity).inputs) as ItemId[]) {
+            const amount = Math.min(carry, consumerWants(entity, item), hall.store.available(item));
+
+            if (amount > 0) offers.push({ from: hall.id, to: entity.id, item, amount, priority });
+          }
+          break;
+        }
 
         case 'drill':
         case 'farm':

@@ -61,6 +61,7 @@ import { WEAPONS } from '../data/weapons.ts';
 import { JOB_PRIORITY, LUMBERJACKS, PORTERS } from '../data/workers.ts';
 import { WEATHER, WEATHER_CALENDAR, type WeatherId } from '../data/weather.ts';
 import { ChunkIndex } from './chunk.ts';
+import { consumerRecipe, consumerRoom, consumerWants, isConsumer } from './consumers.ts';
 import { NO_WIND, nearestFoe, shoot, stepArrow, type Wind } from './combat.ts';
 import { clockAt, isWaveTick, ticksToNextWave, type DayClock } from './dayNight.ts';
 import type {
@@ -254,7 +255,7 @@ export type WorldEvents = {
   /** La forge a fondu une plaque. */
   forgeProduced: { id: EntityId; item: ItemId };
   /** `amount` objets du sac viennent d'entrer dans le coffre d'une nurserie ou d'une forge. */
-  buildingSupplied: { id: EntityId; item: ItemId; amount: number };
+  buildingSupplied: { id: EntityId; item: ItemId; amount: number; source: 'bag' | 'town' };
   /** Un « Transférer le sac » vers une nurserie ou une forge a été refusé. */
   supplyRejected: { id: EntityId; reason: SupplyRejection };
   /** L'heure de naître est passée, mais la nurserie n'a pas de quoi nourrir l'enfant. */
@@ -1254,24 +1255,44 @@ export class World {
    * coffre, au prorata de la recette — le fer ne prend pas la place du charbon.
    */
   public accepts(entity: Entity, item: ItemId): number {
-    if (entity.kind !== 'nursery' && entity.kind !== 'forge') return 0;
-
-    const recipe = consumerRecipe(entity);
-    const needed = recipe.inputs[item] ?? 0;
-
-    if (needed <= 0) return 0;
-
-    const share = Math.floor((entity.store.capacity * needed) / totalOf(recipe.inputs));
-
-    return Math.max(0, Math.min(share - entity.store.count(item), entity.store.freeSpace()));
+    return isConsumer(entity) ? consumerRoom(entity, item) : 0;
   }
 
-  /** Adam porte-t-il quelque chose que le bâtiment accepte ? */
+  /**
+   * Un « Transférer » poserait-il quelque chose : du sac, ou de la ville si
+   * le bâtiment est dans le rayon de la mairie ? L'UI grise le bouton sur
+   * cette réponse, le tick décide sur la même.
+   */
   public canSupply(entity: Entity): boolean {
-    if (entity.kind !== 'nursery' && entity.kind !== 'forge') return false;
+    if (!isConsumer(entity)) return false;
+
+    const town = this.townStockFor(entity);
+
     return inputItems(consumerRecipe(entity)).some(
-      (item) => this.accepts(entity, item) > 0 && this.player.inventory.count(item) > 0,
+      (item) =>
+        (consumerRoom(entity, item) > 0 && this.player.inventory.count(item) > 0) ||
+        (consumerWants(entity, item) > 0 && (town?.available(item) ?? 0) > 0),
     );
+  }
+
+  /**
+   * Ce qui arrête la nurserie ou la forge, pour sa fenêtre : la première
+   * entrée qui manque au prochain cycle, ce que la ville en a de disponible,
+   * et si des porteurs l'apportent déjà — ou sont là pour le faire. `null`
+   * si rien ne manque.
+   */
+  public supplyStatus(consumer: Nursery | Forge): { item: ItemId; inTown: number; coming: boolean; porters: boolean } | null {
+    for (const [item, amount] of amountsOf(consumerRecipe(consumer).inputs)) {
+      if (consumer.store.count(item) >= amount) continue;
+
+      return {
+        item,
+        inTown: this.townStock()?.available(item) ?? 0,
+        coming: consumer.store.expected(item) > 0,
+        porters: [...this.workers()].some((worker) => !worker.logistician && this.onDuty(worker)),
+      };
+    }
+    return null;
   }
 
   /** Au contact : un objet du sac entre dans le coffre. Renvoie `false` s'il n'y avait rien à donner. */
@@ -1283,18 +1304,23 @@ export class World {
 
       inventory.remove(item, 1);
       consumer.store.add(item, 1);
-      this.events.emit('buildingSupplied', { id: consumer.id, item, amount: 1 });
+      this.events.emit('buildingSupplied', { id: consumer.id, item, amount: 1, source: 'bag' });
       this.afterSupply(consumer);
       return true;
     }
     return false;
   }
 
-  /** Le bouton « Transférer le sac » : tout ce que le bâtiment accepte et qu'Adam porte, en une fois. */
+  /**
+   * Le bouton « Transférer » : tout ce que le bâtiment accepte, en une fois —
+   * le sac d'abord, puis la ville si le bâtiment est dans le rayon de la
+   * mairie, comme sur un chantier. La ville ne donne que son disponible, et
+   * pas ce qu'un porteur apporte déjà.
+   */
   private supplyAll(id: EntityId): void {
     const entity = this.entities.get(id);
 
-    if (entity?.kind !== 'nursery' && entity?.kind !== 'forge') {
+    if (!entity || !isConsumer(entity)) {
       this.events.emit('supplyRejected', { id, reason: 'missing' });
       return;
     }
@@ -1303,18 +1329,12 @@ export class World {
       return;
     }
 
-    const { inventory } = this.player;
+    const town = this.townStockFor(entity);
     let moved = 0;
 
     for (const item of inputItems(consumerRecipe(entity))) {
-      const amount = Math.min(this.accepts(entity, item), inventory.count(item));
-
-      if (amount <= 0) continue;
-
-      inventory.remove(item, amount);
-      entity.store.add(item, amount);
-      moved += amount;
-      this.events.emit('buildingSupplied', { id: entity.id, item, amount });
+      moved += this.supplyFrom(entity, item, consumerRoom(entity, item), this.player.inventory, 'bag');
+      if (town) moved += this.supplyFrom(entity, item, consumerWants(entity, item), town, 'town');
     }
 
     if (moved === 0) {
@@ -1322,6 +1342,18 @@ export class World {
       return;
     }
     this.afterSupply(entity);
+  }
+
+  /** Passe au plus `wanted` objets de `from` au coffre du bâtiment. Renvoie ce qui est passé. */
+  private supplyFrom(consumer: Nursery | Forge, item: ItemId, wanted: number, from: Store, source: 'bag' | 'town'): number {
+    const amount = Math.min(wanted, from.available(item));
+
+    if (amount <= 0) return 0;
+
+    const moved = consumer.store.add(item, from.remove(item, amount));
+
+    if (moved > 0) this.events.emit('buildingSupplied', { id: consumer.id, item, amount: moved, source });
+    return moved;
   }
 
   /** Une livraison réveille ce qui l'attendait : la naissance en retard, la forge à l'arrêt. */
@@ -3089,6 +3121,9 @@ export class World {
 
       accepted = Math.max(0, Math.min(job.amount, needed - delivered));
       if (accepted > 0) target.delivered[job.item] = delivered + accepted;
+    } else if (isConsumer(target)) {
+      // Adam a pu la remplir entre-temps : elle ne prend que sa part, le reste repart à la mairie.
+      accepted = target.store.add(job.item, Math.min(job.amount, consumerRoom(target, job.item)));
     } else {
       accepted = target.store.add(job.item, job.amount);
     }
@@ -3100,6 +3135,8 @@ export class World {
       if (target.kind === 'site' && siteMissing(target) === 0) this.complete(target);
       // Au labo, il lance le compte à rebours.
       if (target.kind === 'lab') this.startCountdown(target);
+      // À la nurserie ou à la forge, il réveille ce qui attendait.
+      if (isConsumer(target)) this.afterSupply(target);
     }
 
     worker.searchTicks = 0;
@@ -3797,11 +3834,6 @@ export function siteMissing(site: Site): number {
     missing += Math.max(0, needed - (site.delivered[item] ?? 0));
   }
   return missing;
-}
-
-/** La recette d'un bâtiment qui consomme. */
-function consumerRecipe(consumer: Nursery | Forge): RecipeProto {
-  return RECIPES[consumer.kind === 'nursery' ? NURSERY_RECIPE : FORGE_RECIPE];
 }
 
 function amountsOf(amounts: RecipeProto['inputs']): [ItemId, number][] {
