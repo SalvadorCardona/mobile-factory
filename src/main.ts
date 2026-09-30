@@ -63,6 +63,7 @@ const HARVEST_COLORS: Record<ItemId, readonly number[]> = {
   ironOre: [PALETTE.cyan.base, PALETTE.cyan.light, PALETTE.cyan.shade].map(hex),
   coal: [PALETTE.ink.base, PALETTE.ink.light, PALETTE.yellow.light].map(hex),
   food: [PALETTE.yellow.base, PALETTE.mint.base, PALETTE.mint.light].map(hex),
+  ironPlate: [PALETTE.cyan.base, PALETTE.cyan.light, PALETTE.ink.base].map(hex),
 };
 
 /**
@@ -353,6 +354,7 @@ function wireAudio(world: World, audio: AudioEngine, hud: Hud): void {
   world.events.on('resourceHarvested', ({ item }) => audio.play(item === 'wood' ? 'chop' : 'rock'));
   world.events.on('siteDelivered', () => audio.play('deliver'));
   world.events.on('storeTaken', () => audio.play('deliver'));
+  world.events.on('buildingSupplied', () => audio.play('deliver'));
   world.events.on('siteReady', () => audio.play('open'));
   world.events.on('buildingCompleted', () => audio.play('build'));
   world.events.on('arrowShot', () => audio.play('arrow'));

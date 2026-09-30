@@ -14,7 +14,8 @@
  * commence sur le chantier de la mairie, et Adam récolte à mains nues, par
  * **contact** — un arbre ou un rocher heurté se récolte, un chantier heurté
  * reçoit ce qu'il attend, une foreuse ou une ferme heurtée donne ce que son
- * coffre contient. Une fois la mairie debout, les mutants arrivent par
+ * coffre contient, une nurserie ou une forge heurtée reçoit ce que sa recette
+ * consomme. Une fois la mairie debout, les mutants arrivent par
  * vagues et marchent droit dessus ; l'arc d'Adam et les tours de guet tirent
  * seuls. Si la mairie tombe, la partie est perdue. Loin du village, la faune
  * — crabes sur les plages, loups en forêt — s'en prend à Adam s'il approche.
@@ -27,18 +28,25 @@
 import { Emitter } from '../core/events.ts';
 import { CHUNK_TILES, TILE_SIZE, coordKey, distanceSq, floorDiv, type TileCoord } from '../core/grid.ts';
 import { mulberry32, type StatefulRng } from '../core/rng.ts';
-import { BUILDINGS, NURSERY_BIRTH_TICKS, type BuildingId } from '../data/buildings.ts';
+import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
 import { ENEMIES, MUTANT_LOOT, WAVES, WILDLIFE, WILDLIFE_SPAWN, waveSize } from '../data/enemies.ts';
 import { EVE } from '../data/eve.ts';
 import type { ItemId } from '../data/items.ts';
 import type { QuestId } from '../data/quests.ts';
-import { RECIPES, type RecipeId } from '../data/recipes.ts';
+import { RECIPES, type RecipeId, type RecipeProto } from '../data/recipes.ts';
 import { RESOURCES } from '../data/resources.ts';
 import { WEAPONS } from '../data/weapons.ts';
 import { JOB_PRIORITY, PORTERS } from '../data/workers.ts';
 import { ChunkIndex } from './chunk.ts';
 import { nearestFoe, shoot, stepArrow } from './combat.ts';
-import type { Command, CommandLogEntry, PlacementRejection, SiteRejection, TakeRejection } from './commands.ts';
+import type {
+  Command,
+  CommandLogEntry,
+  PlacementRejection,
+  SiteRejection,
+  SupplyRejection,
+  TakeRejection,
+} from './commands.ts';
 import type { WildlifeId } from '../data/enemies.ts';
 import { compassOf, spawnPoint, stepMutant, type Compass } from './enemies.ts';
 import { createEve, currentQuest, harvestTicksWithTools, isUnlocked, mostDamaged, questProgress, rideHome, walkTo } from './eve.ts';
@@ -71,6 +79,7 @@ import type {
   EntityId,
   Farm,
   Foe,
+  Forge,
   House,
   Job,
   Kid,
@@ -95,6 +104,12 @@ const DRILL_RECIPE: RecipeId = 'mineOre';
 
 /** Recette d'une ferme. */
 const FARM_RECIPE: RecipeId = 'growFood';
+
+/** Ce que coûte une naissance à la nurserie, et tous les combien. */
+const NURSERY_RECIPE: RecipeId = 'raiseChild';
+
+/** Recette d'une forge. */
+const FORGE_RECIPE: RecipeId = 'smeltPlate';
 
 /** Ticks de contact entre deux objets livrés sur un chantier. Court : le chantier se remplit à vue. */
 export const DELIVER_TICKS = 2;
@@ -135,7 +150,15 @@ export type WorldEvents = {
   siteRejected: { id: EntityId; reason: SiteRejection };
   /** La ferme a récolté. */
   farmProduced: { id: EntityId; item: ItemId };
-  /** Adam a pris `amount` objets dans le coffre d'une foreuse ou d'une ferme. */
+  /** La forge a fondu une plaque. */
+  forgeProduced: { id: EntityId; item: ItemId };
+  /** `amount` objets du sac viennent d'entrer dans le coffre d'une nurserie ou d'une forge. */
+  buildingSupplied: { id: EntityId; item: ItemId; amount: number };
+  /** Un « Transférer le sac » vers une nurserie ou une forge a été refusé. */
+  supplyRejected: { id: EntityId; reason: SupplyRejection };
+  /** L'heure de naître est passée, mais la nurserie n'a pas de quoi nourrir l'enfant. */
+  nurseryHungry: { id: EntityId };
+  /** Adam a pris `amount` objets dans le coffre d'une foreuse, d'une ferme ou d'une forge. */
   storeTaken: { id: EntityId; item: ItemId; amount: number };
   /** Un « Prendre » a été refusé. */
   takeRejected: { id: EntityId; reason: TakeRejection };
@@ -464,6 +487,10 @@ export class World {
       case 'takeFromBuilding':
         this.takeAll(command.id);
         break;
+
+      case 'supplyBuilding':
+        this.supplyAll(command.id);
+        break;
     }
   }
 
@@ -596,6 +623,9 @@ export class World {
 
     if (entity?.kind === 'site') this.deliver(entity);
     else if (entity?.kind === 'drill' || entity?.kind === 'farm') this.collect(entity);
+    else if (entity?.kind === 'nursery') this.supplyOne(entity);
+    // La forge prend d'abord ce qu'Adam lui apporte, puis lui rend ses plaques.
+    else if (entity?.kind === 'forge' && !this.supplyOne(entity)) this.collect(entity);
   }
 
   private harvest(tx: number, ty: number): void {
@@ -644,11 +674,11 @@ export class World {
   }
 
   /**
-   * Prend un objet du coffre d'une foreuse ou d'une ferme heurtée : au
-   * contact, le coffre se vide à vue, comme un chantier se remplit.
+   * Prend un objet du coffre d'une foreuse, d'une ferme ou d'une forge
+   * heurtée : au contact, le coffre se vide à vue, comme un chantier se remplit.
    */
-  private collect(producer: Drill | Farm): void {
-    const [item] = producer.store.entries()[0] ?? [];
+  private collect(producer: Drill | Farm | Forge): void {
+    const [item] = this.takeable(producer)[0] ?? [];
 
     if (!item) return;
     if (this.player.inventory.freeSpace() <= 0) {
@@ -656,6 +686,93 @@ export class World {
       return;
     }
     this.takeInto(producer, item, 1);
+  }
+
+  /* ------------------------------------------------------ approvisionnement */
+
+  /**
+   * Combien d'unités de `item` le bâtiment accepte encore. Seules la nurserie
+   * et la forge consomment ; chaque entrée de leur recette a sa part du
+   * coffre, au prorata de la recette — le fer ne prend pas la place du charbon.
+   */
+  public accepts(entity: Entity, item: ItemId): number {
+    if (entity.kind !== 'nursery' && entity.kind !== 'forge') return 0;
+
+    const recipe = consumerRecipe(entity);
+    const needed = recipe.inputs[item] ?? 0;
+
+    if (needed <= 0) return 0;
+
+    const share = Math.floor((entity.store.capacity * needed) / totalOf(recipe.inputs));
+
+    return Math.max(0, Math.min(share - entity.store.count(item), entity.store.freeSpace()));
+  }
+
+  /** Adam porte-t-il quelque chose que le bâtiment accepte ? */
+  public canSupply(entity: Entity): boolean {
+    if (entity.kind !== 'nursery' && entity.kind !== 'forge') return false;
+    return inputItems(consumerRecipe(entity)).some(
+      (item) => this.accepts(entity, item) > 0 && this.player.inventory.count(item) > 0,
+    );
+  }
+
+  /** Au contact : un objet du sac entre dans le coffre. Renvoie `false` s'il n'y avait rien à donner. */
+  private supplyOne(consumer: Nursery | Forge): boolean {
+    const { inventory } = this.player;
+
+    for (const item of inputItems(consumerRecipe(consumer))) {
+      if (this.accepts(consumer, item) <= 0 || inventory.count(item) === 0) continue;
+
+      inventory.remove(item, 1);
+      consumer.store.add(item, 1);
+      this.events.emit('buildingSupplied', { id: consumer.id, item, amount: 1 });
+      this.afterSupply(consumer);
+      return true;
+    }
+    return false;
+  }
+
+  /** Le bouton « Transférer le sac » : tout ce que le bâtiment accepte et qu'Adam porte, en une fois. */
+  private supplyAll(id: EntityId): void {
+    const entity = this.entities.get(id);
+
+    if (entity?.kind !== 'nursery' && entity?.kind !== 'forge') {
+      this.events.emit('supplyRejected', { id, reason: 'missing' });
+      return;
+    }
+    if (!this.inReach(entity)) {
+      this.events.emit('supplyRejected', { id, reason: 'outOfReach' });
+      return;
+    }
+
+    const { inventory } = this.player;
+    let moved = 0;
+
+    for (const item of inputItems(consumerRecipe(entity))) {
+      const amount = Math.min(this.accepts(entity, item), inventory.count(item));
+
+      if (amount <= 0) continue;
+
+      inventory.remove(item, amount);
+      entity.store.add(item, amount);
+      moved += amount;
+      this.events.emit('buildingSupplied', { id: entity.id, item, amount });
+    }
+
+    if (moved === 0) {
+      this.events.emit('supplyRejected', { id, reason: 'nothingToGive' });
+      return;
+    }
+    this.afterSupply(entity);
+  }
+
+  /** Une livraison réveille ce qui l'attendait : la naissance en retard, la forge à l'arrêt. */
+  private afterSupply(consumer: Nursery | Forge): void {
+    if (consumer.kind === 'nursery') {
+      if (consumer.hungry && hasInputs(consumer.store, RECIPES[NURSERY_RECIPE])) this.runNursery(consumer);
+    } else if (consumer.blocked) {
+      this.startForge(consumer);
+    }
   }
 
   /* ------------------------------------------------------------- placement */
@@ -693,8 +810,8 @@ export class World {
       return found;
     };
 
-    // Pas de plan, pas de chantier : le menu ne le propose pas, le tick non plus.
-    if (!isUnlocked(building, this.questsDone)) return { reason: 'locked', tiles: tiles(() => true) };
+    // Pas de plan ou pas encore la vague, pas de chantier : le tick refuse comme le menu.
+    if (!this.isUnlocked(building)) return { reason: 'locked', tiles: tiles(() => true) };
 
     const checks: [PlacementRejection, (x: number, y: number) => boolean][] = [
       ['terrain', (x, y) => !isBuildable(terrainAt(this.seed, x, y))],
@@ -720,6 +837,14 @@ export class World {
     }
 
     return null;
+  }
+
+  /**
+   * Le bâtiment est-il débloqué ? Il faut son plan, s'il en demande un (quêtes
+   * d'Ève), et avoir vu passer `unlockWave` vagues.
+   */
+  public isUnlocked(building: BuildingId): boolean {
+    return isUnlocked(building, this.questsDone) && this.wave >= BUILDINGS[building].unlockWave;
   }
 
   /** Réserve l'emprise et ouvre le chantier. Un coût vide le termine sur-le-champ. */
@@ -776,7 +901,13 @@ export class World {
         break;
 
       case 'nursery':
-        building = { ...base, kind: 'nursery', nextBirthTick: this.tickCount + NURSERY_BIRTH_TICKS, born: 0 };
+        building = {
+          ...base,
+          kind: 'nursery',
+          nextBirthTick: this.tickCount + RECIPES[NURSERY_RECIPE].duration,
+          born: 0,
+          hungry: false,
+        };
         break;
 
       case 'tower':
@@ -789,6 +920,10 @@ export class World {
 
       case 'farm':
         building = { ...base, kind: 'farm', blocked: false };
+        break;
+
+      case 'forge':
+        building = { ...base, kind: 'forge', blocked: true };
         break;
     }
 
@@ -813,6 +948,10 @@ export class World {
 
       case 'farm':
         this.scheduleFarm(building);
+        break;
+
+      case 'forge':
+        // Coffre vide : elle attend son fer et son charbon, sans rien coûter.
         break;
 
       case 'house':
@@ -860,6 +999,10 @@ export class World {
 
       case 'farm':
         this.runFarm(entity);
+        break;
+
+      case 'forge':
+        this.runForge(entity);
         break;
 
       case 'site':
@@ -930,8 +1073,52 @@ export class World {
     this.scheduler.schedule(farm.id, this.tickCount + RECIPES[FARM_RECIPE].duration, this.tickCount);
   }
 
-  /** Une naissance : un enfant apparaît sur la première tuile libre autour de la nurserie. */
+  /**
+   * Un cycle de forge : les entrées deviennent la plaque. Comme la foreuse,
+   * une forge à qui il manque du fer ou du charbon ne se replanifie pas —
+   * c'est la livraison d'Adam qui la relance.
+   */
+  private runForge(forge: Forge): void {
+    const recipe: RecipeProto = RECIPES[FORGE_RECIPE];
+
+    if (canCraft(forge.store, recipe)) {
+      for (const [item, amount] of amountsOf(recipe.inputs)) forge.store.remove(item, amount);
+      for (const [item, amount] of amountsOf(recipe.outputs)) {
+        forge.store.add(item, amount);
+        this.events.emit('forgeProduced', { id: forge.id, item });
+      }
+    }
+    this.startForge(forge);
+  }
+
+  /** Planifie le prochain cycle s'il a de quoi tourner ; sinon, la forge s'arrête. */
+  private startForge(forge: Forge): void {
+    const recipe: RecipeProto = RECIPES[FORGE_RECIPE];
+
+    if (!canCraft(forge.store, recipe)) {
+      forge.blocked = true;
+      return;
+    }
+    forge.blocked = false;
+    this.scheduler.schedule(forge.id, this.tickCount + recipe.duration, this.tickCount);
+  }
+
+  /**
+   * Une naissance : si le coffre a de quoi nourrir l'enfant, il apparaît sur
+   * la première tuile libre autour de la nurserie. Sinon, la nurserie a faim
+   * et ne se replanifie pas : c'est la nourriture apportée qui la réveille.
+   */
   private runNursery(nursery: Nursery): void {
+    const recipe: RecipeProto = RECIPES[NURSERY_RECIPE];
+
+    if (!hasInputs(nursery.store, recipe)) {
+      if (!nursery.hungry) this.events.emit('nurseryHungry', { id: nursery.id });
+      nursery.hungry = true;
+      return;
+    }
+    for (const [item, amount] of amountsOf(recipe.inputs)) nursery.store.remove(item, amount);
+    nursery.hungry = false;
+
     const home = {
       x: (nursery.tx + nursery.width / 2) * TILE_SIZE,
       y: (nursery.ty + nursery.height / 2) * TILE_SIZE,
@@ -958,7 +1145,7 @@ export class World {
 
     this.mobiles.set(kid.id, kid);
     nursery.born += 1;
-    nursery.nextBirthTick = this.tickCount + NURSERY_BIRTH_TICKS;
+    nursery.nextBirthTick = this.tickCount + recipe.duration;
     this.scheduler.schedule(nursery.id, nursery.nextBirthTick, this.tickCount);
     this.events.emit('childBorn', { nurseryId: nursery.id, kidId: kid.id, x, y });
   }
@@ -1807,6 +1994,8 @@ export class World {
     } else if (entity.kind === 'farm' && entity.blocked) {
       entity.blocked = false;
       this.scheduleFarm(entity);
+    } else if (entity.kind === 'forge' && entity.blocked) {
+      this.startForge(entity);
     }
     return removed;
   }
@@ -1815,14 +2004,14 @@ export class World {
   private takeAll(id: EntityId): void {
     const entity = this.entities.get(id);
 
-    if (entity?.kind !== 'drill' && entity?.kind !== 'farm') {
+    if (entity?.kind !== 'drill' && entity?.kind !== 'farm' && entity?.kind !== 'forge') {
       this.events.emit('takeRejected', { id, reason: 'missing' });
       return;
     }
 
     const reason: TakeRejection | null = !this.inReach(entity)
       ? 'outOfReach'
-      : entity.store.isEmpty()
+      : this.takeable(entity).length === 0
         ? 'empty'
         : this.player.inventory.freeSpace() <= 0
           ? 'bagFull'
@@ -1833,7 +2022,7 @@ export class World {
       return;
     }
 
-    for (const [item, amount] of entity.store.entries()) {
+    for (const [item, amount] of this.takeable(entity)) {
       const room = this.player.inventory.freeSpace();
 
       if (room <= 0) break;
@@ -1841,8 +2030,23 @@ export class World {
     }
   }
 
+  /**
+   * Ce qu'Adam peut prendre dans un coffre : tout, pour une foreuse ou une
+   * ferme ; les plaques seulement pour une forge — son fer et son charbon
+   * restent au four.
+   */
+  public takeable(producer: Drill | Farm | Forge): [ItemId, number][] {
+    const entries = producer.store.entries();
+
+    if (producer.kind !== 'forge') return entries;
+
+    const outputs: RecipeProto['outputs'] = RECIPES[FORGE_RECIPE].outputs;
+
+    return entries.filter(([item]) => (outputs[item] ?? 0) > 0);
+  }
+
   /** Du coffre au sac : le coffre se vide (et la machine repart), le sac reçoit. */
-  private takeInto(producer: Drill | Farm, item: ItemId, amount: number): void {
+  private takeInto(producer: Drill | Farm | Forge, item: ItemId, amount: number): void {
     const taken = this.withdraw(producer.id, item, amount);
 
     if (taken <= 0) return;
@@ -1897,6 +2101,33 @@ export function siteMissing(site: Site): number {
     missing += Math.max(0, needed - (site.delivered[item] ?? 0));
   }
   return missing;
+}
+
+/** La recette d'un bâtiment qui consomme. */
+function consumerRecipe(consumer: Nursery | Forge): RecipeProto {
+  return RECIPES[consumer.kind === 'nursery' ? NURSERY_RECIPE : FORGE_RECIPE];
+}
+
+function amountsOf(amounts: RecipeProto['inputs']): [ItemId, number][] {
+  return Object.entries(amounts) as [ItemId, number][];
+}
+
+function inputItems(recipe: RecipeProto): ItemId[] {
+  return amountsOf(recipe.inputs).map(([item]) => item);
+}
+
+function totalOf(amounts: RecipeProto['inputs']): number {
+  return amountsOf(amounts).reduce((total, [, amount]) => total + amount, 0);
+}
+
+/** Le coffre contient-il toutes les entrées de la recette ? */
+function hasInputs(store: Store, recipe: RecipeProto): boolean {
+  return amountsOf(recipe.inputs).every(([item, amount]) => store.count(item) >= amount);
+}
+
+/** Toutes les entrées, et la place pour les sorties une fois les entrées consommées. */
+function canCraft(store: Store, recipe: RecipeProto): boolean {
+  return hasInputs(store, recipe) && store.freeSpace() + totalOf(recipe.inputs) >= totalOf(recipe.outputs);
 }
 
 function clamp(value: number, min: number, max: number): number {

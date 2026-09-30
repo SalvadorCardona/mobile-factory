@@ -25,6 +25,7 @@ import { DECOR_ART } from '../art/decor.ts';
 import { DRILL } from '../art/drill.ts';
 import { EVE_SPRITE } from '../art/eve.ts';
 import { FARM } from '../art/farm.ts';
+import { FORGE } from '../art/forge.ts';
 import { KID } from '../art/kid.ts';
 import { LOOT } from '../art/loot.ts';
 import { MUTANT } from '../art/mutant.ts';
@@ -35,7 +36,7 @@ import { STORE_FULL } from '../art/storeFull.ts';
 import { TARGET } from '../art/target.ts';
 import { TOWN_HALL } from '../art/townHall.ts';
 import { TREE, TREE_DEAD, TREE_PINE } from '../art/trees.ts';
-import { WATCHTOWER } from '../art/watchtower.ts';
+import { REINFORCED_TOWER, WATCHTOWER } from '../art/watchtower.ts';
 import { WOLF } from '../art/wolf.ts';
 import { WORKER } from '../art/worker.ts';
 
@@ -86,6 +87,8 @@ export const SPRITES = {
   builderHouse: BUILDER_HOUSE,
   farm: FARM,
   watchtower: WATCHTOWER,
+  forge: FORGE,
+  reinforcedTower: REINFORCED_TOWER,
 
   /** Décor de surface : un morceau par élément, cf. `data/decor.ts`. */
   decor: DECOR_ART,

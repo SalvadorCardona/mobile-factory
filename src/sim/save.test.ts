@@ -87,6 +87,15 @@ function playedWorld(): World {
 
   if (hall && hall.kind !== 'site') hall.hp = 1_000_000;
   build(world, 'nursery');
+
+  // De quoi nourrir le premier enfant : sans nourriture, la nurserie attend.
+  const nursery = [...world.entities.values()].find((entity) => entity.kind === 'nursery');
+
+  if (!nursery) throw new Error('pas de nurserie');
+  world.player.inventory.add('food', 4);
+  world.push({ type: 'supplyBuilding', id: nursery.id });
+  world.tick();
+
   build(world, 'watchtower');
   build(world, 'drill');
 

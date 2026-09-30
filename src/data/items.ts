@@ -23,6 +23,7 @@ export const ITEMS = {
   coal: { label: 'Charbon', stack: 100 },
   ironOre: { label: 'Minerai de fer', stack: 100 },
   food: { label: 'Nourriture', stack: 100 },
+  ironPlate: { label: 'Plaque de fer', stack: 50 },
 } as const satisfies Record<string, ItemProto>;
 
 export type ItemId = keyof typeof ITEMS;

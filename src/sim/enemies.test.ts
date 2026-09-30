@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_SIZE, worldToTile } from '../core/grid.ts';
-import { BUILDINGS, NURSERY_BIRTH_TICKS } from '../data/buildings.ts';
+import { BUILDINGS } from '../data/buildings.ts';
 import { ENEMIES, MUTANT_LOOT, WAVES, waveSize } from '../data/enemies.ts';
 import type { ItemId } from '../data/items.ts';
+import { RECIPES } from '../data/recipes.ts';
 import { WEAPONS } from '../data/weapons.ts';
 import { compassOf } from './enemies.ts';
 import { BUILD_REACH_TILES } from './player.ts';
@@ -30,6 +31,9 @@ function standNextTo(world: World, tx: number, ty: number, width: number, height
   }
   throw new Error('emprise cernée');
 }
+
+const NURSERY_BIRTH_TICKS = RECIPES.raiseChild.duration;
+const BIRTH_FOOD = RECIPES.raiseChild.inputs.food;
 
 /** Remplit le sac avec le coût, va au contact du chantier, et pousse jusqu'à l'achèvement. */
 function completeSite(world: World, id: EntityId): Entity {
@@ -556,15 +560,23 @@ describe('nurserie', () => {
       born.push(kidId);
       birthTick = world.tickCount;
     });
+
+    // De quoi nourrir deux enfants.
+    world.player.inventory.add('food', BIRTH_FOOD * 2);
+    world.push({ type: 'supplyBuilding', id: nursery.id });
+    world.tick();
+    expect(nursery.store.count('food')).toBe(BIRTH_FOOD * 2);
+
     expect(nursery.nextBirthTick - world.tickCount).toBeLessThanOrEqual(NURSERY_BIRTH_TICKS);
     expect(world.population()).toEqual({ adults: 1, children: 0, workers: 0 });
 
-    for (let i = 0; i < NURSERY_BIRTH_TICKS - 3; i += 1) world.tick();
+    while (world.tickCount < nursery.nextBirthTick - 1) world.tick();
     expect(born).toHaveLength(0);
 
-    for (let i = 0; i < 3; i += 1) world.tick();
+    world.tick();
     expect(born).toHaveLength(1);
     expect(nursery.born).toBe(1);
+    expect(nursery.store.count('food')).toBe(BIRTH_FOOD);
     expect(world.population()).toEqual({ adults: 1, children: 1, workers: 0 });
     expect(nursery.nextBirthTick).toBe(birthTick + NURSERY_BIRTH_TICKS);
 
@@ -583,6 +595,73 @@ describe('nurserie', () => {
 
     for (let i = 0; i < NURSERY_BIRTH_TICKS; i += 1) world.tick();
     expect(born).toHaveLength(2);
+    expect(nursery.store.count('food')).toBe(0);
+  });
+
+  it('ne fait naître personne sans nourriture, et la livraison la réveille', () => {
+    const world = new World(7);
+    const nursery = build(world, 'nursery');
+    let born = 0;
+    let hungry = 0;
+
+    if (nursery.kind !== 'nursery') throw new Error('pas une nurserie');
+
+    world.events.on('childBorn', () => (born += 1));
+    world.events.on('nurseryHungry', () => (hungry += 1));
+
+    while (world.tickCount < nursery.nextBirthTick) world.tick();
+
+    // L'heure est passée, le coffre est vide : pas d'enfant, et plus de réveil planifié.
+    expect(born).toBe(0);
+    expect(hungry).toBe(1);
+    expect(nursery.hungry).toBe(true);
+
+    const wakes = world.pendingWakes();
+
+    for (let i = 0; i < NURSERY_BIRTH_TICKS; i += 1) world.tick();
+    expect(born).toBe(0);
+    expect(hungry).toBe(1);
+    expect(world.pendingWakes()).toBe(wakes);
+
+    // Trois nourritures ne suffisent pas ; la quatrième fait naître l'enfant sur-le-champ.
+    world.player.inventory.add('food', BIRTH_FOOD - 1);
+    world.push({ type: 'supplyBuilding', id: nursery.id });
+    world.tick();
+    expect(born).toBe(0);
+
+    world.player.inventory.add('food', 1);
+    world.push({ type: 'supplyBuilding', id: nursery.id });
+    world.tick();
+    expect(born).toBe(1);
+    expect(nursery.hungry).toBe(false);
+    expect(nursery.store.count('food')).toBe(0);
+    expect(nursery.nextBirthTick).toBe(world.tickCount + NURSERY_BIRTH_TICKS);
+    expect(world.pendingWakes()).toBe(wakes + 1);
+  });
+
+  it('prend la nourriture au contact d’Adam, et elle seule, dans la limite de son coffre', () => {
+    const world = new World(7);
+    const nursery = build(world, 'nursery');
+    const rejected: string[] = [];
+
+    if (nursery.kind !== 'nursery') throw new Error('pas une nurserie');
+
+    world.events.on('supplyRejected', ({ reason }) => rejected.push(reason));
+
+    // Rien à donner : refusé.
+    world.player.inventory.add('wood', 5);
+    world.push({ type: 'supplyBuilding', id: nursery.id });
+    world.tick();
+    expect(rejected).toEqual(['nothingToGive']);
+
+    world.player.inventory.add('food', BUILDINGS.nursery.storage + 3);
+    world.push({ type: 'setMoveAxis', ...standNextTo(world, nursery.tx, nursery.ty, nursery.width, nursery.height) });
+    for (let i = 0; i < 200; i += 1) world.tick();
+
+    expect(nursery.store.count('food')).toBe(BUILDINGS.nursery.storage);
+    expect(world.player.inventory.count('food')).toBe(3);
+    expect(world.player.inventory.count('wood')).toBe(5);
+    expect(nursery.store.count('wood')).toBe(0);
   });
 });
 

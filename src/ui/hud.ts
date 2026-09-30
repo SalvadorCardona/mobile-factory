@@ -50,7 +50,7 @@ const REJECTION_LABELS: Record<PlacementRejection, string> = {
   outOfReach: 'Trop loin — rapprochez-vous',
   resource: 'Dégagez d’abord les arbres et rochers',
   onPlayer: 'Vous êtes sur l’emplacement',
-  locked: 'Il vous manque le plan de ce bâtiment',
+  locked: 'Pas encore débloqué — il faut son plan, ou tenir encore quelques vagues',
 };
 
 /** Durée de vie d'un gain flottant, en ms (cf. `hud-float-up` dans le CSS). */
@@ -283,6 +283,12 @@ export class Hud {
       if (reason === 'nothingToGive') this.notify('Rien dans le sac que ce chantier attende', 'bad');
     });
     world.events.on('storeTaken', ({ item, amount }) => this.float(item, amount));
+    world.events.on('buildingSupplied', ({ item, amount }) => this.float(item, -amount));
+    world.events.on('supplyRejected', ({ reason }) => {
+      if (reason === 'outOfReach') this.notify(REJECTION_LABELS.outOfReach, 'bad');
+      if (reason === 'nothingToGive') this.notify('Rien dans le sac que ce bâtiment attende', 'bad');
+    });
+    world.events.on('nurseryHungry', () => this.notify('La nurserie attend de la nourriture pour le prochain enfant', 'bad'));
     world.events.on('takeRejected', ({ reason }) => {
       if (reason === 'outOfReach') this.notify(REJECTION_LABELS.outOfReach, 'bad');
       if (reason === 'empty') this.notify('Le coffre est vide', 'bad');
@@ -739,7 +745,7 @@ export class Hud {
         .entries()
         .map(([item, amount]) => `${ITEMS[item].label} ${amount}`)
         .join(', ');
-      const stopped = entity.kind === 'drill' && entity.blocked ? ' — arrêtée' : '';
+      const stopped = (entity.kind === 'drill' || entity.kind === 'forge') && entity.blocked ? ' — arrêtée' : '';
 
       lines.push(`#${entity.id} ${BUILDINGS[entity.proto].label} : ${contents || 'vide'}${stopped}`);
     }

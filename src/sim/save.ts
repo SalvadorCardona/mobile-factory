@@ -228,10 +228,18 @@ function parseEntity(raw: unknown): SavedEntity {
         blocked: bool(entity['blocked']),
       };
     case 'nursery':
-      return { ...built, kind, nextBirthTick: int(entity['nextBirthTick']), born: int(entity['born']) };
+      return {
+        ...built,
+        kind,
+        nextBirthTick: int(entity['nextBirthTick']),
+        born: int(entity['born']),
+        // Absent des sauvegardes d'avant la nourriture : la nurserie n'avait jamais faim.
+        hungry: entity['hungry'] === undefined ? false : bool(entity['hungry']),
+      };
     case 'tower':
       return { ...built, kind, armed: bool(entity['armed']) };
     case 'farm':
+    case 'forge':
       return { ...built, kind, blocked: bool(entity['blocked']) };
     case 'townHall':
     case 'house':

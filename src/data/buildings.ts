@@ -18,7 +18,7 @@ import type { SpriteId } from './sprites.ts';
 import type { WeaponId } from './weapons.ts';
 
 /** Comportement simulé associé au bâtiment. Un `kind` = un cas dans `sim/`. */
-export type BuildingKind = 'drill' | 'townHall' | 'nursery' | 'tower' | 'house' | 'farm';
+export type BuildingKind = 'drill' | 'townHall' | 'nursery' | 'tower' | 'house' | 'farm' | 'forge';
 
 export interface BuildingProto {
   label: string;
@@ -50,6 +50,12 @@ export interface BuildingProto {
    * qu'une fois le plan donné par Ève, en récompense d'une quête (`data/quests.ts`).
    */
   plan: boolean;
+  /**
+   * Vague à passer avant de pouvoir le poser. Le menu montre la carte, grisée,
+   * dès le début : le joueur sait à quoi servira le charbon avant d'en avoir
+   * besoin, sans avoir trop de choix trop tôt.
+   */
+  unlockWave: number;
   /** Sprite du bâtiment : son chantier, sa version finie, sa version endommagée. */
   sprite: SpriteId;
   /** Arme automatique du bâtiment, ou `null` s'il n'en porte pas. */
@@ -71,6 +77,7 @@ export const BUILDINGS = {
     workers: 0,
     menu: false,
     plan: false,
+    unlockWave: 0,
     sprite: 'townHall',
     weapon: null,
   },
@@ -88,6 +95,7 @@ export const BUILDINGS = {
     workers: 0,
     menu: true,
     plan: false,
+    unlockWave: 0,
     sprite: 'drill',
     weapon: null,
   },
@@ -100,11 +108,12 @@ export const BUILDINGS = {
     width: 2,
     height: 2,
     cost: { wood: 14, stone: 6 },
-    storage: 0,
+    storage: 12,
     hp: 60,
     workers: 0,
     menu: true,
     plan: false,
+    unlockWave: 0,
     sprite: 'nursery',
     weapon: null,
   },
@@ -122,6 +131,7 @@ export const BUILDINGS = {
     workers: 4,
     menu: true,
     plan: true,
+    unlockWave: 0,
     sprite: 'builderHouse',
     weapon: null,
   },
@@ -139,6 +149,7 @@ export const BUILDINGS = {
     workers: 4,
     menu: true,
     plan: false,
+    unlockWave: 0,
     sprite: 'farm',
     weapon: null,
   },
@@ -156,8 +167,45 @@ export const BUILDINGS = {
     workers: 0,
     menu: true,
     plan: false,
+    unlockWave: 0,
     sprite: 'watchtower',
     weapon: 'towerBow',
+  },
+  forge: {
+    label: LORE.buildings.forge.name,
+    siteDescription: LORE.buildings.forge.site,
+    description: LORE.buildings.forge.description,
+    effect: LORE.buildings.forge.effect,
+    kind: 'forge',
+    width: 2,
+    height: 2,
+    cost: { wood: 8, stone: 10, ironOre: 4 },
+    storage: 30,
+    hp: 60,
+    workers: 0,
+    menu: true,
+    plan: false,
+    unlockWave: 2,
+    sprite: 'forge',
+    weapon: null,
+  },
+  reinforcedTower: {
+    label: LORE.buildings.reinforcedTower.name,
+    siteDescription: LORE.buildings.reinforcedTower.site,
+    description: LORE.buildings.reinforcedTower.description,
+    effect: LORE.buildings.reinforcedTower.effect,
+    kind: 'tower',
+    width: 2,
+    height: 2,
+    cost: { wood: 10, stone: 6, ironPlate: 4 },
+    storage: 0,
+    hp: 90,
+    workers: 0,
+    menu: true,
+    plan: false,
+    unlockWave: 2,
+    sprite: 'reinforcedTower',
+    weapon: 'reinforcedBow',
   },
 } as const satisfies Record<string, BuildingProto>;
 
@@ -171,6 +219,3 @@ export const MENU_BUILDING_IDS = BUILDING_IDS.filter((id) => BUILDINGS[id].menu)
 export function isBuildingId(value: string): value is BuildingId {
   return value in BUILDINGS;
 }
-
-/** Ticks entre deux naissances à la nurserie : dix minutes. */
-export const NURSERY_BIRTH_TICKS = 20 * 60 * 10;

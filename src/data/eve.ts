@@ -49,6 +49,8 @@ export const EVE_LINES = {
     bow: 'Reste près d’eux : ton arc tire tout seul.',
     /** Par radio, entre deux vagues, tant qu'elle n'est pas là. `{n}` : vagues restantes. */
     coming: 'Tiens bon : encore {n} vague{s} et j’arrive avec ma machine !',
+    /** Une fois la forge débloquée, tant qu'elle n'est pas bâtie : le charbon sert enfin. */
+    forge: 'La forge est débloquée ! Fer et charbon dedans, plaques de fer dehors.',
   },
   /** Le petit dialogue d'arrivée, bulle après bulle. */
   arrival: [

@@ -63,13 +63,18 @@ export interface TownHall extends Built {
   kind: 'townHall';
 }
 
-/** La nurserie : un enfant toutes les dix minutes. */
+/** La nurserie : un enfant toutes les dix minutes, s'il y a de quoi le nourrir. */
 export interface Nursery extends Built {
   kind: 'nursery';
   /** Tick de la prochaine naissance — la fenêtre d'inspection affiche le compte à rebours. */
   nextBirthTick: number;
   /** Enfants nés ici, en tout. */
   born: number;
+  /**
+   * Vrai quand l'heure de naître est passée sans assez de nourriture dans le
+   * coffre : la nurserie ne se replanifie plus, c'est la livraison qui la réveille.
+   */
+  hungry: boolean;
 }
 
 /** La tour de guet : un arc automatique, réveillé tant qu'il y a des mutants. */
@@ -91,7 +96,17 @@ export interface Farm extends Built {
   blocked: boolean;
 }
 
-export type Entity = Site | Drill | TownHall | Nursery | Tower | House | Farm;
+/**
+ * La forge : fer et charbon, apportés par Adam, deviennent des plaques de
+ * fer dans son coffre, à la cadence de la recette.
+ */
+export interface Forge extends Built {
+  kind: 'forge';
+  /** Vrai quand il manque une entrée : la forge ne se replanifie plus. */
+  blocked: boolean;
+}
+
+export type Entity = Site | Drill | TownHall | Nursery | Tower | House | Farm | Forge;
 
 export type Building = Exclude<Entity, Site>;
 
