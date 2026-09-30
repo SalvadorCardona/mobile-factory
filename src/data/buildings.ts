@@ -231,6 +231,7 @@ export const BUILDINGS = {
     height: 2,
     cost: { wood: 12, stone: 8, food: 4 },
     storage: 0,
+    logisticRadius: 0,
     hp: 60,
     workers: 0,
     menu: true,
