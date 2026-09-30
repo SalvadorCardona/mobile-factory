@@ -8,13 +8,14 @@
  * Deux familles :
  * - les **entités** posées sur la grille — chantiers et bâtiments — qui
  *   dorment entre deux réveils du scheduler ;
- * - les **mobiles** — mutants, bêtes, flèches, enfants, Ève — qui bougent à chaque tick.
+ * - les **mobiles** — mutants, bêtes, flèches, enfants, Ève, ouvriers — qui bougent à chaque tick.
  *   Ils sont peu nombreux, et c'est ce qui rend le tick par mobile acceptable.
  */
 
 import type { BuildingId } from '../data/buildings.ts';
 import type { EnemyId, WildlifeId } from '../data/enemies.ts';
 import type { ItemId } from '../data/items.ts';
+import type { JobPriority } from '../data/workers.ts';
 import type { Store } from './store.ts';
 
 export type EntityId = number;
@@ -78,7 +79,7 @@ export interface Tower extends Built {
   armed: boolean;
 }
 
-/** La maison des constructeurs : elle ne fait rien, elle loge — ses ouvriers comptent dans la population. */
+/** La maison des constructeurs : elle loge les ouvriers — les porteurs — qui y dorment quand il n'y a rien à porter. */
 export interface House extends Built {
   kind: 'house';
 }
@@ -234,4 +235,38 @@ export interface Eve extends Moving {
   wanderTicks: number;
 }
 
-export type Mobile = Mutant | Beast | Arrow | Kid | Eve;
+/**
+ * Un transport : `amount` objets `item`, de `from` vers `to`.
+ *
+ * Il est couvert des deux côtés dès sa création : le stock est marqué
+ * sortant à la source, la place réservée à l'arrivée (`sim/jobs.ts`). Un
+ * second job ne peut plus voir ni ce stock ni cette place.
+ */
+export interface Job {
+  from: EntityId;
+  to: EntityId;
+  item: ItemId;
+  amount: number;
+  priority: JobPriority;
+  /** Vrai une fois la charge ramassée : seule la réservation d'arrivée tient encore. */
+  carried: boolean;
+}
+
+/**
+ * Un ouvrier de la maison des constructeurs : un porteur.
+ *
+ * Il dort chez lui (`inside`) tant qu'il n'y a rien à porter, sort dès qu'un
+ * job se présente, et rentre s'y abriter pendant une vague.
+ */
+export interface Worker extends Moving {
+  kind: 'worker';
+  /** La maison qui le loge. */
+  homeId: EntityId;
+  /** Vrai s'il est chez lui : invisible, immobile. */
+  inside: boolean;
+  job: Job | null;
+  /** Ticks avant de chercher à nouveau du travail. */
+  searchTicks: number;
+}
+
+export type Mobile = Mutant | Beast | Arrow | Kid | Eve | Worker;

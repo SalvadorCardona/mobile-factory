@@ -1,5 +1,5 @@
 /**
- * Mutants, bêtes sauvages, flèches, enfants et Ève.
+ * Mutants, bêtes sauvages, flèches, enfants, Ève et ouvriers.
  *
  * Les mobiles n'ont pas d'événement de création : ils apparaissent dans
  * `world.mobiles`, et cette couche s'y synchronise à chaque frame — une vue
@@ -23,6 +23,9 @@
  *
  * Le marqueur de cible — un anneau jaune au sol et une pointe au-dessus de
  * la tête — suit ce que l'arc d'Adam vise (`player.target`).
+ *
+ * Un ouvrier chez lui n'est pas dessiné ; dehors, il porte sa charge sur la
+ * tête tant que son job est ramassé.
  */
 
 import { Container, Graphics, Sprite, type Texture, type Ticker } from 'pixi.js';
@@ -52,6 +55,8 @@ function puppetOf(mobile: Exclude<Mobile, { kind: 'arrow' }>): { id: PuppetId; s
       return { id: 'kid', shadowWidth: 15, stride: 3 };
     case 'eve':
       return { id: 'eve', shadowWidth: 20, stride: 4 };
+    case 'worker':
+      return { id: 'worker', shadowWidth: 16, stride: 3 };
     case 'beast':
       return mobile.proto === 'crab'
         ? { id: WILDLIFE.crab.sprite, shadowWidth: 22, stride: 8, gait: 'scuttle' }
@@ -168,13 +173,19 @@ export class MobileLayer {
 
         case 'mutant':
         case 'beast':
-        case 'kid': {
+        case 'kid':
+        case 'worker': {
           const puppet = view.puppet!;
 
           view.root.zIndex = y + 6;
           this.ground(view, x, y);
 
-          if (mobile.kind !== 'kid' && view.hp) {
+          if (mobile.kind === 'worker') {
+            view.root.visible = !mobile.inside;
+            puppet.carry(mobile.job?.carried ? mobile.job.item : null);
+          }
+
+          if ((mobile.kind === 'mutant' || mobile.kind === 'beast') && view.hp) {
             const max = mobile.kind === 'mutant' ? ENEMIES[mobile.proto].hp : WILDLIFE[mobile.proto].hp;
 
             view.hp.visible = mobile.hp < max;
