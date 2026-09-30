@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BUILDINGS } from '../data/buildings.ts';
 import { World } from '../sim/world.ts';
-import { tutorialHint, type HintProgress } from './hint.ts';
+import { tutorialAdvice, tutorialHint, type HintProgress } from './hint.ts';
 
 const TAP_HINT = 'Tapez le chantier, puis « Construire ».';
 
@@ -46,5 +46,13 @@ describe('tutorialHint', () => {
 
     expect(world.entities.get(world.townHallId)?.kind).toBe('townHall');
     expect(tutorialHint(world, FRESH, false, 0)).not.toBe(TAP_HINT);
+  });
+
+  it('envoie chercher du bois, puis de la pierre', () => {
+    const world = new World(1);
+
+    expect(tutorialAdvice(world, FRESH, false, 0)?.wants).toBe('wood');
+    expect(tutorialAdvice(world, { ...FRESH, harvestedWood: true }, false, 0)?.wants).toBe('stone');
+    expect(tutorialAdvice(readyWorld(), FRESH, false, 0)?.wants).toBeNull();
   });
 });

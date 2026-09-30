@@ -118,6 +118,22 @@ export function oreAt(seed: number, tx: number, ty: number): OreNode | null {
   return dx * dx + dy * dy <= node.radius * node.radius ? node : null;
 }
 
+/** Les gisements des cellules à `range` cellules ou moins de celle de la tuile. */
+export function oreNodesNear(seed: number, tx: number, ty: number, range: number): OreNode[] {
+  const cellX = Math.floor(tx / ORE_CELL);
+  const cellY = Math.floor(ty / ORE_CELL);
+  const nodes: OreNode[] = [];
+
+  for (let dy = -range; dy <= range; dy += 1) {
+    for (let dx = -range; dx <= range; dx += 1) {
+      const node = nodeOfCell(seed, cellX + dx, cellY + dy);
+
+      if (node) nodes.push(node);
+    }
+  }
+  return nodes;
+}
+
 /*
  * Forêts : un bruit large dessine les massifs, un tirage par tuile fait le
  * grain. Le seuil de massif est haut pour laisser des clairières : un joueur

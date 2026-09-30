@@ -27,7 +27,7 @@ import type { AtlasStats } from '../render/spriteLibrary.ts';
 import type { PlacementRejection } from '../sim/commands.ts';
 import type { EntityId } from '../sim/types.ts';
 import { TICKS_PER_SECOND, siteMissing, type World } from '../sim/world.ts';
-import { tutorialHint } from './hint.ts';
+import { tutorialAdvice, type Advice } from './hint.ts';
 import { itemAmount, itemIcon, uiIcon } from './icons.ts';
 
 const REJECTION_LABELS: Record<PlacementRejection, string> = {
@@ -63,6 +63,7 @@ export class Hud {
   private readonly hint: HTMLElement;
   private readonly hintText: HTMLElement;
   private readonly bag: HTMLElement;
+  private readonly buttons: HTMLElement;
   private readonly floats: HTMLElement;
   private readonly stats: HTMLElement;
   private readonly toasts: HTMLElement;
@@ -74,6 +75,7 @@ export class Hud {
   private lastBag = '';
   private lastQuest = '';
   private lastHint = '';
+  private wanted: ItemId | null = null;
   private debug: boolean;
 
   /** Ce que le joueur a déjà fait : un conseil compris ne revient pas. */
@@ -110,6 +112,8 @@ export class Hud {
     this.countdown = element('div', 'hud-countdown');
 
     const buttons = element('div', 'hud-buttons');
+
+    this.buttons = buttons;
 
     this.pauseButton = element('button', 'hud-button hud-pause');
     this.pauseButton.type = 'button';
@@ -205,6 +209,16 @@ export class Hud {
   /** Bas de la quête, en pixels écran : les repères de bord du renderer restent dessous. */
   public topInset(): number {
     return this.quest.getBoundingClientRect().bottom;
+  }
+
+  /** Les boutons et le sac, posés sous la quête le long des bords : les repères de bord les contournent. */
+  public obstacles(): DOMRect[] {
+    return [this.buttons.getBoundingClientRect(), this.bag.getBoundingClientRect()];
+  }
+
+  /** La ressource que le conseil envoie chercher, ou `null` : le renderer y pointe un repère. */
+  public wantedItem(): ItemId | null {
+    return this.wanted;
   }
 
   public toggleDebug(): void {
@@ -358,11 +372,11 @@ export class Hud {
   /* --------------------------------------------------------------- conseil */
 
   /** Le conseil sous la quête, cf. `hint.ts`. */
-  private currentHint(): string | null {
+  private currentAdvice(): Advice | null {
     const { world } = this;
     const towers = [...world.entities.values()].some((entity) => entity.kind === 'tower');
 
-    return tutorialHint(
+    return tutorialAdvice(
       world,
       {
         harvestedWood: this.harvestedWood,
@@ -376,7 +390,10 @@ export class Hud {
   }
 
   private updateHint(): void {
-    const hint = this.currentHint() ?? '';
+    const advice = this.currentAdvice();
+    const hint = advice?.text ?? '';
+
+    this.wanted = advice?.wants ?? null;
 
     if (hint === this.lastHint) return;
     this.lastHint = hint;

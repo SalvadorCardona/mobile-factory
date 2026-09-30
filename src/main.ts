@@ -20,6 +20,7 @@ import { PALETTE, hex } from './data/artDirection.ts';
 import { MENU_BUILDING_IDS } from './data/buildings.ts';
 import type { WildlifeId } from './data/enemies.ts';
 import type { ItemId } from './data/items.ts';
+import { IndicatorTap } from './input/indicatorTap.ts';
 import { Inspect } from './input/inspect.ts';
 import { Joystick } from './input/joystick.ts';
 import { Keyboard, isTyping, type KeyboardState } from './input/keyboard.ts';
@@ -44,7 +45,7 @@ import { PauseScreen, TitleScreen } from './ui/screens.ts';
  */
 const MAX_FRAME_MS = 250;
 
-/** Hauteur du bouton « Construire » et de sa marge, en pixels écran. */
+/** Hauteur du bouton « Construire » et de sa marge, en pixels écran : le minimum réservé en bas. */
 const HUD_BOTTOM_INSET = 84;
 
 /** Seuil sous lequel un mouvement d'axe ne vaut pas une commande. */
@@ -206,13 +207,28 @@ async function main(): Promise<void> {
     if (event.code === 'Backquote' && import.meta.env.DEV) hud.toggleDebug();
   });
 
-  // Ordre d'interrogation des doigts : l'inspection d'abord (elle ne
+  // Taper le repère de la mairie : sa fenêtre si Adam est à portée de
+  // transfert, sinon un coup d'œil d'une seconde vers elle.
+  const homeTap = new IndicatorTap(
+    (x, y) => renderer.homeIndicatorAt(x, y),
+    () => {
+      const hall = world.entities.get(world.townHallId);
+
+      if (!hall) return;
+      if (world.inReach(hall)) panel.show(hall.id);
+      else renderer.peek((hall.tx + hall.width / 2) * TILE_SIZE, (hall.ty + hall.height / 2) * TILE_SIZE);
+    },
+  );
+
+  // Ordre d'interrogation des doigts : le repère de la mairie d'abord (il ne
+  // revendique qu'un doigt posé dessus), l'inspection ensuite (elle ne
   // revendique qu'un tap sur un bâtiment), le placement ensuite (il ne
   // revendique rien tant qu'aucun bâtiment n'est armé — mais armé, il doit
   // passer avant le joystick, sinon on ne peut pas construire sur la moitié
   // gauche de l'écran), le joystick en dernier.
   const pointers = new PointerRouter(renderer.canvas);
 
+  pointers.add(homeTap);
   pointers.add(inspect);
   pointers.add(placement);
   pointers.add(joystick);
@@ -240,10 +256,27 @@ async function main(): Promise<void> {
     hud.update(ticker.FPS, renderer.bakedChunks, renderer.atlasStats);
 
     // Lire la mise en page force un reflow : une fois tous les dix cadres suffit.
-    if (++frame % 10 === 0) renderer.setHudInsets(hud.topInset(), HUD_BOTTOM_INSET);
+    if (++frame % 10 === 0) renderer.setHudInsets(hud.topInset(), bottomInset(), hud.obstacles());
+    renderer.setObjective(hud.wantedItem());
     buildMenu.refresh();
     panel.update();
   });
+
+  /**
+   * Ce que le bas de l'écran occupe : le bouton « Construire », ou plus quand
+   * le tiroir, la barre de placement ou la fenêtre d'un bâtiment sont ouverts.
+   */
+  function bottomInset(): number {
+    const height = renderer.app.screen.height;
+    let top = height - HUD_BOTTOM_INSET;
+
+    for (const node of [...buildMenu.root.children, panel.root]) {
+      const rect = node.getBoundingClientRect();
+
+      if (rect.height > 0) top = Math.min(top, rect.top);
+    }
+    return height - top;
+  }
 
   /**
    * L'axe est lu en continu mais ne devient une commande que lorsqu'il bouge

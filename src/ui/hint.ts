@@ -22,7 +22,18 @@ export interface HintProgress {
   inspected: EntityId | null;
 }
 
+/** Un conseil, et la ressource qu'il envoie chercher : le repère d'objectif y mène. */
+export interface Advice {
+  text: string;
+  wants: ItemId | null;
+}
+
 export function tutorialHint(world: World, progress: HintProgress, towers: boolean, mutants: number): string | null {
+  return tutorialAdvice(world, progress, towers, mutants)?.text ?? null;
+}
+
+export function tutorialAdvice(world: World, progress: HintProgress, towers: boolean, mutants: number): Advice | null {
+  const say = (text: string, wants: ItemId | null = null): Advice => ({ text, wants });
   const hall = world.entities.get(world.townHallId);
   const { inventory } = world.player;
 
@@ -34,15 +45,15 @@ export function tutorialHint(world: World, progress: HintProgress, towers: boole
     const carries = (Object.keys(cost) as ItemId[]).some((item) => needs(item) && inventory.count(item) > 0);
 
     // Sa fenêtre ouverte, le chantier est tapé : le bouton « Construire » est sous les yeux.
-    if (siteMissing(hall) === 0) return progress.inspected === hall.id ? null : 'Tapez le chantier, puis « Construire ».';
-    if (inventory.freeSpace() <= 0) return 'Sac plein ! Marchez contre le chantier pour livrer.';
-    if (!progress.harvestedWood && needs('wood')) return 'Marchez contre un arbre pour couper du bois.';
-    if (!progress.harvestedStone && needs('stone')) return 'Il faut de la pierre : foncez dans un rocher rose.';
-    if (carries && !progress.delivered) return 'Marchez contre le chantier pour livrer — ou tapez-le.';
+    if (siteMissing(hall) === 0) return progress.inspected === hall.id ? null : say('Tapez le chantier, puis « Construire ».');
+    if (inventory.freeSpace() <= 0) return say('Sac plein ! Marchez contre le chantier pour livrer.');
+    if (!progress.harvestedWood && needs('wood')) return say('Marchez contre un arbre pour couper du bois.', 'wood');
+    if (!progress.harvestedStone && needs('stone')) return say('Il faut de la pierre : foncez dans un rocher rose.', 'stone');
+    if (carries && !progress.delivered) return say('Marchez contre le chantier pour livrer — ou tapez-le.');
     return null;
   }
 
-  if (world.wave === 0 && !towers) return 'Les mutants arrivent : construisez une tour de guet.';
-  if (mutants > 0 && world.wave <= 2) return 'Restez près d’eux : votre arc tire tout seul.';
+  if (world.wave === 0 && !towers) return say('Les mutants arrivent : construisez une tour de guet.');
+  if (mutants > 0 && world.wave <= 2) return say('Restez près d’eux : votre arc tire tout seul.');
   return null;
 }
