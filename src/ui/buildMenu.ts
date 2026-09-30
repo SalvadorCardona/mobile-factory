@@ -31,8 +31,8 @@
  * à chaque frame, lesquels le joueur peut bâtir. Un bâtiment à plan reste
  * caché tant qu'Ève n'a pas donné le plan (`data/quests.ts`).
  *
- * Un bâtiment qui attend sa vague (`unlockWave`) garde sa carte, grisée de
- * la même façon, avec son coût et « Après la vague N » : le joueur voit à
+ * Un bâtiment qui attend sa nuit (`unlockNight`) garde sa carte, grisée de
+ * la même façon, avec son coût et « Dès la nuit N » : le joueur voit à
  * quoi servira le charbon avant de pouvoir poser la forge.
  *
  * Au clavier (`handleKey`) : Espace ouvre le tiroir sur la première carte
@@ -344,9 +344,9 @@ export class BuildMenu {
   private lockReason(id: BuildingId): string | null {
     if (!this.unlocked()) return 'Débloqué après la mairie';
 
-    const { unlockWave } = BUILDINGS[id];
+    const { unlockNight } = BUILDINGS[id];
 
-    return this.world.wave < unlockWave ? `Après la vague ${unlockWave}` : null;
+    return this.world.night < unlockNight ? `Dès la nuit ${unlockNight}` : null;
   }
 
   /** Recalcule l'état visible. Appelé à chaque changement de placement et à chaque frame. */

@@ -54,17 +54,17 @@ export function tutorialAdvice(world: World, progress: HintProgress, towers: boo
     return null;
   }
 
-  if (world.wave === 0 && !towers) return say(lines.tower);
-  if (mutants > 0 && world.wave <= 2) return say(lines.bow);
+  if (world.night === 0 && !towers) return say(lines.tower);
+  if (mutants > 0 && world.night <= 2) return say(lines.bow);
 
-  // Entre deux vagues, tant qu'elle n'est pas là : elle annonce son arrivée.
-  if (mutants === 0 && world.wave > 0 && world.wave < EVE.arrivalWave && !world.eve()) {
-    const left = EVE.arrivalWave - world.wave;
+  // Entre deux nuits, tant qu'elle n'est pas là : elle annonce son arrivée.
+  if (mutants === 0 && world.night > 0 && world.night < EVE.arrivalNight && !world.eve()) {
+    const left = EVE.arrivalNight - world.night;
 
     return say(lines.coming.replace('{n}', String(left)).replace('{s}', left > 1 ? 's' : ''));
   }
 
-  // La forge se débloque après quelques vagues : le charbon, jusque-là sans usage, devient un objectif.
+  // La forge se débloque à la tombée d'une nuit : le charbon, jusque-là sans usage, devient un objectif.
   const forged = [...world.entities.values()].some((entity) => BUILDINGS[entity.proto].kind === 'forge');
 
   if (mutants === 0 && world.isUnlocked('forge') && !forged) return say(lines.forge, 'coal');

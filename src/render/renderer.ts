@@ -8,8 +8,8 @@
  * Deux conteneurs seulement :
  * - `world`, translaté par la caméra, où vit tout ce qui a des coordonnées
  *   monde : le sol baké, l'eau qui bouge par-dessus, les ombres portées, puis le conteneur trié en
- *   profondeur (bâtiments, arbres, rochers, personnages), les particules et
- *   le fantôme de construction ;
+ *   profondeur (bâtiments, arbres, rochers, personnages), les particules, la
+ *   nuit (une passe de teinte et ses lueurs) et le fantôme de construction ;
  * - `hud`, en pixels écran, où vivent le joystick et les repères de bord.
  *
  * Tout est vectoriel, rastérisé à la résolution de l'écran : aucune texture
@@ -28,6 +28,7 @@ import { ChunkLayer } from './chunkLayer.ts';
 import { EntityLayer } from './entityLayer.ts';
 import { GhostLayer } from './ghostLayer.ts';
 import { IndicatorLayer, indicatorSources, type ScreenRect } from './indicatorLayer.ts';
+import { NightLayer } from './nightLayer.ts';
 import { ParticleLayer } from './particles.ts';
 import { ResourceLayer } from './resourceLayer.ts';
 import { SpriteLibrary, type AtlasStats } from './spriteLibrary.ts';
@@ -45,6 +46,7 @@ export class GameRenderer {
   private readonly entityLayer: EntityLayer;
   private readonly resourceLayer: ResourceLayer;
   private readonly ghostLayer: GhostLayer;
+  private readonly nightLayer: NightLayer;
   public readonly particles = new ParticleLayer();
   private readonly joystickBase: Sprite;
   private readonly joystickKnob: Sprite;
@@ -67,6 +69,7 @@ export class GameRenderer {
     this.resourceLayer = new ResourceLayer(world, library, this.tiles, this.entityLayer.container, this.shadows);
     this.indicators = new IndicatorLayer(world, library);
     this.ghostLayer = new GhostLayer(world, library);
+    this.nightLayer = new NightLayer(app.renderer, world);
 
     this.worldContainer.addChild(
       this.chunkLayer.container,
@@ -74,6 +77,7 @@ export class GameRenderer {
       this.shadows,
       this.entityLayer.container,
       this.particles.container,
+      this.nightLayer.container,
       this.ghostLayer.container,
     );
 
@@ -195,6 +199,7 @@ export class GameRenderer {
     this.resourceLayer.update(this.camera, this.app.ticker.deltaMS, block?.reason === 'resource' ? block.tiles : []);
     this.entityLayer.update(alpha, this.app.ticker);
     this.particles.update(this.app.ticker.deltaMS);
+    this.nightLayer.update(alpha);
     this.ghostLayer.update(building, ghost, block, this.app.ticker.deltaMS);
     this.indicators.update(this.camera, this.app.ticker.deltaMS, alpha);
 
@@ -228,6 +233,7 @@ export class GameRenderer {
     this.resourceLayer.destroy();
     this.entityLayer.destroy();
     this.ghostLayer.destroy();
+    this.nightLayer.destroy();
     this.indicators.destroy();
     this.particles.destroy();
     this.library.destroy();

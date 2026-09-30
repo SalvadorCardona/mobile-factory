@@ -51,11 +51,11 @@ export interface BuildingProto {
    */
   plan: boolean;
   /**
-   * Vague à passer avant de pouvoir le poser. Le menu montre la carte, grisée,
+   * Nuit à voir tomber avant de pouvoir le poser. Le menu montre la carte, grisée,
    * dès le début : le joueur sait à quoi servira le charbon avant d'en avoir
    * besoin, sans avoir trop de choix trop tôt.
    */
-  unlockWave: number;
+  unlockNight: number;
   /** Sprite du bâtiment : son chantier, sa version finie, sa version endommagée. */
   sprite: SpriteId;
   /** Arme automatique du bâtiment, ou `null` s'il n'en porte pas. */
@@ -77,7 +77,7 @@ export const BUILDINGS = {
     workers: 0,
     menu: false,
     plan: false,
-    unlockWave: 0,
+    unlockNight: 0,
     sprite: 'townHall',
     weapon: null,
   },
@@ -95,7 +95,7 @@ export const BUILDINGS = {
     workers: 0,
     menu: true,
     plan: false,
-    unlockWave: 0,
+    unlockNight: 0,
     sprite: 'drill',
     weapon: null,
   },
@@ -113,7 +113,7 @@ export const BUILDINGS = {
     workers: 0,
     menu: true,
     plan: false,
-    unlockWave: 0,
+    unlockNight: 0,
     sprite: 'nursery',
     weapon: null,
   },
@@ -131,7 +131,7 @@ export const BUILDINGS = {
     workers: 4,
     menu: true,
     plan: true,
-    unlockWave: 0,
+    unlockNight: 0,
     sprite: 'builderHouse',
     weapon: null,
   },
@@ -149,7 +149,7 @@ export const BUILDINGS = {
     workers: 4,
     menu: true,
     plan: false,
-    unlockWave: 0,
+    unlockNight: 0,
     sprite: 'farm',
     weapon: null,
   },
@@ -167,7 +167,7 @@ export const BUILDINGS = {
     workers: 0,
     menu: true,
     plan: false,
-    unlockWave: 0,
+    unlockNight: 0,
     sprite: 'watchtower',
     weapon: 'towerBow',
   },
@@ -185,7 +185,7 @@ export const BUILDINGS = {
     workers: 0,
     menu: true,
     plan: false,
-    unlockWave: 2,
+    unlockNight: 1,
     sprite: 'forge',
     weapon: null,
   },
@@ -203,7 +203,7 @@ export const BUILDINGS = {
     workers: 0,
     menu: true,
     plan: false,
-    unlockWave: 2,
+    unlockNight: 1,
     sprite: 'reinforcedTower',
     weapon: 'reinforcedBow',
   },

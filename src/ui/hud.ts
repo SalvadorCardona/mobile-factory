@@ -10,7 +10,7 @@
  *
  * Ce qu'il montre :
  * - la **quête** en haut : le chantier de la mairie avec une barre par
- *   ressource, puis la santé de la mairie, la vague et son compte à rebours ;
+ *   ressource, puis la santé de la mairie, la nuit et son compte à rebours ;
  * - un **conseil** sous la quête, qui suit ce que fait le joueur (couper,
  *   casser, livrer, construire, se défendre) et se tait quand il a compris —
  *   c'est Ève qui le dit, son portrait devant ; au bout de cinq secondes, il
@@ -27,9 +27,10 @@
  * - des **bulles** empilées pour les événements, des gains qui flottent
  *   au-dessus de la tête d'Adam, et le nom d'un bâtiment achevé qui monte
  *   de son toit (« Mairie bâtie ! ») ;
- * - le **bandeau** des vagues : « Vague 4 — 2 mutants arrivent par l'est ! »
- *   trois secondes avant, avec une flèche tournée vers leur point
- *   d'apparition, puis « Vague 4 repoussée ! » quand le dernier tombe ;
+ * - le **bandeau** des vagues : « Nuit 4 — 2 mutants arrivent par l'est ! »
+ *   (« Renforts » pour les vagues suivantes de la nuit) trois secondes avant,
+ *   avec une flèche tournée vers leur point d'apparition, puis « Nuit 4 —
+ *   vague repoussée ! » quand le dernier tombe ;
  * - l'écran de **défaite**, avec le bilan de la partie et les graines qu'elle
  *   laisse au jardin des souvenirs ;
  * - les statistiques de debug, seulement avec `?debug` (ou la touche `²`/`` ` ``).
@@ -47,6 +48,7 @@ import type { WaterStats } from '../render/waterLayer.ts';
 import type { PlacementRejection } from '../sim/commands.ts';
 import type { Compass } from '../sim/enemies.ts';
 import type { Entity } from '../sim/types.ts';
+import { ticksToNight } from '../sim/dayNight.ts';
 import { currentQuest, questProgress } from '../sim/eve.ts';
 import { TICKS_PER_SECOND, type Workforce, type World } from '../sim/world.ts';
 import { tutorialAdvice, type Advice } from './hint.ts';
@@ -59,7 +61,7 @@ const REJECTION_LABELS: Record<PlacementRejection, string> = {
   outOfReach: 'Trop loin — rapprochez-vous',
   resource: 'Dégagez d’abord les arbres et rochers',
   onPlayer: 'Vous êtes sur l’emplacement',
-  locked: 'Pas encore débloqué — il faut son plan, ou tenir encore quelques vagues',
+  locked: 'Pas encore débloqué — il faut son plan, ou tenir encore une nuit',
 };
 
 /** Durée de vie d'un gain flottant, en ms (cf. `hud-float-up` dans le CSS). */
@@ -82,7 +84,7 @@ const SPEECH_PER_CHAR_MS = 45;
  */
 const HINT_FOLD_TICKS = 5 * TICKS_PER_SECOND;
 
-/** Sous ce seuil, le compte à rebours de la vague passe au rouge. */
+/** Sous ce seuil, le compte à rebours de la nuit passe au rouge — le crépuscule y est déjà. */
 const WAVE_WARNING_SECONDS = 10;
 
 /** D'où vient une vague, dit comme on le dirait. */
@@ -132,8 +134,8 @@ export class Hud {
   /** Le point monde que la flèche du bandeau montre ; `null` sans flèche. */
   private bannerTarget: { x: number; y: number } | null = null;
   private bannerTimer = 0;
-  /** Numéro de la vague déjà annoncée : le bandeau ne repart pas à chaque seconde du compte à rebours. */
-  private announced = 0;
+  /** La vague déjà annoncée (nuit et rang) : le bandeau ne repart pas à chaque seconde du compte à rebours. */
+  private announced = '';
   private readonly defeat: HTMLElement;
   private readonly defeatStats: HTMLElement;
   private readonly speech: HTMLElement;
@@ -327,16 +329,21 @@ export class Hud {
 
       if (entity) this.celebrate(entity);
     });
-    world.events.on('waveCountdown', ({ seconds, wave, count, from, x, y }) => {
+    world.events.on('waveCountdown', ({ seconds, night, wave, count, from, x, y }) => {
       this.showCountdown(String(seconds));
-      this.announce(wave, count, from, { x, y });
+      this.announce(night, wave, count, from, { x, y });
     });
+    world.events.on('duskFell', () => this.notify('La nuit tombe — rentrez !', 'bad'));
     // Une vague qui n'a pas eu son compte à rebours (partie reprise pile avant) s'annonce quand même.
-    world.events.on('waveStarted', ({ wave, count, from, x, y }) => this.announce(wave, count, from, { x, y }));
-    world.events.on('waveCleared', ({ wave }) =>
-      this.showBanner('cleared', `Vague ${wave} repoussée !`, 'Ramassez ce que les mutants ont lâché', null, BANNER_CLEARED_MS),
+    world.events.on('waveStarted', ({ night, wave, count, from, x, y }) => this.announce(night, wave, count, from, { x, y }));
+    world.events.on('waveCleared', ({ night }) =>
+      this.showBanner('cleared', `Nuit ${night} — vague repoussée !`, 'Ramassez ce que les mutants ont lâché', null, BANNER_CLEARED_MS),
     );
     world.events.on('lootPicked', ({ item, amount }) => this.float(item, amount));
+    world.events.on('dawnBroke', ({ night, reward }) => {
+      this.notify(`L’aube ! Nuit ${night} survécue`, 'good');
+      for (const [item, amount] of reward) this.float(item, amount);
+    });
     world.events.on('buildingDestroyed', ({ proto }) => this.notify(`${BUILDINGS[proto].label} détruite`, 'bad'));
     world.events.on('childBorn', () => this.notify('Un enfant est né à la nurserie !', 'good'));
     world.events.on('townHallDestroyed', () => this.showDefeat());
@@ -477,15 +484,17 @@ export class Hud {
   }
 
   /** Le bandeau d'une vague, une seule fois par vague. */
-  private announce(wave: number, count: number, from: Compass, origin: { x: number; y: number }): void {
-    if (wave === this.announced) return;
-    this.announced = wave;
+  private announce(night: number, wave: number, count: number, from: Compass, origin: { x: number; y: number }): void {
+    const key = `${night}:${wave}`;
+
+    if (key === this.announced) return;
+    this.announced = key;
 
     const plural = count > 1;
 
     this.showBanner(
       'wave',
-      `Vague ${wave}`,
+      wave === 1 ? `Nuit ${night}` : 'Renforts',
       `${count} mutant${plural ? 's' : ''} arrive${plural ? 'nt' : ''} ${FROM_LABELS[from]} !`,
       origin,
       BANNER_WAVE_MS,
@@ -617,14 +626,20 @@ export class Hud {
 
     const max = BUILDINGS[hall.proto].hp;
     const mutants = this.mutantCount();
-    const seconds = Math.max(0, Math.ceil((world.nextWaveTick - world.tickCount) / TICKS_PER_SECOND));
+    const time = world.clock();
+    const dark = time?.phase === 'night';
     const { adults, children, workers } = world.population();
     const people = adults + children;
     const crew = world.workforce();
+    // Pendant la nuit, le temps qu'il reste avant l'aube ; sinon, avant la prochaine nuit.
+    const seconds = time ? Math.ceil((dark ? time.left : ticksToNight(time)) / TICKS_PER_SECOND) : 0;
+    const next = time ? time.cycle + (time.phase === 'dawn' ? 1 : 0) : 1;
     const status =
       mutants > 0
-        ? `Vague ${world.wave} · ${mutants} mutant${mutants > 1 ? 's' : ''}`
-        : `Vague ${world.wave + 1} dans ${clock(seconds)}`;
+        ? `Nuit ${world.night} · ${mutants} mutant${mutants > 1 ? 's' : ''}`
+        : dark
+          ? `Nuit ${world.night} · aube dans ${clock(seconds)}`
+          : `Nuit ${next} dans ${clock(seconds)}`;
 
     const quest = world.eve()?.state === 'idle' || world.eve()?.state === 'repair' ? currentQuest(world.questsDone) : null;
     const progress = quest ? questProgress(quest, world.entities.values()) : null;
@@ -649,7 +664,7 @@ export class Hud {
     const line = element('div', 'hud-quest-line');
     const wave = text('hud-quest-wave', status);
 
-    wave.dataset['urgent'] = String(mutants > 0 || seconds <= WAVE_WARNING_SECONDS);
+    wave.dataset['urgent'] = String(mutants > 0 || dark || seconds <= WAVE_WARNING_SECONDS);
     const chips = element('div', 'hud-quest-chips');
 
     chips.append(chip('people', people + workers, 'Habitants'), this.crewChip(crew.total), chip('mutant', world.kills, 'Mutants abattus'));
@@ -793,7 +808,7 @@ export class Hud {
     const { world } = this;
     const survived = Math.floor((world.defeatTick || world.tickCount) / TICKS_PER_SECOND);
     const rows: [string, string][] = [
-      ['Vagues repoussées', String(Math.max(0, world.wave - 1))],
+      ['Nuits survécues', String(Math.max(0, world.night - 1))],
       ['Mutants abattus', String(world.kills)],
       ['Temps tenu', clock(survived)],
     ];

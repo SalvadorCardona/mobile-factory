@@ -829,14 +829,14 @@ describe('forge', () => {
     world.tick();
     expect(rejected).toEqual(['locked']);
 
-    world.wave = FORGE.unlockWave;
+    world.night = FORGE.unlockNight;
     expect(world.isUnlocked('forge')).toBe(true);
   });
 
   it('fond fer et charbon en plaques, à la cadence de la recette, puis s’arrête faute d’entrées', () => {
     const world = new World(7);
 
-    world.wave = FORGE.unlockWave;
+    world.night = FORGE.unlockNight;
 
     const forge = buildNear(world, 'forge');
     const produced: ItemId[] = [];
@@ -878,7 +878,7 @@ describe('forge', () => {
   it('ne rend que ses plaques, et garde le fer et le charbon au four', () => {
     const world = new World(7);
 
-    world.wave = FORGE.unlockWave;
+    world.night = FORGE.unlockNight;
 
     const forge = buildNear(world, 'forge');
 
@@ -902,7 +902,7 @@ describe('forge', () => {
   it('partage son coffre entre fer et charbon, au prorata de la recette', () => {
     const world = new World(7);
 
-    world.wave = FORGE.unlockWave;
+    world.night = FORGE.unlockNight;
 
     const forge = buildNear(world, 'forge');
 
@@ -917,7 +917,7 @@ describe('forge', () => {
   it('se remplit au contact d’Adam, puis lui rend ses plaques', () => {
     const world = new World(7);
 
-    world.wave = FORGE.unlockWave;
+    world.night = FORGE.unlockNight;
 
     const forge = buildNear(world, 'forge');
 

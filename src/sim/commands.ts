@@ -101,7 +101,7 @@ export type PlacementRejection =
   | 'onPlayer'
   /**
    * Pas encore débloqué : il faut d'abord le plan, qu'Ève donne en récompense
-   * d'une quête, ou passer d'autres vagues (`unlockWave`).
+   * d'une quête, ou voir tomber d'autres nuits (`unlockNight`).
    */
   | 'locked';
 

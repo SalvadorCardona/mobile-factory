@@ -14,7 +14,7 @@
  * Un mutant touché fait la grimace (yeux en croix) et gicle ; un mutant de
  * vague sort d'une flaque vert fluo qui bouillonne, se hisse hors d'elle à
  * la fin de son émergence, et la flaque se résorbe derrière lui ; un mutant
- * qui meurt s'écrase comme une flaque et s'efface. Ce sont des minuteurs de vue : la simulation ne
+ * qui meurt — ou qui fuit le jour, à l'aube — s'écrase comme une flaque et s'efface. Ce sont des minuteurs de vue : la simulation ne
  * connaît que ses points de vie. Crabes et loups font de même, et frappent
  * (pinces qui claquent, bond) quand ils touchent Adam.
  *
@@ -180,6 +180,7 @@ export class MobileLayer {
     };
 
     world.events.on('mutantDied', fall);
+    world.events.on('mutantFled', fall);
     world.events.on('beastDied', fall);
     world.events.on('playerHurt', ({ by }) => this.views.get(by)?.puppet?.strike());
   }

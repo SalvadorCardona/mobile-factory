@@ -157,7 +157,7 @@ describe('sauvegarde', () => {
     expect(kinds).toEqual(new Set(['townHall', 'nursery', 'tower', 'drill', 'site']));
     expect(state.mobiles.some((mobile) => mobile.kind === 'kid')).toBe(true);
     expect(state.mobiles.some((mobile) => mobile.kind === 'mutant')).toBe(true);
-    expect(state.wave).toBeGreaterThan(0);
+    expect(state.night).toBeGreaterThan(0);
     expect(Object.keys(state.resources).length).toBeGreaterThan(0);
   });
 
@@ -198,6 +198,32 @@ describe('sauvegarde', () => {
     expect(file['version']).toBe(SAVE_VERSION);
     expect(file['savedAt']).toBe(1234);
     expect(file['state']).toBeTypeOf('object');
+  });
+
+  it('reprend une sauvegarde de la version 4 : la vague devient la nuit, un jour se lève', () => {
+    const world = new World(7);
+
+    for (let i = 0; i < 5; i += 1) world.tick();
+
+    const file = JSON.parse(encodeSave(world, 1)) as { state: Record<string, unknown> };
+    const state = { ...file.state };
+
+    delete state['night'];
+    delete state['cycleStartTick'];
+    const v4 = (wave: number, nextWaveTick: number): string =>
+      JSON.stringify({ version: 4, savedAt: 1, state: { ...state, wave, nextWaveTick } });
+
+    const standing = decodeSave(v4(3, 900));
+
+    if (!standing.ok) throw new Error(`sauvegarde refusée : ${standing.reason}`);
+    expect(standing.world.night).toBe(3);
+    expect(standing.world.cycleStartTick).toBe(world.tickCount);
+    expect(standing.world.clock()?.phase).toBe('day');
+
+    const building = decodeSave(v4(0, 0));
+
+    if (!building.ok) throw new Error(`sauvegarde refusée : ${building.reason}`);
+    expect(building.world.clock()).toBeNull();
   });
 
   it('ignore sans lever une sauvegarde d’une autre version', () => {

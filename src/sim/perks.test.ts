@@ -130,12 +130,12 @@ describe('bonus du jardin', () => {
 });
 
 describe('graines laissées par une colonie', () => {
-  it('une colonie qui n’a rien bâti ne compte rien, sinon le bâti et les vagues comptent', () => {
+  it('une colonie qui n’a rien bâti ne compte rien, sinon le bâti et les nuits comptent', () => {
     const world = new World(7);
 
     expect(world.colonyScore()).toEqual({ waves: 0, children: 0, buildings: 0 });
 
-    world.wave = 4;
+    world.night = 4;
     world.defeated = true;
     expect(world.colonyScore()).toEqual({ waves: 3, children: 0, buildings: 1 });
     expect(seedsFor(world.colonyScore())).toBeGreaterThan(seedsFor({ waves: 0, children: 0, buildings: 1 }));

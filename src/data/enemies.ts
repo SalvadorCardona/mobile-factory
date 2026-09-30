@@ -54,21 +54,23 @@ export type EnemyId = keyof typeof ENEMIES;
  * Les vagues.
  *
  * Rien n'attaque tant que la mairie est en chantier : le joueur apprend à
- * récolter et à livrer en paix. Une fois le toit posé, la première vague part
- * après `firstDelay`, puis une toutes les `interval`. L'effectif grossit d'un
- * mutant toutes les `growEvery` vagues, jusqu'à `maxSize`.
+ * récolter et à livrer en paix. Une fois le toit posé, le cycle jour / nuit
+ * démarre (`data/dayNight.ts`) : les mutants ne sortent que la nuit, en
+ * `perNight` vagues espacées de `interval`, la première à la tombée de la
+ * nuit. L'effectif grossit d'un mutant toutes les `growEvery` nuits, jusqu'à
+ * `maxSize`.
  *
- * Une vague se voit : elle vient d'**une** direction, tirée dès qu'elle est
- * planifiée pour que l'annonce la donne, et elle surgit **dans le champ**
+ * Une vague se voit : elle vient d'**une** direction, tirée dès que la
+ * précédente est partie pour que l'annonce la donne, et elle surgit **dans le champ**
  * d'un téléphone tenu droit quand Adam est à la mairie — assez près pour que
  * la flaque se voie, pas à vingt tuiles. Chaque mutant sort de sa flaque en
  * `emergeTicks` : ni les arcs ni les tours ne le visent tant qu'il n'est pas
  * debout, si bien qu'on le voit toujours avant de le voir tomber.
  */
 export const WAVES = {
-  firstDelay: 20 * 60,
-  interval: 20 * 45,
-  growEvery: 2,
+  perNight: 2,
+  interval: 20 * 30,
+  growEvery: 1,
   maxSize: 8,
   /** Distance d'apparition depuis le centre de la mairie, en tuiles. */
   minDistance: 6,
@@ -123,9 +125,9 @@ export const LOOT_DROPS = {
   cap: 40,
 } as const;
 
-/** Effectif de la vague numéro `wave` (la première vaut 1). */
-export function waveSize(wave: number): number {
-  return Math.min(WAVES.maxSize, 1 + Math.floor((wave - 1) / WAVES.growEvery));
+/** Effectif d'une vague de la nuit numéro `night` (la première vaut 1). */
+export function waveSize(night: number): number {
+  return Math.min(WAVES.maxSize, 1 + Math.floor((night - 1) / WAVES.growEvery));
 }
 
 /* ------------------------------------------------------------------ faune */

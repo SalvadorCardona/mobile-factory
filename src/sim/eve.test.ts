@@ -53,11 +53,11 @@ function withTownHall(seed = 7): World {
   return world;
 }
 
-/** Raccourci : la vague d'arrivée est passée, Ève roule jusqu'à la mairie. */
+/** Raccourci : la nuit d'arrivée est passée, Ève roule jusqu'à la mairie. */
 function withEve(seed = 7): World {
   const world = withTownHall(seed);
 
-  world.wave = EVE.arrivalWave;
+  world.night = EVE.arrivalNight;
   for (let i = 0; i < 2000 && world.eve()?.state !== 'idle'; i += 1) world.tick();
   if (world.eve()?.state !== 'idle') throw new Error('Ève n’est pas arrivée');
   return world;
@@ -70,22 +70,22 @@ function clearMutants(world: World): void {
 }
 
 describe('Ève', () => {
-  it('arrive une fois la troisième vague repoussée, et la population compte deux adultes', () => {
+  it('arrive une fois la troisième nuit repoussée, et la population compte deux adultes', () => {
     const world = withTownHall();
     const arrived: number[] = [];
 
-    world.events.on('eveArrived', () => arrived.push(world.wave));
+    world.events.on('eveArrived', () => arrived.push(world.night));
 
     expect(world.population().adults).toBe(1);
 
-    for (let i = 0; i < 20 * 60 * 10 && arrived.length === 0; i += 1) {
+    for (let i = 0; i < 20 * 60 * 20 && arrived.length === 0; i += 1) {
       world.tick();
-      if (world.wave < EVE.arrivalWave) expect(world.eve()).toBeUndefined();
+      if (world.night < EVE.arrivalNight) expect(world.eve()).toBeUndefined();
       // Adam repousse chaque vague sur-le-champ.
       clearMutants(world);
     }
 
-    expect(arrived).toEqual([EVE.arrivalWave]);
+    expect(arrived).toEqual([EVE.arrivalNight]);
     expect(world.eve()?.state).toBe('idle');
     expect(world.population().adults).toBe(2);
   });
@@ -94,7 +94,7 @@ describe('Ève', () => {
     const world = withTownHall();
     const hall = world.entities.get(world.townHallId)!;
 
-    world.wave = EVE.arrivalWave;
+    world.night = EVE.arrivalNight;
     for (let i = 0; i < 40 && !world.eve(); i += 1) world.tick();
 
     const eve = world.eve()!;
@@ -116,7 +116,7 @@ describe('Ève', () => {
   it('n’arrive pas si la vague est encore là', () => {
     const world = withTownHall();
 
-    world.wave = EVE.arrivalWave;
+    world.night = EVE.arrivalNight;
     world.mobiles.set(999, {
       kind: 'mutant',
       id: 999,

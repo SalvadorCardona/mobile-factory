@@ -6,8 +6,8 @@
  * Adam ne parle jamais.
  *
  * Avant d'arriver, elle parle par radio : c'est sa voix qui porte les
- * conseils dès la première minute. Elle arrive après la vague
- * `arrivalWave` repoussée, sur son vélo-cargo, puis vit à la mairie, répare
+ * conseils dès la première minute. Elle arrive à l'aube de la nuit
+ * `arrivalNight` repoussée, sur son vélo-cargo, puis vit à la mairie, répare
  * le bâti entre les vagues et donne les quêtes (`data/quests.ts`).
  *
  * Répliques courtes : une bulle se lit d'un coup d'œil et ne bloque jamais.
@@ -15,8 +15,8 @@
  */
 
 export const EVE = {
-  /** Ève arrive une fois cette vague repoussée — le dernier mutant abattu. */
-  arrivalWave: 3,
+  /** Ève arrive une fois cette nuit repoussée — à l'aube, ou le dernier mutant abattu hors de la nuit. */
+  arrivalNight: 3,
   /** Distance, en tuiles, d'où part le vélo-cargo : hors de la vue d'Adam. */
   arrivalDistance: 16,
   /** Vitesse du vélo-cargo. */
@@ -44,10 +44,10 @@ export const EVE_LINES = {
     wood: 'Allô Adam ? Ici Ève. Fonce dans un arbre : il nous faut du bois.',
     stone: 'De la pierre, maintenant. Les rochers roses, ça casse bien.',
     deliver: 'Pose tout ça : marche contre le chantier, ou tape-le.',
-    tower: 'Des mutants approchent ! Une tour de guet, vite.',
+    tower: 'Les mutants sortent la nuit ! Une tour de guet, vite.',
     bow: 'Reste près d’eux : ton arc tire tout seul.',
-    /** Par radio, entre deux vagues, tant qu'elle n'est pas là. `{n}` : vagues restantes. */
-    coming: 'Tiens bon : encore {n} vague{s} et j’arrive avec ma machine !',
+    /** Par radio, entre deux nuits, tant qu'elle n'est pas là. `{n}` : nuits restantes. */
+    coming: 'Tiens bon : encore {n} nuit{s} et j’arrive avec ma machine !',
     /** Une fois la forge débloquée, tant qu'elle n'est pas bâtie : le charbon sert enfin. */
     forge: 'La forge est débloquée ! Fer et charbon dedans, plaques de fer dehors.',
   },
