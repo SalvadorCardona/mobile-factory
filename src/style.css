@@ -176,30 +176,46 @@ button {
 
 /* ------------------------------------------------------------------ quête */
 
-/* Le haut de l'écran : une colonne en flux, pas des positions absolues. */
+/*
+ * Le haut de l'écran : une seule bande, en flux. La quête au centre (elle
+ * prend toute la place qui reste sur un téléphone), les boutons et le sac
+ * dans une colonne à droite. Rien n'est posé sous la quête : quand son
+ * conseil s'ouvre ou se replie, aucun bouton ne bouge.
+ */
 .hud-top {
   position: absolute;
   top: calc(var(--safe-top) + 10px);
   left: calc(var(--safe-left) + 10px);
   right: calc(var(--safe-right) + 10px);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: 1fr minmax(0, 380px) 1fr;
+  align-items: start;
   pointer-events: none;
 }
 
-.hud-top-row {
-  align-self: stretch;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+.hud-quest {
+  grid-column: 2;
+  min-width: 0;
+  padding: 8px 14px 12px;
 }
 
-.hud-quest {
-  width: min(380px, 100%);
-  padding: 10px 14px 12px;
+.hud-side {
+  grid-column: 3;
+  justify-self: end;
+  margin-left: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+/* Le titre, et l'ampoule du conseil replié dans le coin : une ligne de hauteur fixe. */
+.hud-quest-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 24px;
 }
 
 .hud-quest-title {
@@ -349,11 +365,69 @@ button {
 
 /* --------------------------------------------------------------- conseil */
 
+/*
+ * Le pli du conseil : une rangée de grille qui passe de 0fr à 1fr. La quête
+ * grandit et rapetisse en douceur au lieu de sauter.
+ */
+.hud-hint-fold {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 280ms cubic-bezier(0.2, 1, 0.4, 1);
+}
+
+.hud-hint-clip {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.hud-quest[data-hint='open'] .hud-hint-fold {
+  grid-template-rows: 1fr;
+}
+
+/* Replié ou tu, le conseil garde son texte mais disparaît dans son pli. */
+.hud-quest:not([data-hint='open']) .hud-hint {
+  visibility: hidden;
+  transition: visibility 0s 280ms;
+}
+
+.hud-hint-bulb {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--yellow-light);
+  box-shadow: 0 2px 0 var(--yellow-shade);
+  visibility: hidden;
+}
+
+/* Le disque est petit, le doigt ne l'est pas : la zone de tap déborde. */
+.hud-hint-bulb::after {
+  content: '';
+  position: absolute;
+  inset: -10px;
+}
+
+.hud-quest[data-hint='folded'] .hud-hint-bulb {
+  visibility: visible;
+  animation: hint-in 320ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+.hud-hint-bulb:active {
+  transform: translateY(2px);
+  box-shadow: none;
+}
+
 .hud-hint {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 10px;
+  /* Les marges restent dans le pli : fermé, il ne garde pas un pixel. */
+  margin: 10px 0 3px;
   padding: 6px 14px 6px 8px;
   border-radius: 999px;
   /* Le cyan d'Ève : c'est sa voix. */
@@ -362,10 +436,6 @@ button {
   font-size: 16px;
   line-height: 1.25;
   animation: hint-in 320ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
-}
-
-.hud-hint[hidden] {
-  display: none;
 }
 
 @keyframes hint-in {
@@ -437,8 +507,7 @@ button {
 
 .hud-buttons {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 /* Les boutons ronds de la maquette : un disque blanc sur sa face lavande. */
