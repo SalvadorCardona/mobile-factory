@@ -2,12 +2,25 @@
  * Pièces communes aux bâtiments de la colonie.
  *
  * Tous les bâtiments du joueur ont des murs **jaunes** — la teinte réservée
- * à la colonie — et se distinguent par leur toit, leur silhouette et leurs
- * détails : un drapeau, une échelle, une grue, une antenne. Chacun existe en
- * trois états, trois morceaux du même cadre :
+ * à la colonie — et se distinguent par leur silhouette, par une **teinte
+ * d'accent** que nul autre ne porte en grand, et par un ou deux détails qui
+ * disent leur fonction :
  *
- * - `site` : le chantier. Des murs à mi-hauteur, un échafaudage, une grue
- *   corail qui soulève une caisse, un fanion — la maquette validée ;
+ * | bâtiment | silhouette | accent | détails |
+ * | --- | --- | --- | --- |
+ * | mairie | grand bloc 3 × 3, toit à deux pans | corail | drapeau, antenne, horloge |
+ * | foreuse | derrick en treillis | orange (moteur) | roue, tonneau, pierre extraite |
+ * | nurserie | maison basse au toit en dôme | peau (rose pêche) | berceau, linge, ballon |
+ * | constructeurs | atelier plat et une grue | cyan (bâche) | grue, marteau, scie |
+ * | ferme | champ bas, sans toit | ambre (terre) et menthe | sillons, épouvantail |
+ * | tour de guet | la plus haute, sur pilotis | blanc (auvent de toile) | plateforme, drapeau |
+ *
+ * Chacun existe en trois états, trois morceaux du même cadre :
+ *
+ * - `site` : le chantier. Chaque bâtiment a le sien : les pièces communes
+ *   d'ici (terrassement à l'emprise, échafaudage, caisses, planches, panneau)
+ *   et la silhouette du bâtiment en cours — celui de la mairie est la
+ *   maquette validée ;
  * - `built` : le bâtiment fini ;
  * - `damaged` : le même, cabossé par les mutants — un trou, des planches
  *   clouées en croix, des gravats au pied. Il reste debout : c'est gai, même
@@ -17,6 +30,7 @@
  */
 
 import {
+  GROUND,
   PALETTE,
   RADIUS,
   circle,
@@ -34,7 +48,7 @@ import {
   type Tone,
 } from '../data/artDirection.ts';
 
-const { ink, coral, orange, violet, yellow } = PALETTE;
+const { ink, coral, orange, violet, yellow, paper } = PALETTE;
 
 /** Toit à deux pans : le pan gauche éclairé, le pan droit dans l'ombre. */
 export function gableRoof(left: number, right: number, eave: number, peak: number, tone: Tone = 'coral'): string {
@@ -95,6 +109,45 @@ export function siteArt(width: number, height: number, footprint: number): strin
     ladder(width - 12, wallTop - 10, height - 8 - (wallTop - 10)) +
     crate(6, height - 20, 11) +
     planks(width * 0.45, height - 12, width * 0.3)
+  );
+}
+
+/**
+ * Le terrassement : la terre retournée sur toute l'emprise (`footprint` px
+ * au bas du cadre), bordée de piquets. C'est l'emprise réelle du bâtiment.
+ */
+export function siteGround(width: number, height: number, footprint: number): string {
+  const top = height - footprint;
+
+  return (
+    rect(2, top + 6, width - 4, footprint - 8, GROUND.sand.shade, RADIUS.large) +
+    rect(5, top + 9, width - 10, footprint - 16, GROUND.sand.base, RADIUS.block) +
+    line(4, top + 8, 4, top + 13, ink.base) +
+    line(width - 4, top + 8, width - 4, top + 13, ink.base)
+  );
+}
+
+/** Un échafaudage au trait : deux niveaux de lisses et leurs poteaux. */
+export function scaffold(x: number, y: number, w: number, h: number): string {
+  return railing(x, y, w, h, 3, ink.base) + line(x, y + h / 2, x + w, y + h / 2, ink.base);
+}
+
+/** Le bric-à-brac du chantier, au pied de l'emprise : une caisse et des planches. */
+export function siteClutter(width: number, height: number): string {
+  return crate(4, height - 15, 10) + planks(width - 22, height - 9, 18);
+}
+
+/**
+ * Le panneau du chantier : un piquet, une planche blanche, et dessus le
+ * pictogramme du bâtiment (`glyph`, dessiné par l'appelant autour de
+ * `x + 7, y + 6`). On sait ce qui se construit avant qu'il ne soit debout.
+ */
+export function siteSign(x: number, y: number, glyph: string): string {
+  return (
+    line(x + 7, y + 10, x + 7, y + 20, ink.base) +
+    rect(x, y, 14, 12, paper.shade, RADIUS.small) +
+    rect(x, y, 14, 10, paper.base, RADIUS.small) +
+    glyph
   );
 }
 

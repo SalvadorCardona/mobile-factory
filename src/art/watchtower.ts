@@ -3,8 +3,12 @@
  *
  * La plus haute silhouette de la colonie (cadre 64 × 128 pour une emprise
  * 2 × 2) : des poteaux indigo contreventés, une échelle, une plateforme
- * jaune à rambarde, un toit pointu corail, une lanterne et le drapeau.
- * Des sacs de sable au pied.
+ * jaune à rambarde, un auvent de toile blanche — son accent : le corail est
+ * à la mairie —, une lanterne et le drapeau. Des sacs de sable au pied.
+ *
+ * Son chantier : les quatre pilotis déjà plantés et contreventés, l'échelle,
+ * les planches de la plateforme en pile au pied, un fanion en haut d'un
+ * poteau et un drapeau sur le panneau.
  */
 
 import {
@@ -21,7 +25,7 @@ import {
   svg,
 } from '../data/artDirection.ts';
 import type { SpriteProto } from '../data/sprites.ts';
-import { damageMarks, gableRoof, siteArt } from './building.ts';
+import { damageMarks, gableRoof, planks, siteClutter, siteGround, siteSign } from './building.ts';
 
 const W = 64;
 const H = 128;
@@ -50,7 +54,7 @@ function tower(): string {
     ladder(28.5, 48, 72) +
     shadedBlock(3, 32, 58, 16, 6, 'yellow', 6) +
     railing(6, 22, 52, 10, 6) +
-    gableRoof(0, 64, 24, 8) +
+    gableRoof(0, 64, 24, 8, 'paper') +
     flag(32, 0, 10, 'cyan') +
     line(48, 24, 48, 27, ink.base) +
     circle(48, 29.5, 3, yellow.base) +
@@ -61,13 +65,32 @@ function tower(): string {
   );
 }
 
+function site(): string {
+  return (
+    siteGround(W, H, FOOTPRINT) +
+    // Les pilotis sont plantés à leur hauteur finale ; la plateforme manque.
+    rect(17, 44, 4, 70, ink.light, 2) +
+    rect(43, 44, 4, 70, ink.light, 2) +
+    line(19, 60, 45, 96, ink.light) +
+    line(45, 60, 19, 96, ink.light) +
+    rect(9, 42, 5, 80, ink.base, 2.5) +
+    rect(50, 42, 5, 80, ink.base, 2.5) +
+    ladder(28.5, 70, 50) +
+    flag(52.5, 30, 12, 'cyan') +
+    // Les planches de la plateforme attendent au pied.
+    planks(20, 116, 26) +
+    siteClutter(W, H) +
+    siteSign(22, 92, flag(26, 93, 8, 'cyan'))
+  );
+}
+
 export const WATCHTOWER = {
   width: W,
   height: H,
   anchorX: 0,
   anchorY: 1,
   parts: {
-    site: svg(W, H, siteArt(W, H, FOOTPRINT)),
+    site: svg(W, H, site()),
     built: svg(W, H, tower()),
     damaged: svg(W, H, tower(), damageMarks(3, 32, 58, 16)),
   },

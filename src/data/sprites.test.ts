@@ -3,6 +3,7 @@ import { brandBanner, brandIcon } from '../art/brand.ts';
 import { GROUND_TILES, cornerTile, edgeTile, shadowTile } from '../art/terrain.ts';
 import { UI_ICONS } from '../art/ui.ts';
 import { GROUND, PALETTE, auditSvg, type Ground } from './artDirection.ts';
+import { BUILDINGS, BUILDING_IDS } from './buildings.ts';
 import { ITEM_ICONS } from './icons.ts';
 import { BUILDING_PARTS, SPRITES, SPRITE_IDS, WALKER_PARTS, type SpriteProto } from './sprites.ts';
 
@@ -58,8 +59,30 @@ describe('sprites', () => {
   });
 
   it('donne à chaque bâtiment son chantier, sa version finie et sa version endommagée', () => {
-    for (const id of ['townHall', 'drill', 'nursery', 'builderHouse', 'farm', 'watchtower'] as const) {
-      for (const part of BUILDING_PARTS) expect(SPRITES[id].parts).toHaveProperty(part);
+    for (const id of BUILDING_IDS) {
+      for (const part of BUILDING_PARTS) expect(SPRITES[BUILDINGS[id].sprite].parts, `${id}.${part}`).toHaveProperty(part);
+    }
+  });
+
+  it('donne à chaque bâtiment son propre sprite, sans en réutiliser un autre', () => {
+    const sprites = BUILDING_IDS.map((id) => BUILDINGS[id].sprite);
+
+    expect(new Set(sprites).size, 'deux bâtiments partagent un sprite').toBe(sprites.length);
+
+    // Aucun morceau n'est celui d'un autre bâtiment, ni un autre état du même :
+    // un chantier générique partagé par tous ferait échouer ce test.
+    const seen = new Map<string, string>();
+
+    for (const id of BUILDING_IDS) {
+      const parts = SPRITES[BUILDINGS[id].sprite].parts as Record<string, string>;
+
+      for (const part of BUILDING_PARTS) {
+        const svg = parts[part] ?? '';
+        const twin = seen.get(svg);
+
+        expect(twin, `${id}.${part} est identique à ${twin}`).toBeUndefined();
+        seen.set(svg, `${id}.${part}`);
+      }
     }
   });
 
