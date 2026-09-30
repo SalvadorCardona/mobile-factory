@@ -988,6 +988,27 @@ describe('sac : ce qu’Adam accepte de porter', () => {
     expect(world.resources.at(tx, ty)?.remaining).toBe(resource.remaining);
   });
 
+  /*
+   * Le playtest du 30/09/2026 : 30 bois dans le sac, la mairie à 0/20, et le
+   * refus disait « aucun chantier n'en attend plus ». Le refus dit
+   * maintenant ce que les chantiers attendent encore.
+   */
+  it('dit, en refusant la récolte, qu’un chantier attend encore l’objet', () => {
+    const { world, tx, ty, axis } = worldWithHarvestable();
+    const item = RESOURCES[world.resources.at(tx, ty)!.id].item;
+    const wanted: number[] = [];
+
+    expect(world.wanted(item)).toBeGreaterThan(0);
+    world.player.inventory.add(item, world.carryLimit(item));
+    world.events.on('harvestRefused', (event) => wanted.push(event.wanted));
+    world.push({ type: 'setMoveAxis', ...axis });
+
+    for (let i = 0; i < 60; i += 1) world.tick();
+
+    expect(wanted.length).toBeGreaterThan(0);
+    expect(wanted.every((amount) => amount === world.wanted(item))).toBe(true);
+  });
+
   it('récolte encore juste sous le seuil', () => {
     const { world, tx, ty, axis } = worldWithHarvestable();
     const item = RESOURCES[world.resources.at(tx, ty)!.id].item;

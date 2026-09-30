@@ -267,9 +267,11 @@ export type WorldEvents = {
   inventoryFull: Record<string, never>;
   /**
    * Adam heurte un arbre ou un rocher mais porte déjà assez de cet objet
-   * (`carryLimit`) : rien n'est pris, et le joueur le voit.
+   * (`carryLimit`) : rien n'est pris, et le joueur le voit. `wanted` dit ce
+   * que chantiers et recettes en attendent encore (`World.wanted`) : zéro,
+   * personne n'en veut ; sinon, le sac en contient assez, il faut livrer.
    */
-  harvestRefused: { tx: number; ty: number; item: ItemId };
+  harvestRefused: { tx: number; ty: number; item: ItemId; wanted: number };
   /**
    * Plus que `seconds` secondes avant la prochaine vague (3, 2, puis 1) : sa
    * nuit, son rang dans la nuit, son effectif, d'où elle vient et le point,
@@ -1138,7 +1140,7 @@ export class World {
 
       // Assez de cet objet dans le sac : Adam n'en prend plus, et le joueur le voit.
       if (player.inventory.count(item) >= this.carryLimit(item)) {
-        if (!refused.has(item)) this.events.emit('harvestRefused', { tx: node.tx, ty: node.ty, item });
+        if (!refused.has(item)) this.events.emit('harvestRefused', { tx: node.tx, ty: node.ty, item, wanted: this.wanted(item) });
         refused.add(item);
         continue;
       }
