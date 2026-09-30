@@ -173,6 +173,12 @@ export class Hud {
       if (reason === 'outOfReach') this.notify(REJECTION_LABELS.outOfReach, 'bad');
       if (reason === 'nothingToGive') this.notify('Rien dans le sac que ce chantier attende', 'bad');
     });
+    world.events.on('storeTaken', ({ item, amount }) => this.float(item, amount));
+    world.events.on('takeRejected', ({ reason }) => {
+      if (reason === 'outOfReach') this.notify(REJECTION_LABELS.outOfReach, 'bad');
+      if (reason === 'empty') this.notify('Le coffre est vide', 'bad');
+      if (reason === 'bagFull') this.notify('Sac plein — rien à prendre de plus', 'bad');
+    });
     world.events.on('inventoryFull', () => this.notify('Sac plein — allez livrer le chantier', 'bad'));
     world.events.on('buildingCompleted', ({ id }) => {
       const entity = world.entities.get(id);

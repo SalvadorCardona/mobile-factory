@@ -16,7 +16,9 @@ mutants radioactifs** rôdent. La partie commence sur le chantier de la
 
 **Mécanique centrale** — Adam n'a pas de bouton d'action. Il **heurte** les
 choses : un arbre ou un rocher heurté se récolte (bois, fer, charbon,
-pierre) ; un chantier heurté reçoit ce qu'il attend. Les ressources et les
+pierre) ; un chantier heurté reçoit ce qu'il attend ; une foreuse ou une
+ferme heurtée vide son coffre dans le sac (bouton « Prendre » dans sa
+fenêtre), ce qui la relance si elle était bloquée. Les ressources et les
 bâtiments sont solides, on ne les traverse pas. Un tap sur un chantier ouvre
 sa fenêtre : « Transférer le sac » y vide d'un coup ce qu'il attend, et
 « Construire » l'achève — **un chantier livré ne se termine jamais seul**.

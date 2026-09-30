@@ -25,7 +25,12 @@ export type Command =
    * Achève un chantier entièrement livré. Un chantier ne se termine jamais
    * seul : le joueur voit l'emprise, décide, et appuie sur « Construire ».
    */
-  | { type: 'buildSite'; id: EntityId };
+  | { type: 'buildSite'; id: EntityId }
+  /**
+   * Vide le coffre d'une foreuse ou d'une ferme dans le sac, dans la limite
+   * de la place. Le bouton « Prendre » de la fenêtre du bâtiment.
+   */
+  | { type: 'takeFromBuilding'; id: EntityId };
 
 /** Motif de refus d'une commande sur un chantier — remonté à l'UI par un événement. */
 export type SiteRejection =
@@ -37,6 +42,17 @@ export type SiteRejection =
   | 'incomplete'
   /** Adam n'a rien dans le sac que le chantier attende. */
   | 'nothingToGive';
+
+/** Motif de refus d'un « Prendre » — remonté à l'UI par un événement. */
+export type TakeRejection =
+  /** Le bâtiment n'existe plus, ou n'a pas de production à prendre. */
+  | 'missing'
+  /** Adam est trop loin de l'emprise. */
+  | 'outOfReach'
+  /** Le coffre est vide. */
+  | 'empty'
+  /** Le sac est plein : rien n'est pris, rien n'est jeté. */
+  | 'bagFull';
 
 /** Motif de refus d'un placement — remonté à l'UI par un événement. */
 export type PlacementRejection =

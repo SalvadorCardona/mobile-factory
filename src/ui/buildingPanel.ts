@@ -8,8 +8,10 @@
  *
  * Sur un chantier, deux boutons : « Transférer le sac » vide dans le chantier
  * tout ce qu'il attend et qu'Adam possède ; « Construire » apparaît quand
- * tout est livré. La fenêtre ne modifie rien elle-même : chaque bouton
- * pousse une commande (`transferToSite`, `buildSite`) que le tick consomme.
+ * tout est livré. Sur une foreuse ou une ferme, « Prendre » vide son coffre
+ * dans le sac, dans la limite de la place. La fenêtre ne modifie rien
+ * elle-même : chaque bouton pousse une commande (`transferToSite`,
+ * `buildSite`, `takeFromBuilding`) que le tick consomme.
  *
  * Elle **lit** le monde à chaque frame tant qu'elle est ouverte, et se ferme
  * seule si l'entité disparaît — rasée par un mutant, par exemple.
@@ -21,6 +23,9 @@ import { WEAPONS } from '../data/weapons.ts';
 import type { Entity, EntityId } from '../sim/types.ts';
 import { TICKS_PER_SECOND, siteMissing, type World } from '../sim/world.ts';
 import { itemAmount, uiIcon } from './icons.ts';
+
+/** L'état d'une foreuse ou d'une ferme qui attend qu'on la vide. */
+const BLOCKED = 'Bloquée : coffre plein — heurtez-la ou appuyez sur Prendre.';
 
 export class BuildingPanel {
   public readonly root: HTMLElement;
@@ -34,6 +39,7 @@ export class BuildingPanel {
   private readonly actions: HTMLElement;
   private readonly transferButton: HTMLButtonElement;
   private readonly buildButton: HTMLButtonElement;
+  private readonly takeButton: HTMLButtonElement;
   private lastText = '';
   private lastItems = '';
 
@@ -96,7 +102,14 @@ export class BuildingPanel {
       if (this.entityId !== null) this.world.push({ type: 'buildSite', id: this.entityId });
     });
 
-    this.actions.append(this.transferButton, this.buildButton);
+    this.takeButton = document.createElement('button');
+    this.takeButton.type = 'button';
+    this.takeButton.textContent = 'Prendre';
+    this.takeButton.addEventListener('click', () => {
+      if (this.entityId !== null) this.world.push({ type: 'takeFromBuilding', id: this.entityId });
+    });
+
+    this.actions.append(this.transferButton, this.buildButton, this.takeButton);
 
     this.root.append(header, this.description, this.bar, this.items, this.lines, this.actions);
   }
@@ -181,12 +194,22 @@ export class BuildingPanel {
       this.transferButton.disabled = !inReach || !canGive;
       this.buildButton.hidden = missing > 0;
       this.buildButton.disabled = !inReach;
+      this.takeButton.hidden = true;
     } else {
       ratio = entity.hp / proto.hp;
       barClass = 'hp';
       lines.push(`Points de vie ${entity.hp}/${proto.hp}`);
       if (proto.workers > 0) lines.push(`${proto.workers} ouvriers y travaillent.`);
-      this.actions.hidden = true;
+
+      // Une foreuse ou une ferme produit dans son coffre : Adam vient le vider.
+      const producer = entity.kind === 'drill' || entity.kind === 'farm';
+
+      this.actions.hidden = !producer;
+      this.transferButton.hidden = true;
+      this.buildButton.hidden = true;
+      this.takeButton.hidden = !producer;
+      this.takeButton.disabled =
+        !inReach || entity.store.isEmpty() || this.world.player.inventory.freeSpace() <= 0;
 
       switch (entity.kind) {
         case 'townHall': {
@@ -201,7 +224,7 @@ export class BuildingPanel {
 
         case 'drill':
           lines.push(entity.output ? `Extrait : ${ITEMS[entity.output].label}` : 'Posée à sec : aucun gisement dessous.');
-          lines.push(entity.blocked && entity.output ? 'Arrêtée — coffre plein.' : entity.output ? 'En marche.' : '');
+          lines.push(entity.blocked && entity.output ? BLOCKED : entity.output ? 'En marche.' : '');
           break;
 
         case 'nursery': {
@@ -221,7 +244,7 @@ export class BuildingPanel {
         }
 
         case 'farm':
-          lines.push(entity.blocked ? 'Arrêtée — coffre plein.' : 'Les sillons poussent.');
+          lines.push(entity.blocked ? BLOCKED : 'Les sillons poussent.');
           break;
 
         case 'house':
