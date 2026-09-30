@@ -15,6 +15,8 @@
  *   casser, livrer, construire, se défendre) et se tait quand il a compris —
  *   c'est Ève qui le dit, son portrait devant ; au bout de cinq secondes, il
  *   se replie en ampoule à côté du titre ;
+ * - dans la ligne de la mairie, le **compteur d'ouvriers** : un tap déplie
+ *   leur détail par bâtiment, et ce que font les porteurs ;
  * - la **quête d'Ève** en cours, une fois qu'elle est arrivée ;
  * - la **bulle** d'Ève au-dessus de sa tête : son arrivée, ses quêtes, ce
  *   qu'elle répond quand on la tape. Courte, jamais bloquante ;
@@ -43,9 +45,9 @@ import type { PlacementRejection } from '../sim/commands.ts';
 import type { Compass } from '../sim/enemies.ts';
 import type { Entity } from '../sim/types.ts';
 import { currentQuest, questProgress } from '../sim/eve.ts';
-import { TICKS_PER_SECOND, type World } from '../sim/world.ts';
+import { TICKS_PER_SECOND, type Workforce, type World } from '../sim/world.ts';
 import { tutorialAdvice, type Advice } from './hint.ts';
-import { itemAmount, itemIcon, uiIcon } from './icons.ts';
+import { buildingIcon, itemAmount, itemIcon, uiIcon } from './icons.ts';
 import { mapUrl, seedLine } from './seed.ts';
 
 const REJECTION_LABELS: Record<PlacementRejection, string> = {
@@ -134,6 +136,8 @@ export class Hud {
   public readonly pauseButton: HTMLButtonElement;
   private lastBag = '';
   private lastQuest = '';
+  /** Le détail des ouvriers, déplié d'un tap sur leur compteur. */
+  private crewOpen = false;
   private lastHint = '';
   /** Tick où le conseil a été montré (ou déplié) : il se replie `HINT_FOLD_TICKS` plus tard. */
   private hintSince = 0;
@@ -599,6 +603,7 @@ export class Hud {
     const seconds = Math.max(0, Math.ceil((world.nextWaveTick - world.tickCount) / TICKS_PER_SECOND));
     const { adults, children, workers } = world.population();
     const people = adults + children;
+    const crew = world.workforce();
     const status =
       mutants > 0
         ? `Vague ${world.wave} · ${mutants} mutant${mutants > 1 ? 's' : ''}`
@@ -607,7 +612,7 @@ export class Hud {
     const quest = world.eve()?.state === 'idle' || world.eve()?.state === 'repair' ? currentQuest(world.questsDone) : null;
     const progress = quest ? questProgress(quest, world.entities.values()) : null;
 
-    key = `hall:${hall.hp}:${status}:${people}:${workers}:${world.kills}:${quest}:${progress?.have}`;
+    key = `hall:${hall.hp}:${status}:${people}:${workers}:${world.kills}:${quest}:${progress?.have}:${this.crewOpen && JSON.stringify(crew)}`;
     if (key === this.lastQuest) return;
     this.lastQuest = key;
 
@@ -628,8 +633,12 @@ export class Hud {
     const wave = text('hud-quest-wave', status);
 
     wave.dataset['urgent'] = String(mutants > 0 || seconds <= WAVE_WARNING_SECONDS);
-    line.append(wave, chip('people', people + workers, 'Habitants'), chip('mutant', world.kills, 'Mutants abattus'));
+    const chips = element('div', 'hud-quest-chips');
+
+    chips.append(chip('people', people + workers, 'Habitants'), this.crewChip(crew.total), chip('mutant', world.kills, 'Mutants abattus'));
+    line.append(wave, chips);
     this.questBody.replaceChildren(hp, line);
+    if (this.crewOpen) this.questBody.append(crewDetail(crew));
 
     if (quest && progress) {
       const row = element('div', 'hud-quest-eve');
@@ -637,6 +646,21 @@ export class Hud {
       row.append(uiIcon('eve', 18), text('hud-quest-eve-label', QUESTS[quest].label), text('hud-meter-value', `${progress.have}/${progress.need}`));
       this.questBody.append(row);
     }
+  }
+
+  /** Le compteur d'ouvriers : un tap déplie leur détail sous la ligne, un autre le replie. */
+  private crewChip(total: number): HTMLElement {
+    const node = text('hud-quest-chip hud-quest-crew', String(total), 'button');
+
+    node.setAttribute('type', 'button');
+    node.setAttribute('aria-label', `${total} ouvrier${total > 1 ? 's' : ''} — voir le détail`);
+    node.setAttribute('aria-expanded', String(this.crewOpen));
+    node.prepend(uiIcon('worker', 18));
+    node.addEventListener('click', () => {
+      this.crewOpen = !this.crewOpen;
+      this.updateQuest();
+    });
+    return node;
   }
 
   /* --------------------------------------------------------------- conseil */
@@ -806,6 +830,27 @@ function chip(icon: 'people' | 'mutant', value: number, label: string): HTMLElem
   node.title = label;
   node.prepend(uiIcon(icon, 18));
   return node;
+}
+
+/** Le détail des ouvriers : une ligne par bâtiment qui emploie, puis ce que font les porteurs. */
+function crewDetail({ byBuilding, porters }: Workforce): HTMLElement {
+  const detail = element('div', 'hud-quest-crew-detail');
+  const row = (icon: HTMLElement, label: string, count: number): HTMLElement => {
+    const node = element('div', 'hud-quest-crew-row');
+
+    node.append(icon, text('hud-quest-crew-label', label), text('hud-quest-crew-count', String(count)));
+    return node;
+  };
+
+  if (byBuilding.length === 0) detail.append(text('hud-quest-crew-label', 'Aucun ouvrier pour l’instant.', 'div'));
+  for (const { proto, count } of byBuilding) detail.append(row(buildingIcon(proto, 22), BUILDINGS[proto].label, count));
+  if (porters.busy + porters.idle > 0) {
+    detail.append(
+      row(uiIcon('worker', 22), 'Porteurs occupés', porters.busy),
+      row(uiIcon('worker', 22), 'Porteurs en attente', porters.idle),
+    );
+  }
+  return detail;
 }
 
 /** Une ligne de quête : icône, barre, « 7/20 ». */
