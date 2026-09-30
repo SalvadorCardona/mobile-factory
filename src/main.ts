@@ -113,6 +113,7 @@ async function main(): Promise<void> {
 
   hud.root.append(buildMenu.root, panel.root);
   hud.setProjector((x, y) => renderer.worldToScreen(x, y));
+  hud.setInspected(() => panel.shown);
 
   /*
    * L'horloge : la simulation n'avance que si la partie a commencé et n'est
