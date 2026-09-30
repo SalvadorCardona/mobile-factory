@@ -135,7 +135,7 @@ export interface PlacementBlock {
 export type WorldEvents = {
   /** Un chantier est ouvert (ou un bâtiment à coût nul, posé fini). */
   buildingPlaced: { id: EntityId; tx: number; ty: number };
-  /** Le chantier a reçu son dernier objet : l'entité est devenue le bâtiment, sous le même id. */
+  /** Le chantier a reçu son dernier objet : l'entité est devenue le bâtiment, sous le même id, sans autre action du joueur. */
   buildingCompleted: { id: EntityId };
   placementRejected: { reason: PlacementRejection };
   drillBlocked: { id: EntityId };
@@ -144,8 +144,6 @@ export type WorldEvents = {
   resourceHarvested: { tx: number; ty: number; item: ItemId; remaining: number };
   /** `amount` objets du sac viennent d'être posés sur le chantier. `missing` : ce qui manque encore, tous objets confondus. */
   siteDelivered: { id: EntityId; item: ItemId; amount: number; missing: number };
-  /** Le chantier a tout reçu : il attend que le joueur appuie sur « Construire ». */
-  siteReady: { id: EntityId };
   /** Une commande sur un chantier a été refusée. */
   siteRejected: { id: EntityId; reason: SiteRejection };
   /** La ferme a récolté. */
@@ -416,6 +414,11 @@ export class World {
     this.scheduler.restore(state.scheduler);
     this.restoreJobs();
 
+    // Une sauvegarde d'avant l'achèvement automatique peut garder un chantier livré : il s'achève au chargement.
+    for (const entity of [...this.entities.values()]) {
+      if (entity.kind === 'site' && siteMissing(entity) === 0) this.complete(entity);
+    }
+
     // Une maison d'une sauvegarde d'avant les porteurs : ses ouvriers s'y installent.
     for (const entity of this.entities.values()) {
       if (entity.kind === 'house') this.staff(entity);
@@ -480,10 +483,6 @@ export class World {
         this.transfer(command.id);
         break;
 
-      case 'buildSite':
-        this.build(command.id);
-        break;
-
       case 'takeFromBuilding':
         this.takeAll(command.id);
         break;
@@ -544,22 +543,7 @@ export class World {
       this.events.emit('siteRejected', { id, reason: 'nothingToGive' });
       return;
     }
-    if (siteMissing(site) === 0) this.events.emit('siteReady', { id: site.id });
-  }
-
-  /** Le bouton « Construire » : le chantier livré devient le bâtiment. */
-  private build(id: EntityId): void {
-    const found = this.siteFor(id);
-
-    if ('reason' in found) {
-      this.events.emit('siteRejected', { id, reason: found.reason });
-      return;
-    }
-    if (siteMissing(found.site) > 0) {
-      this.events.emit('siteRejected', { id, reason: 'incomplete' });
-      return;
-    }
-    this.complete(found.site);
+    if (siteMissing(site) === 0) this.complete(site);
   }
 
   /* -------------------------------------------------------------- collision */
@@ -667,8 +651,8 @@ export class World {
 
       this.events.emit('siteDelivered', { id: site.id, item, amount: 1, missing });
 
-      // Le chantier ne se termine jamais tout seul : il attend « Construire ».
-      if (missing === 0) this.events.emit('siteReady', { id: site.id });
+      // Le dernier objet posé achève le chantier : le joueur a déjà fait l'effort.
+      if (missing === 0) this.complete(site);
       return;
     }
   }

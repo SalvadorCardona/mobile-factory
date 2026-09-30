@@ -19,13 +19,9 @@ export type Command =
   /**
    * Vide le sac dans un chantier : tout ce qu'il attend et qu'Adam possède
    * y passe d'un coup. Le bouton « Transférer » de la fenêtre du bâtiment.
+   * Si c'était tout ce qui manquait, le chantier s'achève.
    */
   | { type: 'transferToSite'; id: EntityId }
-  /**
-   * Achève un chantier entièrement livré. Un chantier ne se termine jamais
-   * seul : le joueur voit l'emprise, décide, et appuie sur « Construire ».
-   */
-  | { type: 'buildSite'; id: EntityId }
   /**
    * Vide le coffre d'une foreuse ou d'une ferme dans le sac, dans la limite
    * de la place. Le bouton « Prendre » de la fenêtre du bâtiment.
@@ -44,8 +40,6 @@ export type SiteRejection =
   | 'missing'
   /** Adam est trop loin de l'emprise. */
   | 'outOfReach'
-  /** Il manque encore des ressources : on ne construit pas un mur à moitié livré. */
-  | 'incomplete'
   /** Adam n'a rien dans le sac que le chantier attende. */
   | 'nothingToGive';
 

@@ -6,14 +6,14 @@
  * chantier, le compte à rebours de la nurserie, la veille d'une tour, les
  * points de vie de la mairie et sa population, les ouvriers.
  *
- * Sur un chantier, deux boutons : « Transférer le sac » vide dans le chantier
- * tout ce qu'il attend et qu'Adam possède ; « Construire » apparaît quand
- * tout est livré. Sur une foreuse, une ferme ou une forge, « Prendre » vide
- * son coffre dans le sac, dans la limite de la place. Sur une nurserie ou
- * une forge, « Transférer le sac » y verse ce que sa recette consomme. La
- * fenêtre ne modifie rien elle-même : chaque bouton pousse une commande
- * (`transferToSite`, `buildSite`, `takeFromBuilding`, `supplyBuilding`) que
- * le tick consomme.
+ * Sur un chantier, un bouton : « Transférer le sac » vide dans le chantier
+ * tout ce qu'il attend et qu'Adam possède — le dernier objet livré achève le
+ * chantier, la fenêtre montre alors le bâtiment. Sur une foreuse, une ferme
+ * ou une forge, « Prendre » vide son coffre dans le sac, dans la limite de la
+ * place. Sur une nurserie ou une forge, « Transférer le sac » y verse ce que
+ * sa recette consomme. La fenêtre ne modifie rien elle-même : chaque bouton
+ * pousse une commande (`transferToSite`, `takeFromBuilding`, `supplyBuilding`)
+ * que le tick consomme.
  *
  * Elle **lit** le monde à chaque frame tant qu'elle est ouverte, et se ferme
  * seule si l'entité disparaît — rasée par un mutant, par exemple.
@@ -41,7 +41,6 @@ export class BuildingPanel {
   private readonly items: HTMLElement;
   private readonly actions: HTMLElement;
   private readonly transferButton: HTMLButtonElement;
-  private readonly buildButton: HTMLButtonElement;
   private readonly takeButton: HTMLButtonElement;
   private lastText = '';
   private lastItems = '';
@@ -102,14 +101,6 @@ export class BuildingPanel {
       this.world.push({ type: kind === 'site' ? 'transferToSite' : 'supplyBuilding', id: this.entityId });
     });
 
-    this.buildButton = document.createElement('button');
-    this.buildButton.type = 'button';
-    this.buildButton.textContent = 'Construire';
-    this.buildButton.dataset['confirm'] = 'true';
-    this.buildButton.addEventListener('click', () => {
-      if (this.entityId !== null) this.world.push({ type: 'buildSite', id: this.entityId });
-    });
-
     this.takeButton = document.createElement('button');
     this.takeButton.type = 'button';
     this.takeButton.textContent = 'Prendre';
@@ -117,7 +108,7 @@ export class BuildingPanel {
       if (this.entityId !== null) this.world.push({ type: 'takeFromBuilding', id: this.entityId });
     });
 
-    this.actions.append(this.transferButton, this.buildButton, this.takeButton);
+    this.actions.append(this.transferButton, this.takeButton);
 
     this.root.append(header, this.description, this.bar, this.items, this.lines, this.actions);
   }
@@ -185,11 +176,7 @@ export class BuildingPanel {
       ratio = total === 0 ? 1 : 1 - missing / total;
       barClass = 'progress';
       lines.push(
-        missing === 0
-          ? 'Tout est livré : construisez.'
-          : inReach
-            ? 'Chantier en cours — transférez le sac, ou heurtez-le.'
-            : 'Chantier en cours — rapprochez-vous pour livrer.',
+        inReach ? 'Chantier en cours — transférez le sac, ou heurtez-le.' : 'Chantier en cours — rapprochez-vous pour livrer.',
       );
       if (proto.workers > 0) lines.push(`Emploiera ${proto.workers} ouvriers.`);
 
@@ -200,10 +187,8 @@ export class BuildingPanel {
         `site:${entity.id}:${JSON.stringify(entity.delivered)}`,
       );
       this.actions.hidden = false;
-      this.transferButton.hidden = missing === 0;
+      this.transferButton.hidden = false;
       this.transferButton.disabled = !inReach || !canGive;
-      this.buildButton.hidden = missing > 0;
-      this.buildButton.disabled = !inReach;
       this.takeButton.hidden = true;
     } else {
       ratio = entity.hp / proto.hp;
@@ -219,7 +204,6 @@ export class BuildingPanel {
       this.actions.hidden = !producer && !consumer;
       this.transferButton.hidden = !consumer;
       this.transferButton.disabled = !inReach || !this.world.canSupply(entity);
-      this.buildButton.hidden = true;
       this.takeButton.hidden = !producer;
       this.takeButton.disabled =
         !inReach || !producer || this.world.takeable(entity).length === 0 || this.world.player.inventory.freeSpace() <= 0;

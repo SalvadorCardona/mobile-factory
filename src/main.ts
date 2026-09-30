@@ -47,7 +47,7 @@ import { formatSeed, parseSeed } from './ui/seed.ts';
  */
 const MAX_FRAME_MS = 250;
 
-/** Hauteur du bouton « Construire » et de sa marge, en pixels écran : le minimum réservé en bas. */
+/** Hauteur du bouton « Bâtir » et de sa marge, en pixels écran : le minimum réservé en bas. */
 const HUD_BOTTOM_INSET = 84;
 
 /** Seuil sous lequel un mouvement d'axe ne vaut pas une commande. */
@@ -163,7 +163,6 @@ async function main(): Promise<void> {
 
   hud.root.append(buildMenu.root, panel.root);
   hud.setProjector((x, y) => renderer.worldToScreen(x, y));
-  hud.setInspected(() => panel.shown);
 
   /*
    * L'horloge : la simulation n'avance que si la partie a commencé et n'est
@@ -289,7 +288,7 @@ async function main(): Promise<void> {
   });
 
   /**
-   * Ce que le bas de l'écran occupe : le bouton « Construire », ou plus quand
+   * Ce que le bas de l'écran occupe : le bouton « Bâtir », ou plus quand
    * le tiroir, la barre de placement ou la fenêtre d'un bâtiment sont ouverts.
    */
   function bottomInset(): number {
@@ -355,7 +354,6 @@ function wireAudio(world: World, audio: AudioEngine, hud: Hud): void {
   world.events.on('siteDelivered', () => audio.play('deliver'));
   world.events.on('storeTaken', () => audio.play('deliver'));
   world.events.on('buildingSupplied', () => audio.play('deliver'));
-  world.events.on('siteReady', () => audio.play('open'));
   world.events.on('buildingCompleted', () => audio.play('build'));
   world.events.on('arrowShot', () => audio.play('arrow'));
   world.events.on('mutantHit', () => audio.play('hit'));
@@ -464,8 +462,9 @@ function wireParticles(world: World, renderer: GameRenderer): void {
 
     if (!entity) return;
 
-    // Des éclats dorés tout le long du pied du bâtiment : ça y est, il tient debout.
+    // Un nuage de poussière et des éclats dorés tout le long du pied du bâtiment : ça y est, il tient debout.
     for (let i = 0; i <= entity.width; i += 1) {
+      particles.burst((entity.tx + i) * TILE_SIZE, (entity.ty + entity.height) * TILE_SIZE, RUBBLE_COLORS, 6, 0.05);
       particles.burst((entity.tx + i) * TILE_SIZE, (entity.ty + entity.height) * TILE_SIZE, CELEBRATION_COLORS, 7, 0.16);
     }
   });

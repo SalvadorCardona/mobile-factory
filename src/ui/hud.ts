@@ -19,8 +19,9 @@
  * - la **bulle** d'Ève au-dessus de sa tête : son arrivée, ses quêtes, ce
  *   qu'elle répond quand on la tape. Courte, jamais bloquante ;
  * - les boutons pause et son, et le **sac** d'Adam, à droite de la quête ;
- * - des **bulles** empilées pour les événements, et des gains qui flottent
- *   au-dessus de la tête d'Adam ;
+ * - des **bulles** empilées pour les événements, des gains qui flottent
+ *   au-dessus de la tête d'Adam, et le nom d'un bâtiment achevé qui monte
+ *   de son toit (« Mairie bâtie ! ») ;
  * - le **bandeau** des vagues : « Vague 4 — 2 mutants arrivent par l'est ! »
  *   trois secondes avant, avec une flèche tournée vers leur point
  *   d'apparition, puis « Vague 4 repoussée ! » quand le dernier tombe ;
@@ -28,6 +29,7 @@
  * - les statistiques de debug, seulement avec `?debug` (ou la touche `²`/`` ` ``).
  */
 
+import { TILE_SIZE } from '../core/grid.ts';
 import { BUILDINGS } from '../data/buildings.ts';
 import { ITEMS, type ItemId } from '../data/items.ts';
 import { EVE_LINES } from '../data/eve.ts';
@@ -37,9 +39,9 @@ import type { AtlasStats } from '../render/spriteLibrary.ts';
 import type { WaterStats } from '../render/waterLayer.ts';
 import type { PlacementRejection } from '../sim/commands.ts';
 import type { Compass } from '../sim/enemies.ts';
-import type { EntityId } from '../sim/types.ts';
+import type { Entity } from '../sim/types.ts';
 import { currentQuest, questProgress } from '../sim/eve.ts';
-import { TICKS_PER_SECOND, siteMissing, type World } from '../sim/world.ts';
+import { TICKS_PER_SECOND, type World } from '../sim/world.ts';
 import { tutorialAdvice, type Advice } from './hint.ts';
 import { itemAmount, itemIcon, uiIcon } from './icons.ts';
 import { mapUrl, seedLine } from './seed.ts';
@@ -55,6 +57,9 @@ const REJECTION_LABELS: Record<PlacementRejection, string> = {
 
 /** Durée de vie d'un gain flottant, en ms (cf. `hud-float-up` dans le CSS). */
 const FLOAT_MS = 1000;
+
+/** Durée de vie du « Mairie bâtie ! » qui monte d'un bâtiment achevé, en ms (cf. `hud-built-up` dans le CSS). */
+const BUILT_MS = 1800;
 
 /** Durée d'affichage d'une bulle, et combien peuvent s'empiler. */
 const TOAST_MS = 2600;
@@ -147,7 +152,6 @@ export class Hud {
   private delivered = false;
 
   private project: Projector = (x, y) => ({ x, y });
-  private inspected: () => EntityId | null = () => null;
 
   private readonly world: World;
 
@@ -277,7 +281,6 @@ export class Hud {
       this.delivered = true;
       this.float(item, -amount);
     });
-    world.events.on('siteReady', () => this.notify('Chantier livré — appuyez sur Construire', 'good'));
     world.events.on('siteRejected', ({ reason }) => {
       if (reason === 'outOfReach') this.notify(REJECTION_LABELS.outOfReach, 'bad');
       if (reason === 'nothingToGive') this.notify('Rien dans le sac que ce chantier attende', 'bad');
@@ -298,7 +301,7 @@ export class Hud {
     world.events.on('buildingCompleted', ({ id }) => {
       const entity = world.entities.get(id);
 
-      if (entity) this.notify(`${BUILDINGS[entity.proto].label} : construction terminée`, 'good');
+      if (entity) this.celebrate(entity);
     });
     world.events.on('waveCountdown', ({ seconds, wave, count, from, x, y }) => {
       this.showCountdown(String(seconds));
@@ -398,11 +401,6 @@ export class Hud {
   /** Le renderer sait où est Adam à l'écran ; le HUD non. `main.ts` fait le lien. */
   public setProjector(project: Projector): void {
     this.project = project;
-  }
-
-  /** Le bâtiment dont la fenêtre est ouverte : le conseil qui invite à le taper se tait. */
-  public setInspected(inspected: () => EntityId | null): void {
-    this.inspected = inspected;
   }
 
   /** Bas de la quête, en pixels écran : les repères de bord du renderer restent dessous. */
@@ -528,6 +526,18 @@ export class Hud {
     window.setTimeout(() => floater.remove(), FLOAT_MS);
   }
 
+  /** « Mairie bâtie ! » qui monte du toit d'un bâtiment achevé et s'efface. */
+  private celebrate(entity: Entity): void {
+    const { x, y } = this.project((entity.tx + entity.width / 2) * TILE_SIZE, (entity.ty - 1) * TILE_SIZE);
+    const floater = element('span', 'hud-built');
+
+    floater.style.left = `${Math.round(x)}px`;
+    floater.style.top = `${Math.round(y)}px`;
+    floater.textContent = `${BUILDINGS[entity.proto].label} bâtie !`;
+    this.floats.append(floater);
+    window.setTimeout(() => floater.remove(), BUILT_MS);
+  }
+
   /** `fps`, `chunks`, `atlas` et `water` viennent du renderer : le monde ne les connaît pas. */
   public update(fps: number, chunks: number, atlas: AtlasStats, water: WaterStats): void {
     this.updateQuest();
@@ -563,12 +573,11 @@ export class Hud {
       this.lastQuest = key;
 
       const cost = Object.entries(BUILDINGS[hall.proto].cost) as [ItemId, number][];
-      const ready = siteMissing(hall) === 0;
 
-      this.quest.dataset['mode'] = ready ? 'ready' : 'build';
-      this.questTitle.textContent = ready ? 'Chantier livré' : 'Objectif';
+      this.quest.dataset['mode'] = 'build';
+      this.questTitle.textContent = 'Objectif';
       this.questBody.replaceChildren(
-        text('hud-quest-goal', ready ? `Tapez la ${name.toLowerCase()} → Construire` : `Bâtir la ${name}`),
+        text('hud-quest-goal', `Bâtir la ${name}`),
         ...cost.map(([item, needed]) => meter(item, hall.delivered[item] ?? 0, needed)),
       );
       return;
@@ -642,7 +651,6 @@ export class Hud {
         harvestedWood: this.harvestedWood,
         harvestedStone: this.harvestedStone,
         delivered: this.delivered,
-        inspected: this.inspected(),
       },
       towers,
       this.mutantCount(),

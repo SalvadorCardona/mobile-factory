@@ -1,7 +1,7 @@
 /**
  * Menu de construction.
  *
- * Un seul bouton à l'écran — « Construire » — qui ouvre un tiroir. Le tiroir
+ * Un seul bouton à l'écran — « Bâtir » — qui ouvre un tiroir. Le tiroir
  * liste les bâtiments débloqués en cartes : vignette, nom, ce que fait le
  * bâtiment en une ligne (`effect`), coût en icônes, ouvriers. Choisir une carte ferme le tiroir et arme le placement
  * (`input/placement.ts`) ; une barre remplace alors le bouton, avec le nom
@@ -99,7 +99,7 @@ export class BuildMenu {
     this.root = document.createElement('div');
     this.root.className = 'build-menu';
 
-    this.toggleButton = button('Construire', () => this.toggle());
+    this.toggleButton = button('Bâtir', () => this.toggle());
     this.toggleButton.className = 'build-toggle';
     this.toggleButton.prepend(uiIcon('hammer', 28));
     this.toggleButton.append(keyHint('Espace'));

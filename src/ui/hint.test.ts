@@ -4,49 +4,48 @@ import { EVE, EVE_LINES } from '../data/eve.ts';
 import { World } from '../sim/world.ts';
 import { tutorialAdvice, tutorialHint, type HintProgress } from './hint.ts';
 
-const TAP_HINT = EVE_LINES.hints.tapSite;
+const FRESH: HintProgress = { harvestedWood: false, harvestedStone: false, delivered: false };
 
-const FRESH: HintProgress = { harvestedWood: false, harvestedStone: false, delivered: false, inspected: null };
-
-/** Une partie dont le chantier de la mairie a reçu tout son coût. */
-function readyWorld(): World {
+/** Un monde dont la mairie est bâtie : le sac livré, le dernier objet l'achève. */
+function builtWorld(): World {
   const world = new World(1);
-  const hall = world.entities.get(world.townHallId);
 
-  if (hall?.kind !== 'site') throw new Error('la partie ne commence plus sur le chantier de la mairie');
-  hall.delivered = { ...BUILDINGS[hall.proto].cost };
+  world.player.inventory.add('wood', 25);
+  world.player.inventory.add('stone', 12);
+  world.push({ type: 'transferToSite', id: world.townHallId });
+  world.tick();
   return world;
 }
 
 describe('tutorialHint', () => {
-  it('ne pousse pas à taper un chantier qui attend encore', () => {
-    expect(tutorialHint(new World(1), FRESH, false, 0)).not.toBe(TAP_HINT);
+  it('commence par le bois du chantier de la mairie', () => {
+    expect(tutorialHint(new World(1), FRESH, false, 0)).toBe(EVE_LINES.hints.wood);
   });
 
-  it('invite à taper le chantier livré', () => {
-    expect(tutorialHint(readyWorld(), FRESH, false, 0)).toBe(TAP_HINT);
-  });
+  it('passe à la tour de guet une fois la mairie bâtie, sans autre action que la livraison', () => {
+    const world = new World(1);
 
-  it('se tait quand la fenêtre du chantier est ouverte', () => {
-    const world = readyWorld();
-
-    expect(tutorialHint(world, { ...FRESH, inspected: world.townHallId }, false, 0)).toBeNull();
-  });
-
-  it('revient si la fenêtre ouverte est celle d’un autre bâtiment', () => {
-    const world = readyWorld();
-
-    expect(tutorialHint(world, { ...FRESH, inspected: world.townHallId + 1 }, false, 0)).toBe(TAP_HINT);
-  });
-
-  it('disparaît une fois la mairie construite', () => {
-    const world = readyWorld();
-
-    world.push({ type: 'buildSite', id: world.townHallId });
+    world.player.inventory.add('wood', 25);
+    world.player.inventory.add('stone', 12);
+    world.push({ type: 'transferToSite', id: world.townHallId });
     world.tick();
 
     expect(world.entities.get(world.townHallId)?.kind).toBe('townHall');
-    expect(tutorialHint(world, FRESH, false, 0)).not.toBe(TAP_HINT);
+    expect(tutorialHint(world, FRESH, false, 0)).toBe(EVE_LINES.hints.tower);
+  });
+
+  it('ne parle jamais d’un bouton « Construire »', () => {
+    const world = new World(1);
+    const hints: (string | null)[] = [tutorialHint(world, FRESH, false, 0)];
+
+    world.player.inventory.add('wood', 25);
+    world.player.inventory.add('stone', 12);
+    hints.push(tutorialHint(world, FRESH, false, 0));
+    world.push({ type: 'transferToSite', id: world.townHallId });
+    world.tick();
+    hints.push(tutorialHint(world, FRESH, false, 0));
+
+    for (const hint of hints) expect(hint ?? '').not.toContain('Construire');
   });
 
   it('envoie chercher du bois, puis de la pierre', () => {
@@ -54,14 +53,12 @@ describe('tutorialHint', () => {
 
     expect(tutorialAdvice(world, FRESH, false, 0)?.wants).toBe('wood');
     expect(tutorialAdvice(world, { ...FRESH, harvestedWood: true }, false, 0)?.wants).toBe('stone');
-    expect(tutorialAdvice(readyWorld(), FRESH, false, 0)?.wants).toBeNull();
+    // La mairie bâtie, le conseil ne réclame plus de matériau.
+    expect(tutorialAdvice(builtWorld(), FRESH, false, 0)?.wants).toBeNull();
   });
 
   it('annonce la forge une fois débloquée, et envoie chercher du charbon', () => {
-    const world = readyWorld();
-
-    world.push({ type: 'buildSite', id: world.townHallId });
-    world.tick();
+    const world = builtWorld();
 
     expect(tutorialAdvice(world, FRESH, true, 0)).toBeNull();
 

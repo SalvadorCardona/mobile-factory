@@ -20,8 +20,9 @@ pierre) ; un chantier heurté reçoit ce qu'il attend ; une foreuse ou une
 ferme heurtée vide son coffre dans le sac (bouton « Prendre » dans sa
 fenêtre), ce qui la relance si elle était bloquée. Les ressources et les
 bâtiments sont solides, on ne les traverse pas. Un tap sur un chantier ouvre
-sa fenêtre : « Transférer le sac » y vide d'un coup ce qu'il attend, et
-« Construire » l'achève — **un chantier livré ne se termine jamais seul**.
+sa fenêtre : « Transférer le sac » y vide d'un coup ce qu'il attend.
+**Le dernier objet livré achève le chantier**, sans bouton de validation
+(poussière, rebond, son, « Mairie bâtie ! » qui flotte).
 Une nurserie ou une forge heurtée (ou « Transférer le sac ») reçoit ce que
 sa recette consomme ; la forge (débloquée après la vague 2, `unlockWave`)
 fond fer + charbon en plaques de fer, qui bâtissent la tour renforcée.
@@ -121,7 +122,7 @@ Les règles, en résumé :
   s'affiche qu'avec `?debug` en dev.
 - `src/ui/icons.ts` sert icônes d'objets, vignettes de bâtiments et
   pictogrammes (`src/art/ui.ts`) en `data:` URL SVG pour le DOM. Le menu de construction est un tiroir derrière un
-  seul bouton ; armer un bâtiment passe la carte en mode construction
+  seul bouton, « Bâtir » — aucun autre bouton ne porte ce libellé ; armer un bâtiment passe la carte en mode construction
   (grille + emprises, `render/ghostLayer.ts`).
 
 ## Système de sprites
