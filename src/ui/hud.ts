@@ -13,11 +13,12 @@
  *   ressource, puis la santé de la mairie, la vague et son compte à rebours ;
  * - un **conseil** sous la quête, qui suit ce que fait le joueur (couper,
  *   casser, livrer, construire, se défendre) et se tait quand il a compris —
- *   c'est Ève qui le dit, son portrait devant ;
+ *   c'est Ève qui le dit, son portrait devant ; au bout de cinq secondes, il
+ *   se replie en ampoule à côté du titre ;
  * - la **quête d'Ève** en cours, une fois qu'elle est arrivée ;
  * - la **bulle** d'Ève au-dessus de sa tête : son arrivée, ses quêtes, ce
  *   qu'elle répond quand on la tape. Courte, jamais bloquante ;
- * - le **sac** d'Adam, à droite ;
+ * - les boutons pause et son, et le **sac** d'Adam, à droite de la quête ;
  * - des **bulles** empilées pour les événements, et des gains qui flottent
  *   au-dessus de la tête d'Adam ;
  * - l'écran de **défaite**, avec le bilan de la partie ;
@@ -59,6 +60,12 @@ const MAX_TOASTS = 3;
 const SPEECH_BASE_MS = 1600;
 const SPEECH_PER_CHAR_MS = 45;
 
+/**
+ * Un conseil inchangé se replie au bout de ce délai, compté en ticks : il ne
+ * se replie ni derrière l'écran titre ni pendant la pause.
+ */
+const HINT_FOLD_TICKS = 5 * TICKS_PER_SECOND;
+
 /** Sous ce seuil, le compte à rebours de la vague passe au rouge. */
 const WAVE_WARNING_SECONDS = 10;
 
@@ -76,6 +83,7 @@ export class Hud {
   private readonly questBody: HTMLElement;
   private readonly hint: HTMLElement;
   private readonly hintText: HTMLElement;
+  private readonly hintBulb: HTMLButtonElement;
   private readonly bag: HTMLElement;
   private readonly buttons: HTMLElement;
   private readonly floats: HTMLElement;
@@ -90,6 +98,8 @@ export class Hud {
   private lastBag = '';
   private lastQuest = '';
   private lastHint = '';
+  /** Tick où le conseil a été montré (ou déplié) : il se replie `HINT_FOLD_TICKS` plus tard. */
+  private hintSince = 0;
   private wanted: ItemId | null = null;
 
   /** Les répliques d'Ève en attente, et l'heure où la réplique affichée s'en va. */
@@ -120,12 +130,31 @@ export class Hud {
     this.quest = element('div', 'panel hud-quest');
     this.questTitle = element('div', 'hud-quest-title');
     this.questBody = element('div', 'hud-quest-body');
-    this.quest.append(this.questTitle, this.questBody);
+
+    // Replié, le conseil n'est plus qu'une ampoule à côté du titre : un tap le déplie.
+    this.hintBulb = element('button', 'hud-hint-bulb');
+    this.hintBulb.type = 'button';
+    this.hintBulb.setAttribute('aria-label', 'Afficher le conseil');
+    this.hintBulb.append(uiIcon('hint', 20));
+    this.hintBulb.addEventListener('click', () => this.unfoldHint());
+
+    const head = element('div', 'hud-quest-head');
+
+    head.append(this.questTitle, this.hintBulb);
+    this.quest.append(head, this.questBody);
+    this.quest.dataset['hint'] = 'none';
+
+    // Le conseil s'ouvre et se referme en douceur dans son pli : la quête
+    // grandit sans à-coup, et rien n'est posé dessous qui puisse sauter.
+    const fold = element('div', 'hud-hint-fold');
 
     this.hint = element('div', 'hud-hint');
-    this.hint.hidden = true;
     this.hintText = element('span', 'hud-hint-text');
     this.hint.append(uiIcon('eve', 22), this.hintText);
+    const clip = element('div', 'hud-hint-clip');
+
+    clip.append(this.hint);
+    fold.append(clip);
 
     this.bag = element('div', 'panel hud-bag');
     this.floats = element('div', 'hud-floats');
@@ -174,16 +203,16 @@ export class Hud {
     defeatPanel.append(defeatTitle, defeatText, this.defeatStats, replay, fresh, seedLine(world.seed));
     this.defeat.append(defeatPanel);
 
-    // Le haut de l'écran se met en page tout seul : la quête, son conseil
-    // dessous, puis les boutons et le sac. Rien ne se chevauche, quelle que
-    // soit la longueur du conseil ou la taille de la police.
+    // Le haut de l'écran se met en page tout seul : la quête et son conseil,
+    // et à côté une colonne avec les boutons sur une ligne, le sac dessous.
+    // Rien ne se chevauche, et rien ne bouge quand le conseil change.
     this.top = element('div', 'hud-top');
 
-    const row = element('div', 'hud-top-row');
+    const side = element('div', 'hud-side');
 
-    this.quest.append(this.hint);
-    row.append(buttons, this.bag);
-    this.top.append(this.quest, row);
+    this.quest.append(fold);
+    side.append(buttons, this.bag);
+    this.top.append(this.quest, side);
 
     this.root.append(
       this.top,
@@ -326,7 +355,7 @@ export class Hud {
     return this.quest.getBoundingClientRect().bottom;
   }
 
-  /** Les boutons et le sac, posés sous la quête le long des bords : les repères de bord les contournent. */
+  /** Les boutons et le sac, posés à droite de la quête : les repères de bord les contournent. */
   public obstacles(): DOMRect[] {
     return [this.buttons.getBoundingClientRect(), this.bag.getBoundingClientRect()];
   }
@@ -521,15 +550,28 @@ export class Hud {
 
     this.wanted = advice?.wants ?? null;
 
-    if (hint === this.lastHint) return;
-    this.lastHint = hint;
-    this.hint.hidden = hint === '';
-    this.hintText.textContent = hint;
+    if (hint !== this.lastHint) {
+      this.lastHint = hint;
+      this.hintSince = this.world.tickCount;
+      // Le texte reste en place quand le conseil se tait : il part en se repliant.
+      if (hint !== '') this.hintText.textContent = hint;
 
-    // Relance l'animation d'entrée à chaque nouveau conseil.
-    this.hint.style.animation = 'none';
-    void this.hint.offsetWidth;
-    this.hint.style.animation = '';
+      // Relance l'animation d'entrée à chaque nouveau conseil.
+      this.hint.style.animation = 'none';
+      void this.hint.offsetWidth;
+      this.hint.style.animation = '';
+    }
+
+    const folded = this.world.tickCount - this.hintSince >= HINT_FOLD_TICKS;
+    const state = hint === '' ? 'none' : folded ? 'folded' : 'open';
+
+    if (this.quest.dataset['hint'] !== state) this.quest.dataset['hint'] = state;
+  }
+
+  /** Le tap sur l'ampoule : le conseil revient pour cinq secondes. */
+  private unfoldHint(): void {
+    this.hintSince = this.world.tickCount;
+    this.quest.dataset['hint'] = this.lastHint === '' ? 'none' : 'open';
   }
 
   /* ------------------------------------------------------------------- sac */
