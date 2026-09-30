@@ -26,6 +26,8 @@ export interface BuildingProto {
   siteDescription: string;
   /** Texte de la fenêtre d'inspection du bâtiment fini. */
   description: string;
+  /** Ce que fait le bâtiment, en une ligne : sa carte du menu de construction. */
+  effect: string;
   kind: BuildingKind;
   /** Emprise en tuiles. */
   width: number;
@@ -54,6 +56,7 @@ export const BUILDINGS = {
     label: LORE.buildings.townHall.name,
     siteDescription: LORE.buildings.townHall.site,
     description: LORE.buildings.townHall.description,
+    effect: LORE.buildings.townHall.effect,
     kind: 'townHall',
     width: 3,
     height: 3,
@@ -69,6 +72,7 @@ export const BUILDINGS = {
     label: LORE.buildings.drill.name,
     siteDescription: LORE.buildings.drill.site,
     description: LORE.buildings.drill.description,
+    effect: LORE.buildings.drill.effect,
     kind: 'drill',
     width: 2,
     height: 2,
@@ -84,6 +88,7 @@ export const BUILDINGS = {
     label: LORE.buildings.nursery.name,
     siteDescription: LORE.buildings.nursery.site,
     description: LORE.buildings.nursery.description,
+    effect: LORE.buildings.nursery.effect,
     kind: 'nursery',
     width: 2,
     height: 2,
@@ -99,6 +104,7 @@ export const BUILDINGS = {
     label: LORE.buildings.builderHouse.name,
     siteDescription: LORE.buildings.builderHouse.site,
     description: LORE.buildings.builderHouse.description,
+    effect: LORE.buildings.builderHouse.effect,
     kind: 'house',
     width: 2,
     height: 2,
@@ -114,6 +120,7 @@ export const BUILDINGS = {
     label: LORE.buildings.farm.name,
     siteDescription: LORE.buildings.farm.site,
     description: LORE.buildings.farm.description,
+    effect: LORE.buildings.farm.effect,
     kind: 'farm',
     width: 2,
     height: 2,
@@ -129,6 +136,7 @@ export const BUILDINGS = {
     label: LORE.buildings.watchtower.name,
     siteDescription: LORE.buildings.watchtower.site,
     description: LORE.buildings.watchtower.description,
+    effect: LORE.buildings.watchtower.effect,
     kind: 'tower',
     width: 2,
     height: 2,

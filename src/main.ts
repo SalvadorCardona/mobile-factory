@@ -129,7 +129,7 @@ async function main(): Promise<void> {
 
   const debug = import.meta.env.DEV && new URLSearchParams(window.location.search).has('debug');
   const hud = new Hud(world, debug);
-  const buildMenu = new BuildMenu(placement, MENU_BUILDING_IDS, () => audio.play('open'));
+  const buildMenu = new BuildMenu(world, placement, MENU_BUILDING_IDS, () => audio.play('open'));
   const panel = new BuildingPanel(world, () => audio.play('open'));
   const inspect = new Inspect(
     world,
