@@ -74,6 +74,20 @@ export type Command =
    */
   | { type: 'upgradeBuilding'; id: EntityId }
   /**
+   * Met en pause un bâtiment producteur (`paused: true`), ou le relance. En
+   * pause, il ne produit ni ne consomme ; ses ouvriers finissent leur geste
+   * puis flânent, et les porteurs vident toujours son coffre. Le bouton
+   * « Pause » / « Reprendre » de sa fenêtre.
+   */
+  | { type: 'pauseBuilding'; id: EntityId; paused: boolean }
+  /**
+   * L'effectif voulu d'un bâtiment qui emploie, ramené entre son minimum et
+   * son maximum. Les postes se prennent dans la population libre de la
+   * ville ; un ouvrier retiré finit son geste puis redevient libre. Le
+   * sélecteur − / + de sa fenêtre.
+   */
+  | { type: 'setWorkers'; id: EntityId; count: number }
+  /**
    * Les bonus plantés au jardin des souvenirs, au départ d'une nouvelle
    * colonie. Poussée avant le premier tick ; ignorée ensuite.
    */

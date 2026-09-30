@@ -27,6 +27,12 @@
  * bouton (« Renforcer » pour la tour de guet), qui pousse `upgradeBuilding`.
  * Au dernier niveau, le bouton reste, grisé : « Niveau max ».
  *
+ * Un producteur (foreuse, ferme, forge, nurserie, cabane de bûcheron) a un
+ * bouton « Pause » / « Reprendre » (`pauseBuilding`). Un bâtiment qui emploie
+ * a un sélecteur − / nombre / + (`setWorkers`) : un pictogramme d'ouvrier par
+ * poste, plein s'il est occupé, vide sinon, marqué s'il est demandé mais
+ * qu'aucun ouvrier libre ne vient le prendre.
+ *
  * Elle **lit** le monde à chaque frame tant qu'elle est ouverte, et se ferme
  * seule si l'entité disparaît — rasée par un mutant, par exemple.
  */
@@ -37,13 +43,17 @@ import { ITEMS, type ItemId } from '../data/items.ts';
 import { RECIPES, type RecipeProto } from '../data/recipes.ts';
 import { WEAPONS } from '../data/weapons.ts';
 import { LUMBERJACKS } from '../data/workers.ts';
-import type { Entity, EntityId } from '../sim/types.ts';
+import { canPause } from '../sim/staffing.ts';
+import type { Building, Entity, EntityId } from '../sim/types.ts';
 import { TICKS_PER_SECOND, siteMissing, type World } from '../sim/world.ts';
 import { itemAmount, uiIcon } from './icons.ts';
 import { ResearchPanel } from './researchPanel.ts';
 
 /** L'état d'une foreuse ou d'une ferme qui attend qu'on la vide. */
 const BLOCKED = 'Bloquée : coffre plein — heurtez-la ou appuyez sur Prendre.';
+
+/** L'état d'un producteur mis en pause. */
+const PAUSED = 'En pause : plus rien ne sort ni n’entre en production — appuyez sur Reprendre.';
 
 export class BuildingPanel {
   public readonly root: HTMLElement;
@@ -58,6 +68,15 @@ export class BuildingPanel {
   private readonly transferButton: HTMLButtonElement;
   private readonly takeButton: HTMLButtonElement;
   private readonly depositButton: HTMLButtonElement;
+  private readonly pauseButton: HTMLButtonElement;
+  /** Le sélecteur d'ouvriers : −, les postes, +, et ce qui manque. */
+  private readonly crew: HTMLElement;
+  private readonly crewLess: HTMLButtonElement;
+  private readonly crewMore: HTMLButtonElement;
+  private readonly crewSlots: HTMLElement;
+  private readonly crewCount: HTMLElement;
+  private readonly crewNote: HTMLElement;
+  private lastCrew = '';
   /** Le panneau Recherche, que seule la fenêtre du labo montre. */
   private readonly research: ResearchPanel;
   private readonly upgrade: HTMLElement;
@@ -138,7 +157,34 @@ export class BuildingPanel {
       if (this.entityId !== null) this.world.push({ type: 'depositToTown' });
     });
 
-    this.actions.append(this.transferButton, this.takeButton, this.depositButton);
+    this.pauseButton = document.createElement('button');
+    this.pauseButton.type = 'button';
+    this.pauseButton.className = 'building-panel-pause';
+    this.pauseButton.addEventListener('click', () => {
+      const entity = this.entityId === null ? undefined : this.world.entities.get(this.entityId);
+
+      if (entity && entity.kind !== 'site') this.world.push({ type: 'pauseBuilding', id: entity.id, paused: !entity.paused });
+    });
+
+    this.actions.append(this.pauseButton, this.transferButton, this.takeButton, this.depositButton);
+
+    this.crew = document.createElement('div');
+    this.crew.className = 'building-panel-crew';
+
+    const crewRow = document.createElement('div');
+
+    crewRow.className = 'building-panel-crew-row';
+    this.crewLess = crewButton('−', 'Un ouvrier de moins', () => this.stepStaff(-1));
+    this.crewMore = crewButton('+', 'Un ouvrier de plus', () => this.stepStaff(1));
+    this.crewSlots = document.createElement('div');
+    this.crewSlots.className = 'building-panel-crew-slots';
+    this.crewCount = document.createElement('span');
+    this.crewCount.className = 'building-panel-crew-count';
+    crewRow.append(this.crewLess, this.crewSlots, this.crewCount, this.crewMore);
+
+    this.crewNote = document.createElement('p');
+    this.crewNote.className = 'building-panel-crew-note';
+    this.crew.append(crewRow, this.crewNote);
 
     this.research = new ResearchPanel(world);
     this.research.root.hidden = true;
@@ -164,7 +210,17 @@ export class BuildingPanel {
     upgradeActions.append(this.upgradeButton);
     this.upgrade.append(this.upgradeEffect, this.upgradeCost, upgradeActions);
 
-    this.root.append(header, this.description, this.bar, this.items, this.lines, this.actions, this.upgrade, this.research.root);
+    this.root.append(
+      header,
+      this.description,
+      this.bar,
+      this.items,
+      this.lines,
+      this.crew,
+      this.actions,
+      this.upgrade,
+      this.research.root,
+    );
   }
 
   public get open(): boolean {
@@ -186,6 +242,7 @@ export class BuildingPanel {
     this.lastText = '';
     this.lastItems = '';
     this.lastUpgrade = '';
+    this.lastCrew = '';
     this.refresh(entity);
     this.onOpen();
   }
@@ -259,6 +316,8 @@ export class BuildingPanel {
       this.transferButton.disabled = !inReach || !canGive;
       this.takeButton.hidden = true;
       this.depositButton.hidden = true;
+      this.pauseButton.hidden = true;
+      this.crew.hidden = true;
       this.upgrade.hidden = true;
     } else {
       const level = buildingLevel(entity.proto, entity.level);
@@ -266,7 +325,9 @@ export class BuildingPanel {
       ratio = entity.hp / level.hp;
       barClass = 'hp';
       lines.push(`Points de vie ${entity.hp}/${level.hp}`);
-      if (proto.workers > 0) lines.push(`${proto.workers} ouvriers y travaillent.`);
+
+      const pausable = canPause(entity.proto);
+      const stopped = this.world.stopped(entity);
 
       // Une foreuse, une ferme, une forge ou une cabane de bûcheron remplit son coffre : Adam vient le vider.
       const producer =
@@ -274,7 +335,11 @@ export class BuildingPanel {
       // Une nurserie ou une forge consomme : Adam vient la remplir.
       const consumer = entity.kind === 'nursery' || entity.kind === 'forge';
 
-      this.actions.hidden = !producer && !consumer;
+      this.actions.hidden = !producer && !consumer && !pausable;
+      this.pauseButton.hidden = !pausable;
+      this.pauseButton.textContent = entity.paused ? 'Reprendre' : 'Pause';
+      this.pauseButton.dataset['tone'] = entity.paused ? 'resume' : 'pause';
+      this.refreshCrew(entity);
       this.transferButton.hidden = !consumer;
       this.transferButton.textContent = 'Transférer le sac';
       this.transferButton.disabled = !inReach || !this.world.canSupply(entity);
@@ -300,7 +365,7 @@ export class BuildingPanel {
 
         case 'drill':
           lines.push(entity.output ? `Extrait : ${ITEMS[entity.output].label}` : 'Posée à sec : aucun gisement dessous.');
-          lines.push(entity.blocked && entity.output ? BLOCKED : entity.output ? 'En marche.' : '');
+          lines.push(entity.paused ? PAUSED : entity.blocked && entity.output ? BLOCKED : entity.output ? 'En marche.' : '');
           break;
 
         case 'nursery': {
@@ -308,9 +373,11 @@ export class BuildingPanel {
 
           lines.push(`Chaque naissance mange ${recipeLine(RECIPES.raiseChild.inputs)}.`);
           lines.push(
-            entity.hungry
-              ? 'En attente : il manque de quoi nourrir l’enfant — apportez de la nourriture.'
-              : `Prochain enfant dans ${clock(remaining)}`,
+            entity.paused
+              ? PAUSED
+              : entity.hungry
+                ? 'En attente : il manque de quoi nourrir l’enfant — apportez de la nourriture.'
+                : `Prochain enfant dans ${clock(remaining)}`,
           );
           lines.push(`Enfants nés ici : ${entity.born}`);
           break;
@@ -319,9 +386,11 @@ export class BuildingPanel {
         case 'forge':
           lines.push(`${recipeLine(RECIPES.smeltPlate.inputs)} → ${recipeLine(RECIPES.smeltPlate.outputs)}`);
           lines.push(
-            entity.blocked
-              ? 'À l’arrêt : il manque du fer ou du charbon — heurtez-la ou transférez le sac.'
-              : 'Le four chauffe.',
+            entity.paused
+              ? PAUSED
+              : entity.blocked
+                ? 'À l’arrêt : il manque du fer ou du charbon — heurtez-la ou transférez le sac.'
+                : 'Le four chauffe.',
           );
           break;
 
@@ -334,7 +403,15 @@ export class BuildingPanel {
         }
 
         case 'farm':
-          lines.push(entity.blocked ? BLOCKED : 'Les sillons poussent.');
+          lines.push(
+            entity.paused
+              ? PAUSED
+              : stopped
+                ? 'À l’arrêt : personne aux champs — ajoutez un ouvrier.'
+                : entity.blocked
+                  ? BLOCKED
+                  : 'Les sillons poussent.',
+          );
           break;
 
         case 'house':
@@ -348,11 +425,15 @@ export class BuildingPanel {
         case 'lumberCamp':
           lines.push(`Les bûcherons coupent les arbres à ${LUMBERJACKS.radius} cases à la ronde.`);
           lines.push(
-            this.world.treesLeft(entity) === 0
-              ? 'Plus d’arbres à portée.'
-              : entity.store.total() > entity.store.capacity - LUMBERJACKS.carry
-                ? 'Coffre plein : les bûcherons attendent qu’on le vide.'
-                : 'Les haches résonnent.',
+            entity.paused
+              ? 'En pause : les bûcherons rapportent leur bois, puis flânent.'
+              : stopped
+                ? 'À l’arrêt : aucun bûcheron — ajoutez un ouvrier.'
+                : this.world.treesLeft(entity) === 0
+                  ? 'Plus d’arbres à portée.'
+                  : entity.store.total() > entity.store.capacity - LUMBERJACKS.carry
+                    ? 'Coffre plein : les bûcherons attendent qu’on le vide.'
+                    : 'Les haches résonnent.',
           );
           break;
 
@@ -393,6 +474,56 @@ export class BuildingPanel {
     this.lines.textContent = text;
     this.bar.dataset['kind'] = barClass;
     this.barFill.style.width = `${Math.round(Math.max(0, Math.min(1, ratio)) * 100)}%`;
+  }
+
+  /** Le sélecteur d'ouvriers : un pictogramme par poste — occupé, libre, ou demandé mais vide. */
+  private refreshCrew(building: Building): void {
+    const staffing = this.world.staffing(building);
+
+    this.crew.hidden = staffing === null;
+    if (!staffing) return;
+
+    const { min, max, wanted, filled } = staffing;
+    const key = `${building.id}:${wanted}:${filled}:${max}`;
+
+    this.crewLess.disabled = wanted <= min;
+    this.crewMore.disabled = wanted >= max;
+    if (key === this.lastCrew) return;
+    this.lastCrew = key;
+
+    this.crewSlots.replaceChildren(
+      ...Array.from({ length: max }, (_, slot) => {
+        const cell = document.createElement('span');
+
+        // Occupé, demandé mais sans ouvrier libre, ou fermé.
+        cell.className = 'building-panel-crew-slot';
+        cell.dataset['slot'] = slot < filled ? 'filled' : slot < wanted ? 'missing' : 'empty';
+        cell.append(uiIcon('worker', 26));
+        return cell;
+      }),
+    );
+    this.crewCount.textContent = `${wanted}/${max}`;
+
+    const missing = wanted - filled;
+
+    const plural = (count: number): string => (count > 1 ? 's' : '');
+
+    this.crewNote.textContent =
+      missing > 0
+        ? `${missing} ouvrier${plural(missing)} manquant${plural(missing)} : le poste se remplira dès qu’un ouvrier sera libre.`
+        : wanted === 0
+          ? 'Aucun ouvrier : le bâtiment est à l’arrêt.'
+          : `${filled} ouvrier${plural(filled)} affecté${plural(filled)}` +
+            (max > wanted ? `, ${max - wanted} rendu${plural(max - wanted)} à la ville.` : '.');
+    this.crewNote.dataset['missing'] = String(missing > 0);
+  }
+
+  /** − ou + : l'effectif voulu, poussé en commande ; la simulation le borne. */
+  private stepStaff(delta: number): void {
+    const entity = this.entityId === null ? undefined : this.world.entities.get(this.entityId);
+
+    if (!entity || entity.kind === 'site') return;
+    this.world.push({ type: 'setWorkers', id: entity.id, count: entity.staff + delta });
   }
 
   /** Le niveau suivant : ce qu'il apporte, ce qu'il coûte, ce qui manque ; ou « Niveau max ». */
@@ -457,6 +588,18 @@ export class BuildingPanel {
   public destroy(): void {
     this.root.remove();
   }
+}
+
+/** Un bouton rond du sélecteur d'ouvriers. */
+function crewButton(label: string, title: string, onClick: () => void): HTMLButtonElement {
+  const button = document.createElement('button');
+
+  button.type = 'button';
+  button.className = 'building-panel-crew-step';
+  button.textContent = label;
+  button.setAttribute('aria-label', title);
+  button.addEventListener('click', onClick);
+  return button;
 }
 
 /** Texte d'inspection : celui du chantier tant qu'il en est un, celui du bâtiment à son niveau ensuite. */

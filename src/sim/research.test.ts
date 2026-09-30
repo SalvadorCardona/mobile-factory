@@ -347,7 +347,7 @@ describe('labo de recherche', () => {
     const state = built.snapshot();
     const { tx, ty } = spot(built, 'drill');
 
-    state.entities.push({ kind: 'house', id: state.nextId, proto: 'builderHouse', tx, ty, width: 2, height: 2, store: {}, hp: BUILDINGS.builderHouse.hp, level: 1 });
+    state.entities.push({ kind: 'house', id: state.nextId, proto: 'builderHouse', tx, ty, width: 2, height: 2, store: {}, hp: BUILDINGS.builderHouse.hp, level: 1, paused: false, staff: BUILDINGS.builderHouse.workers });
     state.nextId += 1;
 
     const world = World.restore(state);

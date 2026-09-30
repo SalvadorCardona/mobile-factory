@@ -1761,6 +1761,113 @@ button.hud-stock:active {
   box-shadow: 0 2px 0 var(--mint-shade);
 }
 
+/* Pause : le bouton passe au vert quand il relance. */
+.building-panel-actions button[data-tone='resume'] {
+  background: var(--mint);
+  color: var(--paper);
+  box-shadow: 0 5px 0 var(--mint-shade);
+}
+
+.building-panel-actions button[data-tone='resume']:active {
+  box-shadow: 0 2px 0 var(--mint-shade);
+}
+
+/*
+ * Le sélecteur d'ouvriers : deux boutons ronds larges au doigt, et entre eux
+ * un pictogramme par poste — plein s'il est occupé, pâle s'il est fermé,
+ * pâle avec une pastille corail s'il attend un ouvrier libre.
+ */
+.building-panel-crew {
+  margin-top: 12px;
+}
+
+.building-panel-crew[hidden] {
+  display: none;
+}
+
+.building-panel-crew-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.building-panel-crew-step {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border: none;
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 5px 0 var(--paper-shade);
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.building-panel-crew-step:active {
+  transform: translateY(3px);
+  box-shadow: 0 2px 0 var(--paper-shade);
+}
+
+.building-panel-crew-step[disabled] {
+  opacity: 0.45;
+  transform: none;
+}
+
+.building-panel-crew-slots {
+  display: flex;
+  flex: 1;
+  justify-content: center;
+  gap: 2px;
+}
+
+.building-panel-crew-slot {
+  position: relative;
+  display: inline-flex;
+}
+
+.building-panel-crew-slot[data-slot='empty'] img {
+  opacity: 0.25;
+}
+
+.building-panel-crew-slot[data-slot='missing'] img {
+  opacity: 0.45;
+}
+
+.building-panel-crew-slot[data-slot='missing']::after {
+  content: '';
+  position: absolute;
+  right: -1px;
+  top: -1px;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--coral);
+  box-shadow: 0 2px 0 var(--coral-shade);
+}
+
+.building-panel-crew-count {
+  flex: none;
+  min-width: 42px;
+  font-size: 19px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--violet);
+}
+
+.building-panel-crew-note {
+  margin: 6px 0 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.building-panel-crew-note[data-missing='true'] {
+  color: var(--danger);
+}
+
 .building-panel-lines {
   margin: 8px 0 0;
   font: inherit;

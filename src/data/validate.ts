@@ -74,6 +74,9 @@ export function validatePrototypes(): string[] {
     if (building.workers < 0 || !Number.isInteger(building.workers)) {
       errors.push(`BUILDINGS.${id} : nombre d'ouvriers invalide`);
     }
+    if (building.minWorkers < 0 || !Number.isInteger(building.minWorkers) || building.minWorkers > building.workers) {
+      errors.push(`BUILDINGS.${id} : minimum d'ouvriers hors de [0, ${building.workers}]`);
+    }
     if (building.unlockNight < 0 || !Number.isInteger(building.unlockNight)) {
       errors.push(`BUILDINGS.${id} : nuit de déblocage invalide`);
     }
