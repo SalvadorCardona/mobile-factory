@@ -28,7 +28,7 @@ import { World } from './world.ts';
  * `WorldState` ; une migration de l'ancienne version se branche alors dans
  * `decodeSave`, sinon l'ancienne sauvegarde est ignorée.
  */
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 /** Une entité telle qu'elle est rangée : son coffre devient un simple stock. */
 export type SavedEntity = Stored<Entity>;

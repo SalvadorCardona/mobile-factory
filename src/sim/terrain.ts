@@ -17,7 +17,9 @@
  * Tout est pur : mêmes entrées, mêmes sorties, sans état.
  */
 
+import { CHUNK_TILES } from '../core/grid.ts';
 import { hash3, noise2 } from '../core/rng.ts';
+import { BUILDINGS } from '../data/buildings.ts';
 import { DECOR, DECOR_DENSITY, DECOR_IDS, type DecorId, type DecorTerrain } from '../data/decor.ts';
 import type { Habitat } from '../data/enemies.ts';
 import type { ItemId } from '../data/items.ts';
@@ -105,17 +107,231 @@ function nodeOfCell(seed: number, cellX: number, cellY: number): OreNode | null 
   };
 }
 
-/** Le gisement présent sur cette tuile, ou `null`. */
+/** Le gisement présent sur cette tuile, ou `null`. Les filons du foyer passent devant ceux des cellules. */
 export function oreAt(seed: number, tx: number, ty: number): OreNode | null {
-  const node = nodeOfCell(seed, Math.floor(tx / ORE_CELL), Math.floor(ty / ORE_CELL));
-
-  if (!node) return null;
   if (terrainAt(seed, tx, ty) === 'water') return null;
 
-  const dx = tx - node.tx;
-  const dy = ty - node.ty;
+  for (const node of homeOf(seed).ores) {
+    if (inDisc(tx, ty, node.tx, node.ty, node.radius)) return node;
+  }
 
-  return dx * dx + dy * dy <= node.radius * node.radius ? node : null;
+  const node = nodeOfCell(seed, Math.floor(tx / ORE_CELL), Math.floor(ty / ORE_CELL));
+
+  return node && inDisc(tx, ty, node.tx, node.ty, node.radius) ? node : null;
+}
+
+function inDisc(tx: number, ty: number, cx: number, cy: number, radius: number): boolean {
+  const dx = tx - cx;
+  const dy = ty - cy;
+
+  return dx * dx + dy * dy <= radius * radius;
+}
+
+/* ------------------------------------------------------------------ foyer */
+
+/**
+ * Cherche, en spirale carrée depuis l'origine, une clairière de 5 × 6 tuiles
+ * entièrement constructible : la mairie (3 × 3) en haut, Adam en dessous,
+ * une tuile de marge autour. Sans ça, une seed qui met de l'eau en (0, 0)
+ * fait apparaître le joueur dans un lac dont il ne peut pas sortir — ou la
+ * mairie les pieds dedans. La clairière doit aussi pouvoir accueillir le
+ * foyer (voir `Home`) : un îlot où ne tient aucun filon est écarté.
+ *
+ * Renvoie la tuile sous la mairie ; Adam apparaît juste en dessous.
+ */
+export function findSpawn(seed: number): [number, number] {
+  return homeOf(seed).spawn;
+}
+
+/** La mairie, premier chantier : c'est elle que la clairière du départ doit accueillir. */
+const TOWN_HALL_HEIGHT = BUILDINGS.townHall.height;
+
+/** La clairière du départ, que `World` vide de ses ressources : la mairie au-dessus, Adam en dessous. */
+function inClearing(sx: number, sy: number, tx: number, ty: number): boolean {
+  return tx >= sx - 2 && tx <= sx + 2 && ty >= sy - TOWN_HALL_HEIGHT && ty <= sy + 2;
+}
+
+function isClearing(seed: number, sx: number, sy: number): boolean {
+  for (let ty = sy - TOWN_HALL_HEIGHT; ty <= sy + 2; ty += 1) {
+    for (let tx = sx - 2; tx <= sx + 2; tx += 1) {
+      if (!isBuildable(terrainAt(seed, tx, ty))) return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Le foyer : ce qu'il faut autour du départ pour bâtir la mairie, puis la
+ * foreuse. Laissés au hasard des cellules, la pierre n'étant qu'un filon sur
+ * quatre, les rochers roses tombaient à 30–60 tuiles d'Adam sur une seed sur
+ * deux — trois écrans de téléphone à errer sans savoir où. Le foyer pose donc,
+ * à portée de pas depuis Adam (jamais de l'autre côté d'un lac) :
+ * - un bosquet à quelques tuiles, pour le bois ;
+ * - un filon de pierre à moins d'un écran ;
+ * - un filon de fer un peu plus loin, pour la première foreuse.
+ *
+ * Tiré de la seed seule (le terrain ne dépend pas des filons), donc pur ;
+ * gardé en cache parce que `oreAt` le consulte à chaque tuile.
+ */
+interface Home {
+  spawn: [number, number];
+  ores: OreNode[];
+  grove: { tx: number; ty: number };
+}
+
+/** Distances au départ d'Adam, en tuiles, du centre de chaque pièce du foyer. */
+const HOME_GROVE = { min: 3, max: 4.5, radius: 2 };
+const HOME_STONE = { min: 7, max: 9.5, radius: 2 };
+const HOME_IRON = { min: 13, max: 16, radius: 2 };
+
+/** Assez large pour contenir le filon de fer le plus lointain. */
+const HOME_REACH = 20;
+const SPAN = 2 * HOME_REACH + 1;
+
+const HOMES = new Map<number, Home>();
+
+function homeOf(seed: number): Home {
+  let home = HOMES.get(seed);
+
+  if (!home) {
+    home = searchHome(seed);
+    HOMES.set(seed, home);
+  }
+  return home;
+}
+
+function searchHome(seed: number): Home {
+  let first: [number, number] | null = null;
+
+  for (let radius = 0; radius < CHUNK_TILES * 4; radius += 1) {
+    for (let dy = -radius; dy <= radius; dy += 1) {
+      for (let dx = -radius; dx <= radius; dx += 1) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== radius) continue;
+        if (!isClearing(seed, dx, dy)) continue;
+
+        const home = planHome(seed, dx, dy);
+
+        if (home) return home;
+        first ??= [dx, dy];
+      }
+    }
+  }
+
+  // Aucune clairière n'accueille de foyer : la première venue, filons posés d'office.
+  const [sx, sy] = first ?? [0, 0];
+
+  return planHome(seed, sx, sy, true)!;
+}
+
+/** Le foyer autour de cette clairière, ou `null` s'il n'y tient pas (sauf `force`). */
+function planHome(seed: number, sx: number, sy: number, force = false): Home | null {
+  const ax = sx;
+  const ay = sy + 1;
+  const reachable = reachableFrom(seed, ax, ay);
+  const land = (tx: number, ty: number): boolean => terrainAt(seed, tx, ty) !== 'water';
+  const clear = (tx: number, ty: number, radius: number): boolean => {
+    for (let dy = -radius; dy <= radius; dy += 1) {
+      for (let dx = -radius; dx <= radius; dx += 1) {
+        if (dx * dx + dy * dy > radius * radius) continue;
+        if (!land(tx + dx, ty + dy) || inClearing(sx, sy, tx + dx, ty + dy)) return false;
+      }
+    }
+    return true;
+  };
+
+  /** Une tuile atteignable dans l'anneau, tirée de la seed parmi celles qui passent le filtre. */
+  const pick = (salt: number, ring: { min: number; max: number }, accept: (tx: number, ty: number) => boolean) => {
+    const candidates: [number, number][] = [];
+
+    for (const key of reachable) {
+      const tx = (key % SPAN) - HOME_REACH + ax;
+      const ty = Math.floor(key / SPAN) - HOME_REACH + ay;
+      const distSq = (tx - ax) ** 2 + (ty - ay) ** 2;
+
+      if (distSq < ring.min * ring.min || distSq > ring.max * ring.max) continue;
+      if (accept(tx, ty)) candidates.push([tx, ty]);
+    }
+    return candidates.length > 0 ? candidates[hash3(seed ^ salt, sx, sy) % candidates.length]! : null;
+  };
+
+  const stoneAt =
+    pick(0x68e31da4, HOME_STONE, (tx, ty) => clear(tx, ty, HOME_STONE.radius)) ??
+    pick(0x68e31da4, HOME_STONE, (tx, ty) => clear(tx, ty, 0)) ??
+    (force ? [ax, ay + HOME_STONE.min] : null);
+
+  if (!stoneAt) return null;
+
+  const stone = homeNode(seed, 'stone', stoneAt, HOME_STONE.radius);
+  const apart = (tx: number, ty: number): boolean => !inDisc(tx, ty, stone.tx, stone.ty, 2 * HOME_IRON.radius + 1);
+  const ironAt =
+    pick(0xb5297a4d, HOME_IRON, (tx, ty) => clear(tx, ty, HOME_IRON.radius) && apart(tx, ty)) ??
+    pick(0xb5297a4d, HOME_IRON, (tx, ty) => clear(tx, ty, 0) && apart(tx, ty)) ??
+    (force ? [ax, ay - HOME_IRON.min] : null);
+
+  if (!ironAt) return null;
+
+  const iron = homeNode(seed, 'ironOre', ironAt, HOME_IRON.radius);
+
+  // Le cœur du bosquet porte toujours un arbre : ni filon ni clairière dessous.
+  const bare = (tx: number, ty: number): boolean =>
+    clear(tx, ty, 0) &&
+    !inDisc(tx, ty, stone.tx, stone.ty, stone.radius) &&
+    !inDisc(tx, ty, iron.tx, iron.ty, iron.radius) &&
+    nodeAt(seed, tx, ty) === null;
+  const groveAt =
+    pick(0x1656567b, HOME_GROVE, (tx, ty) => bare(tx, ty) && terrainAt(seed, tx, ty) === 'grass') ??
+    pick(0x1656567b, HOME_GROVE, bare) ??
+    (force ? [ax + HOME_GROVE.min, ay] : null);
+
+  if (!groveAt) return null;
+
+  return { spawn: [sx, sy], ores: [stone, iron], grove: { tx: groveAt[0], ty: groveAt[1] } };
+}
+
+function homeNode(seed: number, item: ItemId, [tx, ty]: [number, number], radius: number): OreNode {
+  return { id: hash3(seed ^ 0x2f8a6c1e, tx, ty), item, tx, ty, radius };
+}
+
+/** Le gisement de cellule sur la tuile, sans les filons du foyer. */
+function nodeAt(seed: number, tx: number, ty: number): OreNode | null {
+  const node = nodeOfCell(seed, Math.floor(tx / ORE_CELL), Math.floor(ty / ORE_CELL));
+
+  return node && inDisc(tx, ty, node.tx, node.ty, node.radius) ? node : null;
+}
+
+/**
+ * Les tuiles qu'Adam peut atteindre à pied depuis son départ, dans un carré
+ * de `HOME_REACH` tuiles autour de lui. Seule l'eau arrête : un arbre ou un
+ * rocher se récolte. Clés : `x + y * SPAN`, relatives au coin du carré.
+ */
+function reachableFrom(seed: number, ax: number, ay: number): number[] {
+  const seen = new Uint8Array(SPAN * SPAN);
+  const start = HOME_REACH + HOME_REACH * SPAN;
+  const queue = [start];
+
+  seen[start] = 1;
+  for (let head = 0; head < queue.length; head += 1) {
+    const key = queue[head]!;
+    const x = key % SPAN;
+    const y = Math.floor(key / SPAN);
+
+    for (const [nx, ny] of [
+      [x + 1, y],
+      [x - 1, y],
+      [x, y + 1],
+      [x, y - 1],
+    ] as const) {
+      if (nx < 0 || ny < 0 || nx >= SPAN || ny >= SPAN) continue;
+
+      const next = nx + ny * SPAN;
+
+      if (seen[next]) continue;
+      if (!isWalkable(terrainAt(seed, nx - HOME_REACH + ax, ny - HOME_REACH + ay))) continue;
+      seen[next] = 1;
+      queue.push(next);
+    }
+  }
+  return queue;
 }
 
 /** Les gisements des cellules à `range` cellules ou moins de celle de la tuile. */
@@ -158,16 +374,22 @@ export function resourceAt(seed: number, tx: number, ty: number): ResourceId | n
   const ore = oreAt(seed, tx, ty);
 
   if (ore) {
+    // Le cœur d'un filon porte toujours son rocher : celui du foyer ne peut pas sortir vide.
     const roll = hash3(seed ^ 0x2545f491, tx, ty) / 4294967296;
+    const core = tx === ore.tx && ty === ore.ty;
 
-    return roll < ROCK_DENSITY ? (ROCK_OF_ORE[ore.item] ?? null) : null;
+    return core || roll < ROCK_DENSITY ? (ROCK_OF_ORE[ore.item] ?? null) : null;
   }
 
+  const { grove } = homeOf(seed);
+  const inGrove = inDisc(tx, ty, grove.tx, grove.ty, HOME_GROVE.radius);
+
+  if (inGrove && tx === grove.tx && ty === grove.ty) return 'tree';
   if (terrain !== 'grass') return null;
 
   const forest = smoothNoise(seed ^ 0x7f4a7c15, tx, ty, FOREST_CELL);
 
-  if (forest < FOREST_THRESHOLD) return null;
+  if (forest < FOREST_THRESHOLD && !inGrove) return null;
 
   const roll = hash3(seed ^ 0x1b873593, tx, ty) / 4294967296;
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decorAt, oreAt, resourceAt, terrainAt } from './terrain.ts';
+import { decorAt, findSpawn, oreAt, resourceAt, terrainAt } from './terrain.ts';
 
 describe('terrain', () => {
   /*
@@ -162,5 +162,51 @@ describe('décor', () => {
     expect(decorated / bare).toBeGreaterThan(0.02);
     expect(decorated / bare).toBeLessThan(0.15);
     expect(kinds.size).toBeGreaterThan(6);
+  });
+});
+
+describe('foyer', () => {
+  /** La plus proche tuile portant `id`, en tuiles depuis le départ d'Adam, hors de la clairière. */
+  function nearest(seed: number, id: string, reach: number): number {
+    const [sx, sy] = findSpawn(seed);
+    const ax = sx;
+    const ay = sy + 1;
+    let best = Infinity;
+
+    for (let ty = ay - reach; ty <= ay + reach; ty += 1) {
+      for (let tx = ax - reach; tx <= ax + reach; tx += 1) {
+        // `World` vide la clairière de la mairie : ce qui y pousse ne compte pas.
+        if (tx >= sx - 2 && tx <= sx + 2 && ty >= sy - 3 && ty <= sy + 2) continue;
+        if (resourceAt(seed, tx, ty) !== id) continue;
+        best = Math.min(best, Math.hypot(tx - ax, ty - ay));
+      }
+    }
+    return best;
+  }
+
+  /*
+   * Playtest du 30/09/2026 : sur la moitié des seeds, le premier rocher de
+   * pierre était à plus de trois écrans du départ. La mairie doit pouvoir se
+   * bâtir sans explorer, sur toutes les seeds.
+   */
+  it('met des arbres à 6 tuiles, de la pierre à 12 et du fer à 20 sur 1 000 seeds', () => {
+    for (let seed = 0; seed < 1000; seed += 1) {
+      const trees = nearest(seed, 'tree', 6);
+      const stone = nearest(seed, 'stoneRock', 12);
+      const iron = nearest(seed, 'ironRock', 20);
+
+      expect({ seed, ok: trees <= 6 && stone <= 12 && iron <= 20 }).toEqual({ seed, ok: true });
+    }
+  });
+
+  it('se tire de la seed : même seed, mêmes filons', () => {
+    const [sx, sy] = findSpawn(42);
+
+    expect(findSpawn(42)).toEqual([sx, sy]);
+    for (let ty = sy - 20; ty <= sy + 20; ty += 1) {
+      for (let tx = sx - 20; tx <= sx + 20; tx += 1) {
+        expect(oreAt(42, tx, ty)).toEqual(oreAt(42, tx, ty));
+      }
+    }
   });
 });

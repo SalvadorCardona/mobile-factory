@@ -50,7 +50,7 @@ import { ResourceIndex } from './resources.ts';
 import type { SavedEntity, WorldState } from './save.ts';
 import { Scheduler } from './scheduler.ts';
 import { Store } from './store.ts';
-import { habitatAt, isBuildable, isWalkable, oreAt, terrainAt } from './terrain.ts';
+import { findSpawn, habitatAt, isBuildable, isWalkable, oreAt, terrainAt } from './terrain.ts';
 import type {
   Beast,
   Building,
@@ -211,7 +211,7 @@ export class World {
     this.resources = new ResourceIndex(this.seed);
     this.rng = mulberry32(this.seed ^ 0x3c6ef372);
 
-    const [sx, sy] = this.findSpawn();
+    const [sx, sy] = findSpawn(this.seed);
     const proto = BUILDINGS[STARTING_BUILDING];
 
     // La clairière : la mairie au-dessus, Adam en dessous, et rien qui gêne.
@@ -1372,40 +1372,6 @@ export class World {
   /** Nombre de réveils en attente — affiché dans le HUD de debug. */
   public pendingWakes(): number {
     return this.scheduler.size();
-  }
-
-  /* ----------------------------------------------------------------- spawn */
-
-  /**
-   * Cherche, en spirale carrée depuis l'origine, une clairière de 5 × 6 tuiles
-   * entièrement constructible : la mairie (3 × 3) en haut, Adam en dessous,
-   * une tuile de marge autour. Sans ça, une seed qui met de l'eau en (0, 0)
-   * fait apparaître le joueur dans un lac dont il ne peut pas sortir — ou la
-   * mairie les pieds dedans.
-   *
-   * Renvoie la tuile sous la mairie, celle où Adam se tient.
-   */
-  private findSpawn(): [number, number] {
-    const { height } = BUILDINGS[STARTING_BUILDING];
-
-    for (let radius = 0; radius < CHUNK_TILES * 4; radius += 1) {
-      for (let dy = -radius; dy <= radius; dy += 1) {
-        for (let dx = -radius; dx <= radius; dx += 1) {
-          if (Math.max(Math.abs(dx), Math.abs(dy)) !== radius) continue;
-          if (this.isClearing(dx, dy, height)) return [dx, dy];
-        }
-      }
-    }
-    return [0, 0];
-  }
-
-  private isClearing(sx: number, sy: number, height: number): boolean {
-    for (let ty = sy - height; ty <= sy + 2; ty += 1) {
-      for (let tx = sx - 2; tx <= sx + 2; tx += 1) {
-        if (!isBuildable(terrainAt(this.seed, tx, ty))) return false;
-      }
-    }
-    return true;
   }
 
   /** La première tuile praticable collée à l'emprise, en commençant par le bas, ou `null`. */

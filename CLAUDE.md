@@ -156,7 +156,10 @@ Rien ne joue avant un geste du joueur.
   `Math.random()` côté `sim/`.
 - La carte n'est jamais stockée : terrain, filons et ressources de surface
   sont régénérés depuis la seed (`sim/terrain.ts`). Seules les modifications
-  du joueur (`sim/resources.ts`, entités) sont de l'état.
+  du joueur (`sim/resources.ts`, entités) sont de l'état. Le départ aussi se
+  tire de la seed, avec son foyer : bosquet, filon de pierre (≤ 12 tuiles) et
+  de fer (≤ 20) à portée de pas d'Adam — `terrain.test.ts` le vérifie sur
+  1 000 seeds.
 - Sauvegarde automatique : `sim/save.ts` sérialise le monde (format versionné
   `{ version, savedAt, state }`, validé à la lecture) ; `storage/localSave.ts`
   est le seul à toucher au `localStorage` (clé `mobile-factory:save`), et tout
