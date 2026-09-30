@@ -13,7 +13,7 @@
 
 import { TILE_SIZE } from '../core/grid.ts';
 import { auditSvg } from './artDirection.ts';
-import { BUILDINGS } from './buildings.ts';
+import { BUILDINGS, NURSERY_BIRTH_TICKS } from './buildings.ts';
 import { ENEMIES, WAVES, WILDLIFE, WILDLIFE_SPAWN, type WildlifeProto } from './enemies.ts';
 import { ICON_SIZE, ITEM_ICONS } from './icons.ts';
 import { ITEMS } from './items.ts';
@@ -65,6 +65,20 @@ export function validatePrototypes(): string[] {
     }
     if (building.kind === 'tower' && building.weapon === null) {
       errors.push(`BUILDINGS.${id} : une tour sans arme ne sert à rien`);
+    }
+    // La ligne d'effet du menu cite des chiffres : ils doivent suivre la donnée.
+    if (building.effect.trim() === '') {
+      errors.push(`BUILDINGS.${id} : ligne d'effet vide`);
+    }
+    if (building.weapon !== null && building.weapon in WEAPONS) {
+      const range = `${WEAPONS[building.weapon].range} cases`;
+
+      if (!building.effect.includes(range)) errors.push(`BUILDINGS.${id} : l'effet doit citer la portée (« ${range} »)`);
+    }
+    if (building.kind === 'nursery') {
+      const minutes = `${NURSERY_BIRTH_TICKS / (20 * 60)} min`;
+
+      if (!building.effect.includes(minutes)) errors.push(`BUILDINGS.${id} : l'effet doit citer « ${minutes} »`);
     }
     if (!(building.sprite in SPRITES)) {
       errors.push(`BUILDINGS.${id} : planche inconnue « ${building.sprite} »`);

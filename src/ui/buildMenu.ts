@@ -2,8 +2,8 @@
  * Menu de construction.
  *
  * Un seul bouton à l'écran — « Construire » — qui ouvre un tiroir. Le tiroir
- * liste les bâtiments débloqués en cartes : vignette, nom, coût en icônes,
- * ouvriers. Choisir une carte ferme le tiroir et arme le placement
+ * liste les bâtiments débloqués en cartes : vignette, nom, ce que fait le
+ * bâtiment en une ligne (`effect`), coût en icônes, ouvriers. Choisir une carte ferme le tiroir et arme le placement
  * (`input/placement.ts`) ; une barre remplace alors le bouton, avec le nom
  * du bâtiment choisi, « Poser », « Poser encore » et « Annuler ». « Poser »
  * rend la main au joystick ; « Poser encore » garde le bâtiment armé, pour
@@ -17,7 +17,13 @@
  * pas avant d'appuyer, pas après.
  *
  * Une carte ne se grise pas quand le sac est vide : poser un chantier ne
- * coûte rien, c'est le remplir qui coûte.
+ * coûte rien, c'est le remplir qui coûte. Le coût se colore seulement d'après
+ * le sac — vert ce qu'Adam porte déjà, orange ce qui manque.
+ *
+ * Tant que la mairie est en chantier, les cartes sont grisées et disent
+ * « Débloqué après la mairie » : un débutant ne dépense pas son premier bois
+ * ailleurs. Elles restent focalisables (`aria-disabled`, pas `disabled`) pour
+ * que le clavier et le lecteur d'écran les parcourent quand même.
  *
  * `unlocked` est pour l'instant la liste complète des bâtiments du menu.
  * Quand la recherche existera, elle viendra de `unlockedBuildings` — le menu
@@ -35,6 +41,7 @@ import { gridStep, type GridMove } from '../core/gridNav.ts';
 import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
 import type { Placement } from '../input/placement.ts';
+import type { World } from '../sim/world.ts';
 import { buildingIcon, itemAmount, uiIcon } from './icons.ts';
 
 /** Position physique → mouvement dans la grille : flèches, et ZQSD/WASD comme pour marcher. */
@@ -60,12 +67,20 @@ export class BuildMenu {
   private readonly repeatButton: HTMLButtonElement;
   private readonly cancelButton: HTMLButtonElement;
   private readonly cards = new Map<BuildingId, HTMLButtonElement>();
+  private readonly costs: { item: ItemId; amount: number; element: HTMLElement }[] = [];
   private opened = false;
 
+  private readonly world: World;
   private readonly placement: Placement;
   private readonly onOpen: () => void;
 
-  public constructor(placement: Placement, unlocked: readonly BuildingId[], onOpen: () => void = () => {}) {
+  public constructor(
+    world: World,
+    placement: Placement,
+    unlocked: readonly BuildingId[],
+    onOpen: () => void = () => {},
+  ) {
+    this.world = world;
     this.placement = placement;
     this.onOpen = onOpen;
     this.root = document.createElement('div');
@@ -130,10 +145,11 @@ export class BuildMenu {
     this.refresh();
   }
 
-  /** Une carte : vignette, nom, coût, ouvriers. */
+  /** Une carte : vignette, nom, effet, coût, ouvriers. */
   private card(id: BuildingId): HTMLButtonElement {
     const proto = BUILDINGS[id];
     const card = button('', () => {
+      if (!this.unlocked()) return;
       this.close();
       this.placement.select(id);
     });
@@ -151,6 +167,12 @@ export class BuildMenu {
     name.textContent = proto.label;
     body.append(name);
 
+    const effect = document.createElement('div');
+
+    effect.className = 'build-card-effect';
+    effect.textContent = proto.effect;
+    body.append(effect);
+
     const cost = document.createElement('div');
 
     cost.className = 'build-card-cost';
@@ -158,14 +180,30 @@ export class BuildMenu {
     const entries = Object.entries(proto.cost) as [ItemId, number][];
 
     if (entries.length === 0) cost.textContent = 'gratuit';
-    for (const [item, amount] of entries) cost.append(itemAmount(item, amount));
-    body.append(cost);
+    for (const [item, amount] of entries) {
+      const element = itemAmount(item, amount);
+
+      this.costs.push({ item, amount, element });
+      cost.append(element);
+    }
 
     const meta = document.createElement('div');
 
     meta.className = 'build-card-meta';
     meta.textContent = `${proto.width}×${proto.height}` + (proto.workers > 0 ? ` · ${proto.workers} ouvriers` : '');
-    body.append(meta);
+
+    // Coût et emprise sur une ligne : la carte garde la hauteur d'un pouce, effet compris.
+    const footer = document.createElement('div');
+
+    footer.className = 'build-card-footer';
+    footer.append(cost, meta);
+    body.append(footer);
+
+    const lock = document.createElement('div');
+
+    lock.className = 'build-card-lock';
+    lock.textContent = 'Débloqué après la mairie';
+    body.append(lock);
 
     card.append(body);
     return card;
@@ -264,12 +302,30 @@ export class BuildMenu {
     return Math.max(1, cards.filter((card) => card.offsetTop === top).length);
   }
 
+  /** Le menu s'ouvre une fois la mairie debout : avant, tout le bois lui revient. */
+  private unlocked(): boolean {
+    return this.world.entities.get(this.world.townHallId)?.kind === 'townHall';
+  }
+
   /** Recalcule l'état visible. Appelé à chaque changement de placement et à chaque frame. */
   public refresh(): void {
     const armed = this.placement.armedBuilding();
+    const locked = String(!this.unlocked());
 
     for (const [id, card] of this.cards) {
       card.dataset['active'] = String(armed === id);
+      if (card.getAttribute('aria-disabled') !== locked) card.setAttribute('aria-disabled', locked);
+    }
+
+    // Le sac ne compte que tiroir ouvert : fermé, personne ne voit les coûts.
+    if (this.opened) {
+      const { inventory } = this.world.player;
+
+      for (const { item, amount, element } of this.costs) {
+        const done = String(inventory.count(item) >= amount);
+
+        if (element.dataset['done'] !== done) element.dataset['done'] = done;
+      }
     }
 
     const idle = this.placement.mode === 'idle';

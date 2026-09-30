@@ -77,8 +77,10 @@ export const LORE = {
   },
 
   /**
-   * Chaque bâtiment a deux textes : `site` pour son chantier, `description`
-   * pour le bâtiment fini. Un bâtiment debout ne parle jamais de son chantier.
+   * Chaque bâtiment a trois textes : `site` pour son chantier, `description`
+   * pour le bâtiment fini, `effect` pour sa carte du menu de construction —
+   * une ligne, ce qu'il fait vraiment aujourd'hui. Un bâtiment debout ne
+   * parle jamais de son chantier ; un bâtiment qui ne fait encore rien le dit.
    */
   buildings: {
     townHall: {
@@ -87,11 +89,13 @@ export const LORE = {
         'Le premier bâtiment de la colonie. Le jeu commence sur son chantier : ' +
         'il faut y apporter du bois et de la pierre pour l’achever.',
       description: 'Le cœur de la colonie : si elle tombe, tout est perdu.',
+      effect: 'Le cœur de la colonie : si elle tombe, tout est perdu.',
     },
     drill: {
       name: 'Foreuse',
       site: 'Un bâti de pierre qui attend son fer. Posée sur un filon, elle l’extraira seule.',
       description: 'Machine de récupération qui extrait le filon sous elle.',
+      effect: 'Extrait seule le minerai du filon sous elle.',
     },
     nursery: {
       name: 'Nurserie',
@@ -99,6 +103,7 @@ export const LORE = {
       description:
         'Un abri chauffé, des couvertures, un berceau. Toutes les dix minutes, ' +
         'un enfant y naît et la colonie grandit d’un survivant.',
+      effect: '+1 enfant toutes les 10 min.',
     },
     builderHouse: {
       name: 'Maison des constructeurs',
@@ -106,6 +111,7 @@ export const LORE = {
       description:
         'Un dortoir de planches et de tôle pour quatre ouvriers. Ce sont eux ' +
         'qui, bientôt, porteront les ressources à la place d’Adam.',
+      effect: 'Loge 4 ouvriers. Pas encore d’autre effet.',
     },
     farm: {
       name: 'Ferme',
@@ -113,6 +119,7 @@ export const LORE = {
       description:
         'Quelques sillons dans la terre irradiée et une cabane à outils. Quatre ' +
         'ouvriers y font pousser de quoi nourrir la colonie.',
+      effect: 'Cultive de la nourriture, sans usage pour l’instant.',
     },
     watchtower: {
       name: 'Tour de guet',
@@ -120,6 +127,7 @@ export const LORE = {
       description:
         'Une plateforme de planches sur quatre poteaux, avec un arc et un carquois. ' +
         'Elle tire seule sur tout mutant qui passe à sa portée.',
+      effect: 'Tire sur les mutants à 8 cases.',
     },
   },
 } as const;

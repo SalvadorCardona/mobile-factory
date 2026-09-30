@@ -823,7 +823,10 @@ button {
 
 .build-drawer-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  /* Une colonne sur téléphone : la ligne d'effet a besoin de la largeur. */
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  /* Sans ça, la liste qui rétrécit écrase les lignes sous le contenu des cartes. */
+  grid-auto-rows: max-content;
   gap: 12px;
   padding: 2px 2px 8px;
   overflow-y: auto;
@@ -922,6 +925,15 @@ button {
   font-size: 18px;
   font-weight: 700;
   line-height: 1.15;
+  /* « Maison des constructeurs » passe à la ligne entre deux mots, jamais hors de sa carte. */
+  overflow-wrap: break-word;
+}
+
+.build-card-effect {
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.2;
+  overflow-wrap: break-word;
 }
 
 .build-card-cost {
@@ -931,10 +943,44 @@ button {
   font-size: 16px;
 }
 
+.build-card-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+
 .build-card-meta {
   font-size: 14px;
   font-weight: 500;
   color: var(--muted);
+}
+
+.build-card-lock {
+  display: none;
+  align-self: flex-start;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--paper-shade);
+  color: var(--violet-shade);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* Avant la mairie : la carte se lit, mais ne se choisit pas. */
+.build-card[aria-disabled='true'] {
+  background: var(--paper-shade);
+  box-shadow: 0 4px 0 var(--violet-light);
+}
+
+.build-card[aria-disabled='true'] .icon-building,
+.build-card[aria-disabled='true'] .build-card-cost {
+  opacity: 0.45;
+}
+
+.build-card[aria-disabled='true'] .build-card-lock {
+  display: block;
+  background: var(--paper);
 }
 
 .build-armed {
