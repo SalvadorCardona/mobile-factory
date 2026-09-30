@@ -287,6 +287,7 @@ describe('porteurs', () => {
       moving: false,
       hp: ENEMIES.mutant.hp,
       attackCooldown: 0,
+      emerge: 0,
     });
 
     const before = census(world);
