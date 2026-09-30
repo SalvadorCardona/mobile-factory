@@ -35,6 +35,16 @@
  * la même façon, avec son coût et « Dès la nuit N » : le joueur voit à
  * quoi servira le charbon avant de pouvoir poser la forge.
  *
+ * Les cartes se rangent à l'ouverture du tiroir, par utilité du moment
+ * (`buildOrder.ts`) : la tour de guet en tête au crépuscule et la nuit, puis
+ * ce qu'on peut payer tout de suite. L'ordre ne bouge plus tant que le tiroir
+ * reste ouvert.
+ *
+ * Sur téléphone, les cartes se compactent en deux colonnes — vignette, nom,
+ * coût — pour tenir toutes, ou presque, sans défiler. L'effet quitte la
+ * carte pour une ligne au pied du tiroir, qu'un appui long (ou le focus
+ * clavier) remplit ; la ligne est toujours là, la liste ne bouge pas.
+ *
  * Au clavier (`handleKey`) : Espace ouvre le tiroir sur la première carte
  * (ou sur le bâtiment déjà armé), les flèches ou ZQSD/WASD passent d'une
  * carte à l'autre dans la grille, Entrée choisit, Espace ou Échap referment.
@@ -49,6 +59,7 @@ import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
 import type { Placement } from '../input/placement.ts';
 import type { World } from '../sim/world.ts';
+import { buildOrder } from './buildOrder.ts';
 import { buildingIcon, itemAmount, uiIcon } from './icons.ts';
 import { placementOutput, placementReason } from './placementReason.ts';
 
@@ -64,11 +75,19 @@ const MOVES: Readonly<Record<string, GridMove>> = {
   KeyS: 'down',
 };
 
+/** Un doigt posé plus longtemps que ça sur une carte lit son effet au lieu de la choisir. */
+const LONG_PRESS_MS = 450;
+
+/** Ce que dit la ligne d'effet tant qu'aucune carte n'a été lue. */
+const EFFECT_PROMPT = 'Appui long sur une carte : à quoi sert le bâtiment';
+
 export class BuildMenu {
   public readonly root: HTMLElement;
 
   private readonly toggleButton: HTMLButtonElement;
   private readonly drawer: HTMLElement;
+  private readonly list: HTMLElement;
+  private readonly effectLine: HTMLElement;
   private readonly armedBar: HTMLElement;
   private readonly armedLabel: HTMLElement;
   private readonly reasonText: HTMLElement;
@@ -81,6 +100,8 @@ export class BuildMenu {
   private readonly locks = new Map<BuildingId, HTMLElement>();
   private readonly costs: { item: ItemId; amount: number; element: HTMLElement }[] = [];
   private opened = false;
+  /** L'appui long vient de montrer un effet : le `click` qui suit le relâchement ne choisit pas la carte. */
+  private swallowClick = false;
 
   private readonly world: World;
   private readonly placement: Placement;
@@ -131,17 +152,23 @@ export class BuildMenu {
 
     header.append(title, keys, close);
 
-    const list = document.createElement('div');
-
-    list.className = 'build-drawer-list';
+    this.list = document.createElement('div');
+    this.list.className = 'build-drawer-list';
 
     for (const id of unlocked) {
       const card = this.card(id);
 
       this.cards.set(id, card);
-      list.append(card);
+      this.list.append(card);
     }
-    this.drawer.append(header, list);
+
+    // Masquée sur grand écran, où chaque carte porte son effet.
+    this.effectLine = document.createElement('div');
+    this.effectLine.className = 'build-drawer-effect';
+    this.effectLine.setAttribute('role', 'status');
+    this.effectLine.textContent = EFFECT_PROMPT;
+
+    this.drawer.append(header, this.list, this.effectLine);
 
     this.armedBar = document.createElement('div');
     this.armedBar.className = 'panel build-armed';
@@ -173,12 +200,18 @@ export class BuildMenu {
   private card(id: BuildingId): HTMLButtonElement {
     const proto = BUILDINGS[id];
     const card = button('', () => {
+      if (this.swallowClick) {
+        this.swallowClick = false;
+        return;
+      }
       if (this.lockReason(id) !== null) return;
       this.close();
       this.placement.select(id);
     });
 
     card.className = 'build-card';
+    this.longPress(card, id);
+    card.addEventListener('focus', () => this.showEffect(id));
     card.append(buildingIcon(id));
 
     const body = document.createElement('div');
@@ -233,6 +266,61 @@ export class BuildMenu {
     return card;
   }
 
+  /** Appui long : l'effet s'écrit au pied du tiroir, la carte n'est pas choisie. */
+  private longPress(card: HTMLButtonElement, id: BuildingId): void {
+    let timer: number | undefined;
+    const cancel = (): void => {
+      window.clearTimeout(timer);
+      timer = undefined;
+    };
+
+    card.addEventListener('pointerdown', () => {
+      cancel();
+      this.swallowClick = false;
+      timer = window.setTimeout(() => {
+        timer = undefined;
+        this.swallowClick = true;
+        this.showEffect(id);
+      }, LONG_PRESS_MS);
+    });
+    card.addEventListener('pointerup', cancel);
+    card.addEventListener('pointercancel', cancel);
+    card.addEventListener('pointerleave', cancel);
+    // Le menu contextuel du navigateur, qu'un appui long ouvre sur Android, cacherait la carte.
+    card.addEventListener('contextmenu', (event) => event.preventDefault());
+  }
+
+  private showEffect(id: BuildingId): void {
+    setText(this.effectLine, `${BUILDINGS[id].label} : ${BUILDINGS[id].effect}`);
+  }
+
+  /** Range les cartes par utilité du moment. Seulement à l'ouverture : rien ne saute sous le doigt. */
+  private sortCards(): void {
+    const phase = this.world.clock()?.phase;
+    const order = buildOrder([...this.cards.keys()], {
+      threat: phase === 'dusk' || phase === 'night',
+      locked: (id) => this.lockReason(id) !== null,
+      affordable: (id) => this.affordable(id),
+    });
+
+    for (const id of order) {
+      const card = this.cards.get(id);
+
+      if (card) this.list.append(card);
+    }
+    this.list.scrollTop = 0;
+  }
+
+  /** Le sac et la ville couvrent tout le coût : le chantier se remplira d'un « Transférer ». */
+  private affordable(id: BuildingId): boolean {
+    const { inventory } = this.world.player;
+    const town = this.world.townStock();
+
+    return (Object.entries(BUILDINGS[id].cost) as [ItemId, number][]).every(
+      ([item, amount]) => inventory.count(item) + (town?.available(item) ?? 0) >= amount,
+    );
+  }
+
   public get isOpen(): boolean {
     return this.opened;
   }
@@ -245,6 +333,8 @@ export class BuildMenu {
   /** `focusCard` : ouvert au clavier, le tiroir met tout de suite une carte sous le focus. */
   public open(focusCard = false): void {
     this.opened = true;
+    this.sortCards();
+    setText(this.effectLine, EFFECT_PROMPT);
     this.drawer.hidden = false;
     this.onOpen();
     this.refresh();
