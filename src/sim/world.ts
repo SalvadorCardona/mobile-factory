@@ -1880,8 +1880,8 @@ export class World {
     if (accepted > 0) {
       this.events.emit('porterDelivered', { workerId: worker.id, id: target.id, item: job.item, amount: accepted });
 
-      // Le chantier ne se termine jamais tout seul : il attend « Construire ».
-      if (target.kind === 'site' && siteMissing(target) === 0) this.events.emit('siteReady', { id: target.id });
+      // Le dernier objet posé achève le chantier, qu'il vienne d'Adam ou d'un porteur.
+      if (target.kind === 'site' && siteMissing(target) === 0) this.complete(target);
     }
 
     worker.searchTicks = 0;
