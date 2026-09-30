@@ -105,7 +105,11 @@ describe('clinique', () => {
 
     expect(stunned.length).toBeGreaterThan(0);
     expect(stunned.length).toBeLessThan(outcomes.length);
-    for (const outcome of outcomes) expect(outcome.loot).toBe(outcome.stunned ? 0 : 1);
+    // Abattu, il lâche sa table (`ENEMIES.mutant.loot`, jamais vide) ; assommé, rien.
+    for (const outcome of outcomes) {
+      if (outcome.stunned) expect(outcome.loot).toBe(0);
+      else expect(outcome.loot).toBeGreaterThan(0);
+    }
 
     // Assommé, il n'est plus une menace : la vague est repoussée, et l'arc ne le vise plus.
     const { world } = stunned[0]!;
@@ -183,7 +187,7 @@ describe('clinique', () => {
     world.tick();
     expect(gone).toBe(true);
     expect(mobilesOf(world, 'patient')).toHaveLength(0);
-    expect(mobilesOf(world, 'pickup')).toHaveLength(1);
+    expect(mobilesOf(world, 'pickup').length).toBeGreaterThan(0);
   });
 
   it('fait porter l’ex-mutant plus lourd qu’un porteur', () => {
