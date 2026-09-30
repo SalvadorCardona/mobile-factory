@@ -56,12 +56,12 @@ function colony(hall: Stock, placements: Placement[]): World {
   const state = world.snapshot();
   let nextId = state.nextId;
   const entities: SavedEntity[] = [
-    { kind: 'townHall', id: world.townHallId, proto: 'townHall', tx: hx, ty: hy, width: 3, height: 3, store: hall, hp: BUILDINGS.townHall.hp, level: 1 },
+    { kind: 'townHall', id: world.townHallId, proto: 'townHall', tx: hx, ty: hy, width: 3, height: 3, store: hall, hp: BUILDINGS.townHall.hp, level: 1, paused: false, staff: 0 },
   ];
 
   for (const { proto, dx, dy, store = {}, site } of placements) {
     const { width, height, hp } = BUILDINGS[proto];
-    const placed = { id: nextId++, proto, tx: hx + dx, ty: hy + dy, width, height, store, hp, level: 1 };
+    const placed = { id: nextId++, proto, tx: hx + dx, ty: hy + dy, width, height, store, hp, level: 1, paused: false, staff: BUILDINGS[proto].workers };
 
     if (site) {
       entities.push({ id: placed.id, proto, tx: placed.tx, ty: placed.ty, width, height, kind: 'site', delivered: {} });

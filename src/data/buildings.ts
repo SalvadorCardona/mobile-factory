@@ -172,6 +172,7 @@ export const BUILDINGS = {
     logisticRadius: 0,
     hp: 60,
     workers: 4,
+    minWorkers: 0,
     menu: true,
     unique: false,
     plan: false,
