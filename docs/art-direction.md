@@ -218,10 +218,20 @@ Coût mesuré (Chrome, écran de téléphone 390 × 844) : ~100 images tiennent
 dans **une seule texture** d'atlas — 1,3 Mpx à DPR 2, 2,8 Mpx à DPR 3 — et se
 rastérisent en ~85 ms sur un portable ; compter trois à cinq fois plus sur un
 téléphone d'entrée de gamme. Un bloc de sol baké pèse 4 Mo à DPR 2 ; quatre à
-six sont à l'écran, vingt au plus restent en mémoire.
+six sont à l'écran, vingt au plus restent en mémoire. Arbres et rochers : ~200
+par chunk, quatre chunks au plus gardés, soit au plus ~800 sprites et autant
+d'ombres — tous sur la même page d'atlas, donc un ou deux appels de dessin.
+À surveiller si la densité des forêts augmente : c'est le premier poste à
+découper plus finement (par blocs, comme le sol) avant d'ajouter du culling.
 
 ## Exemples
 
 La planche de référence, générée par `npm run art:sheet` :
 
 ![Planche des sprites](art-direction/planche-sprites.png)
+
+L'écran de jeu, et une vague de mutants (captures à DPR 2, téléphone 390 × 844) :
+
+| | |
+| --- | --- |
+| ![Écran de jeu](art-direction/ecran-jeu.png) | ![Une vague](art-direction/ecran-combat.png) |

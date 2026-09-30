@@ -12,7 +12,8 @@ passée et c'est plutôt gai ; les mutants sont drôles plus qu'effrayants.
 Références à regarder (avec `Read`) avant de dessiner :
 `docs/art-direction/maquette-validee.png` (l'écran de jeu validé),
 `docs/art-direction/reference-illustrateur-cabane.png` et
-`docs/art-direction/reference-illustrateur-tour.png`. Le détail est dans
+`docs/art-direction/reference-illustrateur-tour.png`, puis ce qui existe
+déjà : `docs/art-direction/planche-sprites.png` et `ecran-jeu.png`. Le détail est dans
 `docs/art-direction.md` ; la vérité exécutable dans `src/data/artDirection.ts`.
 
 ## La règle d'or
