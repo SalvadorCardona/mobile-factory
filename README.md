@@ -1,4 +1,4 @@
-![mobile-factory](https://raw.githubusercontent.com/SalvadorCardona/brand-assets/main/projects/mobile-factory/banner.png)
+![mobile-factory](docs/banner.png)
 
 # Mobile Factory
 
@@ -141,7 +141,7 @@ src/
   input/    joystick, keyboard, pointer, placement, inspect
   ui/       hud, buildMenu, buildingPanel
   audio/    engine, synth, music       — Web Audio, sons procéduraux
-  tools/    artSheet                   — planche de relecture des visuels
+  tools/    artSheet, brand            — planche de relecture, icône, bannière
   main.ts   câblage uniquement
 ```
 

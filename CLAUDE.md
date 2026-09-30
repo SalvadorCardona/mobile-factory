@@ -119,6 +119,10 @@ Les règles, en résumé :
 - Ressenti (rebond, secousse, tremblement, flash, caméra) : des minuteurs
   de vue côté `render/`, jamais de l'état de simulation.
   `render/indicatorLayer.ts` dessine les repères de bord (mutants, mairie).
+- L'icône (favicon, PWA) et la bannière du README sont des scènes SVG
+  composées avec les sprites (`src/art/brand.ts`) ; `npm run art:brand`
+  écrit les pages à rastériser et affiche les commandes Chrome qui
+  produisent `public/icon.png`, `public/favicon.png` et `docs/banner.png`.
 - Relire un visuel : `npm run art:sheet -- planche.svg`, puis
   `google-chrome --headless --screenshot=planche.png --window-size=L,H planche.svg`
   et ouvrir le PNG avec `Read`.

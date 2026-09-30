@@ -160,6 +160,17 @@ export function group(transform: string, ...body: string[]): string {
   return `<g transform="${transform}">${body.join('')}</g>`;
 }
 
+/**
+ * Pose un SVG complet (un sprite, un morceau) dans un autre, son coin haut
+ * gauche en (x, y), agrandi de `scale` : c'est ainsi qu'on compose une scène
+ * — l'icône, la bannière — avec les sprites du jeu, sans les redessiner.
+ */
+export function embed(source: string, x: number, y: number, scale = 1): string {
+  const body = source.replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '');
+
+  return group(`translate(${n(x)} ${n(y)}) scale(${n(scale)})`, body);
+}
+
 /** Miroir horizontal d'un contenu, autour de l'axe vertical `x = axis`. */
 export function mirrorX(axis: number, ...body: string[]): string {
   return group(`translate(${n(axis * 2)} 0) scale(-1 1)`, ...body);

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { brandBanner, brandIcon } from '../art/brand.ts';
 import { GROUND_TILES, cornerTile, edgeTile, shadowTile } from '../art/terrain.ts';
+import { UI_ICONS } from '../art/ui.ts';
 import { GROUND, PALETTE, auditSvg, type Ground } from './artDirection.ts';
 import { ITEM_ICONS } from './icons.ts';
 import { BUILDING_PARTS, SPRITES, SPRITE_IDS, WALKER_PARTS, type SpriteProto } from './sprites.ts';
@@ -22,9 +24,16 @@ function everySvg(): [string, string][] {
     [`terrain.shadow.${ground}`, shadowTile(ground)] as [string, string],
     [`terrain.corner.${ground}`, cornerTile(GROUND[ground].base, 'tl')] as [string, string],
   ]);
-  const icons = Object.entries(ITEM_ICONS).map(([item, svg]): [string, string] => [`icon.${item}`, svg]);
+  const icons = [
+    ...Object.entries(ITEM_ICONS).map(([item, svg]): [string, string] => [`icon.${item}`, svg]),
+    ...Object.entries(UI_ICONS).map(([name, svg]): [string, string] => [`ui.${name}`, svg]),
+  ];
+  const brand: [string, string][] = [
+    ['brand.icon', brandIcon()],
+    ['brand.banner', brandBanner()],
+  ];
 
-  return [...sprites, ...terrain, ...icons];
+  return [...sprites, ...terrain, ...icons, ...brand];
 }
 
 describe('sprites', () => {
@@ -33,8 +42,11 @@ describe('sprites', () => {
   });
 
   it('réserve le vert fluo aux mutants', () => {
+    // Seuls ont le droit de le porter : le mutant, son pictogramme, et la bannière, où il en passe un.
+    const mutants = (name: string): boolean => name.startsWith('mutant.') || name === 'ui.mutant' || name === 'brand.banner';
+
     for (const [name, svg] of everySvg()) {
-      if (name.startsWith('mutant.')) continue;
+      if (mutants(name)) continue;
       for (const color of TOXIC) expect(svg.includes(color), `${name} porte le vert des mutants`).toBe(false);
     }
   });
