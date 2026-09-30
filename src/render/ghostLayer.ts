@@ -7,6 +7,10 @@
  * posé « à peu près là » finit une tuile trop à gauche une fois sur deux ; la
  * grille rend la case lisible, et les emprises disent où on ne pourra pas poser.
  *
+ * Une foreuse armée montre les **filons** autour d'Adam : chaque case de
+ * gisement teintée de la famille de son minerai, avec l'icône de ce qu'elle
+ * donnerait — y compris sous les rochers, qu'il faut casser avant de poser.
+ *
  * Le cercle jaune autour de la mairie finie est son rayon logistique : un
  * chantier posé dedans puisera dans le stock de la colonie.
  *
@@ -30,11 +34,13 @@
 
 import { Container, Graphics, Sprite } from 'pixi.js';
 import { TILE_SIZE, worldToTile } from '../core/grid.ts';
-import { BUILDINGS } from '../data/buildings.ts';
+import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
 import { PALETTE, RADIUS, STROKE, hex } from '../data/artDirection.ts';
 import { BUILD_REACH_TILES } from '../sim/player.ts';
+import { oreAt } from '../sim/terrain.ts';
 import type { PlacementBlock, World } from '../sim/world.ts';
 import type { GhostState } from '../input/placement.ts';
+import { ITEM_TONES, iconKey } from './indicatorLayer.ts';
 import type { SpriteLibrary } from './spriteLibrary.ts';
 
 const VALID = hex(PALETTE.mint.base);
@@ -59,6 +65,9 @@ const REFUSE_SWINGS = 3;
 /** Rayon de la grille autour du joueur, en tuiles : un peu plus que la portée. */
 const GRID_RADIUS = BUILD_REACH_TILES + 3;
 
+/** Icône d'une case de filon, en pixels monde : lisible sans cacher le rocher dessous. */
+const ORE_ICON_PX = 16;
+
 export class GhostLayer {
   public readonly container = new Container();
 
@@ -68,6 +77,11 @@ export class GhostLayer {
   private readonly cells = new Graphics();
   private readonly reach = new Graphics();
   private readonly warehouseReach = new Graphics();
+  /** Les filons autour d'Adam, quand une foreuse est armée : cases teintées et icônes. */
+  private readonly ores = new Graphics();
+  private readonly oreIcons = new Container();
+  private readonly oreIconPool: Sprite[] = [];
+  private lastOreKey = '';
   private readonly preview = new Sprite();
   /** Le fantôme lui-même — sprite, cases, liseré — : c'est lui qui secoue la tête. */
   private readonly ghost = new Container();
@@ -93,27 +107,42 @@ export class GhostLayer {
     this.reducedMotion = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
 
     this.ghost.addChild(this.preview, this.cells, this.outline);
-    this.container.addChild(this.grid, this.footprints, this.warehouseReach, this.reach, this.ghost);
+    this.container.addChild(
+      this.grid,
+      this.footprints,
+      this.ores,
+      this.oreIcons,
+      this.warehouseReach,
+      this.reach,
+      this.ghost,
+    );
     this.container.visible = false;
   }
 
   /**
-   * `building` : le mode construction est actif (bâtiment armé, fantôme posé
-   * ou non). `ghost` : le fantôme, s'il est posé. `block` : pourquoi il ne
-   * se pose pas, calculé une fois par le renderer.
+   * `armed` : le bâtiment armé — le mode construction est actif, fantôme
+   * posé ou non. `ghost` : le fantôme, s'il est posé. `block` : pourquoi il
+   * ne se pose pas, calculé une fois par le renderer.
    */
-  public update(building: boolean, ghost: GhostState | null, block: PlacementBlock | null, deltaMs: number): void {
-    if (!building) {
+  public update(
+    armed: BuildingId | null,
+    ghost: GhostState | null,
+    block: PlacementBlock | null,
+    deltaMs: number,
+  ): void {
+    if (!armed) {
       this.container.visible = false;
       this.lastKey = '';
       this.lastGridKey = '';
       this.refuseLeft = 0;
       this.lastWarehouseKey = '';
+      this.lastOreKey = '';
       return;
     }
 
     this.container.visible = true;
     this.updateGrid();
+    this.updateOres(BUILDINGS[armed].kind === 'drill');
     this.updateWarehouseReach();
 
     // Le cercle de portée suit le joueur en continu, lui.
@@ -269,6 +298,60 @@ export class GhostLayer {
         .fill({ color, alpha: 0.18 })
         .stroke({ width: STROKE.width, color, alpha: 0.6, alignment: 1 });
     }
+  }
+
+  /**
+   * Les filons de la grille, redessinés seulement quand Adam change de tuile :
+   * la seed ne bouge pas, les gisements non plus. Une case par tuile de
+   * filon, à la teinte de son minerai, et l'icône de l'objet au centre.
+   */
+  private updateOres(visible: boolean): void {
+    const { tx, ty } = worldToTile(this.world.player.x, this.world.player.y);
+    const key = visible ? `${tx}:${ty}` : '';
+
+    if (key === this.lastOreKey) return;
+    this.lastOreKey = key;
+    this.ores.clear();
+
+    let used = 0;
+
+    if (visible) {
+      for (let y = ty - GRID_RADIUS; y <= ty + GRID_RADIUS; y += 1) {
+        for (let x = tx - GRID_RADIUS; x <= tx + GRID_RADIUS; x += 1) {
+          const node = oreAt(this.world.seed, x, y);
+
+          if (!node) continue;
+
+          const tone = PALETTE[ITEM_TONES[node.item]];
+
+          this.ores
+            .roundRect(
+              x * TILE_SIZE + CELL_INSET,
+              y * TILE_SIZE + CELL_INSET,
+              TILE_SIZE - CELL_INSET * 2,
+              TILE_SIZE - CELL_INSET * 2,
+              RADIUS.block,
+            )
+            .fill({ color: hex(tone.base), alpha: 0.3 })
+            .stroke({ width: STROKE.width, color: hex(tone.shade), alpha: 0.8, alignment: 1 })
+            // Une pastille blanche sous l'icône : lisible même sur un rocher de la même teinte.
+            .circle((x + 0.5) * TILE_SIZE, (y + 0.5) * TILE_SIZE, ORE_ICON_PX / 2 + 2)
+            .fill({ color: WHITE, alpha: 0.9 });
+
+          const icon = this.oreIconPool[used] ?? this.oreIcons.addChild(new Sprite());
+
+          this.oreIconPool[used] = icon;
+          used += 1;
+          icon.texture = this.library.texture(iconKey(node.item));
+          icon.anchor.set(0.5);
+          icon.width = ORE_ICON_PX;
+          icon.height = ORE_ICON_PX;
+          icon.position.set((x + 0.5) * TILE_SIZE, (y + 0.5) * TILE_SIZE);
+          icon.visible = true;
+        }
+      }
+    }
+    for (let i = used; i < this.oreIconPool.length; i += 1) this.oreIconPool[i]!.visible = false;
   }
 
   public destroy(): void {

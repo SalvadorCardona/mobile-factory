@@ -320,7 +320,7 @@ describe('World', () => {
     const origin = worldToTile(world.player.x, world.player.y);
 
     for (let d = BUILD_REACH_TILES + 2; d < BUILD_REACH_TILES + 40; d += 1) {
-      const block = world.placementBlock('drill', origin.tx + d, origin.ty);
+      const block = world.placementBlock('nursery', origin.tx + d, origin.ty);
 
       if (block?.reason !== 'outOfReach') continue;
       expect(block.tiles).toHaveLength(DRILL.width * DRILL.height);
@@ -672,7 +672,7 @@ describe('World', () => {
     expect(replay.entities.size).toBe(world.entities.size);
   });
 
-  it('pose une foreuse hors gisement sans jamais la planifier', () => {
+  it('refuse une foreuse hors gisement, et la pose sur un filon', () => {
     for (let seed = 1; seed < 200; seed += 1) {
       const world = new World(seed);
       const origin = worldToTile(world.player.x, world.player.y);
@@ -681,22 +681,61 @@ describe('World', () => {
         for (let dx = -3; dx <= 3; dx += 1) {
           const tx = origin.tx + dx;
           const ty = origin.ty + dy;
+          const dry = world.placementBlock('drill', tx, ty);
 
-          if (oreAt(seed, tx, ty)) continue;
-          if (world.canPlace('drill', tx, ty) !== null) continue;
+          if (dry?.reason !== 'noOre') continue;
 
-          const drill = buildDrill(world, { tx, ty });
+          // Toute l'emprise est fautive, et le tick refuse comme l'aperçu.
+          expect(dry.tiles).toHaveLength(DRILL.width * DRILL.height);
+          expect(world.oreUnder('drill', tx, ty)).toBeNull();
 
-          if (drill.kind !== 'drill') throw new Error('pas une foreuse');
+          const rejections: PlacementRejection[] = [];
 
-          expect(drill.output).toBeNull();
-          expect(drill.blocked).toBe(true);
-          expect(world.pendingWakes()).toBe(0);
+          world.events.on('placementRejected', ({ reason }) => rejections.push(reason));
+          world.push({ type: 'placeBuilding', building: 'drill', tx, ty });
+          world.tick();
+
+          expect(rejections).toEqual(['noOre']);
+          expect([...world.entities.values()].some((entity) => entity.proto === 'drill')).toBe(false);
           return;
         }
       }
     }
     throw new Error('aucun emplacement sans gisement trouvé');
+  });
+
+  it('une foreuse sur un filon : aucun refus, et elle dit ce qu’elle extraira', () => {
+    const { world, spot } = worldWithOre();
+
+    expect(world.placementBlock('drill', spot.tx, spot.ty)).toBeNull();
+    expect(world.oreUnder('drill', spot.tx, spot.ty)).toBe(oreAt(world.seed, spot.tx, spot.ty)?.item);
+  });
+
+  it('un rocher sur le filon : il faut d’abord le casser', () => {
+    for (let seed = 1; seed < 200; seed += 1) {
+      const world = new World(seed);
+      const origin = worldToTile(world.player.x, world.player.y);
+
+      for (let dy = -BUILD_REACH_TILES; dy <= BUILD_REACH_TILES; dy += 1) {
+        for (let dx = -BUILD_REACH_TILES; dx <= BUILD_REACH_TILES; dx += 1) {
+          const tx = origin.tx + dx;
+          const ty = origin.ty + dy;
+
+          if (!oreAt(seed, tx, ty) || !world.resources.isSolid(tx, ty)) continue;
+          if (world.placementBlock('drill', tx, ty)?.reason !== 'resource') continue;
+
+          for (let y = ty; y < ty + DRILL.height; y += 1) {
+            for (let x = tx; x < tx + DRILL.width; x += 1) world.resources.clear(x, y);
+          }
+          const block = world.placementBlock('drill', tx, ty);
+
+          if (block?.reason === 'onPlayer') continue;
+          expect(block).toBeNull();
+          return;
+        }
+      }
+    }
+    throw new Error('aucun rocher sur un filon à portée');
   });
 });
 
@@ -1075,7 +1114,7 @@ describe('géométrie de placement', () => {
   it('refuse une case constructible mais hors de portée', () => {
     // On cherche une case franchement lointaine et constructible : le refus
     // doit alors être « hors de portée », pas « terrain » ni « ressource ».
-    const building: BuildingId = 'drill';
+    const building: BuildingId = 'nursery';
 
     for (let seed = 1; seed < 400; seed += 1) {
       const world = new World(seed);

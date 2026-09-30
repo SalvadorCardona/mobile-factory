@@ -1614,6 +1614,10 @@ button.hud-stock:active {
   color: var(--danger);
 }
 
+.build-armed-reason[data-ok='true'] strong {
+  color: var(--good);
+}
+
 .build-armed-reason span::before {
   content: ' · ';
 }

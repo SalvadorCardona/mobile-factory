@@ -20,6 +20,7 @@
 
 import { Application, Container } from 'pixi.js';
 import { GROUND, hex } from '../data/artDirection.ts';
+import type { BuildingId } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
 import type { GhostState } from '../input/placement.ts';
 import type { EntityId } from '../sim/types.ts';
@@ -175,7 +176,9 @@ export class GameRenderer {
     this.camera.shake(amount);
   }
 
-  public draw(alpha: number, building: boolean, ghost: GhostState | null): void {
+  /** `armed` : le bâtiment armé au menu de construction, ou `null` hors du mode construction. */
+  public draw(alpha: number, armed: BuildingId | null, ghost: GhostState | null): void {
+    const building = armed !== null;
     const { player } = this.world;
 
     this.camera.resize(this.app.screen.width, this.app.screen.height);
@@ -208,7 +211,7 @@ export class GameRenderer {
     this.entityLayer.update(alpha, this.app.ticker);
     this.particles.update(this.app.ticker.deltaMS);
     this.nightLayer.update(alpha);
-    this.ghostLayer.update(building, ghost, block, this.app.ticker.deltaMS);
+    this.ghostLayer.update(armed, ghost, block, this.app.ticker.deltaMS);
     this.workReach.update(building ? ghost : null, this.selected);
     this.weather.update(this.camera, this.app.ticker.deltaMS, alpha);
     this.indicators.update(this.camera, this.app.ticker.deltaMS, alpha);

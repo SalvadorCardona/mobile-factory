@@ -20,7 +20,9 @@ plus, du plus proche au plus loin) lâchent une unité (bois, fer, charbon,
 pierre), qu'il marche ou non. Il **heurte** le reste : un chantier heurté
 reçoit ce qu'il attend ; une foreuse ou une ferme heurtée vide son coffre
 dans le sac (bouton « Prendre » dans sa fenêtre), ce qui la relance si elle
-était bloquée. Rochers et bâtiments sont solides ; d'un arbre, seul le tronc
+était bloquée. Une foreuse ne se pose que sur un filon (refus `noOre`) :
+armée, elle montre les filons autour d'Adam, rochers compris — on casse le
+rocher, puis on pose la foreuse à sa place. Rochers et bâtiments sont solides ; d'un arbre, seul le tronc
 l'arrête et il glisse autour — une forêt n'est jamais un mur. Un tap sur un
 chantier ouvre sa fenêtre : « Transférer » y vide d'un coup ce qu'il attend
 — le sac d'abord, puis le stock de la ville s'il est dans son rayon.
