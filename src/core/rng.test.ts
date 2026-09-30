@@ -9,6 +9,16 @@ describe('mulberry32', () => {
     for (let i = 0; i < 100; i += 1) expect(a()).toBe(b());
   });
 
+  it('reprend la suite depuis son état relu', () => {
+    const a = mulberry32(99);
+
+    for (let i = 0; i < 17; i += 1) a();
+
+    const b = mulberry32(a.state());
+
+    for (let i = 0; i < 100; i += 1) expect(b()).toBe(a());
+  });
+
   it('reste dans [0, 1[', () => {
     const rng = mulberry32(7);
 

@@ -145,6 +145,12 @@ Rien ne joue avant un geste du joueur.
 - La carte n'est jamais stockée : terrain, filons et ressources de surface
   sont régénérés depuis la seed (`sim/terrain.ts`). Seules les modifications
   du joueur (`sim/resources.ts`, entités) sont de l'état.
+- Sauvegarde automatique : `sim/save.ts` sérialise le monde (format versionné
+  `{ version, savedAt, state }`, validé à la lecture) ; `storage/localSave.ts`
+  est le seul à toucher au `localStorage` (clé `mobile-factory:save`), et tout
+  y est dans un try/catch. Un nouvel état de simulation doit entrer dans
+  `World.snapshot()` / `restore()` — sinon il se perd au rechargement ; un
+  changement incompatible incrémente `SAVE_VERSION`.
 - Le contenu est de la donnée (`src/data/*.ts`, `as const satisfies`).
   `validatePrototypes()` tourne au démarrage en dev et dans les tests.
 - Pas d'ECS, pas de moteur physique, pas de multijoueur.

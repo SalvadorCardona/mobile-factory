@@ -18,6 +18,16 @@
 
 export type WakeId = number;
 
+/**
+ * Les réveils en attente, pour la sauvegarde : `[tick, ids]` par échéance.
+ * Roue et map restent séparées — `due()` rend la roue avant la map, et c'est
+ * cet ordre qui garde la partie rechargée identique à l'originale.
+ */
+export interface SchedulerSnapshot {
+  near: [number, WakeId[]][];
+  far: [number, WakeId[]][];
+}
+
 const WHEEL_SIZE = 256;
 
 export class Scheduler {
@@ -71,6 +81,41 @@ export class Scheduler {
 
     this.pending -= result.length;
     return result;
+  }
+
+  /**
+   * Les réveils en attente, vus depuis le tick `currentTick` (déjà écoulé).
+   * Un slot de la roue ne dit pas son tick : c'est le seul tick à venir,
+   * à moins de 256 de `currentTick`, qui y tombe.
+   */
+  public toJSON(currentTick: number): SchedulerSnapshot {
+    const near: [number, WakeId[]][] = [];
+
+    this.wheel.forEach((slot, index) => {
+      if (slot.length === 0) return;
+
+      const ahead = (((index - currentTick) % WHEEL_SIZE) + WHEEL_SIZE) % WHEEL_SIZE;
+
+      near.push([currentTick + (ahead === 0 ? WHEEL_SIZE : ahead), [...slot]]);
+    });
+
+    return { near, far: [...this.far].map(([tick, ids]) => [tick, [...ids]]) };
+  }
+
+  /** Remplace tous les réveils par ceux d'une sauvegarde. */
+  public restore(snapshot: SchedulerSnapshot): void {
+    for (const slot of this.wheel) slot.length = 0;
+    this.far.clear();
+    this.pending = 0;
+
+    for (const [tick, ids] of snapshot.near) {
+      this.wheel[tick % WHEEL_SIZE]!.push(...ids);
+      this.pending += ids.length;
+    }
+    for (const [tick, ids] of snapshot.far) {
+      this.far.set(tick, [...ids]);
+      this.pending += ids.length;
+    }
   }
 
   /** Nombre de réveils en attente — utile en test et dans l'affichage de debug. */

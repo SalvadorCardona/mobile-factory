@@ -96,4 +96,10 @@ export class ResourceIndex {
   public toJSON(): Record<string, number> {
     return Object.fromEntries(this.taken);
   }
+
+  /** Remplace les tuiles entamées par celles d'une sauvegarde. */
+  public restore(taken: Record<string, number>): void {
+    this.taken.clear();
+    for (const [key, amount] of Object.entries(taken)) this.taken.set(key, amount);
+  }
 }

@@ -17,6 +17,7 @@ import {
   rect,
   shadedCircle,
   shadedPill,
+  shape,
   svg,
 } from '../data/artDirection.ts';
 
@@ -30,6 +31,50 @@ function heart(cx: number, cy: number, r: number, color: (typeof PALETTE)['coral
     circle(cx + r * 0.95, cy, r, color) +
     polygon([cx - r * 1.9, cy + r * 0.35, cx, cy + r * 2.3, cx + r * 1.9, cy + r * 0.35], color)
   );
+}
+
+/**
+ * Une flèche qui tourne sur elle-même : un anneau plein ouvert en haut à
+ * gauche, et sa pointe qui repart vers la droite. Formes pleines, pas de trait.
+ */
+function restartArrow(cx: number, cy: number, color: (typeof PALETTE)[keyof typeof PALETTE]['base' | 'shade']): string {
+  const outer = 8;
+  const inner = 4.4;
+  const from = (-60 * Math.PI) / 180;
+  const to = (200 * Math.PI) / 180;
+  const at = (radius: number, angle: number): string =>
+    `${round(cx + radius * Math.cos(angle))} ${round(cy + radius * Math.sin(angle))}`;
+  const band =
+    `M${at(outer, from)}A${outer} ${outer} 0 1 1 ${at(outer, to)}` +
+    `L${at(inner, to)}A${inner} ${inner} 0 1 0 ${at(inner, from)}Z`;
+
+  // La pointe, au bout de l'anneau, suit la tangente du tour.
+  const middle = (outer + inner) / 2;
+  const baseX = cx + middle * Math.cos(to);
+  const baseY = cy + middle * Math.sin(to);
+  const [tangentX, tangentY] = [-Math.sin(to), Math.cos(to)];
+  const [normalX, normalY] = [Math.cos(to), Math.sin(to)];
+  const wing = 4.6;
+  const reach = 5.2;
+
+  return (
+    shape(band, color) +
+    polygon(
+      [
+        baseX + normalX * wing,
+        baseY + normalY * wing,
+        baseX + tangentX * reach,
+        baseY + tangentY * reach,
+        baseX - normalX * wing,
+        baseY - normalY * wing,
+      ].map(round),
+      color,
+    )
+  );
+}
+
+function round(value: number): number {
+  return Math.round(value * 100) / 100;
 }
 
 export const UI_ICONS = {
@@ -88,6 +133,10 @@ export const UI_ICONS = {
   move: svg(S, S, circle(12, 12, 10, cyan.light), circle(12.8, 12.8, 5.5, cyan.shade), circle(12, 12, 5, cyan.base)),
   /** La flèche du bouton « Jouer ». */
   play: svg(S, S, polygon([8.5, 5.5, 19.5, 12.5, 8.5, 19.5], orange.shade), polygon([7.5, 4.5, 18.5, 11.5, 7.5, 18.5], paper.base)),
+  /** « Recommencer », sur un bouton blanc : la flèche corail qui repart. */
+  restart: svg(S, S, restartArrow(12.6, 13.6, coral.shade), restartArrow(12, 13, coral.base), pill(5, 11.5, 2, 3.4, coral.light)),
+  /** La même, blanche, sur le bouton corail de la confirmation. */
+  restartLight: svg(S, S, restartArrow(12.6, 13.6, orange.shade), restartArrow(12, 13, paper.base)),
 } as const;
 
 export type UiIcon = keyof typeof UI_ICONS;
