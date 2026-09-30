@@ -8,7 +8,8 @@
  *
  * Choix d'une tuile, tout seedé : l'herbe alterne ses deux tons en damier,
  * une case par tuile ; les autres sols tirent une variante, la sobre le plus
- * souvent — un sol trop chargé fatigue l'œil et noie les ressources.
+ * souvent — un sol trop chargé fatigue l'œil et noie les ressources. L'eau
+ * tire la sienne parmi celles de sa profondeur (`BlockTerrain.depth`).
  */
 
 import type { Texture } from 'pixi.js';
@@ -16,15 +17,22 @@ import { GROUND, type Ground } from '../data/artDirection.ts';
 import {
   GROUND_TILES,
   SHADOW_SIZE,
+  WATER_DEPTH_COLORS,
+  WATER_SPRITES,
+  WATER_TILES,
   cornerTile,
   edgeTile,
   shadowTile,
   type Corner,
   type Side,
+  type WaterDepth,
+  type WaterSprite,
 } from '../art/terrain.ts';
+import { hash3 } from '../core/rng.ts';
+import { terrainAt, type TerrainKind } from '../sim/terrain.ts';
 import type { SpriteLibrary, SvgSource } from './spriteLibrary.ts';
 
-export type { Corner, Side };
+export type { Corner, Side, WaterDepth };
 
 export const SIDES: readonly Side[] = ['top', 'right', 'bottom', 'left'];
 export const CORNERS: readonly Corner[] = ['tl', 'tr', 'bl', 'br'];
@@ -48,10 +56,18 @@ export const CORNER_SIDES: Record<Corner, readonly [Side, Side]> = {
 const GROUNDS = Object.keys(GROUND) as Ground[];
 const TILE = 32;
 
-type GroundColor = (typeof GROUND)[Ground]['base' | 'alt'];
+type GroundColor = (typeof GROUND)[Ground]['base' | 'alt'] | (typeof WATER_DEPTH_COLORS)[number];
 
-/** Couleurs de fond qu'un coin arrondi peut prendre : la base de chaque sol, et le second ton de l'herbe. */
-const CORNER_COLORS: readonly GroundColor[] = [...GROUNDS.map((ground) => GROUND[ground].base), GROUND.grass.alt];
+/**
+ * Couleurs de fond qu'un coin arrondi peut prendre : la base de chaque sol,
+ * le second ton de l'herbe, et les deux profondeurs du large, qui arrondissent les paliers de l'eau.
+ */
+const CORNER_COLORS: readonly GroundColor[] = [
+  ...GROUNDS.map((ground) => GROUND[ground].base),
+  GROUND.grass.alt,
+  GROUND.water.alt,
+  GROUND.water.deep,
+];
 
 /** Les images du sol, à passer à `SpriteLibrary.load`. */
 export function terrainSources(): SvgSource[] {
@@ -61,13 +77,21 @@ export function terrainSources(): SvgSource[] {
   };
 
   for (const ground of GROUNDS) {
-    GROUND_TILES[ground].forEach((svg, variant) => add(`terrain.${ground}.${variant}`, svg));
+    if (ground !== 'water') GROUND_TILES[ground].forEach((svg, variant) => add(`terrain.${ground}.${variant}`, svg));
     for (const side of SIDES) {
       const svg = edgeTile(ground, side);
 
       if (svg) add(`terrain.edge.${ground}.${side}`, svg);
     }
     add(`terrain.shadow.${ground}`, shadowTile(ground), SHADOW_SIZE.width, SHADOW_SIZE.height);
+  }
+  for (const depth of WATER_DEPTHS) {
+    WATER_TILES[depth].forEach((svg, variant) => add(`terrain.water.${depth}.${variant}`, svg));
+  }
+  for (const [name, svg] of Object.entries(WATER_SPRITES)) {
+    const [, width, height] = /width="([\d.]+)" height="([\d.]+)"/.exec(svg) ?? [];
+
+    add(`terrain.${name}`, svg, Number(width), Number(height));
   }
   for (const color of CORNER_COLORS) {
     for (const corner of CORNERS) add(`terrain.corner.${color}.${corner}`, cornerTile(color, corner));
@@ -84,10 +108,14 @@ export class TerrainTiles {
 
   /**
    * La tuile de sol en (tx, ty). `roll` est un hachage seedé de la tuile :
-   * il choisit la variante des sols qui en ont plusieurs.
+   * il choisit la variante des sols qui en ont plusieurs. `depth` ne sert
+   * qu'à l'eau.
    */
-  public ground(ground: Ground, tx: number, ty: number, roll: number): Texture {
+  public ground(ground: Ground, tx: number, ty: number, roll: number, depth: WaterDepth = 0): Texture {
     if (ground === 'grass') return this.library.texture(`terrain.grass.${checker(tx, ty)}`);
+    if (ground === 'water') {
+      return this.library.texture(`terrain.water.${depth}.${Math.min(variantOf(roll), WATER_TILES[depth].length - 1)}`);
+    }
     return this.library.texture(`terrain.${ground}.${variantOf(roll)}`);
   }
 
@@ -96,11 +124,24 @@ export class TerrainTiles {
     return edgeTile(owner, side) ? this.library.texture(`terrain.edge.${owner}.${side}`) : null;
   }
 
-  /** Coin arrondi, peint dans la couleur du sol voisin tel qu'il est dessiné en (tx, ty). */
-  public corner(neighbour: Ground, tx: number, ty: number, corner: Corner): Texture {
-    const color = neighbour === 'grass' && checker(tx, ty) === 1 ? GROUND.grass.alt : GROUND[neighbour].base;
+  /**
+   * Coin arrondi, peint dans la couleur du sol voisin tel qu'il est dessiné
+   * en (tx, ty) ; pour l'eau, celle de sa profondeur `depth`.
+   */
+  public corner(neighbour: Ground, tx: number, ty: number, corner: Corner, depth: WaterDepth = 0): Texture {
+    const color =
+      neighbour === 'grass' && checker(tx, ty) === 1
+        ? GROUND.grass.alt
+        : neighbour === 'water'
+          ? WATER_DEPTH_COLORS[depth]
+          : GROUND[neighbour].base;
 
     return this.library.texture(`terrain.corner.${color}.${corner}`);
+  }
+
+  /** Un sprite animé de l'eau : écume des rives ou reflet du large. */
+  public water(name: WaterSprite): Texture {
+    return this.library.texture(`terrain.${name}`);
   }
 
   /** Ombre portée pleine, dans la teinte foncée du sol ; `SHADOW_SIZE` px, à étirer. */
@@ -109,9 +150,64 @@ export class TerrainTiles {
   }
 }
 
+const WATER_DEPTHS: readonly WaterDepth[] = [0, 1, 2];
+
+/**
+ * Le sol d'un bloc de `size` tuiles et de sa marge, lu une fois depuis la
+ * seed : la nature de chaque tuile, et la profondeur de l'eau.
+ *
+ * La profondeur se lit à la distance de la rive : 0 quand une des huit
+ * voisines est à sec, 1 quand la rive est à deux tuiles, 2 au-delà. Elle
+ * regarde deux tuiles autour : elle n'est juste qu'à `margin - 2` tuiles
+ * du bloc, au plus.
+ */
+export class BlockTerrain {
+  private readonly kinds: TerrainKind[];
+  private readonly span: number;
+  private readonly margin: number;
+
+  public constructor(seed: number, baseTx: number, baseTy: number, size: number, margin: number) {
+    this.span = size + margin * 2;
+    this.margin = margin;
+    this.kinds = new Array<TerrainKind>(this.span * this.span);
+
+    for (let ly = -margin; ly < size + margin; ly += 1) {
+      for (let lx = -margin; lx < size + margin; lx += 1) {
+        this.kinds[(ly + margin) * this.span + lx + margin] = terrainAt(seed, baseTx + lx, baseTy + ly);
+      }
+    }
+  }
+
+  /** Nature de la tuile en (lx, ly), coordonnées locales au bloc. */
+  public kind(lx: number, ly: number): TerrainKind {
+    return this.kinds[(ly + this.margin) * this.span + lx + this.margin]!;
+  }
+
+  /** Profondeur de l'eau en (lx, ly) ; 0 pour une tuile à sec. */
+  public depth(lx: number, ly: number): WaterDepth {
+    if (this.kind(lx, ly) !== 'water') return 0;
+
+    let depth: WaterDepth = 2;
+
+    for (let dy = -2; dy <= 2; dy += 1) {
+      for (let dx = -2; dx <= 2; dx += 1) {
+        if (this.kind(lx + dx, ly + dy) === 'water') continue;
+        if (Math.abs(dx) <= 1 && Math.abs(dy) <= 1) return 0;
+        depth = 1;
+      }
+    }
+    return depth;
+  }
+}
+
 /** Case du damier d'herbe : 0 ou 1. */
 export function checker(tx: number, ty: number): 0 | 1 {
   return ((tx + ty) & 1) === 0 ? 0 : 1;
+}
+
+/** Le hachage seedé d'une tuile qui choisit sa variante de sol : le même au bake et pour l'eau animée. */
+export function groundRoll(seed: number, tx: number, ty: number): number {
+  return hash3(seed ^ 0x6a09e667, tx, ty);
 }
 
 /** Variante d'un sol à trois tuiles : la sobre sept fois sur dix. */

@@ -24,19 +24,18 @@
 
 import { Container, RenderTexture, Sprite, type Renderer, type Texture } from 'pixi.js';
 import { TILE_SIZE, coordKey } from '../core/grid.ts';
-import { hash3 } from '../core/rng.ts';
-import { decorAt, terrainAt, type TerrainKind } from '../sim/terrain.ts';
+import { decorAt } from '../sim/terrain.ts';
 import type { Camera } from './camera.ts';
 import type { SpriteLibrary } from './spriteLibrary.ts';
-import { CORNERS, CORNER_SIDES, SIDES, SIDE_OFFSET, type TerrainTiles } from './terrainTiles.ts';
+import { BlockTerrain, CORNERS, CORNER_SIDES, SIDES, SIDE_OFFSET, groundRoll, type TerrainTiles } from './terrainTiles.ts';
 
 /** Côté d'un bloc, en tuiles, et en pixels monde. */
-const BLOCK_TILES = 16;
-const BLOCK_SIZE = BLOCK_TILES * TILE_SIZE;
+export const BLOCK_TILES = 16;
+export const BLOCK_SIZE = BLOCK_TILES * TILE_SIZE;
 
 /** Marge de bake et d'éviction, en blocs au-delà de la zone visible. */
-const BAKE_MARGIN = 0;
-const KEEP_MARGIN = 1;
+export const BAKE_MARGIN = 0;
+export const KEEP_MARGIN = 1;
 
 /** Résolution maximale d'un bloc baké. */
 const MAX_BLOCK_RESOLUTION = 2;
@@ -105,8 +104,9 @@ export class ChunkLayer {
   /**
    * Dessine le bloc dans sa RenderTexture, puis jette la scène.
    *
-   * Quatre passes, dans l'ordre du peintre : le sol, les transitions (faces
-   * avant, liserés), les coins arrondis, puis le décor. Les sprites sont
+   * Quatre passes, dans l'ordre du peintre : le sol (l'eau selon sa
+   * profondeur), les transitions (faces avant, liserés), les coins arrondis
+   * — entre sols et entre profondeurs d'eau —, puis le décor. Les sprites sont
    * temporaires : seule la texture survit. Celles du tileset, partagées, restent.
    */
   private renderInto(bx: number, by: number, target: RenderTexture): void {
@@ -118,30 +118,29 @@ export class ChunkLayer {
     const baseTy = by * BLOCK_TILES;
     const { seed } = this;
 
-    // Une rangée de marge autour du bloc : les transitions du bord en dépendent.
-    const span = BLOCK_TILES + 2;
-    const kinds: TerrainKind[] = new Array<TerrainKind>(span * span);
+    // Trois rangées de marge : les coins du bord regardent la profondeur de
+    // la voisine, qui regarde elle-même deux tuiles autour.
+    const terrain = new BlockTerrain(seed, baseTx, baseTy, BLOCK_TILES, 3);
+    // Un palier par sol, et un par profondeur d'eau : c'est entre paliers que les coins s'arrondissent.
+    const layerAt = (lx: number, ly: number): string => {
+      const kind = terrain.kind(lx, ly);
 
-    for (let ly = -1; ly <= BLOCK_TILES; ly += 1) {
-      for (let lx = -1; lx <= BLOCK_TILES; lx += 1) {
-        kinds[(ly + 1) * span + lx + 1] = terrainAt(seed, baseTx + lx, baseTy + ly);
-      }
-    }
-
-    const kindAt = (lx: number, ly: number): TerrainKind => kinds[(ly + 1) * span + lx + 1]!;
+      return kind === 'water' ? `water${terrain.depth(lx, ly)}` : kind;
+    };
 
     for (let ly = 0; ly < BLOCK_TILES; ly += 1) {
       for (let lx = 0; lx < BLOCK_TILES; lx += 1) {
         const tx = baseTx + lx;
         const ty = baseTy + ly;
-        const kind = kindAt(lx, ly);
+        const kind = terrain.kind(lx, ly);
+        const roll = groundRoll(seed, tx, ty);
 
-        scene.addChild(tileSprite(this.tiles.ground(kind, tx, ty, hash3(seed ^ 0x6a09e667, tx, ty)), lx, ly));
+        scene.addChild(tileSprite(this.tiles.ground(kind, tx, ty, roll, terrain.depth(lx, ly)), lx, ly));
 
         for (const side of SIDES) {
           const [dx, dy] = SIDE_OFFSET[side];
 
-          if (kindAt(lx + dx, ly + dy) === kind) continue;
+          if (terrain.kind(lx + dx, ly + dy) === kind) continue;
 
           const edge = this.tiles.edge(kind, side);
 
@@ -149,16 +148,23 @@ export class ChunkLayer {
         }
 
         // Un coin est saillant quand ses deux voisins orthogonaux sont d'un
-        // même autre sol : on l'arrondit, peint dans la couleur de ce sol.
+        // même autre palier : on l'arrondit, peint dans la couleur de ce palier.
+        const layer = layerAt(lx, ly);
+
         for (const corner of CORNERS) {
           const [vertical, horizontal] = CORNER_SIDES[corner];
           const [vx, vy] = SIDE_OFFSET[vertical];
           const [hx, hy] = SIDE_OFFSET[horizontal];
-          const above = kindAt(lx + vx, ly + vy);
-          const beside = kindAt(lx + hx, ly + hy);
+          const above = layerAt(lx + vx, ly + vy);
+          const beside = layerAt(lx + hx, ly + hy);
 
-          if (above === kind || beside !== above) continue;
-          corners.addChild(tileSprite(this.tiles.corner(beside, tx + hx, ty + hy, corner), lx, ly));
+          if (above === layer || beside !== above) continue;
+
+          const neighbour = terrain.kind(lx + hx, ly + hy);
+
+          corners.addChild(
+            tileSprite(this.tiles.corner(neighbour, tx + hx, ty + hy, corner, terrain.depth(lx + hx, ly + hy)), lx, ly),
+          );
         }
 
         const decor = decorAt(seed, tx, ty);

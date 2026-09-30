@@ -16,11 +16,11 @@
  */
 
 import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
-import { ENEMIES, type EnemyId } from '../data/enemies.ts';
+import { ENEMIES, WILDLIFE, type EnemyId, type WildlifeId } from '../data/enemies.ts';
 import { ITEMS, type ItemId } from '../data/items.ts';
 import type { SchedulerSnapshot } from './scheduler.ts';
 import type { Store, StoreSnapshot } from './store.ts';
-import type { Entity, EntityId, Facing, Mobile, Player } from './types.ts';
+import type { BeastState, Entity, EntityId, Facing, Mobile, Player } from './types.ts';
 import { World } from './world.ts';
 
 /**
@@ -28,7 +28,7 @@ import { World } from './world.ts';
  * `WorldState` ; une migration de l'ancienne version se branche alors dans
  * `decodeSave`, sinon l'ancienne sauvegarde est ignorée.
  */
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 /** Une entité telle qu'elle est rangée : son coffre devient un simple stock. */
 export type SavedEntity = Stored<Entity>;
@@ -36,6 +36,13 @@ export type SavedEntity = Stored<Entity>;
 type Stored<E> = E extends { store: Store } ? Omit<E, 'store'> & { store: StoreSnapshot } : E;
 
 export type SavedPlayer = Omit<Player, 'inventory'> & { inventory: StoreSnapshot };
+
+/** Une tanière qui a servi : combien de bêtes dehors, et quand elle se repeuple. */
+export interface SavedDen {
+  id: number;
+  members: number;
+  readyTick: number;
+}
 
 /** Tout l'état de la simulation, en données JSON. */
 export interface WorldState {
@@ -59,6 +66,8 @@ export interface WorldState {
   resources: Record<string, number>;
   entities: SavedEntity[];
   mobiles: Mobile[];
+  /** Tanières habitées ou vidées ; les autres se relisent dans la seed. */
+  dens: SavedDen[];
   scheduler: SchedulerSnapshot;
 }
 
@@ -125,6 +134,8 @@ type Json = Record<string, unknown>;
 
 const FACINGS: readonly Facing[] = ['down', 'up', 'left', 'right'];
 
+const BEAST_STATES: readonly BeastState[] = ['roam', 'chase', 'return'];
+
 function parseState(raw: unknown): WorldState {
   const state = record(raw);
 
@@ -147,6 +158,7 @@ function parseState(raw: unknown): WorldState {
     resources: parseResources(state['resources']),
     entities: unique(array(state['entities']).map(parseEntity)),
     mobiles: unique(array(state['mobiles']).map(parseMobile)),
+    dens: unique(array(state['dens']).map(parseDen)),
     scheduler: parseScheduler(state['scheduler']),
   };
 }
@@ -158,6 +170,9 @@ function parsePlayer(raw: unknown): SavedPlayer {
     ...moving(player),
     harvesting: bool(player['harvesting']),
     bowCooldown: int(player['bowCooldown']),
+    target: player['target'] === null ? null : int(player['target']),
+    hp: finite(player['hp']),
+    calmTicks: int(player['calmTicks']),
     inventory: stock(player['inventory']),
   };
 }
@@ -228,6 +243,25 @@ function parseMobile(raw: unknown): Mobile {
         hp: finite(mobile['hp']),
         attackCooldown: int(mobile['attackCooldown']),
       };
+    case 'beast': {
+      const state = mobile['state'];
+
+      if (!BEAST_STATES.includes(state as BeastState)) throw new SaveError(`humeur inconnue : ${String(state)}`);
+      return {
+        ...base,
+        kind: 'beast',
+        proto: oneOf(mobile['proto'], WILDLIFE) as WildlifeId,
+        hp: finite(mobile['hp']),
+        denId: int(mobile['denId']),
+        homeX: finite(mobile['homeX']),
+        homeY: finite(mobile['homeY']),
+        state: state as BeastState,
+        dirX: finite(mobile['dirX']),
+        dirY: finite(mobile['dirY']),
+        wanderTicks: int(mobile['wanderTicks']),
+        attackCooldown: int(mobile['attackCooldown']),
+      };
+    }
     case 'arrow':
       return {
         ...base,
@@ -251,6 +285,12 @@ function parseMobile(raw: unknown): Mobile {
     default:
       throw new SaveError(`mobile inconnu : ${String(mobile['kind'])}`);
   }
+}
+
+function parseDen(raw: unknown): SavedDen {
+  const den = record(raw);
+
+  return { id: int(den['id']), members: int(den['members']), readyTick: int(den['readyTick']) };
 }
 
 function parseScheduler(raw: unknown): SchedulerSnapshot {

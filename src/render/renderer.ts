@@ -7,7 +7,7 @@
  *
  * Deux conteneurs seulement :
  * - `world`, translaté par la caméra, où vit tout ce qui a des coordonnées
- *   monde : le sol baké, les ombres portées, puis le conteneur trié en
+ *   monde : le sol baké, l'eau qui bouge par-dessus, les ombres portées, puis le conteneur trié en
  *   profondeur (bâtiments, arbres, rochers, personnages), les particules et
  *   le fantôme de construction ;
  * - `hud`, en pixels écran, où vivent le joystick et les repères de bord.
@@ -32,6 +32,7 @@ import { ParticleLayer } from './particles.ts';
 import { ResourceLayer } from './resourceLayer.ts';
 import { SpriteLibrary, type AtlasStats } from './spriteLibrary.ts';
 import { TerrainTiles, terrainSources } from './terrainTiles.ts';
+import { WaterLayer, type WaterStats } from './waterLayer.ts';
 
 export class GameRenderer {
   public readonly camera = new Camera();
@@ -39,6 +40,7 @@ export class GameRenderer {
   private readonly worldContainer = new Container();
   private readonly hudContainer = new Container();
   private readonly chunkLayer: ChunkLayer;
+  private readonly waterLayer: WaterLayer;
   private readonly shadows = new Container();
   private readonly entityLayer: EntityLayer;
   private readonly resourceLayer: ResourceLayer;
@@ -60,6 +62,7 @@ export class GameRenderer {
     this.library = library;
     this.tiles = new TerrainTiles(library);
     this.chunkLayer = new ChunkLayer(app.renderer, library, this.tiles, world.seed);
+    this.waterLayer = new WaterLayer(this.tiles, world.seed);
     this.entityLayer = new EntityLayer(world, library, this.tiles, this.shadows);
     this.resourceLayer = new ResourceLayer(world, library, this.tiles, this.entityLayer.container, this.shadows);
     this.indicators = new IndicatorLayer(world, library);
@@ -67,6 +70,7 @@ export class GameRenderer {
 
     this.worldContainer.addChild(
       this.chunkLayer.container,
+      this.waterLayer.container,
       this.shadows,
       this.entityLayer.container,
       this.particles.container,
@@ -174,6 +178,7 @@ export class GameRenderer {
     this.worldContainer.scale.set(this.camera.zoom);
 
     this.chunkLayer.update(this.camera);
+    this.waterLayer.update(this.camera, this.app.ticker.deltaMS);
     this.resourceLayer.update(this.camera, this.app.ticker.deltaMS);
     this.entityLayer.update(alpha, this.app.ticker);
     this.particles.update(this.app.ticker.deltaMS);
@@ -194,6 +199,11 @@ export class GameRenderer {
     return this.chunkLayer.drawn;
   }
 
+  /** Sprites d'eau à l'écran, et combien sont animés — le HUD de debug les affiche. */
+  public get waterStats(): WaterStats {
+    return this.waterLayer.stats;
+  }
+
   /** Coût de l'atlas de sprites : pages, images, mémoire, temps de chargement. */
   public get atlasStats(): AtlasStats {
     return this.library.stats;
@@ -201,6 +211,7 @@ export class GameRenderer {
 
   public destroy(): void {
     this.chunkLayer.destroy();
+    this.waterLayer.destroy();
     this.resourceLayer.destroy();
     this.entityLayer.destroy();
     this.ghostLayer.destroy();

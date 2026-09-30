@@ -18,7 +18,7 @@
  */
 
 import { writeFileSync } from 'node:fs';
-import { GROUND_TILES, cornerTile, edgeTile, shadowTile } from '../art/terrain.ts';
+import { GROUND_TILES, WATER_SPRITES, WATER_TILES, cornerTile, edgeTile, shadowTile } from '../art/terrain.ts';
 import { UI_ICONS } from '../art/ui.ts';
 import { GROUND, PALETTE, type Ground } from '../data/artDirection.ts';
 import { BUILDINGS, BUILDING_IDS } from '../data/buildings.ts';
@@ -96,6 +96,11 @@ const allSections: [string, Cell[][]][] = [
         }),
         cell(`${ground}.coin`, cornerTile(GROUND[ground].base, 'tl')),
         cell(`${ground}.ombre`, shadowTile(ground)),
+      ]),
+    ).concat(
+      rows([
+        ...([1, 2] as const).flatMap((depth) => WATER_TILES[depth].map((svg, i) => cell(`water.${depth}.${i}`, svg))),
+        ...Object.entries(WATER_SPRITES).map(([name, svg]) => cell(`water.${name}`, svg)),
       ]),
     ),
   ],
