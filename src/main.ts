@@ -36,6 +36,7 @@ import { LocalSave, type LoadResult } from './storage/localSave.ts';
 import { TILE_SIZE } from './core/grid.ts';
 import { BuildingPanel } from './ui/buildingPanel.ts';
 import { InventoryPanel } from './ui/inventoryPanel.ts';
+import { escapeAction } from './ui/escape.ts';
 import { JoystickView } from './ui/joystick.ts';
 import { BuildMenu } from './ui/buildMenu.ts';
 import { Hud } from './ui/hud.ts';
@@ -260,7 +261,21 @@ async function main(): Promise<void> {
   });
   window.addEventListener('pagehide', () => autosave.now());
   window.addEventListener('keydown', (event) => {
-    if (event.code === 'Escape' || event.code === 'KeyP') setPaused(!paused);
+    if (event.code === 'KeyP') setPaused(!paused);
+    // Échap ferme d'abord ce qui est au premier plan ; la pause, si rien ne l'est.
+    if (event.code === 'Escape') {
+      const action = escapeAction({
+        paused,
+        menuOpen: buildMenu.isOpen,
+        panelOpen: panel.open,
+        inventoryOpen: inventory.open,
+      });
+
+      if (action === 'closeMenu') buildMenu.close();
+      else if (action === 'closePanel') panel.close();
+      else if (action === 'closeInventory') inventory.close();
+      else setPaused(action === 'pause');
+    }
     // Le sac, comme dans la plupart des jeux sur PC : I, lu par position comme ZQSD.
     if (event.code === 'KeyI' && !isTyping(event.target) && started && !paused) inventory.toggle();
     if (event.code === 'Backquote' && import.meta.env.DEV) hud.toggleDebug();
