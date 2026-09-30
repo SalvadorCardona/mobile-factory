@@ -70,7 +70,8 @@ export function createPlayer(x: number, y: number): Player {
  *
  * `axisX` / `axisY` sont analogiques : la vitesse dépend de la distance au
  * centre du joystick, pas seulement de la direction. `speedTiles` est la
- * vitesse à pleine amplitude — celle de base, plus ce qu'ajoute la recherche.
+ * vitesse à pleine amplitude — celle de base, plus ce qu'ajoute la recherche,
+ * moins ce que retire la pluie acide.
  */
 export function stepPlayer(
   player: Player,
