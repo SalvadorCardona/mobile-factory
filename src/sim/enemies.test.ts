@@ -337,7 +337,8 @@ describe('mise en scène des vagues', () => {
     const [mutant] = mutants(world);
     let loot: Pickup | undefined;
 
-    world.events.on('lootDropped', ({ id }) => (loot = world.mobiles.get(id) as Pickup));
+    // Le premier butin seulement : un autre mutant peut tomber pendant l'attente.
+    world.events.on('lootDropped', ({ id }) => (loot ??= world.mobiles.get(id) as Pickup));
 
     for (let i = 0; i < 200 && !loot; i += 1) {
       world.player.x = mutant!.x + 3 * TILE_SIZE;
