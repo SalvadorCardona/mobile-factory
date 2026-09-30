@@ -9,7 +9,8 @@
  * Trois sortes de repères, en pixels écran, plaqués contre le bord : une
  * pastille ronde en trois tons, sans contour, qui pointe vers sa cible —
  * - vert fluo, avec un gros œil, par mutant hors champ (la teinte des
- *   mutants), plus opaque quand il approche ;
+ *   mutants), plus opaque quand il approche — et, dans le brouillard, par
+ *   mutant avalé par la brume même s'il est à l'écran ;
  * - vert fluo, plus gros et qui bat, vers le point d'où surgira la
  *   prochaine vague, pendant les trois secondes de son annonce ;
  * - jaune, avec un petit toit, vers la mairie (ou son chantier) quand elle
@@ -39,6 +40,7 @@ import { findDeposit, type Deposit } from '../sim/deposits.ts';
 import { TICKS_PER_SECOND, type World } from '../sim/world.ts';
 import type { Camera } from './camera.ts';
 import type { SpriteLibrary, SvgSource } from './spriteLibrary.ts';
+import { FOG_CLEAR_TILES } from './weatherLayer.ts';
 
 /**
  * Marges par défaut où les repères ne vont pas : l'objectif en haut, le bouton
@@ -191,6 +193,7 @@ export class IndicatorLayer {
     const px = player.prevX + (player.x - player.prevX) * alpha;
     const py = player.prevY + (player.y - player.prevY) * alpha;
     const zone = this.zone(camera);
+    const foggy = this.world.weather()?.id === 'fog';
 
     this.discover(camera);
 
@@ -202,7 +205,7 @@ export class IndicatorLayer {
       const distance = Math.hypot(x - px, y - py) / TILE_SIZE;
       const near = 1 - Math.min(1, distance / FAR_TILES);
 
-      this.arrow(camera, zone, x, y - 16, 'toxic', 0.45 + near * 0.55, 1, 'eye');
+      this.arrow(camera, zone, x, y - 16, 'toxic', 0.45 + near * 0.55, 1, 'eye', foggy && distance > FOG_CLEAR_TILES);
     }
 
     this.searchIn -= deltaMs;
@@ -291,11 +294,12 @@ export class IndicatorLayer {
     opacity: number,
     scale: number,
     glyph: Glyph,
+    hidden = false,
   ): Pin | null {
     const screen = camera.worldToScreen(x, y);
     const { left, right, top, bottom } = zone;
 
-    if (screen.x >= 0 && screen.x <= camera.viewWidth && screen.y >= 0 && screen.y <= camera.viewHeight) return null;
+    if (!hidden && screen.x >= 0 && screen.x <= camera.viewWidth && screen.y >= 0 && screen.y <= camera.viewHeight) return null;
 
     // Projette la direction depuis le centre de la zone utile jusqu'à son bord.
     const cx = (left + right) / 2;

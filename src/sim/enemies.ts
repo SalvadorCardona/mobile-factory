@@ -27,12 +27,16 @@ export interface MutantStep {
 /**
  * Un tick de mutant. `occupantAt` dit quel bâtiment occupe une tuile, s'il y
  * en a un : c'est la seule chose qui bloque un mutant.
+ *
+ * Par coup de vent, `downwind` est son bonus de vitesse quand il marche dans
+ * le sens du vent (`windX`, `windY`, unitaire) ; face au vent, rien ne change.
  */
 export function stepMutant(
   mutant: Mutant,
   target: { x: number; y: number },
   occupantAt: (tx: number, ty: number) => EntityId | undefined,
   stepSeconds: number,
+  wind: { windX: number; windY: number; downwind: number } | null = null,
 ): MutantStep {
   const proto = ENEMIES[mutant.proto];
 
@@ -59,7 +63,8 @@ export function stepMutant(
     return { blockedBy: null, strikes: false };
   }
 
-  const speed = proto.speed * TILE_SIZE * stepSeconds;
+  const tailwind = wind ? wind.downwind * Math.max(0, (dx * wind.windX + dy * wind.windY) / distance) : 0;
+  const speed = proto.speed * (1 + tailwind) * TILE_SIZE * stepSeconds;
   const wantX = (dx / distance) * speed;
   const wantY = (dy / distance) * speed;
   const box = { halfW: proto.halfW, halfH: proto.halfH };

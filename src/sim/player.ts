@@ -61,7 +61,8 @@ export function createPlayer(x: number, y: number): Player {
  * Intègre un tick de déplacement et renvoie la tuile heurtée, s'il y en a une.
  *
  * `axisX` / `axisY` sont analogiques : la vitesse dépend de la distance au
- * centre du joystick, pas seulement de la direction.
+ * centre du joystick, pas seulement de la direction. `speedFactor` la
+ * module — la pluie acide alourdit Adam.
  */
 export function stepPlayer(
   player: Player,
@@ -69,8 +70,9 @@ export function stepPlayer(
   axisY: number,
   isSolid: SolidTest,
   stepSeconds: number,
+  speedFactor = 1,
 ): Contact | null {
-  const speed = PLAYER_SPEED_TILES * TILE_SIZE * stepSeconds;
+  const speed = PLAYER_SPEED_TILES * speedFactor * TILE_SIZE * stepSeconds;
   const contact = moveBox(player, PLAYER_BOX, axisX * speed, axisY * speed, isSolid);
 
   player.moving = player.x !== player.prevX || player.y !== player.prevY;

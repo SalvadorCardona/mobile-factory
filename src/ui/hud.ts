@@ -11,6 +11,8 @@
  * Ce qu'il montre :
  * - la **quête** en haut : le chantier de la mairie avec une barre par
  *   ressource, puis la santé de la mairie, la vague et son compte à rebours ;
+ * - la **météo** dessous, en capsule : ce qui arrive et dans combien de
+ *   temps, puis ce qui tombe et pour combien de temps encore ;
  * - un **conseil** sous la quête, qui suit ce que fait le joueur (couper,
  *   casser, livrer, construire, se défendre) et se tait quand il a compris —
  *   c'est Ève qui le dit, son portrait devant ; au bout de cinq secondes, il
@@ -37,12 +39,14 @@ import { EVE_LINES } from '../data/eve.ts';
 import { LORE } from '../data/lore.ts';
 import { seedsFor } from '../data/perks.ts';
 import { QUESTS, TOOLS, type QuestReward } from '../data/quests.ts';
+import { WEATHER, WEATHER_CALENDAR } from '../data/weather.ts';
 import type { AtlasStats } from '../render/spriteLibrary.ts';
 import type { WaterStats } from '../render/waterLayer.ts';
 import type { PlacementRejection } from '../sim/commands.ts';
 import type { Compass } from '../sim/enemies.ts';
 import type { Entity } from '../sim/types.ts';
 import { currentQuest, questProgress } from '../sim/eve.ts';
+import { nextWeather } from '../sim/weather.ts';
 import { TICKS_PER_SECOND, type World } from '../sim/world.ts';
 import { tutorialAdvice, type Advice } from './hint.ts';
 import { itemAmount, itemIcon, uiIcon } from './icons.ts';
@@ -126,6 +130,7 @@ export class Hud {
   private bannerTimer = 0;
   /** Numéro de la vague déjà annoncée : le bandeau ne repart pas à chaque seconde du compte à rebours. */
   private announced = 0;
+  private readonly weather: HTMLElement;
   private readonly defeat: HTMLElement;
   private readonly defeatStats: HTMLElement;
   private readonly speech: HTMLElement;
@@ -147,6 +152,7 @@ export class Hud {
   private talks = 0;
   /** Bas de la quête, relu à chaque réplique seulement : lire la mise en page force un reflow. */
   private speechFloor = 0;
+  private lastWeather = '';
   private debug: boolean;
 
   /** Ce que le joueur a déjà fait : un conseil compris ne revient pas. */
@@ -202,6 +208,8 @@ export class Hud {
     this.speech = element('div', 'hud-speech');
     this.speech.hidden = true;
     this.speech.setAttribute('aria-live', 'polite');
+    this.weather = element('div', 'hud-weather');
+    this.weather.hidden = true;
 
     this.banner = element('div', 'hud-banner');
     this.banner.hidden = true;
@@ -262,7 +270,7 @@ export class Hud {
 
     this.quest.append(fold);
     side.append(buttons, this.bag);
-    this.top.append(this.quest, side);
+    this.top.append(this.quest, side, this.weather);
 
     this.root.append(
       this.top,
@@ -276,10 +284,10 @@ export class Hud {
     );
 
     world.events.on('placementRejected', ({ reason }) => this.notify(REJECTION_LABELS[reason], 'bad'));
-    world.events.on('resourceHarvested', ({ item }) => {
+    world.events.on('resourceHarvested', ({ item, amount }) => {
       if (item === 'wood') this.harvestedWood = true;
       if (item === 'stone') this.harvestedStone = true;
-      this.float(item, 1);
+      this.float(item, amount);
     });
     world.events.on('siteDelivered', ({ item, amount }) => {
       this.delivered = true;
@@ -320,6 +328,12 @@ export class Hud {
     world.events.on('buildingDestroyed', ({ proto }) => this.notify(`${BUILDINGS[proto].label} détruite`, 'bad'));
     world.events.on('childBorn', () => this.notify('Un enfant est né à la nurserie !', 'good'));
     world.events.on('townHallDestroyed', () => this.showDefeat());
+    world.events.on('weatherAnnounced', ({ id, seconds }) => {
+      const proto = WEATHER[id];
+
+      this.notify(`${proto.label} dans ${seconds} s — ${proto.advice}`, proto.harsh ? 'bad' : 'info');
+    });
+    world.events.on('weatherEnded', ({ id }) => this.notify(`Fin : ${WEATHER[id].label.toLowerCase()}`, 'good'));
     world.events.on('playerKnockedOut', () => this.notify('Adam s’est évanoui — il se réveille à la mairie', 'bad'));
     world.events.on('eveArriving', () => this.notify('Quelqu’un arrive à vélo…', 'good'));
     world.events.on('eveArrived', () => {
@@ -540,15 +554,16 @@ export class Hud {
   }
 
   /** `fps`, `chunks`, `atlas` et `water` viennent du renderer : le monde ne les connaît pas. */
-  public update(fps: number, chunks: number, atlas: AtlasStats, water: WaterStats): void {
+  public update(fps: number, chunks: number, atlas: AtlasStats, water: WaterStats, weatherParticles = 0): void {
     this.updateQuest();
     this.updateHint();
     this.updateBag();
     this.updateSpeech();
+    this.updateWeather();
     this.root.dataset['danger'] = String(this.mutantCount() > 0 && !this.world.defeated);
     if (!this.banner.hidden) this.aimBanner();
 
-    if (this.debug) this.updateStats(fps, chunks, atlas, water);
+    if (this.debug) this.updateStats(fps, chunks, atlas, water, weatherParticles);
   }
 
   private mutantCount(): number {
@@ -688,6 +703,34 @@ export class Hud {
     this.quest.dataset['hint'] = this.lastHint === '' ? 'none' : 'open';
   }
 
+  /* ----------------------------------------------------------------- météo */
+
+  /** La capsule météo : l'annonce et son compte à rebours, puis le temps qu'il reste. */
+  private updateWeather(): void {
+    const { world } = this;
+    const spell = world.weather();
+    const next = spell ? null : nextWeather(world.seed, world.tickCount);
+    const coming = next && next.start - world.tickCount <= WEATHER_CALENDAR.announceTicks ? next : null;
+    const shown = spell ?? coming;
+    let label = '';
+
+    if (shown) {
+      const seconds = Math.ceil(((spell ? shown.end : shown.start) - world.tickCount) / TICKS_PER_SECOND);
+      const name = WEATHER[shown.id].label;
+
+      label = spell ? `${name} · ${clock(seconds)}` : `${name} dans ${seconds} s`;
+    }
+
+    if (label === this.lastWeather) return;
+    this.lastWeather = label;
+    this.weather.hidden = !shown;
+    if (!shown) return;
+
+    this.weather.dataset['soon'] = String(!spell);
+    this.weather.dataset['harsh'] = String(WEATHER[shown.id].harsh);
+    this.weather.textContent = label;
+  }
+
   /* ------------------------------------------------------------------- sac */
 
   /**
@@ -744,7 +787,7 @@ export class Hud {
 
   /* ------------------------------------------------------------------ debug */
 
-  private updateStats(fps: number, chunks: number, atlas: AtlasStats, water: WaterStats): void {
+  private updateStats(fps: number, chunks: number, atlas: AtlasStats, water: WaterStats, weatherParticles: number): void {
     const { cx, cy } = this.world.playerChunk();
     const lines = [
       `tick ${this.world.tickCount}   ${fps.toFixed(0)} fps   seed ${this.world.seed}`,
@@ -752,6 +795,7 @@ export class Hud {
       `eau ${water.sprites} sprite(s) à l'écran, ${water.animated} animé(s)`,
       `atlas ${atlas.images} images → ${atlas.pages} texture(s), ${atlas.megapixels.toFixed(1)} Mpx @${atlas.resolution}x, ${atlas.ms} ms`,
       `${this.world.entities.size} bâtiment(s)   ${this.world.mobiles.size} mobile(s)   ${this.world.pendingWakes()} réveil(s)`,
+      `météo ${this.world.weather()?.id ?? 'calme'}   ${weatherParticles} particule(s)`,
     ];
 
     for (const entity of this.world.entities.values()) {

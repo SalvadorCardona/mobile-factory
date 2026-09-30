@@ -10,7 +10,8 @@
  *   monde : le sol baké, l'eau qui bouge par-dessus, les ombres portées, puis le conteneur trié en
  *   profondeur (bâtiments, arbres, rochers, personnages), les particules et
  *   le fantôme de construction ;
- * - `hud`, en pixels écran, où vivent le joystick et les repères de bord.
+ * - `hud`, en pixels écran, où vivent la météo, le joystick et les repères
+ *   de bord.
  *
  * Tout est vectoriel, rastérisé à la résolution de l'écran : aucune texture
  * n'est agrandie, aucune n'est en `nearest`.
@@ -33,6 +34,7 @@ import { ResourceLayer } from './resourceLayer.ts';
 import { SpriteLibrary, type AtlasStats } from './spriteLibrary.ts';
 import { TerrainTiles, terrainSources } from './terrainTiles.ts';
 import { WaterLayer, type WaterStats } from './waterLayer.ts';
+import { WeatherLayer } from './weatherLayer.ts';
 
 export class GameRenderer {
   public readonly camera = new Camera();
@@ -51,6 +53,7 @@ export class GameRenderer {
   private readonly library: SpriteLibrary;
   private readonly tiles: TerrainTiles;
   private readonly indicators: IndicatorLayer;
+  private readonly weather: WeatherLayer;
 
   public readonly app: Application;
 
@@ -67,11 +70,13 @@ export class GameRenderer {
     this.resourceLayer = new ResourceLayer(world, library, this.tiles, this.entityLayer.container, this.shadows);
     this.indicators = new IndicatorLayer(world, library);
     this.ghostLayer = new GhostLayer(world, library);
+    this.weather = new WeatherLayer(world, library);
 
     this.worldContainer.addChild(
       this.chunkLayer.container,
       this.waterLayer.container,
       this.shadows,
+      this.weather.ground,
       this.entityLayer.container,
       this.particles.container,
       this.ghostLayer.container,
@@ -83,7 +88,7 @@ export class GameRenderer {
     this.joystickKnob.anchor.set(0.5);
     this.joystickBase.visible = false;
     this.joystickKnob.visible = false;
-    this.hudContainer.addChild(this.indicators.container, this.joystickBase, this.joystickKnob);
+    this.hudContainer.addChild(this.weather.screen, this.indicators.container, this.joystickBase, this.joystickKnob);
 
     app.stage.addChild(this.worldContainer, this.hudContainer);
 
@@ -191,6 +196,7 @@ export class GameRenderer {
     this.entityLayer.update(alpha, this.app.ticker);
     this.particles.update(this.app.ticker.deltaMS);
     this.ghostLayer.update(building, ghost, block);
+    this.weather.update(this.camera, this.app.ticker.deltaMS, alpha);
     this.indicators.update(this.camera, this.app.ticker.deltaMS, alpha);
 
     this.joystickBase.visible = joystick.active;
@@ -212,6 +218,11 @@ export class GameRenderer {
     return this.waterLayer.stats;
   }
 
+  /** Particules de météo affichées — le HUD de debug l'affiche, pour mesurer sur téléphone. */
+  public get weatherParticles(): number {
+    return this.weather.particleCount;
+  }
+
   /** Coût de l'atlas de sprites : pages, images, mémoire, temps de chargement. */
   public get atlasStats(): AtlasStats {
     return this.library.stats;
@@ -224,6 +235,7 @@ export class GameRenderer {
     this.entityLayer.destroy();
     this.ghostLayer.destroy();
     this.indicators.destroy();
+    this.weather.destroy();
     this.particles.destroy();
     this.library.destroy();
     this.app.destroy(true, { children: true });

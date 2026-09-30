@@ -74,6 +74,14 @@ plafond. Ils ne s'en prennent qu'à Adam (qui a des PV et se réveille à la
 mairie s'il tombe) ; l'arc d'Adam vise l'ennemi le plus proche, bête ou
 mutant, et le marque (`player.target`) ; les tours ne visent que les mutants.
 
+**Météo** — lue dans la seed et le temps de jeu, jamais stockée
+(`src/data/weather.ts`, `src/sim/weather.ts`) : pluie acide (Adam ralenti,
+bâtiments abîmés rongés, sauf à l'abri près de la mairie), coup de vent
+(flèches en arc, mutants poussés), brouillard (portée des arcs réduite),
+arc-en-ciel radioactif (récolte doublée). Annoncée 10 s à l'avance ; une
+vague ne part jamais sous une météo `harsh`. Rendu en `ParticleContainer`
+(`render/weatherLayer.ts`).
+
 ## Direction artistique
 
 **Vectoriel « post-apo joyeux » : la vie reprend ses droits sur la ruine.**

@@ -108,6 +108,8 @@ const BEAST_COLORS: Record<WildlifeId, readonly number[]> = {
   crab: [PALETTE.coral.base, PALETTE.orange.base, PALETTE.coral.light].map(hex),
   wolf: [PALETTE.violet.base, PALETTE.violet.light, PALETTE.ink.light].map(hex),
 };
+/** Les gouttes qui rongent un bâtiment sous la pluie acide : la menthe claire de la pluie. */
+const ACID_COLORS = [PALETTE.mint.light, PALETTE.mint.base, PALETTE.cyan.light].map(hex);
 const RUBBLE_COLORS = [PALETTE.yellow.base, PALETTE.yellow.shade, PALETTE.orange.base, PALETTE.violet.light].map(hex);
 const CELEBRATION_COLORS = [PALETTE.yellow.base, PALETTE.coral.base, PALETTE.cyan.base, PALETTE.mint.base, PALETTE.violet.base].map(hex);
 
@@ -286,7 +288,7 @@ async function main(): Promise<void> {
     if (started && !paused) autosave.update(ticker.deltaMS);
 
     renderer.draw(accumulator / STEP_MS, placement.mode !== 'idle', placement.ghost, joystick.state);
-    hud.update(ticker.FPS, renderer.bakedChunks, renderer.atlasStats, renderer.waterStats);
+    hud.update(ticker.FPS, renderer.bakedChunks, renderer.atlasStats, renderer.waterStats, renderer.weatherParticles);
 
     // Lire la mise en page force un reflow : une fois tous les dix cadres suffit.
     if (++frame % 10 === 0) renderer.setHudInsets(hud.topInset(), bottomInset(), hud.obstacles());
@@ -494,6 +496,11 @@ function wireParticles(world: World, renderer: GameRenderer): void {
     if (entity) {
       particles.burst((entity.tx + entity.width / 2) * TILE_SIZE, (entity.ty + entity.height) * TILE_SIZE, RUBBLE_COLORS, 3);
     }
+  });
+  world.events.on('buildingCorroded', ({ id }) => {
+    const entity = world.entities.get(id);
+
+    if (entity) particles.burst((entity.tx + entity.width / 2) * TILE_SIZE, entity.ty * TILE_SIZE + 8, ACID_COLORS, 4);
   });
   world.events.on('buildingCompleted', ({ id }) => {
     const entity = world.entities.get(id);

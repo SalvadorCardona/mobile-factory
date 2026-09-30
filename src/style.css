@@ -179,8 +179,8 @@ button {
 /*
  * Le haut de l'écran : une seule bande, en flux. La quête au centre (elle
  * prend toute la place qui reste sur un téléphone), les boutons et le sac
- * dans une colonne à droite. Rien n'est posé sous la quête : quand son
- * conseil s'ouvre ou se replie, aucun bouton ne bouge.
+ * dans une colonne à droite. Sous la quête, seule la capsule météo : quand
+ * son conseil s'ouvre ou se replie, aucun bouton ne bouge.
  */
 .hud-top {
   position: absolute;
@@ -562,6 +562,56 @@ button {
 
 .hud-bag[data-empty='true'] .hud-bag-items {
   display: none;
+}
+
+/* ----------------------------------------------------------------- météo */
+
+/* Une capsule sous la quête : ce qui arrive, puis ce qui tombe. */
+/* Sous la quête, dans sa colonne : la colonne des boutons reste en place. */
+.hud-weather {
+  grid-column: 2;
+  grid-row: 2;
+  justify-self: center;
+  margin-top: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 14px 5px 10px;
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow: var(--face);
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  animation: toast-in 280ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+.hud-weather[hidden] {
+  display: none;
+}
+
+.hud-weather::before {
+  content: '';
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: inset -2px -2px 0 var(--cyan-shade);
+}
+
+.hud-weather[data-harsh='true']::before {
+  background: var(--mint-light);
+  box-shadow: inset -2px -2px 0 var(--mint);
+}
+
+.hud-weather[data-harsh='true'] {
+  color: var(--danger);
+}
+
+/* L'annonce clignote doucement : elle arrive. */
+.hud-weather[data-soon='true'] {
+  animation: blink 0.8s steps(2) infinite;
 }
 
 /* ---------------------------------------------------------------- bulles */

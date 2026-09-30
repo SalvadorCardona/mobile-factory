@@ -37,6 +37,7 @@ import { TARGET } from '../art/target.ts';
 import { TOWN_HALL } from '../art/townHall.ts';
 import { TREE, TREE_DEAD, TREE_PINE } from '../art/trees.ts';
 import { REINFORCED_TOWER, WATCHTOWER } from '../art/watchtower.ts';
+import { RAINBOW, WEATHER_FX } from '../art/weather.ts';
 import { WOLF } from '../art/wolf.ts';
 import { WORKER } from '../art/worker.ts';
 
@@ -92,6 +93,10 @@ export const SPRITES = {
 
   /** Décor de surface : un morceau par élément, cf. `data/decor.ts`. */
   decor: DECOR_ART,
+
+  /** Météo : gouttes, vent, brouillard, fleurs, et l'arc-en-ciel — cf. `data/weather.ts`. */
+  weather: WEATHER_FX,
+  rainbow: RAINBOW,
 } satisfies Record<string, SpriteProto>;
 
 export type SpriteId = keyof typeof SPRITES;
