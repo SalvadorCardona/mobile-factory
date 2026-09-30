@@ -297,6 +297,7 @@ export const BUILDINGS = {
     unlockNight: 0,
     sprite: 'lab',
     weapon: null,
+    upgrades: [],
   },
 } as const satisfies Record<string, BuildingProto>;
 
