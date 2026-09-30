@@ -126,7 +126,9 @@ Les règles, en résumé :
   l'objet (`TerrainTiles.shadow`), dans un conteneur sous tout le reste.
 - Ressenti (rebond, secousse, tremblement, flash, caméra) : des minuteurs
   de vue côté `render/`, jamais de l'état de simulation.
-  `render/indicatorLayer.ts` dessine les repères de bord (mutants, mairie).
+  `render/indicatorLayer.ts` dessine les repères de bord (mutants, mairie,
+  gisement que réclame le conseil — `sim/deposits.ts`), jamais sous le HUD ;
+  taper celui de la mairie y jette un coup d'œil (`Camera.peek`).
 - L'icône (favicon, PWA) et la bannière du README sont des scènes SVG
   composées avec les sprites (`src/art/brand.ts`) ; `npm run art:brand`
   écrit les pages à rastériser et affiche les commandes Chrome qui

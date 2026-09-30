@@ -18,6 +18,7 @@
 
 import { Application, Container, Sprite } from 'pixi.js';
 import { GROUND, hex } from '../data/artDirection.ts';
+import type { ItemId } from '../data/items.ts';
 import type { JoystickState } from '../input/joystick.ts';
 import type { GhostState } from '../input/placement.ts';
 import { STEP_MS, type World } from '../sim/world.ts';
@@ -26,7 +27,7 @@ import { Camera } from './camera.ts';
 import { ChunkLayer } from './chunkLayer.ts';
 import { EntityLayer } from './entityLayer.ts';
 import { GhostLayer } from './ghostLayer.ts';
-import { IndicatorLayer } from './indicatorLayer.ts';
+import { IndicatorLayer, indicatorSources, type ScreenRect } from './indicatorLayer.ts';
 import { ParticleLayer } from './particles.ts';
 import { ResourceLayer } from './resourceLayer.ts';
 import { SpriteLibrary, type AtlasStats } from './spriteLibrary.ts';
@@ -61,7 +62,7 @@ export class GameRenderer {
     this.chunkLayer = new ChunkLayer(app.renderer, library, this.tiles, world.seed);
     this.entityLayer = new EntityLayer(world, library, this.tiles, this.shadows);
     this.resourceLayer = new ResourceLayer(world, library, this.tiles, this.entityLayer.container, this.shadows);
-    this.indicators = new IndicatorLayer(world);
+    this.indicators = new IndicatorLayer(world, library);
     this.ghostLayer = new GhostLayer(world, library);
 
     this.worldContainer.addChild(
@@ -103,7 +104,7 @@ export class GameRenderer {
 
     mount.append(app.canvas);
 
-    const library = await SpriteLibrary.load(terrainSources());
+    const library = await SpriteLibrary.load([...terrainSources(), ...indicatorSources()]);
 
     return new GameRenderer(app, world, createAtlas(app.renderer), library);
   }
@@ -120,9 +121,27 @@ export class GameRenderer {
     return this.camera.worldToScreen(x, y);
   }
 
-  /** Place occupée par le HUD en haut et en bas de l'écran : les repères de bord l'évitent. */
-  public setHudInsets(top: number, bottom: number): void {
-    this.indicators.setInsets(top, bottom);
+  /**
+   * Place occupée par le HUD en haut et en bas de l'écran, et ce qu'il pose le
+   * long des bords entre les deux : les repères de bord l'évitent.
+   */
+  public setHudInsets(top: number, bottom: number, obstacles: readonly ScreenRect[]): void {
+    this.indicators.setInsets(top, bottom, obstacles);
+  }
+
+  /** La ressource que réclame le conseil : un repère pointe vers son gisement le plus proche. */
+  public setObjective(item: ItemId | null): void {
+    this.indicators.setObjective(item);
+  }
+
+  /** Le repère de la mairie est-il sous ce point écran ? */
+  public homeIndicatorAt(x: number, y: number): boolean {
+    return this.indicators.homeAt(x, y);
+  }
+
+  /** La caméra glisse vers (x, y) monde, s'y attarde une seconde, puis revient sur Adam. */
+  public peek(x: number, y: number): void {
+    this.camera.peek(x, y);
   }
 
   /** Secoue la caméra : 0.2 pour un coup, 0.6 pour un effondrement. */
