@@ -27,6 +27,7 @@ import { KID } from '../art/kid.ts';
 import { MUTANT } from '../art/mutant.ts';
 import { NURSERY } from '../art/nursery.ts';
 import { ROCK_COAL, ROCK_IRON, ROCK_STONE } from '../art/rocks.ts';
+import { STORE_FULL } from '../art/storeFull.ts';
 import { TARGET } from '../art/target.ts';
 import { TOWN_HALL } from '../art/townHall.ts';
 import { TREE, TREE_DEAD, TREE_PINE } from '../art/trees.ts';
@@ -57,6 +58,8 @@ export const SPRITES = {
   wolf: WOLF,
   arrow: ARROW,
   target: TARGET,
+  /** Bulle « coffre plein » au-dessus d'une foreuse ou d'une ferme arrêtée. */
+  storeFull: STORE_FULL,
 
   tree: TREE,
   treePine: TREE_PINE,

@@ -12,7 +12,8 @@
  * le bâtiment fini, et le bâtiment cabossé, affiché dès que les mutants lui
  * ont pris la moitié de ses points de vie. Certains ont en plus un morceau
  * animé : la roue de la foreuse tourne quand elle travaille, les cultures de
- * la ferme ondulent.
+ * la ferme ondulent. Une foreuse ou une ferme bloquée, coffre plein, porte
+ * au-dessus du toit une bulle qui flotte : il faut venir la vider.
  *
  * Tri en profondeur : les enfants sont ordonnés par le bas de leur emprise,
  * pour qu'Adam passe derrière la mairie quand il est au-dessus d'elle et
@@ -50,6 +51,10 @@ const POP_MS = 420;
 const HIT_MS = 220;
 const HIT_TINT = hex(PALETTE.coral.light);
 
+/** La pointe de la bulle « coffre plein » descend d'autant sous le haut du cadre, et monte d'autant sur une barre de vie. */
+const FULL_DIP = 6;
+const FULL_ABOVE_BAR = 16;
+
 /** Sous cette part de ses points de vie, un bâtiment montre ses blessures. */
 const DAMAGED_RATIO = 0.5;
 
@@ -67,6 +72,8 @@ interface EntityView {
   main: Sprite;
   /** Morceau animé : roue de foreuse, cultures. */
   moving: Sprite | null;
+  /** Bulle « coffre plein » d'une foreuse ou d'une ferme, visible quand elle est bloquée. */
+  full: Sprite | null;
   shadow: Sprite;
   /** Barre d'avancement d'un chantier, ou barre de vie d'un bâtiment entamé. */
   bar: Graphics;
@@ -207,7 +214,17 @@ export class EntityLayer {
     bar.visible = false;
     root.addChild(bar);
 
-    return { root, main, moving: movingSprite, shadow, bar, pop: 0, hit: 0, baseX: 0, shown, barKey: '' };
+    let full: Sprite | null = null;
+
+    if (entity.kind === 'drill' || entity.kind === 'farm') {
+      full = new Sprite(this.library.part('storeFull', 'bubble'));
+      full.anchor.set(SPRITES.storeFull.anchorX, SPRITES.storeFull.anchorY);
+      full.x = (entity.width * TILE_SIZE) / 2;
+      full.visible = false;
+      root.addChild(full);
+    }
+
+    return { root, main, moving: movingSprite, full, shadow, bar, pop: 0, hit: 0, baseX: 0, shown, barKey: '' };
   }
 
   /** Fini ou cabossé, selon ce qu'il reste de points de vie. */
@@ -288,9 +305,25 @@ export class EntityLayer {
       }
 
       this.drawBar(view, entity);
+      this.showFull(view, entity, ticker.lastTime);
       this.feel(view, ticker.deltaMS);
       this.animate(view, entity, ticker.lastTime);
     }
+  }
+
+  /** La bulle « coffre plein » flotte au-dessus du toit tant que la machine attend. */
+  private showFull(view: EntityView, entity: Entity, now: number): void {
+    if (!view.full) return;
+
+    const blocked = (entity.kind === 'drill' && entity.output !== null && entity.blocked) || (entity.kind === 'farm' && entity.blocked);
+
+    view.full.visible = blocked;
+    if (!blocked) return;
+
+    // La pointe touche le haut du toit ; au-dessus de la barre de vie quand elle est là.
+    const top = entity.height * TILE_SIZE - SPRITES[BUILDINGS[entity.proto].sprite].height;
+
+    view.full.y = top + FULL_DIP - (view.bar.visible ? FULL_ABOVE_BAR : 0) + Math.sin(now * 0.004) * 2;
   }
 
   /** L'ombre d'Adam prend la teinte du sol sous ses pieds. */

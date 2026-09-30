@@ -328,6 +328,7 @@ function wireAudio(world: World, audio: AudioEngine, hud: Hud): void {
 
   world.events.on('resourceHarvested', ({ item }) => audio.play(item === 'wood' ? 'chop' : 'rock'));
   world.events.on('siteDelivered', () => audio.play('deliver'));
+  world.events.on('storeTaken', () => audio.play('deliver'));
   world.events.on('siteReady', () => audio.play('open'));
   world.events.on('buildingCompleted', () => audio.play('build'));
   world.events.on('arrowShot', () => audio.play('arrow'));

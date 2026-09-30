@@ -13,7 +13,8 @@
  * Le pitch tient dans `data/lore.ts` ; ce qu'il implique ici : la partie
  * commence sur le chantier de la mairie, et Adam récolte à mains nues, par
  * **contact** — un arbre ou un rocher heurté se récolte, un chantier heurté
- * reçoit ce qu'il attend. Une fois la mairie debout, les mutants arrivent par
+ * reçoit ce qu'il attend, une foreuse ou une ferme heurtée donne ce que son
+ * coffre contient. Une fois la mairie debout, les mutants arrivent par
  * vagues et marchent droit dessus ; l'arc d'Adam et les tours de guet tirent
  * seuls. Si la mairie tombe, la partie est perdue. Loin du village, la faune
  * — crabes sur les plages, loups en forêt — s'en prend à Adam s'il approche.
@@ -30,7 +31,7 @@ import { RESOURCES } from '../data/resources.ts';
 import { WEAPONS } from '../data/weapons.ts';
 import { ChunkIndex } from './chunk.ts';
 import { nearestFoe, shoot, stepArrow } from './combat.ts';
-import type { Command, CommandLogEntry, PlacementRejection, SiteRejection } from './commands.ts';
+import type { Command, CommandLogEntry, PlacementRejection, SiteRejection, TakeRejection } from './commands.ts';
 import type { WildlifeId } from '../data/enemies.ts';
 import { spawnPoint, stepMutant } from './enemies.ts';
 import { stepKid } from './kids.ts';
@@ -113,6 +114,10 @@ export type WorldEvents = {
   siteRejected: { id: EntityId; reason: SiteRejection };
   /** La ferme a récolté. */
   farmProduced: { id: EntityId; item: ItemId };
+  /** Adam a pris `amount` objets dans le coffre d'une foreuse ou d'une ferme. */
+  storeTaken: { id: EntityId; item: ItemId; amount: number };
+  /** Un « Prendre » a été refusé. */
+  takeRejected: { id: EntityId; reason: TakeRejection };
   /** Le sac est plein : la récolte s'arrête, il faut aller livrer. */
   inventoryFull: Record<string, never>;
   /** Plus que `seconds` secondes avant la prochaine vague (3, 2, puis 1). */
@@ -385,6 +390,10 @@ export class World {
       case 'buildSite':
         this.build(command.id);
         break;
+
+      case 'takeFromBuilding':
+        this.takeAll(command.id);
+        break;
     }
   }
 
@@ -511,9 +520,10 @@ export class World {
     const occupant = this.chunks.occupantAt(contact.tx, contact.ty);
     const entity = occupant === undefined ? undefined : this.entities.get(occupant);
 
-    if (entity?.kind === 'site' && this.contactTicks % DELIVER_TICKS === 0) {
-      this.deliver(entity);
-    }
+    if (this.contactTicks % DELIVER_TICKS !== 0) return;
+
+    if (entity?.kind === 'site') this.deliver(entity);
+    else if (entity?.kind === 'drill' || entity?.kind === 'farm') this.collect(entity);
   }
 
   private harvest(tx: number, ty: number): void {
@@ -559,6 +569,21 @@ export class World {
       if (missing === 0) this.events.emit('siteReady', { id: site.id });
       return;
     }
+  }
+
+  /**
+   * Prend un objet du coffre d'une foreuse ou d'une ferme heurtée : au
+   * contact, le coffre se vide à vue, comme un chantier se remplit.
+   */
+  private collect(producer: Drill | Farm): void {
+    const [item] = producer.store.entries()[0] ?? [];
+
+    if (!item) return;
+    if (this.player.inventory.freeSpace() <= 0) {
+      this.events.emit('inventoryFull', {});
+      return;
+    }
+    this.takeInto(producer, item, 1);
   }
 
   /* ------------------------------------------------------------- placement */
@@ -1281,9 +1306,9 @@ export class World {
   /**
    * Retire des objets du coffre d'un bâtiment et le relance s'il était bloqué.
    *
-   * Personne ne l'appelle encore : les porteurs sont un ticket suivant. C'est
-   * le point d'entrée qu'ils utiliseront, et il est testé — c'est aussi la
-   * démonstration que le réveil sur événement fonctionne.
+   * Adam y passe (heurt et « Prendre ») ; c'est aussi le point d'entrée des
+   * porteurs, un ticket suivant — et la démonstration que le réveil sur
+   * événement fonctionne.
    */
   public withdraw(id: EntityId, item: ItemId, amount: number): number {
     const entity = this.entities.get(id);
@@ -1292,11 +1317,56 @@ export class World {
 
     const removed = entity.store.remove(item, amount);
 
-    if (removed > 0 && entity.kind === 'drill' && entity.blocked && entity.output) {
+    if (removed <= 0) return 0;
+
+    // Une machine bloquée ne se replanifiait plus : c'est ce retrait qui la réveille.
+    if (entity.kind === 'drill' && entity.blocked && entity.output) {
       entity.blocked = false;
       this.scheduleDrill(entity);
+    } else if (entity.kind === 'farm' && entity.blocked) {
+      entity.blocked = false;
+      this.scheduleFarm(entity);
     }
     return removed;
+  }
+
+  /** Le bouton « Prendre » : tout le coffre passe dans le sac, dans la limite de la place. */
+  private takeAll(id: EntityId): void {
+    const entity = this.entities.get(id);
+
+    if (entity?.kind !== 'drill' && entity?.kind !== 'farm') {
+      this.events.emit('takeRejected', { id, reason: 'missing' });
+      return;
+    }
+
+    const reason: TakeRejection | null = !this.inReach(entity)
+      ? 'outOfReach'
+      : entity.store.isEmpty()
+        ? 'empty'
+        : this.player.inventory.freeSpace() <= 0
+          ? 'bagFull'
+          : null;
+
+    if (reason) {
+      this.events.emit('takeRejected', { id, reason });
+      return;
+    }
+
+    for (const [item, amount] of entity.store.entries()) {
+      const room = this.player.inventory.freeSpace();
+
+      if (room <= 0) break;
+      this.takeInto(entity, item, Math.min(amount, room));
+    }
+  }
+
+  /** Du coffre au sac : le coffre se vide (et la machine repart), le sac reçoit. */
+  private takeInto(producer: Drill | Farm, item: ItemId, amount: number): void {
+    const taken = this.withdraw(producer.id, item, amount);
+
+    if (taken <= 0) return;
+    this.player.inventory.add(item, taken);
+    this.events.emit('storeTaken', { id: producer.id, item, amount: taken });
   }
 
   /** Nombre de réveils en attente — affiché dans le HUD de debug. */

@@ -462,6 +462,128 @@ describe('World', () => {
     expect(drill.store.total()).toBe(DRILL.storage - 10 + 1);
   });
 
+  it('vide une foreuse pleine qu’Adam heurte, dans la limite du sac, et la réveille', () => {
+    const { world, spot } = worldWithOre();
+    const drill = buildDrill(world, spot);
+    const taken: number[] = [];
+    let full = 0;
+
+    if (drill.kind !== 'drill') throw new Error('pas une foreuse');
+
+    for (let i = 0; i < CYCLE * (DRILL.storage + 2); i += 1) world.tick();
+    expect(drill.blocked).toBe(true);
+    expect(world.pendingWakes()).toBe(0);
+
+    // Trois places dans le sac, pas une de plus.
+    world.player.inventory.add('wood', INVENTORY_CAPACITY - 3);
+    world.events.on('storeTaken', ({ amount }) => taken.push(amount));
+    world.events.on('inventoryFull', () => (full += 1));
+
+    const axis = standNextTo(world, drill.tx, drill.ty, drill.width, drill.height);
+
+    if (!axis) throw new Error('foreuse inaccessible');
+    world.push({ type: 'setMoveAxis', ...axis });
+
+    for (let i = 0; i < CYCLE && taken.length === 0; i += 1) world.tick();
+
+    // Le premier objet pris réveille la foreuse : elle se replanifie.
+    expect(taken).toEqual([1]);
+    expect(drill.blocked).toBe(false);
+    expect(world.pendingWakes()).toBe(1);
+
+    for (let i = 0; i < 20; i += 1) world.tick();
+
+    expect(taken).toEqual([1, 1, 1]);
+    expect(world.player.inventory.total()).toBe(INVENTORY_CAPACITY);
+    expect(world.player.inventory.count(drill.output!)).toBe(3);
+    expect(full).toBeGreaterThan(0);
+  });
+
+  it('« Prendre » vide le coffre dans le sac, à portée et dans la limite de la place', () => {
+    const { world, spot } = worldWithOre();
+    const drill = buildDrill(world, spot);
+    const rejected: string[] = [];
+
+    if (drill.kind !== 'drill') throw new Error('pas une foreuse');
+
+    world.events.on('takeRejected', ({ reason }) => rejected.push(reason));
+
+    // Coffre vide : refusé.
+    world.push({ type: 'takeFromBuilding', id: drill.id });
+    world.tick();
+    expect(rejected).toEqual(['empty']);
+
+    for (let i = 0; i < CYCLE * (DRILL.storage + 2); i += 1) world.tick();
+    expect(drill.blocked).toBe(true);
+
+    world.player.inventory.add('wood', INVENTORY_CAPACITY - 5);
+    world.push({ type: 'takeFromBuilding', id: drill.id });
+    world.tick();
+
+    expect(world.player.inventory.count(drill.output!)).toBe(5);
+    expect(drill.store.total()).toBe(DRILL.storage - 5);
+    expect(drill.blocked).toBe(false);
+    expect(world.pendingWakes()).toBe(1);
+
+    // Sac plein : refusé, rien n'est jeté.
+    world.push({ type: 'takeFromBuilding', id: drill.id });
+    world.tick();
+    expect(rejected).toEqual(['empty', 'bagFull']);
+    expect(drill.store.total()).toBe(DRILL.storage - 5);
+
+    // Trop loin : refusé.
+    world.player.inventory.remove('wood', 10);
+    world.player.x += (BUILD_REACH_TILES + 4) * TILE_SIZE;
+    world.push({ type: 'takeFromBuilding', id: drill.id });
+    world.tick();
+    expect(rejected).toEqual(['empty', 'bagFull', 'outOfReach']);
+
+    // Un chantier n'a rien à prendre.
+    world.push({ type: 'takeFromBuilding', id: world.townHallId });
+    world.tick();
+    expect(rejected).toEqual(['empty', 'bagFull', 'outOfReach', 'missing']);
+  });
+
+  it('récupère la nourriture d’une ferme pleine, qui repart aussitôt', () => {
+    for (let seed = 1; seed < 200; seed += 1) {
+      const world = new World(seed);
+      const origin = worldToTile(world.player.x, world.player.y);
+      let spot: { tx: number; ty: number } | null = null;
+
+      for (let dy = -3; dy <= 3 && !spot; dy += 1) {
+        for (let dx = -3; dx <= 3 && !spot; dx += 1) {
+          if (world.canPlace('farm', origin.tx + dx, origin.ty + dy) === null) spot = { tx: origin.tx + dx, ty: origin.ty + dy };
+        }
+      }
+      if (!spot) continue;
+
+      world.push({ type: 'placeBuilding', building: 'farm', tx: spot.tx, ty: spot.ty });
+      world.tick();
+
+      const farm = completeSite(world, Math.max(...world.entities.keys()));
+      const { duration, outputs } = RECIPES.growFood;
+
+      if (farm.kind !== 'farm') throw new Error('pas une ferme');
+
+      for (let i = 0; i < duration * (BUILDINGS.farm.storage / outputs.food + 2); i += 1) world.tick();
+      expect(farm.blocked).toBe(true);
+      expect(world.pendingWakes()).toBe(0);
+
+      world.push({ type: 'takeFromBuilding', id: farm.id });
+      world.tick();
+
+      expect(world.player.inventory.count('food')).toBe(BUILDINGS.farm.storage);
+      expect(farm.store.isEmpty()).toBe(true);
+      expect(farm.blocked).toBe(false);
+      expect(world.pendingWakes()).toBe(1);
+
+      for (let i = 0; i < duration; i += 1) world.tick();
+      expect(farm.store.count('food')).toBe(outputs.food);
+      return;
+    }
+    throw new Error('aucun emplacement de ferme trouvé');
+  });
+
   it('ne retire rien d’un chantier', () => {
     const world = new World(3);
 
