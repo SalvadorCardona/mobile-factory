@@ -36,6 +36,7 @@ import { LocalSave, type LoadResult } from './storage/localSave.ts';
 import { TILE_SIZE } from './core/grid.ts';
 import { BuildingPanel } from './ui/buildingPanel.ts';
 import { InventoryPanel } from './ui/inventoryPanel.ts';
+import { JoystickView } from './ui/joystick.ts';
 import { BuildMenu } from './ui/buildMenu.ts';
 import { Hud } from './ui/hud.ts';
 import { PauseScreen, TitleScreen } from './ui/screens.ts';
@@ -145,7 +146,8 @@ async function main(): Promise<void> {
   // pour provoquer une vague ou une naissance sans attendre dix minutes.
   if (import.meta.env.DEV) Object.assign(window, { mobileFactory: { world } });
 
-  const joystick = new Joystick(() => renderer.app.screen.width);
+  const joystick = new Joystick();
+  const stick = new JoystickView(joystick);
   const keyboard = new Keyboard();
   const placement = new Placement(
     world,
@@ -186,7 +188,8 @@ async function main(): Promise<void> {
     },
   );
 
-  hud.root.append(buildMenu.root, panel.root, inventory.root);
+  hud.root.append(stick.root, buildMenu.root, panel.root, inventory.root);
+  stick.avoid([...buildMenu.root.children]);
   hud.bag.addEventListener('click', () => inventory.toggle());
   hud.setProjector((x, y) => renderer.worldToScreen(x, y));
 
@@ -276,14 +279,12 @@ async function main(): Promise<void> {
     },
   );
 
-  // Ordre d'interrogation des doigts : le repère de la mairie d'abord (il ne
-  // revendique qu'un doigt posé dessus), l'inspection ensuite (elle ne
-  // revendique qu'un tap sur un bâtiment), le placement ensuite (il ne
-  // revendique rien tant qu'aucun bâtiment n'est armé — mais armé, il doit
-  // passer avant le joystick, sinon on ne peut pas construire sur la moitié
-  // gauche de l'écran), le joystick en dernier. Un glissé qui ne part pas du
-  // fantôme, le placement le lâche : il revient au joystick, et Adam marche
-  // pendant qu'on vise.
+  // Ordre d'interrogation des doigts du canvas : le repère de la mairie
+  // d'abord (il ne revendique qu'un doigt posé dessus), l'inspection ensuite
+  // (elle ne revendique qu'un tap sur un bâtiment), le placement en dernier
+  // (il ne revendique rien tant qu'aucun bâtiment n'est armé). Le joystick
+  // n'en est pas : il est dans le DOM, au-dessus du canvas, et garde ses
+  // doigts pour lui — Adam marche au pouce pendant que l'autre doigt vise.
   //
   // À la souris, le survol seul fait suivre le fantôme au curseur : le mode
   // PC se décide à l'événement (`pointerType`), le tactile n'en voit rien.
@@ -292,7 +293,6 @@ async function main(): Promise<void> {
   pointers.add(homeTap);
   pointers.add(inspect);
   pointers.add(placement);
-  pointers.add(joystick);
 
   wireAudio(world, audio, hud);
   wireParticles(world, renderer);
@@ -313,16 +313,22 @@ async function main(): Promise<void> {
     }
     if (started && !paused) autosave.update(ticker.deltaMS);
 
-    renderer.draw(accumulator / STEP_MS, placement.mode !== 'idle', placement.ghost, joystick.state);
+    renderer.draw(accumulator / STEP_MS, placement.mode !== 'idle', placement.ghost);
     hud.update(ticker.FPS, renderer.bakedChunks, renderer.atlasStats, renderer.waterStats, renderer.weatherParticles);
 
     // Lire la mise en page force un reflow : une fois tous les dix cadres suffit.
-    if (++frame % 10 === 0) renderer.setHudInsets(hud.topInset(), bottomInset(), hud.obstacles());
+    if (++frame % 10 === 0) {
+      renderer.setHudInsets(hud.topInset(), bottomInset(), [...hud.obstacles(), stick.root.getBoundingClientRect()]);
+    }
     renderer.setObjective(hud.wantedItem());
     renderer.setSelected(panel.shown);
     buildMenu.refresh();
     panel.update();
     inventory.update();
+    // Un menu, une fenêtre ou la pause par-dessus : le joystick s'efface et
+    // lâche son doigt ; il revient à la fermeture.
+    stick.setEnabled(started && !paused && !world.defeated && !buildMenu.isOpen && !panel.open && !inventory.open);
+    if (hud.root.dataset['stick'] !== String(stick.shown)) hud.root.dataset['stick'] = String(stick.shown);
   });
 
   /**

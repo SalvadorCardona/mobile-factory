@@ -11,21 +11,19 @@
  *   cabane, les ombres portées, puis le conteneur trié en
  *   profondeur (bâtiments, arbres, rochers, personnages), les particules, la
  *   nuit (une passe de teinte et ses lueurs) et le fantôme de construction ;
- * - `hud`, en pixels écran, où vivent la météo, le joystick et les repères
- *   de bord.
+ * - `hud`, en pixels écran, où vivent la météo et les repères de bord (le
+ *   joystick, lui, est dans le DOM : `ui/joystick.ts`).
  *
  * Tout est vectoriel, rastérisé à la résolution de l'écran : aucune texture
  * n'est agrandie, aucune n'est en `nearest`.
  */
 
-import { Application, Container, Sprite } from 'pixi.js';
+import { Application, Container } from 'pixi.js';
 import { GROUND, hex } from '../data/artDirection.ts';
 import type { ItemId } from '../data/items.ts';
-import type { JoystickState } from '../input/joystick.ts';
 import type { GhostState } from '../input/placement.ts';
 import type { EntityId } from '../sim/types.ts';
 import { STEP_MS, type World } from '../sim/world.ts';
-import { createAtlas, type Atlas } from './atlas.ts';
 import { Camera } from './camera.ts';
 import { ChunkLayer } from './chunkLayer.ts';
 import { EntityLayer } from './entityLayer.ts';
@@ -56,8 +54,6 @@ export class GameRenderer {
   private selected: EntityId | null = null;
   private readonly nightLayer: NightLayer;
   public readonly particles = new ParticleLayer();
-  private readonly joystickBase: Sprite;
-  private readonly joystickKnob: Sprite;
   private readonly library: SpriteLibrary;
   private readonly tiles: TerrainTiles;
   private readonly indicators: IndicatorLayer;
@@ -67,7 +63,7 @@ export class GameRenderer {
 
   private readonly world: World;
 
-  private constructor(app: Application, world: World, atlas: Atlas, library: SpriteLibrary) {
+  private constructor(app: Application, world: World, library: SpriteLibrary) {
     this.app = app;
     this.world = world;
     this.library = library;
@@ -94,13 +90,7 @@ export class GameRenderer {
       this.ghostLayer.container,
     );
 
-    this.joystickBase = new Sprite(atlas.joystickBase);
-    this.joystickKnob = new Sprite(atlas.joystickKnob);
-    this.joystickBase.anchor.set(0.5);
-    this.joystickKnob.anchor.set(0.5);
-    this.joystickBase.visible = false;
-    this.joystickKnob.visible = false;
-    this.hudContainer.addChild(this.weather.screen, this.indicators.container, this.joystickBase, this.joystickKnob);
+    this.hudContainer.addChild(this.weather.screen, this.indicators.container);
 
     app.stage.addChild(this.worldContainer, this.hudContainer);
 
@@ -127,7 +117,7 @@ export class GameRenderer {
 
     const library = await SpriteLibrary.load([...terrainSources(), ...indicatorSources()]);
 
-    return new GameRenderer(app, world, createAtlas(app.renderer), library);
+    return new GameRenderer(app, world, library);
   }
 
   public get canvas(): HTMLCanvasElement {
@@ -185,7 +175,7 @@ export class GameRenderer {
     this.camera.shake(amount);
   }
 
-  public draw(alpha: number, building: boolean, ghost: GhostState | null, joystick: JoystickState): void {
+  public draw(alpha: number, building: boolean, ghost: GhostState | null): void {
     const { player } = this.world;
 
     this.camera.resize(this.app.screen.width, this.app.screen.height);
@@ -222,14 +212,6 @@ export class GameRenderer {
     this.workReach.update(building ? ghost : null, this.selected);
     this.weather.update(this.camera, this.app.ticker.deltaMS, alpha);
     this.indicators.update(this.camera, this.app.ticker.deltaMS, alpha);
-
-    this.joystickBase.visible = joystick.active;
-    this.joystickKnob.visible = joystick.active;
-
-    if (joystick.active) {
-      this.joystickBase.position.set(joystick.originX, joystick.originY);
-      this.joystickKnob.position.set(joystick.knobX, joystick.knobY);
-    }
   }
 
   /** Nombre de blocs de sol bakés — le HUD de debug l'affiche. */

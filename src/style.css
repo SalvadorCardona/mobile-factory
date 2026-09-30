@@ -153,7 +153,7 @@ button {
   pointer-events: auto;
 }
 
-/* Ce qui ne fait qu'informer laisse passer le pouce vers le joystick. */
+/* Ce qui ne fait qu'informer laisse passer le doigt vers la carte. */
 .hud .hud-quest,
 .hud .hud-town,
 .hud .hud-stats {
@@ -827,6 +827,78 @@ button.hud-stock:active {
 /* L'annonce clignote doucement : elle arrive. */
 .hud-weather[data-soon='true'] {
   animation: blink 0.8s steps(2) infinite;
+}
+
+/* -------------------------------------------------------------- joystick */
+
+/*
+ * Toujours au même endroit, en bas à gauche au-dessus de la zone de
+ * sécurité : la zone tactile (plus large) est un disque transparent, l'anneau
+ * voilé et le bouton blanc sont centrés dedans. Anneau et bouton suivent la
+ * DA des cartes : blanc (qui est son propre reflet), face avant lavande
+ * pleine en bas, aucun contour. Un voile indigo léger dessous le détache du sable
+ * et de l'eau claire.
+ */
+.joystick {
+  position: absolute;
+  left: calc(var(--safe-left) + 6px);
+  /* `--stick-lift` : la hauteur d'une barre ouverte en dessous (`JoystickView.avoid`). */
+  bottom: max(calc(var(--safe-bottom) + 6px), calc(var(--stick-lift, 0px) + 2px));
+  width: var(--stick-zone);
+  height: var(--stick-zone);
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  pointer-events: auto;
+  touch-action: none;
+  opacity: 0.8;
+  transition: opacity 160ms ease-out;
+}
+
+.joystick[hidden] {
+  display: none;
+}
+
+.joystick[data-active='true'] {
+  opacity: 1;
+}
+
+.joystick-ring {
+  display: grid;
+  place-items: center;
+  width: var(--stick-ring);
+  height: var(--stick-ring);
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.34);
+  box-shadow:
+    0 0 0 6px rgb(255 255 255 / 0.5) inset,
+    0 4px 0 rgb(43 45 143 / 0.16);
+}
+
+.joystick-knob {
+  width: var(--stick-knob);
+  height: var(--stick-knob);
+  border-radius: 50%;
+  background: var(--paper);
+  box-shadow:
+    0 -5px 0 var(--paper-shade) inset,
+    0 3px 8px rgb(43 45 143 / 0.35);
+  /* Relâché : retour au centre avec un petit rebond. */
+  transition: transform 280ms cubic-bezier(0.34, 1.9, 0.5, 1);
+}
+
+/* Tenu : le bouton colle au doigt, sans retard. */
+.joystick[data-active='true'] .joystick-knob {
+  transition: none;
+}
+
+/* Le joystick occupe le coin : les bulles et le debug montent au-dessus de lui. */
+.hud[data-stick='true'] .hud-toasts {
+  bottom: calc(var(--safe-bottom) + 190px);
+}
+
+.hud[data-stick='true'] .hud-stats {
+  bottom: calc(var(--safe-bottom) + 190px);
 }
 
 /* ---------------------------------------------------------------- bulles */

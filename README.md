@@ -30,7 +30,7 @@ jouable dans le navigateur, sur téléphone :
 - caméra amortie qui anticipe la marche et **tremble** aux impacts, culling
   et éviction par chunk ;
 - boucle à pas fixe 20 TPS, rendu interpolé à la fréquence de l'écran ;
-- joystick virtuel flottant à sortie analogique ; sur PC, déplacement au
+- joystick virtuel fixe, toujours affiché au doigt, à sortie analogique ; sur PC, déplacement au
   clavier — ZQSD, WASD ou flèches, lu par position physique des touches, donc
   sans réglage entre AZERTY et QWERTY ;
 - une foreuse qui extrait le gisement sous elle dans son coffre interne ;

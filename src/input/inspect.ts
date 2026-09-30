@@ -2,7 +2,7 @@
  * Inspection au tap : un doigt posé sur un bâtiment, relevé sans bouger,
  * ouvre sa fenêtre.
  *
- * Ce consommateur passe **avant** le joystick dans le routeur : il ne
+ * Ce consommateur passe **avant** le placement dans le routeur : il ne
  * revendique le doigt que si, au moment où il se pose, un chantier ou un
  * bâtiment est dessous et qu'aucun placement n'est en cours. Sinon il laisse
  * la main. Un doigt revendiqué qui glisse au-delà de `TAP_SLOP` n'ouvre rien —
