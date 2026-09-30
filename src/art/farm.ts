@@ -5,6 +5,11 @@
  * clos d'une barrière au trait. Dans les coins, la cabane jaune au toit
  * corail et le tonneau d'eau cyan ; au milieu, l'épouvantail en tunique.
  * Les cultures sont un morceau à part (`crops`) : le rendu les fait onduler.
+ * La seule silhouette basse et sans toit de la colonie.
+ *
+ * Son chantier : le champ piqueté, deux sillons sur quatre déjà tracés, la
+ * croix de l'épouvantail encore nue, les sacs de graines, et une pousse sur
+ * le panneau.
  *
  * Cadre 64 × 80 ; l'emprise occupe les 64 px du bas.
  */
@@ -15,6 +20,7 @@ import {
   circle,
   cushion,
   flower,
+  leaf,
   line,
   pill,
   railing,
@@ -24,7 +30,7 @@ import {
   svg,
 } from '../data/artDirection.ts';
 import type { SpriteProto } from '../data/sprites.ts';
-import { damageMarks, siteArt } from './building.ts';
+import { damageMarks, scaffold, siteClutter, siteGround, siteSign } from './building.ts';
 
 const W = 64;
 const H = 80;
@@ -58,6 +64,31 @@ function field(): string {
   );
 }
 
+/** Une pousse : une tige et deux feuilles. `x, y` : le pied de la tige. */
+function sprout(x: number, y: number): string {
+  return line(x, y, x, y - 5, PALETTE.mint.shade) + leaf(x, y - 4, -150, 0.7) + leaf(x, y - 4, -30, 0.7);
+}
+
+function site(): string {
+  return (
+    siteGround(W, H, FOOTPRINT) +
+    // Deux sillons tracés, les deux autres seulement piquetés.
+    ROWS.slice(0, 2).map((y) => pill(9, y - 2, 46, 5, GROUND.sand.shade)).join('') +
+    ROWS.slice(2).map((y) => line(10, y, 12, y, ink.base) + line(52, y, 54, y, ink.base)).join('') +
+    // La croix de l'épouvantail, pas encore habillée.
+    line(35, 12, 35, 36, ink.base) +
+    line(28, 19, 42, 19, ink.base) +
+    // Les sacs de graines.
+    shadedPill(40, 56, 9, 11, 3, 'yellow') +
+    shadedPill(48, 58, 9, 10, 3, 'yellow') +
+    sprout(44.5, 58) +
+    // La barrière, à moitié posée.
+    scaffold(4, 70, 26, 6) +
+    siteClutter(W, H) +
+    siteSign(4, 16, sprout(11, 25))
+  );
+}
+
 function crops(): string {
   return ROWS.map((y, row) =>
     [14, 26, 38, 50]
@@ -72,7 +103,7 @@ export const FARM = {
   anchorX: 0,
   anchorY: 1,
   parts: {
-    site: svg(W, H, siteArt(W, H, FOOTPRINT)),
+    site: svg(W, H, site()),
     built: svg(W, H, field()),
     damaged: svg(W, H, field(), damageMarks(4, 30, 56, 42)),
     crops: svg(W, H, crops()),

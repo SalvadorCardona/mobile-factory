@@ -4,7 +4,8 @@
  * Le plus grand volume du jeu (emprise 3 × 3) : un grand bloc jaune aux
  * angles larges, un toit corail à deux pans, une terrasse à rambarde, une
  * échelle, une antenne, et le drapeau cyan tout en haut — on la retrouve de
- * loin. Son chantier est celui de la maquette validée.
+ * loin. Son chantier est celui de la maquette validée, plus un panneau au
+ * toit corail.
  *
  * Cadre 96 × 128 ; l'emprise occupe les 96 px du bas.
  */
@@ -23,7 +24,7 @@ import {
   windowPane,
 } from '../data/artDirection.ts';
 import type { SpriteProto } from '../data/sprites.ts';
-import { damageMarks, door, gableRoof, lifeAt, siteArt } from './building.ts';
+import { damageMarks, door, gableRoof, lifeAt, siteArt, siteSign } from './building.ts';
 
 const W = 96;
 const H = 128;
@@ -60,7 +61,7 @@ export const TOWN_HALL = {
   anchorX: 0,
   anchorY: 1,
   parts: {
-    site: svg(W, H, siteArt(W, H, FOOTPRINT)),
+    site: svg(W, H, siteArt(W, H, FOOTPRINT), siteSign(40, 96, gableRoof(42, 52, 102, 97))),
     built: svg(W, H, hall()),
     damaged: svg(W, H, hall(), damageMarks(6, 58, 84, 64)),
   },

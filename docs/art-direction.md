@@ -180,7 +180,10 @@ lisible : un bâtiment couvre exactement son emprise, et ce qui dépasse
 (toit, grue, drapeau) monte au-dessus des tuiles de derrière.
 
 - **Bâtiment** : cadre aussi large que l'emprise, plus haut qu'elle ; ancre
-  (0, 1), le bas du cadre est le bas de l'emprise.
+  (0, 1), le bas du cadre est le bas de l'emprise. Murs jaunes pour tous,
+  mais chacun a sa silhouette, une teinte d'accent que nul autre ne porte en
+  grand, et son propre chantier qui annonce le bâtiment fini (tableau dans
+  `src/art/building.ts`) ; `npm test` refuse deux bâtiments au même sprite.
 - **Personnage** : cadre 32 × 48, ancre aux pieds (0.5, 0.8) ; un enfant
   tient dans 32 × 32.
 - **Arbre, rocher** : posés au pied de leur tuile, ils peuvent monter
@@ -211,7 +214,8 @@ corps vers ce qu'il frappe ; un coup reçu fait gicler et reculer.
    et rangé dans un atlas. Le sol et le décor sont bakés par blocs de 16 × 16
    tuiles à une résolution plafonnée à 2.
 4. **La relecture** : `npm run art:sheet -- planche.svg` compose la planche
-   de tous les visuels ; `google-chrome --headless --screenshot=planche.png
+   de tous les visuels (`-- planche.svg 2 Bâtiments` : les bâtiments seuls,
+   un par ligne, dans leurs trois états et en vignette) ; `google-chrome --headless --screenshot=planche.png
    --window-size=L,H planche.svg` la convertit en PNG, à ouvrir avec `Read`.
 
 Coût mesuré (Chrome, écran de téléphone 390 × 844) : ~100 images tiennent
