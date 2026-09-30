@@ -141,6 +141,14 @@ export const LORE = {
         'Une plateforme de planches sur quatre poteaux, avec un arc et un carquois. ' +
         'Elle tire seule sur tout mutant qui passe à sa portée.',
       effect: 'Tire sur les mutants à 8 cases.',
+      /** Le niveau 2, gagné depuis la fenêtre de la tour : `BUILDINGS.watchtower.upgrades`. */
+      reinforced: {
+        name: 'Tour de guet renforcée',
+        action: 'Renforcer',
+        description:
+          'Une tour de guet blindée de plaques de fer. Son arc porte plus loin ' +
+          'et tire plus vite que celui d’une tour de planches.',
+      },
     },
     forge: {
       name: 'Forge',
@@ -149,14 +157,6 @@ export const LORE = {
         'Un four de pierre, une cheminée qui fume et une enclume. Deux minerais de fer ' +
         'et un charbon y deviennent une plaque de fer.',
       effect: '2 fer + 1 charbon → 1 plaque de fer.',
-    },
-    reinforcedTower: {
-      name: 'Tour de guet renforcée',
-      site: 'Les pilotis d’une tour, et des plaques de fer à visser sur la plateforme.',
-      description:
-        'Une tour de guet blindée de plaques de fer. Son arc porte plus loin ' +
-        'et tire plus vite que celui d’une tour de planches.',
-      effect: 'Tire sur les mutants à 10 cases, 30 % plus vite.',
     },
     clinic: {
       name: 'Clinique',

@@ -391,6 +391,7 @@ function wireAudio(world: World, audio: AudioEngine, hud: Hud): void {
   world.events.on('townDeposited', () => audio.play('deliver'));
   world.events.on('itemDropped', () => audio.play('pickup'));
   world.events.on('buildingCompleted', () => audio.play('build'));
+  world.events.on('buildingUpgraded', () => audio.play('upgrade'));
   world.events.on('arrowShot', () => audio.play('arrow'));
   world.events.on('mutantHit', () => audio.play('hit'));
   world.events.on('mutantDied', () => audio.play('die'));
@@ -455,6 +456,9 @@ function wireSave(world: World, saves: LocalSave, started: () => boolean): Autos
   };
 
   world.events.on('buildingCompleted', () => {
+    due = true;
+  });
+  world.events.on('buildingUpgraded', () => {
     due = true;
   });
   const waveOver = (): void => {
@@ -548,6 +552,17 @@ function wireParticles(world: World, renderer: GameRenderer): void {
       particles.burst((entity.tx + i) * TILE_SIZE, (entity.ty + entity.height) * TILE_SIZE, CELEBRATION_COLORS, 7, 0.16);
     }
   });
+  world.events.on('buildingUpgraded', ({ id }) => {
+    const entity = world.entities.get(id);
+
+    if (!entity) return;
+
+    // Des éclats de fer et des confettis qui sautent du haut de l'emprise : le blindage est vissé.
+    for (let i = 0; i <= entity.width; i += 1) {
+      particles.burst((entity.tx + i) * TILE_SIZE, entity.ty * TILE_SIZE, HARVEST_COLORS.ironPlate, 6, 0.14);
+      particles.burst((entity.tx + i) * TILE_SIZE, entity.ty * TILE_SIZE, CELEBRATION_COLORS, 5, 0.16);
+    }
+  });
   world.events.on('buildingDestroyed', ({ tx, ty }) =>
     particles.burst((tx + 1) * TILE_SIZE, (ty + 1) * TILE_SIZE, RUBBLE_COLORS, 16, 0.14),
   );
@@ -583,6 +598,7 @@ function wireShake(world: World, renderer: GameRenderer): void {
   world.events.on('buildingDestroyed', () => renderer.shake(0.6));
   world.events.on('waveStarted', () => renderer.shake(0.3));
   world.events.on('buildingCompleted', () => renderer.shake(0.18));
+  world.events.on('buildingUpgraded', () => renderer.shake(0.12));
   world.events.on('townHallDestroyed', () => renderer.shake(1));
   world.events.on('playerHurt', () => renderer.shake(0.12));
   world.events.on('playerKnockedOut', () => renderer.shake(0.4));

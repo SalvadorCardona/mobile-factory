@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_SIZE, tileToChunk, worldToTile } from '../core/grid.ts';
-import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
+import { BUILDINGS, type BuildingId, type BuildingProto } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
 import { RECIPES } from '../data/recipes.ts';
 import { RESOURCES } from '../data/resources.ts';
@@ -1236,9 +1236,12 @@ describe('forge', () => {
 });
 
 describe('débouchés', () => {
-  it('donne un usage à chaque objet récoltable : un coût ou une entrée de recette', () => {
+  it('donne un usage à chaque objet récoltable : un coût, une amélioration ou une entrée de recette', () => {
     const consumed = new Set<string>([
-      ...Object.values(BUILDINGS).flatMap((building) => Object.keys(building.cost)),
+      ...(Object.values(BUILDINGS) as BuildingProto[]).flatMap((building) => [
+        ...Object.keys(building.cost),
+        ...building.upgrades.flatMap((upgrade) => Object.keys(upgrade.cost)),
+      ]),
       ...Object.values(RECIPES).flatMap((recipe) => Object.keys(recipe.inputs)),
     ]);
 

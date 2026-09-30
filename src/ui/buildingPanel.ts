@@ -22,11 +22,16 @@
  * Sur le labo de recherche, la fenêtre devient le panneau Recherche
  * (`researchPanel.ts`) : la recherche en cours et la liste des recherches.
  *
+ * Un bâtiment qui a des niveaux (`BUILDINGS[proto].upgrades`) montre en plus
+ * le suivant : ce qu'il apporte, son coût — ce qui manque en rouge — et son
+ * bouton (« Renforcer » pour la tour de guet), qui pousse `upgradeBuilding`.
+ * Au dernier niveau, le bouton reste, grisé : « Niveau max ».
+ *
  * Elle **lit** le monde à chaque frame tant qu'elle est ouverte, et se ferme
  * seule si l'entité disparaît — rasée par un mutant, par exemple.
  */
 
-import { BUILDINGS } from '../data/buildings.ts';
+import { BUILDINGS, buildingLevel, nextUpgrade, type BuildingLevel } from '../data/buildings.ts';
 import { CLINIC } from '../data/clinic.ts';
 import { ITEMS, type ItemId } from '../data/items.ts';
 import { RECIPES, type RecipeProto } from '../data/recipes.ts';
@@ -54,8 +59,13 @@ export class BuildingPanel {
   private readonly depositButton: HTMLButtonElement;
   /** Le panneau Recherche, que seule la fenêtre du labo montre. */
   private readonly research: ResearchPanel;
+  private readonly upgrade: HTMLElement;
+  private readonly upgradeEffect: HTMLElement;
+  private readonly upgradeCost: HTMLElement;
+  private readonly upgradeButton: HTMLButtonElement;
   private lastText = '';
   private lastItems = '';
+  private lastUpgrade = '';
 
   private entityId: EntityId | null = null;
 
@@ -132,7 +142,28 @@ export class BuildingPanel {
     this.research = new ResearchPanel(world);
     this.research.root.hidden = true;
 
-    this.root.append(header, this.description, this.bar, this.items, this.lines, this.actions, this.research.root);
+    this.upgrade = document.createElement('div');
+    this.upgrade.className = 'building-panel-upgrade';
+
+    this.upgradeEffect = document.createElement('p');
+    this.upgradeEffect.className = 'building-panel-upgrade-effect';
+
+    this.upgradeCost = document.createElement('div');
+    this.upgradeCost.className = 'building-panel-items';
+
+    const upgradeActions = document.createElement('div');
+
+    upgradeActions.className = 'building-panel-actions';
+    this.upgradeButton = document.createElement('button');
+    this.upgradeButton.type = 'button';
+    this.upgradeButton.dataset['tone'] = 'upgrade';
+    this.upgradeButton.addEventListener('click', () => {
+      if (this.entityId !== null) this.world.push({ type: 'upgradeBuilding', id: this.entityId });
+    });
+    upgradeActions.append(this.upgradeButton);
+    this.upgrade.append(this.upgradeEffect, this.upgradeCost, upgradeActions);
+
+    this.root.append(header, this.description, this.bar, this.items, this.lines, this.actions, this.upgrade, this.research.root);
   }
 
   public get open(): boolean {
@@ -153,7 +184,7 @@ export class BuildingPanel {
     this.root.hidden = false;
     this.lastText = '';
     this.lastItems = '';
-    this.title.textContent = BUILDINGS[entity.proto].label;
+    this.lastUpgrade = '';
     this.refresh(entity);
     this.onOpen();
   }
@@ -184,7 +215,8 @@ export class BuildingPanel {
 
     const inReach = this.world.inReach(entity);
 
-    // Le chantier devient le bâtiment sous le même id : le texte suit.
+    // Le chantier devient le bâtiment sous le même id, le bâtiment change de niveau : le texte suit.
+    this.title.textContent = entity.kind === 'site' ? proto.label : buildingLevel(entity.proto, entity.level).label;
     this.description.textContent = panelDescription(entity);
 
     // Le labo fini : sa fenêtre devient le panneau Recherche, qui a besoin de toute la place.
@@ -226,10 +258,13 @@ export class BuildingPanel {
       this.transferButton.disabled = !inReach || !canGive;
       this.takeButton.hidden = true;
       this.depositButton.hidden = true;
+      this.upgrade.hidden = true;
     } else {
-      ratio = entity.hp / proto.hp;
+      const level = buildingLevel(entity.proto, entity.level);
+
+      ratio = entity.hp / level.hp;
       barClass = 'hp';
-      lines.push(`Points de vie ${entity.hp}/${proto.hp}`);
+      lines.push(`Points de vie ${entity.hp}/${level.hp}`);
       if (proto.workers > 0) lines.push(`${proto.workers} ouvriers y travaillent.`);
 
       // Une foreuse, une ferme ou une forge produit dans son coffre : Adam vient le vider.
@@ -289,7 +324,7 @@ export class BuildingPanel {
           break;
 
         case 'tower': {
-          const weapon = proto.weapon ? WEAPONS[proto.weapon] : null;
+          const weapon = level.weapon ? WEAPONS[level.weapon] : null;
 
           if (weapon) lines.push(`${weapon.label} — portée ${weapon.range} tuiles`);
           lines.push(entity.armed ? 'En alerte : des mutants approchent.' : 'En veille.');
@@ -335,6 +370,7 @@ export class BuildingPanel {
       } else {
         this.setItems([], 'none');
       }
+      this.refreshUpgrade(entity, inReach);
     }
 
     const text = lines.filter(Boolean).join('\n');
@@ -344,6 +380,57 @@ export class BuildingPanel {
     this.lines.textContent = text;
     this.bar.dataset['kind'] = barClass;
     this.barFill.style.width = `${Math.round(Math.max(0, Math.min(1, ratio)) * 100)}%`;
+  }
+
+  /** Le niveau suivant : ce qu'il apporte, ce qu'il coûte, ce qui manque ; ou « Niveau max ». */
+  private refreshUpgrade(entity: Exclude<Entity, { kind: 'site' }>, inReach: boolean): void {
+    const proto = BUILDINGS[entity.proto];
+    const upgrade = nextUpgrade(entity.proto, entity.level);
+
+    this.upgrade.hidden = proto.upgrades.length === 0;
+    if (this.upgrade.hidden) return;
+
+    const missing = this.world.upgradeMissing(entity) ?? {};
+    const short = Object.keys(missing).length > 0;
+
+    this.upgradeButton.disabled = !upgrade || !inReach || short;
+
+    const key = `${entity.id}:${entity.level}:${inReach}:${JSON.stringify(missing)}`;
+
+    if (key === this.lastUpgrade) return;
+    this.lastUpgrade = key;
+
+    if (!upgrade) {
+      this.upgradeEffect.textContent = '';
+      this.upgradeEffect.hidden = true;
+      this.upgradeCost.replaceChildren();
+      this.upgradeCost.hidden = true;
+      this.upgradeButton.textContent = 'Niveau max';
+      return;
+    }
+
+    this.upgradeEffect.hidden = false;
+    this.upgradeEffect.textContent = `${upgrade.action} : ${upgradeEffect(buildingLevel(entity.proto, entity.level), upgrade)}${
+      inReach ? '' : ' — rapprochez-vous.'
+    }`;
+    this.upgradeCost.hidden = false;
+    this.upgradeCost.replaceChildren(
+      ...(Object.entries(upgrade.cost) as [ItemId, number][]).map(([item, needed]) => {
+        const row = itemAmount(item, needed);
+        const lacking = missing[item] ?? 0;
+
+        if (lacking > 0) {
+          const note = document.createElement('span');
+
+          row.dataset['missing'] = 'true';
+          note.className = 'item-missing';
+          note.textContent = `manque ${lacking}`;
+          row.append(note);
+        }
+        return row;
+      }),
+    );
+    this.upgradeButton.textContent = upgrade.action;
   }
 
   /** Les lignes d'objets ne sont reconstruites que si leur clé change. */
@@ -359,11 +446,27 @@ export class BuildingPanel {
   }
 }
 
-/** Texte d'inspection : celui du chantier tant qu'il en est un, celui du bâtiment ensuite. */
+/** Texte d'inspection : celui du chantier tant qu'il en est un, celui du bâtiment à son niveau ensuite. */
 export function panelDescription(entity: Entity): string {
-  const proto = BUILDINGS[entity.proto];
+  return entity.kind === 'site' ? BUILDINGS[entity.proto].siteDescription : buildingLevel(entity.proto, entity.level).description;
+}
 
-  return entity.kind === 'site' ? proto.siteDescription : proto.description;
+/** Ce qu'apporte un niveau : « PV 60 → 90, portée 8 → 10, cadence +29 % ». */
+export function upgradeEffect(from: BuildingLevel, to: BuildingLevel): string {
+  const parts: string[] = [];
+
+  if (to.hp !== from.hp) parts.push(`PV ${from.hp} → ${to.hp}`);
+
+  const before = from.weapon ? WEAPONS[from.weapon] : null;
+  const after = to.weapon ? WEAPONS[to.weapon] : null;
+
+  if (after && after.range !== before?.range) parts.push(`portée ${before?.range ?? 0} → ${after.range}`);
+  if (before && after && after.cooldown !== before.cooldown) {
+    const faster = Math.round((before.cooldown / after.cooldown - 1) * 100);
+
+    parts.push(`cadence ${faster > 0 ? '+' : ''}${faster} %`);
+  }
+  return parts.join(', ');
 }
 
 /** « 2 minerai de fer + 1 charbon » à partir des quantités d'une recette. */

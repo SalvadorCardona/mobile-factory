@@ -68,7 +68,34 @@ export interface BuildingProto {
   sprite: SpriteId;
   /** Arme automatique du bâtiment, ou `null` s'il n'en porte pas. */
   weapon: WeaponId | null;
+  /**
+   * Niveaux d'amélioration au-delà du premier, dans l'ordre : `upgrades[0]`
+   * est le niveau 2. Ils se gagnent depuis la fenêtre du bâtiment fini, contre
+   * leur `cost`. Vide pour un bâtiment qui ne s'améliore pas.
+   */
+  upgrades: readonly BuildingUpgrade[];
 }
+
+/**
+ * Un niveau d'amélioration : ce qu'il coûte depuis le niveau d'avant, et ce
+ * qu'il remplace dans le prototype — points de vie, arme, sprite, textes.
+ */
+export interface BuildingUpgrade {
+  /** Nom du bâtiment à ce niveau : le titre de sa fenêtre. */
+  label: string;
+  /** Verbe du bouton qui y mène : « Renforcer ». */
+  action: string;
+  /** Texte de la fenêtre d'inspection à ce niveau. */
+  description: string;
+  /** Payé d'un coup, comme un « Transférer » : le sac d'abord, puis la ville si elle est à portée. */
+  cost: Partial<Record<ItemId, number>>;
+  hp: number;
+  weapon: WeaponId | null;
+  sprite: SpriteId;
+}
+
+/** Ce qui change d'un niveau à l'autre, lu par la simulation et le rendu. */
+export type BuildingLevel = Pick<BuildingUpgrade, 'label' | 'description' | 'hp' | 'weapon' | 'sprite'>;
 
 export const BUILDINGS = {
   townHall: {
@@ -90,6 +117,7 @@ export const BUILDINGS = {
     unlockNight: 0,
     sprite: 'townHall',
     weapon: null,
+    upgrades: [],
   },
   drill: {
     label: LORE.buildings.drill.name,
@@ -110,6 +138,7 @@ export const BUILDINGS = {
     unlockNight: 0,
     sprite: 'drill',
     weapon: null,
+    upgrades: [],
   },
   nursery: {
     label: LORE.buildings.nursery.name,
@@ -130,6 +159,7 @@ export const BUILDINGS = {
     unlockNight: 0,
     sprite: 'nursery',
     weapon: null,
+    upgrades: [],
   },
   builderHouse: {
     label: LORE.buildings.builderHouse.name,
@@ -150,6 +180,7 @@ export const BUILDINGS = {
     unlockNight: 0,
     sprite: 'builderHouse',
     weapon: null,
+    upgrades: [],
   },
   farm: {
     label: LORE.buildings.farm.name,
@@ -170,6 +201,7 @@ export const BUILDINGS = {
     unlockNight: 0,
     sprite: 'farm',
     weapon: null,
+    upgrades: [],
   },
   watchtower: {
     label: LORE.buildings.watchtower.name,
@@ -190,6 +222,18 @@ export const BUILDINGS = {
     unlockNight: 0,
     sprite: 'watchtower',
     weapon: 'towerBow',
+    // Le coût est celui de l'ancienne tour renforcée, moins la tour de planches déjà debout.
+    upgrades: [
+      {
+        label: LORE.buildings.watchtower.reinforced.name,
+        action: LORE.buildings.watchtower.reinforced.action,
+        description: LORE.buildings.watchtower.reinforced.description,
+        cost: { stone: 2, ironPlate: 4 },
+        hp: 90,
+        weapon: 'reinforcedBow',
+        sprite: 'reinforcedTower',
+      },
+    ],
   },
   forge: {
     label: LORE.buildings.forge.name,
@@ -210,26 +254,7 @@ export const BUILDINGS = {
     unlockNight: 1,
     sprite: 'forge',
     weapon: null,
-  },
-  reinforcedTower: {
-    label: LORE.buildings.reinforcedTower.name,
-    siteDescription: LORE.buildings.reinforcedTower.site,
-    description: LORE.buildings.reinforcedTower.description,
-    effect: LORE.buildings.reinforcedTower.effect,
-    kind: 'tower',
-    width: 2,
-    height: 2,
-    cost: { wood: 10, stone: 6, ironPlate: 4 },
-    storage: 0,
-    logisticRadius: 0,
-    hp: 90,
-    workers: 0,
-    menu: true,
-    unique: false,
-    plan: false,
-    unlockNight: 1,
-    sprite: 'reinforcedTower',
-    weapon: 'reinforcedBow',
+    upgrades: [],
   },
   clinic: {
     label: LORE.buildings.clinic.name,
@@ -250,6 +275,7 @@ export const BUILDINGS = {
     unlockNight: 1,
     sprite: 'clinic',
     weapon: null,
+    upgrades: [],
   },
   lab: {
     label: LORE.buildings.lab.name,
@@ -280,6 +306,27 @@ export const BUILDING_IDS = Object.keys(BUILDINGS) as BuildingId[];
 
 /** Bâtiments proposés dans le menu, dans l'ordre de déclaration. */
 export const MENU_BUILDING_IDS = BUILDING_IDS.filter((id) => BUILDINGS[id].menu);
+
+/** Le niveau le plus haut qu'atteint le bâtiment : 1 s'il ne s'améliore pas. */
+export function maxLevel(id: BuildingId): number {
+  const proto: BuildingProto = BUILDINGS[id];
+
+  return proto.upgrades.length + 1;
+}
+
+/** Le bâtiment à ce niveau (1 = tel que bâti). */
+export function buildingLevel(id: BuildingId, level: number): BuildingLevel {
+  const proto: BuildingProto = BUILDINGS[id];
+
+  return proto.upgrades[level - 2] ?? proto;
+}
+
+/** L'amélioration qui suit ce niveau, ou `null` au niveau maximal. */
+export function nextUpgrade(id: BuildingId, level: number): BuildingUpgrade | null {
+  const proto: BuildingProto = BUILDINGS[id];
+
+  return proto.upgrades[level - 1] ?? null;
+}
 
 export function isBuildingId(value: string): value is BuildingId {
   return value in BUILDINGS;

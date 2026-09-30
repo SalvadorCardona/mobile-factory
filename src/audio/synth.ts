@@ -16,6 +16,7 @@ export type SoundName =
   | 'rock'
   | 'deliver'
   | 'build'
+  | 'upgrade'
   | 'arrow'
   | 'hit'
   | 'die'
@@ -147,6 +148,17 @@ export const SOUNDS: Record<SoundName, (ctx: AudioContext, out: AudioNode, at: n
   build(ctx, out, at) {
     for (const [i, f] of [523, 659, 784, 1047].entries()) {
       tone(ctx, out, at + i * 0.09, 'triangle', f, f, { decay: 0.18, peak: 0.35 });
+    }
+  },
+
+  /** Bâtiment amélioré : deux coups de marteau sur du fer, puis les notes du chantier achevé, une octave plus haut. */
+  upgrade(ctx, out, at) {
+    for (const i of [0, 1]) {
+      burst(ctx, out, at + i * 0.1, 'bandpass', 3600, 2400, { decay: 0.05, peak: 0.6 });
+      tone(ctx, out, at + i * 0.1, 'square', 1250, 1180, { decay: 0.08, peak: 0.15 });
+    }
+    for (const [i, f] of [784, 1047, 1319].entries()) {
+      tone(ctx, out, at + 0.24 + i * 0.08, 'triangle', f, f, { decay: 0.2, peak: 0.3 });
     }
   },
 

@@ -117,5 +117,8 @@ export const WALKER_PARTS = ['down', 'up', 'side', 'foot'] as const;
 /** Les morceaux qu'un bâtiment doit fournir. */
 export const BUILDING_PARTS = ['site', 'built', 'damaged'] as const;
 
+/** Ceux d'un niveau d'amélioration : il n'a pas de chantier, le bâtiment change sur place. */
+export const UPGRADE_PARTS = ['built', 'damaged'] as const;
+
 /** Les morceaux qu'une ressource de surface doit fournir. */
 export const RESOURCE_PARTS = ['full', 'damaged'] as const;

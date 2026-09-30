@@ -6,7 +6,7 @@ import { inLogisticRange } from './warehouse.ts';
 
 /** Une mairie finie en (0, 0), et un chantier de 2 × 2 posé en (tx, ty). */
 function hall(): Entity {
-  return { kind: 'townHall', id: 1, proto: 'townHall', tx: 0, ty: 0, width: 3, height: 3, store: new Store(Infinity), hp: 1 };
+  return { kind: 'townHall', id: 1, proto: 'townHall', tx: 0, ty: 0, width: 3, height: 3, store: new Store(Infinity), hp: 1, level: 1 };
 }
 
 function site(tx: number, ty: number): Entity {

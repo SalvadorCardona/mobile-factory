@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
+import { BUILDINGS, buildingLevel, nextUpgrade, type BuildingId } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
 import { World } from '../sim/world.ts';
-import { panelDescription } from './buildingPanel.ts';
+import { panelDescription, upgradeEffect } from './buildingPanel.ts';
 
 describe('panelDescription', () => {
   it('chaque bâtiment a deux textes distincts, chantier et bâtiment fini', () => {
@@ -38,5 +38,11 @@ describe('panelDescription', () => {
     if (!hall) return;
     expect(panelDescription(hall)).toBe(BUILDINGS.townHall.description);
     expect(panelDescription(hall)).not.toBe(BUILDINGS.townHall.siteDescription);
+  });
+});
+
+describe('upgradeEffect', () => {
+  it('dit ce qu’apporte le renforcement d’une tour : PV, portée, cadence', () => {
+    expect(upgradeEffect(buildingLevel('watchtower', 1), nextUpgrade('watchtower', 1)!)).toBe('PV 60 → 90, portée 8 → 10, cadence +29 %');
   });
 });

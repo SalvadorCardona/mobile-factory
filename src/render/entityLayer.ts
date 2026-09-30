@@ -20,6 +20,9 @@
  * devant quand il est en dessous. Les arbres et les rochers
  * (`resourceLayer.ts`) et les mobiles partagent ce conteneur.
  *
+ * Un bâtiment amélioré (`buildingUpgraded`) change de sprite sur place : celui
+ * de son niveau (`BUILDINGS[proto].upgrades`), et il rebondit comme à l'achèvement.
+ *
  * Le ressenti : un bâtiment achevé « pousse » (il sort du sol en rebondissant),
  * un bâtiment frappé rougit et tremble. Les deux sont des minuteurs de vue,
  * en millisecondes d'écran — la simulation n'en sait rien.
@@ -28,8 +31,8 @@
 import { Container, Graphics, Sprite, type Ticker } from 'pixi.js';
 import { TILE_SIZE, floorDiv } from '../core/grid.ts';
 import { LIGHT, PALETTE, hex } from '../data/artDirection.ts';
-import { BUILDINGS } from '../data/buildings.ts';
-import { SPRITES, type SpriteProto } from '../data/sprites.ts';
+import { BUILDINGS, buildingLevel } from '../data/buildings.ts';
+import { SPRITES, type SpriteId, type SpriteProto } from '../data/sprites.ts';
 import type { Entity, EntityId } from '../sim/types.ts';
 import { terrainAt } from '../sim/terrain.ts';
 import { siteMissing, type World } from '../sim/world.ts';
@@ -126,6 +129,13 @@ export class EntityLayer {
 
       if (view) view.pop = POP_MS;
     });
+    world.events.on('buildingUpgraded', ({ id }) => {
+      this.replace(id);
+
+      const view = this.views.get(id);
+
+      if (view) view.pop = POP_MS;
+    });
     world.events.on('buildingDamaged', ({ id }) => {
       const view = this.views.get(id);
 
@@ -174,10 +184,10 @@ export class EntityLayer {
 
   private build(entity: Entity): EntityView {
     const root = new Container();
-    const proto = BUILDINGS[entity.proto];
-    const art: SpriteProto = SPRITES[proto.sprite];
+    const sprite = spriteOf(entity);
+    const art: SpriteProto = SPRITES[sprite];
     const shown = entity.kind === 'site' ? 'site' : this.faceOf(entity);
-    const main = footSprite(this.library.texture(`${proto.sprite}.${shown}`), entity);
+    const main = footSprite(this.library.texture(`${sprite}.${shown}`), entity);
     const moving = entity.kind === 'site' ? null : (['wheel', 'crops', 'smoke'] as const).find((part) => art.parts[part]) ?? null;
     let movingSprite: Sprite | null = null;
 
@@ -186,7 +196,7 @@ export class EntityLayer {
     if (moving) {
       const [px, py] = art.pivots?.[moving] ?? [0, art.height];
 
-      movingSprite = new Sprite(this.library.texture(`${proto.sprite}.${moving}`));
+      movingSprite = new Sprite(this.library.texture(`${sprite}.${moving}`));
       movingSprite.anchor.set(px / art.width, py / art.height);
       movingSprite.position.set(px, entity.height * TILE_SIZE - art.height + py);
       root.addChild(movingSprite);
@@ -229,7 +239,7 @@ export class EntityLayer {
 
   /** Fini ou cabossé, selon ce qu'il reste de points de vie. */
   private faceOf(entity: Exclude<Entity, { kind: 'site' }>): 'built' | 'damaged' {
-    return entity.hp <= BUILDINGS[entity.proto].hp * DAMAGED_RATIO ? 'damaged' : 'built';
+    return entity.hp <= buildingLevel(entity.proto, entity.level).hp * DAMAGED_RATIO ? 'damaged' : 'built';
   }
 
   private drawBar(view: EntityView, entity: Entity): void {
@@ -242,7 +252,7 @@ export class EntityLayer {
       ratio = total === 0 ? 1 : 1 - siteMissing(entity) / total;
       color = PROGRESS_FG;
     } else {
-      const max = BUILDINGS[entity.proto].hp;
+      const max = buildingLevel(entity.proto, entity.level).hp;
 
       ratio = entity.hp / max;
       color = HP_FG;
@@ -261,7 +271,7 @@ export class EntityLayer {
     // Une capsule blanche et son remplissage, flottant au-dessus du bâtiment — comme la maquette.
     const width = Math.min(72, entity.width * TILE_SIZE - 12);
     const x = (entity.width * TILE_SIZE - width) / 2;
-    const y = entity.height * TILE_SIZE - SPRITES[BUILDINGS[entity.proto].sprite].height - 12;
+    const y = entity.height * TILE_SIZE - SPRITES[spriteOf(entity)].height - 12;
     const fill = Math.max(0, Math.min(1, ratio)) * (width - 4);
 
     view.bar.clear().roundRect(x, y, width, 8, 4).fill(BAR_TRACK);
@@ -301,7 +311,7 @@ export class EntityLayer {
 
         if (face !== view.shown) {
           view.shown = face;
-          view.main.texture = this.library.texture(`${BUILDINGS[entity.proto].sprite}.${face}`);
+          view.main.texture = this.library.texture(`${spriteOf(entity)}.${face}`);
         }
       }
 
@@ -322,7 +332,7 @@ export class EntityLayer {
     if (!blocked) return;
 
     // La pointe touche le haut du toit ; au-dessus de la barre de vie quand elle est là.
-    const top = entity.height * TILE_SIZE - SPRITES[BUILDINGS[entity.proto].sprite].height;
+    const top = entity.height * TILE_SIZE - SPRITES[spriteOf(entity)].height;
 
     view.full.y = top + FULL_DIP - (view.bar.visible ? FULL_ABOVE_BAR : 0) + Math.sin(now * 0.004) * 2;
   }
@@ -410,4 +420,9 @@ function footSprite(texture: Sprite['texture'], entity: Entity): Sprite {
   sprite.anchor.set(0, 1);
   sprite.y = entity.height * TILE_SIZE;
   return sprite;
+}
+
+/** Le sprite d'un chantier est celui du prototype ; celui d'un bâtiment fini, celui de son niveau. */
+function spriteOf(entity: Entity): SpriteId {
+  return entity.kind === 'site' ? BUILDINGS[entity.proto].sprite : buildingLevel(entity.proto, entity.level).sprite;
 }

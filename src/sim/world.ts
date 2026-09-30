@@ -33,7 +33,7 @@
 import { Emitter } from '../core/events.ts';
 import { CHUNK_TILES, TILE_SIZE, coordKey, distanceSq, floorDiv, type TileCoord } from '../core/grid.ts';
 import { mulberry32, type StatefulRng } from '../core/rng.ts';
-import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
+import { BUILDINGS, buildingLevel, nextUpgrade, type BuildingId } from '../data/buildings.ts';
 import { CLINIC } from '../data/clinic.ts';
 import { DAWN_REWARD } from '../data/dayNight.ts';
 import { ENEMIES, LOOT_DROPS, WAVES, WILDLIFE, WILDLIFE_SPAWN, waveSize, type LootTable } from '../data/enemies.ts';
@@ -66,6 +66,7 @@ import type {
   SiteRejection,
   SupplyRejection,
   TakeRejection,
+  UpgradeRejection,
 } from './commands.ts';
 import type { WildlifeId } from '../data/enemies.ts';
 import { compassOf, spawnPoint, stepMutant, type Compass } from './enemies.ts';
@@ -219,6 +220,13 @@ export type WorldEvents = {
   siteDelivered: { id: EntityId; item: ItemId; amount: number; missing: number; source: 'bag' | 'town' };
   /** Un chantier offert par le jardin des souvenirs vient d'ouvrir déjà livré. */
   siteReady: { id: EntityId };
+  /**
+   * Le bâtiment est passé au niveau `level`, sous le même id : le rendu
+   * change de sprite. `fromBag` : ce qui est sorti du sac pour le payer.
+   */
+  buildingUpgraded: { id: EntityId; level: number; fromBag: [ItemId, number][] };
+  /** Une amélioration a été refusée. */
+  upgradeRejected: { id: EntityId; reason: UpgradeRejection };
   /** Une commande sur un chantier a été refusée. */
   siteRejected: { id: EntityId; reason: SiteRejection };
   /** La ferme a récolté. */
@@ -634,6 +642,10 @@ export class World {
         this.dropFromBag(command.item);
         break;
 
+      case 'upgradeBuilding':
+        this.upgrade(command.id);
+        break;
+
       case 'applyPerks':
         this.applyPerks(command.perks);
         break;
@@ -766,6 +778,69 @@ export class World {
     return Math.max(0, needed - (site.delivered[item] ?? 0));
   }
 
+  /* ------------------------------------------------------------ amélioration */
+
+  /**
+   * Ce qui manque, objet par objet, pour payer le niveau suivant : ni dans
+   * le sac, ni dans le disponible de la ville à portée. Vide si tout y est ;
+   * `null` si le bâtiment ne peut plus monter. L'UI écrit ces manques en
+   * rouge, le tick décide sur la même réponse.
+   */
+  public upgradeMissing(building: Building): Partial<Record<ItemId, number>> | null {
+    const upgrade = nextUpgrade(building.proto, building.level);
+
+    if (!upgrade) return null;
+
+    const town = this.townStockFor(building);
+    const missing: Partial<Record<ItemId, number>> = {};
+
+    for (const [item, needed] of Object.entries(upgrade.cost) as [ItemId, number][]) {
+      const short = needed - this.player.inventory.available(item) - (town?.available(item) ?? 0);
+
+      if (short > 0) missing[item] = short;
+    }
+    return missing;
+  }
+
+  /**
+   * Le niveau suivant, tout de suite, contre son coût entier : le sac
+   * d'abord, puis la ville — comme un « Transférer » sur un chantier. Les
+   * points de vie gardent leur proportion : une tour à moitié cassée le
+   * reste, sur un maximum plus haut.
+   */
+  private upgrade(id: EntityId): void {
+    const building = this.entities.get(id);
+    const reject = (reason: UpgradeRejection): void => this.events.emit('upgradeRejected', { id, reason });
+
+    if (!building || building.kind === 'site') return reject('missing');
+    if (!this.inReach(building)) return reject('outOfReach');
+
+    const upgrade = nextUpgrade(building.proto, building.level);
+    const missing = this.upgradeMissing(building);
+
+    if (!upgrade || !missing) return reject('maxLevel');
+    if (Object.keys(missing).length > 0) return reject('missingItems');
+
+    const town = this.townStockFor(building);
+    const fromBag: [ItemId, number][] = [];
+
+    for (const [item, needed] of Object.entries(upgrade.cost) as [ItemId, number][]) {
+      const bag = Math.min(needed, this.player.inventory.available(item));
+
+      if (bag > 0) {
+        this.player.inventory.remove(item, bag);
+        fromBag.push([item, bag]);
+      }
+      if (needed > bag) town?.remove(item, needed - bag);
+    }
+
+    const before = buildingLevel(building.proto, building.level).hp;
+
+    building.level += 1;
+    building.hp = Math.max(1, Math.round((building.hp / before) * upgrade.hp));
+    this.events.emit('buildingUpgraded', { id, level: building.level, fromBag });
+  }
+
   /* ------------------------------------------------------- ville et sac */
 
   /**
@@ -796,15 +871,15 @@ export class World {
    * rayon, on livre à la main ou par les porteurs : un stock global trop
    * pratique les rendrait inutiles.
    */
-  private townStockFor(site: Site): Store | null {
+  private townStockFor(entity: Entity): Store | null {
     const hall = this.warehouse();
 
-    return hall && inLogisticRange(hall, site) ? hall.store : null;
+    return hall && inLogisticRange(hall, entity) ? hall.store : null;
   }
 
-  /** Le chantier est-il dans le rayon de la mairie finie ? */
-  public inTownRange(site: Site): boolean {
-    return this.townStockFor(site) !== null;
+  /** Le chantier (ou le bâtiment) est-il dans le rayon de la mairie finie ? */
+  public inTownRange(entity: Entity): boolean {
+    return this.townStockFor(entity) !== null;
   }
 
   /** Ce qui manquerait encore au chantier après « Transférer » : ni dans le sac, ni dans la ville à sa portée. */
@@ -1513,6 +1588,7 @@ export class World {
       height: site.height,
       store: new Store(proto.storage),
       hp: proto.hp,
+      level: 1,
     };
     let building: Building;
 
@@ -1815,7 +1891,7 @@ export class World {
   private runTower(tower: Tower): void {
     tower.armed = false;
 
-    const weapon = BUILDINGS[tower.proto].weapon;
+    const { weapon } = buildingLevel(tower.proto, tower.level);
 
     if (!weapon) return;
 
@@ -2373,7 +2449,7 @@ export class World {
         const target = eve.targetId === null ? undefined : this.entities.get(eve.targetId);
 
         // Réparé, rasé, ou une vague qui arrive : elle rentre.
-        if (!target || target.kind === 'site' || target.hp >= BUILDINGS[target.proto].hp || this.hasMutants()) {
+        if (!target || target.kind === 'site' || target.hp >= buildingLevel(target.proto, target.level).hp || this.hasMutants()) {
           eve.state = 'idle';
           eve.targetId = null;
           break;
@@ -2385,7 +2461,7 @@ export class World {
           eve.repairCooldown -= 1;
           break;
         }
-        target.hp = Math.min(BUILDINGS[target.proto].hp, target.hp + EVE.repairAmount);
+        target.hp = Math.min(buildingLevel(target.proto, target.level).hp, target.hp + EVE.repairAmount);
         eve.repairCooldown = EVE.repairTicks;
         this.events.emit('buildingRepaired', { id: target.id, hp: target.hp });
         break;
