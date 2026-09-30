@@ -25,6 +25,8 @@ export interface EnemyProto {
   /** Demi-largeur et demi-hauteur de la boîte de collision, en pixels monde. */
   halfW: number;
   halfH: number;
+  /** Ce qu'il lâche au sol en tombant (`LOOT_DROPS`). */
+  loot: LootTable;
 }
 
 export const ENEMIES = {
@@ -37,6 +39,12 @@ export const ENEMIES = {
     sprite: 'mutant',
     halfW: 8,
     halfH: 6,
+    // De la ferraille à coup sûr, parfois un bout de charbon, rarement une plaque encore droite.
+    loot: [
+      { item: 'ironOre', min: 1, max: 2, chance: 1 },
+      { item: 'coal', min: 1, max: 1, chance: 0.35 },
+      { item: 'ironPlate', min: 1, max: 1, chance: 0.08 },
+    ],
   },
 } as const satisfies Record<string, EnemyProto>;
 
@@ -73,20 +81,47 @@ export const WAVES = {
   emergeStagger: 6,
 } as const;
 
+/* ------------------------------------------------------------------ butin */
+
 /**
- * Le butin des mutants : chacun lâche un objet là où il tombe, et Adam le
- * ramasse en marchant dessus. Un seul objet, pioché dans des matériaux que
- * la colonie connaît déjà — de quoi donner une raison de revenir à la mairie
- * sans remplacer la récolte.
+ * Une ligne d'une table de butin : avec la probabilité `chance`, l'ennemi
+ * lâche entre `min` et `max` exemplaires de `item`, bornes comprises.
  */
-export const MUTANT_LOOT = {
-  /** Ce qu'un mutant peut lâcher, à chances égales : ferraille, conserve, charbon. */
-  items: ['ironOre', 'food', 'coal'],
+export interface LootEntry {
+  item: ItemId;
+  min: number;
+  max: number;
+  /** Entre 0 (exclu) et 1 : 1, c'est à chaque fois. */
+  chance: number;
+}
+
+/** Chaque ligne se tire à part : un ennemi peut tout lâcher d'un coup. */
+export type LootTable = readonly LootEntry[];
+
+/**
+ * Le butin au sol : tout ennemi abattu — mutant, crabe, loup — lâche sa
+ * table là où il tombe, un objet par exemplaire, et Adam le ramasse en
+ * marchant dessus. Rien que des matériaux que la colonie connaît déjà — de
+ * quoi faire rapporter le combat sans remplacer la récolte.
+ *
+ * Sac plein, le butin reste au sol : il n'est ni perdu ni avalé. Oublié, il
+ * disparaît au bout de `lifetimeTicks` ; au-delà de `cap` objets au sol, le
+ * plus ancien s'efface pour laisser tomber le nouveau.
+ */
+export const LOOT_DROPS = {
   /** Ticks avant qu'un butin oublié ne disparaisse. */
   lifetimeTicks: 20 * 180,
   /** Distance, en tuiles, à laquelle Adam le ramasse. */
   pickupRadius: 0.8,
-} as const satisfies { items: readonly ItemId[]; lifetimeTicks: number; pickupRadius: number };
+  /** Distance, en tuiles, à laquelle il glisse vers Adam — s'il a de la place dans le sac. */
+  magnetRadius: 1.8,
+  /** Tuiles par seconde en glissant vers lui. */
+  magnetSpeed: 6,
+  /** Écart maximal, en tuiles, entre deux objets lâchés par le même ennemi. */
+  scatter: 0.35,
+  /** Objets au sol, au plus, toutes origines confondues. */
+  cap: 40,
+} as const;
 
 /** Effectif de la vague numéro `wave` (la première vaut 1). */
 export function waveSize(wave: number): number {
@@ -139,8 +174,8 @@ export interface WildlifeProto {
   groupMax: number;
   /** Ticks avant qu'une tanière vidée par l'arc se repeuple. */
   respawnTicks: number;
-  /** Objet ajouté au sac quand l'arc abat la bête, ou `null`. */
-  loot: ItemId | null;
+  /** Ce qu'elle lâche au sol quand l'arc l'abat (`LOOT_DROPS`). */
+  loot: LootTable;
   sprite: SpriteId;
   halfW: number;
   halfH: number;
@@ -164,7 +199,8 @@ export const WILDLIFE = {
     groupMin: 2,
     groupMax: 3,
     respawnTicks: 20 * 90,
-    loot: 'food',
+    // Une pince à griller.
+    loot: [{ item: 'food', min: 1, max: 1, chance: 1 }],
     sprite: 'crab',
     halfW: 8,
     halfH: 5,
@@ -186,7 +222,11 @@ export const WILDLIFE = {
     groupMin: 2,
     groupMax: 3,
     respawnTicks: 20 * 180,
-    loot: null,
+    // Plus de viande qu'un crabe, et parfois le collier de ferraille d'un ancien chien.
+    loot: [
+      { item: 'food', min: 2, max: 3, chance: 1 },
+      { item: 'ironOre', min: 1, max: 1, chance: 0.2 },
+    ],
     sprite: 'wolf',
     halfW: 9,
     halfH: 6,

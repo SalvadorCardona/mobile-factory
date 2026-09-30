@@ -15,7 +15,7 @@
 import { TILE_SIZE } from '../core/grid.ts';
 import { auditSvg } from './artDirection.ts';
 import { BUILDINGS } from './buildings.ts';
-import { ENEMIES, WAVES, WILDLIFE, WILDLIFE_SPAWN, type WildlifeProto } from './enemies.ts';
+import { ENEMIES, LOOT_DROPS, WAVES, WILDLIFE, WILDLIFE_SPAWN, type LootTable, type WildlifeProto } from './enemies.ts';
 import { EVE } from './eve.ts';
 import { ICON_SIZE, ITEM_ICONS } from './icons.ts';
 import { ITEMS } from './items.ts';
@@ -210,6 +210,7 @@ export function validatePrototypes(): string[] {
         }
       }
     }
+    errors.push(...lootErrors(`ENEMIES.${id}`, enemy.loot));
   }
 
   for (const [id, beast] of Object.entries(WILDLIFE)) {
@@ -228,9 +229,7 @@ export function validatePrototypes(): string[] {
     if (proto.groupMin < 1 || proto.groupMax < proto.groupMin || proto.densPerChunk < 0 || proto.respawnTicks <= 0) {
       errors.push(`WILDLIFE.${id} : effectif, densité ou repeuplement incohérents`);
     }
-    if (proto.loot !== null && !(proto.loot in ITEMS)) {
-      errors.push(`WILDLIFE.${id} : butin inconnu « ${proto.loot} »`);
-    }
+    errors.push(...lootErrors(`WILDLIFE.${id}`, proto.loot));
     if (!(proto.sprite in SPRITES)) {
       errors.push(`WILDLIFE.${id} : sprite inconnu « ${proto.sprite} »`);
     } else {
@@ -250,6 +249,18 @@ export function validatePrototypes(): string[] {
     if (weapon.range <= 0 || weapon.cooldown <= 0 || weapon.damage <= 0 || weapon.arrowSpeed <= 0) {
       errors.push(`WEAPONS.${id} : portée, cadence, dégâts ou vitesse nuls`);
     }
+  }
+
+  if (
+    LOOT_DROPS.lifetimeTicks <= 0 ||
+    LOOT_DROPS.pickupRadius <= 0 ||
+    LOOT_DROPS.magnetRadius < LOOT_DROPS.pickupRadius ||
+    LOOT_DROPS.magnetSpeed <= 0 ||
+    LOOT_DROPS.scatter < 0 ||
+    LOOT_DROPS.scatter > LOOT_DROPS.pickupRadius ||
+    LOOT_DROPS.cap <= 0
+  ) {
+    errors.push('LOOT_DROPS : durée, rayons, vitesse, dispersion ou plafond incohérents');
   }
 
   if (WAVES.minDistance > WAVES.maxDistance || WAVES.firstDelay <= 0 || WAVES.interval <= 0) {
@@ -318,6 +329,22 @@ export function validatePrototypes(): string[] {
     labels.set(proto.label, id);
   }
 
+  return errors;
+}
+
+/** Une table de butin : des objets connus, des quantités entières, et au moins une ligne qui tombe à coup sûr. */
+function lootErrors(owner: string, table: LootTable): string[] {
+  const errors: string[] = [];
+
+  if (!table.some((entry) => entry.chance >= 1)) errors.push(`${owner} : aucun butin garanti — un ennemi abattu doit toujours lâcher quelque chose`);
+
+  for (const { item, min, max, chance } of table) {
+    if (!(item in ITEMS)) errors.push(`${owner} : butin inconnu « ${item} »`);
+    if (!Number.isInteger(min) || !Number.isInteger(max) || min < 1 || max < min) {
+      errors.push(`${owner} : quantités de « ${item} » incohérentes (${min}–${max})`);
+    }
+    if (!(chance > 0 && chance <= 1)) errors.push(`${owner} : probabilité de « ${item} » hors de ]0, 1]`);
+  }
   return errors;
 }
 

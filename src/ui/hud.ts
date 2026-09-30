@@ -313,9 +313,6 @@ export class Hud {
     world.events.on('buildingDestroyed', ({ proto }) => this.notify(`${BUILDINGS[proto].label} détruite`, 'bad'));
     world.events.on('childBorn', () => this.notify('Un enfant est né à la nurserie !', 'good'));
     world.events.on('townHallDestroyed', () => this.showDefeat());
-    world.events.on('beastDied', ({ loot }) => {
-      if (loot) this.float(loot, 1);
-    });
     world.events.on('playerKnockedOut', () => this.notify('Adam s’est évanoui — il se réveille à la mairie', 'bad'));
     world.events.on('eveArriving', () => this.notify('Quelqu’un arrive à vélo…', 'good'));
     world.events.on('eveArrived', () => {

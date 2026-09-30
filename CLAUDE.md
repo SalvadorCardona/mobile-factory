@@ -48,8 +48,9 @@ tout sauf le bâti, qu'ils cassent. Une vague s'annonce trois secondes avant
 (bandeau avec sa direction, cor grave, léger recul de caméra vers elle),
 surgit dans le champ d'une flaque vert fluo — un mutant qui émerge
 (`WAVES.emergeTicks`) n'est pas visable — et finit sur « Vague repoussée ! » ;
-chaque mutant abattu lâche un butin (`MUTANT_LOOT`) qu'Adam ramasse en
-marchant dessus. L'arc d'Adam et la tour de guet
+tout ennemi abattu (mutant, crabe, loup) lâche au sol le butin de sa table
+(`loot`, tirée du PRNG du monde ; `LOOT_DROPS`, `src/sim/loot.ts`) qu'Adam
+ramasse en marchant dessus — sac plein, il reste au sol. L'arc d'Adam et la tour de guet
 (`src/data/weapons.ts`) tirent seuls. La mairie à zéro = partie perdue.
 La **nurserie** fait naître un enfant toutes les dix minutes, contre quatre
 nourritures (recette `raiseChild`) : sans elles, elle attend.
