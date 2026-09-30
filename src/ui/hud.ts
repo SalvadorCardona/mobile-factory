@@ -24,6 +24,7 @@ import { BUILDINGS } from '../data/buildings.ts';
 import { ITEMS, type ItemId } from '../data/items.ts';
 import { LORE } from '../data/lore.ts';
 import type { AtlasStats } from '../render/spriteLibrary.ts';
+import type { WaterStats } from '../render/waterLayer.ts';
 import type { PlacementRejection } from '../sim/commands.ts';
 import type { EntityId } from '../sim/types.ts';
 import { TICKS_PER_SECOND, siteMissing, type World } from '../sim/world.ts';
@@ -292,14 +293,14 @@ export class Hud {
     window.setTimeout(() => floater.remove(), FLOAT_MS);
   }
 
-  /** `fps`, `chunks` et `atlas` viennent du renderer : le monde ne les connaît pas. */
-  public update(fps: number, chunks: number, atlas: AtlasStats): void {
+  /** `fps`, `chunks`, `atlas` et `water` viennent du renderer : le monde ne les connaît pas. */
+  public update(fps: number, chunks: number, atlas: AtlasStats, water: WaterStats): void {
     this.updateQuest();
     this.updateHint();
     this.updateBag();
     this.root.dataset['danger'] = String(this.mutantCount() > 0 && !this.world.defeated);
 
-    if (this.debug) this.updateStats(fps, chunks, atlas);
+    if (this.debug) this.updateStats(fps, chunks, atlas, water);
   }
 
   private mutantCount(): number {
@@ -467,11 +468,12 @@ export class Hud {
 
   /* ------------------------------------------------------------------ debug */
 
-  private updateStats(fps: number, chunks: number, atlas: AtlasStats): void {
+  private updateStats(fps: number, chunks: number, atlas: AtlasStats, water: WaterStats): void {
     const { cx, cy } = this.world.playerChunk();
     const lines = [
       `tick ${this.world.tickCount}   ${fps.toFixed(0)} fps   seed ${this.world.seed}`,
       `chunk ${cx},${cy}   ${chunks} blocs de sol   ${this.world.resources.size()} tuiles entamées`,
+      `eau ${water.sprites} sprite(s) à l'écran, ${water.animated} animé(s)`,
       `atlas ${atlas.images} images → ${atlas.pages} texture(s), ${atlas.megapixels.toFixed(1)} Mpx @${atlas.resolution}x, ${atlas.ms} ms`,
       `${this.world.entities.size} bâtiment(s)   ${this.world.mobiles.size} mobile(s)   ${this.world.pendingWakes()} réveil(s)`,
     ];

@@ -94,8 +94,21 @@ Les sols (`GROUND`) ont leur propre jeu : `base` et `alt` pour le damier doux,
 | --- | --- | --- | --- | --- |
 | herbe | `#93e8ae` | `#8ae0a6` | `#62c894` | `#b3f2c6` |
 | sable | `#ffd98a` | `#ffd382` | `#f2b766` | `#ffe9b8` |
-| eau | `#45d6ff` | `#3fcef8` | `#2fb8ea` | `#b8f1ff` |
+| eau | `#45d6ff` | `#3ccaf8` | `#2fb8ea` | `#b8f1ff` |
 | roche | `#b8c3ff` | `#afbaf9` | `#8a97e6` | `#d3daff` |
+
+L'eau a trois profondeurs, la même teinte glissant vers le bleu : `base` au
+bord, `alt` au large (à deux tuiles de la rive), `deep` (`#35bdf4`) au milieu
+des grands lacs ; chaque palier a les coins arrondis des autres sols. Le long
+des rives, un liseré d'écume en capsules `light` avec un reflet blanc ; au
+large, des reflets en capsule `light`. L'écume et une partie des reflets sont
+des sprites animés au-dessus du sol baké (`render/waterLayer.ts`) : l'écume
+respire, les reflets glissent et s'allongent — lentement, sans transparence ni
+clignotement, et figés sous `prefers-reduced-motion`.
+
+| Avant / après, sur la rive | Avant / après, au milieu d'un lac | L'eau animée |
+| --- | --- | --- |
+| ![La rive avant et après](art-direction/eau-avant-apres.png) | ![Le lac avant et après](art-direction/eau-lac-avant-apres.png) | ![L'eau animée](art-direction/eau-animee.gif) |
 
 ### Couleurs réservées
 
@@ -227,6 +240,11 @@ par chunk, quatre chunks au plus gardés, soit au plus ~800 sprites et autant
 d'ombres — tous sur la même page d'atlas, donc un ou deux appels de dessin.
 À surveiller si la densité des forêts augmente : c'est le premier poste à
 découper plus finement (par blocs, comme le sol) avant d'ajouter du culling.
+L'eau animée : ~50 à 70 sprites à l'écran (écume des rives, un reflet sur
+six tuiles du large), rangés par blocs de 16 × 16 tuiles comme le sol ; un
+bloc ou un sprite hors de l'écran est caché et n'est pas animé. Coût mesuré :
+moins d'un demi-milliseconde de JS par cadre avec le CPU bridé ×4, un appel
+de dessin.
 
 ## Exemples
 

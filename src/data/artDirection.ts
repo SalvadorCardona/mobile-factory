@@ -57,11 +57,14 @@ export const PALETTE = {
  * variation des autres sols) ; `shade` est l'ombre portée **pleine** des
  * objets posés dessus — une teinte plus foncée du sol, jamais une transparence.
  * `light` borde le sol côté lumière (le liseré du sable).
+ *
+ * L'eau a trois profondeurs : `base` au bord, `alt` au large, `deep` au
+ * milieu des grands lacs — la même teinte, qui glisse doucement vers le bleu.
  */
 export const GROUND = {
   grass: { base: '#93e8ae', alt: '#8ae0a6', shade: '#62c894', light: '#b3f2c6' },
   sand: { base: '#ffd98a', alt: '#ffd382', shade: '#f2b766', light: '#ffe9b8' },
-  water: { base: '#45d6ff', alt: '#3fcef8', shade: '#2fb8ea', light: '#b8f1ff' },
+  water: { base: '#45d6ff', alt: '#3ccaf8', deep: '#35bdf4', shade: '#2fb8ea', light: '#b8f1ff' },
   rock: { base: '#b8c3ff', alt: '#afbaf9', shade: '#8a97e6', light: '#d3daff' },
 } as const;
 
@@ -71,7 +74,7 @@ export type Ground = keyof typeof GROUND;
 /** Une couleur autorisée : un ton de `PALETTE` ou de `GROUND`, rien d'autre. */
 export type Color =
   | (typeof PALETTE)[Tone][keyof (typeof PALETTE)[Tone]]
-  | (typeof GROUND)[Ground][keyof (typeof GROUND)[Ground]];
+  | { [G in Ground]: (typeof GROUND)[G][keyof (typeof GROUND)[G]] }[Ground];
 
 /** Toutes les couleurs autorisées, pour les tests et les outils. */
 export const COLORS: ReadonlySet<string> = new Set<string>([

@@ -256,7 +256,7 @@ async function main(): Promise<void> {
     if (started && !paused) autosave.update(ticker.deltaMS);
 
     renderer.draw(accumulator / STEP_MS, placement.mode !== 'idle', placement.ghost, joystick.state);
-    hud.update(ticker.FPS, renderer.bakedChunks, renderer.atlasStats);
+    hud.update(ticker.FPS, renderer.bakedChunks, renderer.atlasStats, renderer.waterStats);
 
     // Lire la mise en page force un reflow : une fois tous les dix cadres suffit.
     if (++frame % 10 === 0) renderer.setHudInsets(hud.topInset(), bottomInset(), hud.obstacles());

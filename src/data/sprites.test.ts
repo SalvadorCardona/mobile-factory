@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { brandBanner, brandIcon } from '../art/brand.ts';
-import { GROUND_TILES, cornerTile, edgeTile, shadowTile } from '../art/terrain.ts';
+import { GROUND_TILES, WATER_SPRITES, WATER_TILES, cornerTile, edgeTile, shadowTile } from '../art/terrain.ts';
 import { UI_ICONS } from '../art/ui.ts';
 import { GROUND, PALETTE, auditSvg, type Ground } from './artDirection.ts';
 import { BUILDINGS, BUILDING_IDS } from './buildings.ts';
@@ -25,6 +25,13 @@ function everySvg(): [string, string][] {
     [`terrain.shadow.${ground}`, shadowTile(ground)] as [string, string],
     [`terrain.corner.${ground}`, cornerTile(GROUND[ground].base, 'tl')] as [string, string],
   ]);
+  const water = [
+    ...([1, 2] as const).flatMap((depth) =>
+      WATER_TILES[depth].map((svg, i): [string, string] => [`terrain.water.${depth}.${i}`, svg]),
+    ),
+    ...Object.entries(WATER_SPRITES).map(([name, svg]): [string, string] => [`terrain.${name}`, svg]),
+    ['terrain.corner.water.deep', cornerTile(GROUND.water.deep, 'tl')] as [string, string],
+  ];
   const icons = [
     ...Object.entries(ITEM_ICONS).map(([item, svg]): [string, string] => [`icon.${item}`, svg]),
     ...Object.entries(UI_ICONS).map(([name, svg]): [string, string] => [`ui.${name}`, svg]),
@@ -34,7 +41,7 @@ function everySvg(): [string, string][] {
     ['brand.banner', brandBanner()],
   ];
 
-  return [...sprites, ...terrain, ...icons, ...brand];
+  return [...sprites, ...terrain, ...water, ...icons, ...brand];
 }
 
 describe('sprites', () => {
