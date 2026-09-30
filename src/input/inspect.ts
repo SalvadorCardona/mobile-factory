@@ -22,10 +22,7 @@ import { BUILDINGS } from '../data/buildings.ts';
 import { SPRITES } from '../data/sprites.ts';
 import type { Entity, EntityId } from '../sim/types.ts';
 import type { World } from '../sim/world.ts';
-import type { PointerConsumer, PointerSample } from './pointer.ts';
-
-/** Déplacement en pixels CSS au-delà duquel un appui n'est plus un tap. */
-const TAP_SLOP = 12;
+import { TAP_SLOP, type PointerConsumer, type PointerSample } from './pointer.ts';
 
 export class Inspect implements PointerConsumer {
   private pointerId: number | null = null;

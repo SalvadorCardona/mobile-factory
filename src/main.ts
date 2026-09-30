@@ -226,7 +226,9 @@ async function main(): Promise<void> {
   // revendique qu'un tap sur un bâtiment), le placement ensuite (il ne
   // revendique rien tant qu'aucun bâtiment n'est armé — mais armé, il doit
   // passer avant le joystick, sinon on ne peut pas construire sur la moitié
-  // gauche de l'écran), le joystick en dernier.
+  // gauche de l'écran), le joystick en dernier. Un glissé qui ne part pas du
+  // fantôme, le placement le lâche : il revient au joystick, et Adam marche
+  // pendant qu'on vise.
   const pointers = new PointerRouter(renderer.canvas);
 
   pointers.add(homeTap);

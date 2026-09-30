@@ -5,12 +5,14 @@
  * liste les bâtiments débloqués en cartes : vignette, nom, coût en icônes,
  * ouvriers. Choisir une carte ferme le tiroir et arme le placement
  * (`input/placement.ts`) ; une barre remplace alors le bouton, avec le nom
- * du bâtiment choisi, « Poser » et « Annuler ».
+ * du bâtiment choisi, « Poser », « Poser encore » et « Annuler ». « Poser »
+ * rend la main au joystick ; « Poser encore » garde le bâtiment armé, pour
+ * enchaîner les poses sans rouvrir le tiroir.
  *
  * Une liste de boutons toujours visibles mangeait un tiers de l'écran sur
  * un téléphone ; à six bâtiments, elle aurait recouvert la carte.
  *
- * Le bouton « Poser » n'apparaît qu'une fois le fantôme posé et reste grisé
+ * Les boutons de pose n'apparaissent qu'une fois le fantôme posé et reste grisé
  * tant que l'emplacement est refusé : le joueur voit pourquoi ça ne marche
  * pas avant d'appuyer, pas après.
  *
@@ -55,6 +57,7 @@ export class BuildMenu {
   private readonly armedBar: HTMLElement;
   private readonly armedLabel: HTMLElement;
   private readonly confirmButton: HTMLButtonElement;
+  private readonly repeatButton: HTMLButtonElement;
   private readonly cancelButton: HTMLButtonElement;
   private readonly cards = new Map<BuildingId, HTMLButtonElement>();
   private opened = false;
@@ -119,8 +122,9 @@ export class BuildMenu {
 
     this.confirmButton = button('Poser', () => this.placement.confirm());
     this.confirmButton.dataset['confirm'] = 'true';
+    this.repeatButton = button('Poser encore', () => this.placement.confirm(true));
     this.cancelButton = button('Annuler', () => this.placement.cancel());
-    this.armedBar.append(this.armedLabel, this.cancelButton, this.confirmButton);
+    this.armedBar.append(this.armedLabel, this.cancelButton, this.repeatButton, this.confirmButton);
 
     this.root.append(this.drawer, this.armedBar, this.toggleButton);
     this.refresh();
@@ -273,14 +277,19 @@ export class BuildMenu {
 
     this.toggleButton.hidden = !idle || this.opened;
     this.armedBar.hidden = idle;
+    this.armedBar.dataset['placing'] = String(placing);
 
     if (armed) {
       const label = placing ? `Poser : ${BUILDINGS[armed].label}` : `Tapez la carte pour placer ${BUILDINGS[armed].label}`;
 
       if (this.armedLabel.textContent !== label) this.armedLabel.textContent = label;
     }
+    const confirmable = this.placement.isConfirmable();
+
     this.confirmButton.hidden = !placing;
-    this.confirmButton.disabled = !this.placement.isConfirmable();
+    this.confirmButton.disabled = !confirmable;
+    this.repeatButton.hidden = !placing;
+    this.repeatButton.disabled = !confirmable;
   }
 
   public destroy(): void {

@@ -10,6 +10,14 @@
  * reste attribué jusqu'au `pointerup`. Un consommateur ne voit donc jamais les
  * mouvements d'un doigt qu'il n'a pas revendiqué.
  *
+ * Une seule exception : un consommateur peut **lâcher** un doigt au premier
+ * mouvement qui lui montre que ce n'est pas pour lui (le placement, quand ce
+ * n'est ni un tap ni un glissé depuis le fantôme). Le doigt est alors proposé
+ * aux consommateurs suivants, comme s'il venait de se poser là où il s'était
+ * posé ; si aucun n'en veut, il reste à celui qui l'a lâché.
+ *
+ * L'aiguillage (`PointerDispatch`) ne touche pas au DOM : il se teste en Node.
+ *
  * `touch-action: none` (cf. style.css) est indispensable : sans lui, le
  * navigateur avale les glissements avant qu'ils n'arrivent ici.
  */
@@ -21,16 +29,82 @@ export interface PointerSample {
   y: number;
 }
 
+/** Déplacement en pixels CSS au-delà duquel un appui n'est plus un tap. */
+export const TAP_SLOP = 12;
+
 export interface PointerConsumer {
   /** Renvoie `true` pour revendiquer ce doigt. Les consommateurs sont interrogés dans l'ordre d'ajout. */
   onDown(sample: PointerSample): boolean;
-  onMove(sample: PointerSample): void;
+  /**
+   * Renvoie `'release'` pour lâcher le doigt, une seule fois par doigt. S'il
+   * trouve preneur, le consommateur reçoit `onUp` et ne le voit plus ; sinon
+   * il reçoit de nouveau ce même mouvement, et garde le doigt.
+   */
+  onMove(sample: PointerSample): 'release' | void;
   onUp(sample: PointerSample): void;
 }
 
-export class PointerRouter {
+interface Owner {
+  consumer: PointerConsumer;
+  /** Où le doigt s'est posé : ce que voit un consommateur à qui on le passe. */
+  down: PointerSample;
+  released: boolean;
+}
+
+/** L'attribution des doigts aux consommateurs, sans DOM. */
+export class PointerDispatch {
   private readonly consumers: PointerConsumer[] = [];
-  private readonly owners = new Map<number, PointerConsumer>();
+  private readonly owners = new Map<number, Owner>();
+
+  public add(consumer: PointerConsumer): void {
+    this.consumers.push(consumer);
+  }
+
+  public down(sample: PointerSample): void {
+    const consumer = this.consumers.find((candidate) => candidate.onDown(sample));
+
+    if (consumer) this.owners.set(sample.id, { consumer, down: sample, released: false });
+  }
+
+  public owns(id: number): boolean {
+    return this.owners.has(id);
+  }
+
+  public move(sample: PointerSample): void {
+    const owner = this.owners.get(sample.id);
+
+    if (!owner) return;
+    if (owner.consumer.onMove(sample) !== 'release' || owner.released) return;
+
+    owner.released = true;
+
+    const next = this.consumers.slice(this.consumers.indexOf(owner.consumer) + 1);
+    const taker = next.find((consumer) => consumer.onDown(owner.down));
+
+    if (taker) {
+      owner.consumer.onUp(sample);
+      owner.consumer = taker;
+    }
+    owner.consumer.onMove(sample);
+  }
+
+  public up(sample: PointerSample): void {
+    const owner = this.owners.get(sample.id);
+
+    if (!owner) return;
+
+    this.owners.delete(sample.id);
+    owner.consumer.onUp(sample);
+  }
+
+  public clear(): void {
+    this.owners.clear();
+    this.consumers.length = 0;
+  }
+}
+
+export class PointerRouter {
+  private readonly dispatch = new PointerDispatch();
   private readonly detach: () => void;
 
   private readonly canvas: HTMLCanvasElement;
@@ -58,7 +132,7 @@ export class PointerRouter {
   }
 
   public add(consumer: PointerConsumer): void {
-    this.consumers.push(consumer);
+    this.dispatch.add(consumer);
   }
 
   private sample(event: PointerEvent): PointerSample {
@@ -69,38 +143,23 @@ export class PointerRouter {
 
   private handleDown(event: PointerEvent): void {
     event.preventDefault();
-
-    const sample = this.sample(event);
-
-    for (const consumer of this.consumers) {
-      if (consumer.onDown(sample)) {
-        this.owners.set(sample.id, consumer);
-        return;
-      }
-    }
+    this.dispatch.down(this.sample(event));
   }
 
   private handleMove(event: PointerEvent): void {
-    const consumer = this.owners.get(event.pointerId);
-
-    if (!consumer) return;
+    if (!this.dispatch.owns(event.pointerId)) return;
 
     event.preventDefault();
-    consumer.onMove(this.sample(event));
+    this.dispatch.move(this.sample(event));
   }
 
   private handleUp(event: PointerEvent): void {
-    const consumer = this.owners.get(event.pointerId);
-
-    if (!consumer) return;
-
-    this.owners.delete(event.pointerId);
-    consumer.onUp(this.sample(event));
+    if (!this.dispatch.owns(event.pointerId)) return;
+    this.dispatch.up(this.sample(event));
   }
 
   public destroy(): void {
     this.detach();
-    this.owners.clear();
-    this.consumers.length = 0;
+    this.dispatch.clear();
   }
 }

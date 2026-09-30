@@ -941,10 +941,11 @@ button {
   pointer-events: auto;
   width: 100%;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding: 8px 8px 8px 16px;
-  border-radius: 999px;
+  border-radius: 32px;
 }
 
 .build-armed-label {
@@ -957,6 +958,17 @@ button {
   min-height: 48px;
   padding: 0 18px;
   font-size: 19px;
+}
+
+/* Fantôme posé : trois boutons ne laissent plus de place au nom sur un téléphone, il passe au-dessus. */
+.build-armed[data-placing='true'] .build-armed-label {
+  flex-basis: 100%;
+}
+
+.build-armed[data-placing='true'] button {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0 12px;
 }
 
 /* ------------------------------------------------------- fenêtre de bâtiment */
