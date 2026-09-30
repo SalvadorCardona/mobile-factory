@@ -23,8 +23,11 @@
  * — crabes sur les plages, loups en forêt — s'en prend à Adam s'il approche.
  * Après la troisième vague repoussée, Ève arrive : elle vit à la mairie,
  * répare le bâti entre les vagues et donne les quêtes (`sim/eve.ts`).
- * Les ouvriers de la maison des constructeurs portent : ils vident foreuses
- * et fermes dans la mairie, et livrent les chantiers depuis la mairie.
+ * Les ouvriers de la maison des constructeurs portent : ils vident foreuses,
+ * fermes et cabanes de bûcheron dans la mairie, et livrent les chantiers
+ * depuis la mairie. Les bûcherons coupent seuls les arbres autour de leur
+ * cabane. Sans rien à faire, un ouvrier flâne devant chez lui, et n'y rentre
+ * que pour dormir, la nuit, ou s'abriter d'une vague.
  * Une clinique change le sort des mutants vaincus : certains tombent
  * assommés, suivent Adam qui les touche jusqu'à elle, et en ressortent
  * ex-mutants — des porteurs de plus (`data/clinic.ts`).
@@ -53,7 +56,7 @@ import { RECIPES, type RecipeId, type RecipeProto } from '../data/recipes.ts';
 import { RESEARCH, type ResearchId, type ResearchStat } from '../data/research.ts';
 import { RESOURCES, type ResourceId } from '../data/resources.ts';
 import { WEAPONS } from '../data/weapons.ts';
-import { JOB_PRIORITY, PORTERS } from '../data/workers.ts';
+import { JOB_PRIORITY, LUMBERJACKS, PORTERS } from '../data/workers.ts';
 import { ChunkIndex } from './chunk.ts';
 import { nearestFoe, shoot, stepArrow } from './combat.ts';
 import { clockAt, isWaveTick, ticksToNextWave, type DayClock } from './dayNight.ts';
@@ -105,7 +108,8 @@ import { Scheduler } from './scheduler.ts';
 import { Store } from './store.ts';
 import { findSpawn, habitatAt, isBuildable, isWalkable, oreAt, terrainAt } from './terrain.ts';
 import { inLogisticRange } from './warehouse.ts';
-import { carryOf, clearLine, standStill, walkToward } from './workers.ts';
+import { chopSpot, isTree, pickTree, treesInRange } from './lumberjacks.ts';
+import { carryOf, clearLine, standStill, walkToward, wander, wanderFrom } from './workers.ts';
 import type {
   Beast,
   Building,
@@ -122,6 +126,8 @@ import type {
   Job,
   Kid,
   Lab,
+  LumberCamp,
+  Lumberjack,
   Mobile,
   MobileId,
   Mutant,
@@ -134,6 +140,9 @@ import type {
   TownHall,
   Worker,
 } from './types.ts';
+
+/** Ce qui remplit un coffre qu'Adam vient vider : foreuse, ferme, forge, cabane de bûcheron. */
+type Producer = Drill | Farm | Forge | LumberCamp;
 
 /** 20 ticks de simulation par seconde. */
 export const TICKS_PER_SECOND = 20;
@@ -309,6 +318,10 @@ export type WorldEvents = {
   buildingRepaired: { id: EntityId; hp: number };
   /** Un porteur a déposé sa charge : sur un chantier, ou dans la mairie. */
   porterDelivered: { workerId: MobileId; id: EntityId; item: ItemId; amount: number };
+  /** Un bûcheron a donné un coup de hache : une unité de bois s'est détachée de l'arbre. `remaining` à 0 : il est tombé. */
+  treeChopped: { lumberjackId: MobileId; tx: number; ty: number; remaining: number };
+  /** Un bûcheron a rangé `amount` bois dans le coffre de sa cabane. */
+  woodStored: { lumberjackId: MobileId; id: EntityId; amount: number };
   /** Un mutant vaincu est tombé assommé plutôt que de s'évaporer : `id` est le patient qu'il devient. */
   mutantStunned: { id: MobileId; clinicId: EntityId; x: number; y: number };
   /** Adam a touché le mutant assommé : il le suit en boitillant. */
@@ -414,6 +427,12 @@ export class World {
 
   /** Les réservations des porteurs. Pas de l'état : elles se relisent dans leurs jobs. */
   private readonly jobs = new JobBoard();
+
+  /** Les arbres qu'un bûcheron vise : aucun autre ne les voit. Pas sauvegardé — rejoué depuis les bûcherons. */
+  private readonly claimedTrees = new Set<string>();
+
+  /** Le dernier compte d'arbres d'une cabane, cf. `treesLeft()`. */
+  private treeCount: { id: EntityId; tick: number; count: number } | null = null;
 
   public constructor(seed: number) {
     this.seed = seed >>> 0;
@@ -553,6 +572,7 @@ export class World {
 
     this.scheduler.restore(state.scheduler);
     this.restoreJobs();
+    this.restoreLumberjacks();
 
     // Une sauvegarde d'avant l'achèvement automatique peut garder un chantier livré : il s'achève au chargement.
     for (const entity of [...this.entities.values()]) {
@@ -562,6 +582,7 @@ export class World {
     // Une maison d'une sauvegarde d'avant les porteurs : ses ouvriers s'y installent.
     for (const entity of this.entities.values()) {
       if (entity.kind === 'house') this.staff(entity);
+      if (entity.kind === 'lumberCamp') this.staffCamp(entity);
     }
   }
 
@@ -1023,7 +1044,7 @@ export class World {
     if (this.contactTicks % DELIVER_TICKS !== 0) return;
 
     if (entity?.kind === 'site') this.deliver(entity);
-    else if (entity?.kind === 'drill' || entity?.kind === 'farm') this.collect(entity);
+    else if (entity?.kind === 'drill' || entity?.kind === 'farm' || entity?.kind === 'lumberCamp') this.collect(entity);
     else if (entity?.kind === 'nursery') this.supplyOne(entity);
     else if (entity?.kind === 'lab') this.supplyLabOne(entity);
     // La forge prend d'abord ce qu'Adam lui apporte, puis lui rend ses plaques.
@@ -1170,7 +1191,7 @@ export class World {
    * Prend un objet du coffre d'une foreuse, d'une ferme ou d'une forge
    * heurtée : au contact, le coffre se vide à vue, comme un chantier se remplit.
    */
-  private collect(producer: Drill | Farm | Forge): void {
+  private collect(producer: Producer): void {
     const [item] = this.takeable(producer)[0] ?? [];
 
     if (!item) return;
@@ -1639,6 +1660,10 @@ export class World {
       case 'lab':
         building = { ...base, kind: 'lab', research: null, endTick: 0 };
         break;
+
+      case 'lumberCamp':
+        building = { ...base, kind: 'lumberCamp' };
+        break;
     }
 
     this.entities.set(site.id, building);
@@ -1670,6 +1695,10 @@ export class World {
 
       case 'house':
         this.staff(building);
+        break;
+
+      case 'lumberCamp':
+        this.staffCamp(building);
         break;
 
       case 'clinic':
@@ -1738,6 +1767,7 @@ export class World {
       case 'townHall':
       case 'house':
       case 'clinic':
+      case 'lumberCamp':
         break;
     }
   }
@@ -2020,6 +2050,7 @@ export class World {
   private stepMobiles(): void {
     // Une fois par tick, pas une fois par ouvrier.
     const alarm = this.hasMutants();
+    const bedtime = this.isBedtime();
     let lootBlocked = false;
 
     for (const mobile of this.mobiles.values()) {
@@ -2063,7 +2094,11 @@ export class World {
           break;
 
         case 'worker':
-          this.stepWorker(mobile, alarm);
+          this.stepWorker(mobile, alarm, bedtime);
+          break;
+
+        case 'lumberjack':
+          this.stepLumberjack(mobile, alarm, bedtime);
           break;
 
         case 'pickup':
@@ -2286,6 +2321,7 @@ export class World {
       inside: false,
       job: null,
       searchTicks: PORTERS.retryTicks,
+      ...wanderFrom(door.x, door.y),
     };
 
     this.mobiles.delete(patient.id);
@@ -2809,6 +2845,7 @@ export class World {
         inside: true,
         job: null,
         searchTicks: 1 + i * 8,
+        ...wanderFrom(door.x, door.y),
       };
 
       this.mobiles.set(worker.id, worker);
@@ -2819,9 +2856,10 @@ export class World {
    * Un tick d'ouvrier. Pendant une vague, il rentre s'abriter avec sa
    * charge et n'en ressort qu'une fois le dernier mutant tombé. Sinon, il
    * suit son job — la source, puis la destination — ou en cherche un toutes
-   * les `retryTicks` ; sans rien à porter, il rentre dormir chez lui.
+   * les `retryTicks` ; sans rien à porter, il flâne devant chez lui, et
+   * rentre dormir à la tombée de la nuit.
    */
-  private stepWorker(worker: Worker, alarm: boolean): void {
+  private stepWorker(worker: Worker, alarm: boolean, bedtime: boolean): void {
     const home = this.entities.get(worker.homeId);
     const homeDoor = home ? doorOf(home) : null;
 
@@ -2850,8 +2888,8 @@ export class World {
 
     if (!job) {
       // Sa maison est tombée et il n'a plus rien à porter : il quitte la colonie.
-      if (homeDoor) this.goHome(worker, homeDoor);
-      else this.mobiles.delete(worker.id);
+      if (!homeDoor) this.mobiles.delete(worker.id);
+      else this.idle(worker, homeDoor, bedtime);
       return;
     }
 
@@ -2873,9 +2911,30 @@ export class World {
     else this.pickUp(worker, job);
   }
 
-  private goHome(worker: Worker, door: { x: number; y: number }): void {
+  private goHome(worker: Worker | Lumberjack, door: { x: number; y: number }): void {
     if (worker.inside) standStill(worker);
     else if (walkToward(worker, door.x, door.y, STEP_SECONDS)) worker.inside = true;
+  }
+
+  /** Sans travail : il dort chez lui à la nuit tombée, et flâne devant sa porte le reste du temps. */
+  private idle(worker: Worker | Lumberjack, door: { x: number; y: number }, bedtime: boolean): void {
+    if (bedtime) {
+      this.goHome(worker, door);
+      return;
+    }
+    if (worker.inside) {
+      // Il sort : sa flânerie repart de sa porte.
+      worker.inside = false;
+      Object.assign(worker, wanderFrom(door.x, door.y));
+    }
+    wander(worker, door, this.seed, this.tickCount, STEP_SECONDS);
+  }
+
+  /** Le crépuscule et la nuit : les ouvriers sans travail vont se coucher. Sans cycle — mairie en chantier —, jamais. */
+  private isBedtime(): boolean {
+    const phase = this.clock()?.phase;
+
+    return phase === 'dusk' || phase === 'night';
   }
 
   /** À la source : la promesse sortante devient un retrait réel, qui réveille une foreuse endormie. */
@@ -2966,6 +3025,257 @@ export class World {
     worker.job = job.to !== this.townHallId && this.jobs.open(this.entities, rerouted) ? rerouted : null;
   }
 
+  /* -------------------------------------------------------------- bûcherons */
+
+  private *lumberjacks(): IterableIterator<Lumberjack> {
+    for (const mobile of this.mobiles.values()) {
+      if (mobile.kind === 'lumberjack') yield mobile;
+    }
+  }
+
+  /** Loge les bûcherons de la cabane qui n'y sont pas encore. */
+  private staffCamp(camp: LumberCamp): void {
+    let lodged = 0;
+
+    for (const lumberjack of this.lumberjacks()) {
+      if (lumberjack.homeId === camp.id) lodged += 1;
+    }
+
+    const door = doorOf(camp);
+
+    for (let i = lodged; i < BUILDINGS[camp.proto].workers; i += 1) {
+      const lumberjack: Lumberjack = {
+        kind: 'lumberjack',
+        id: this.nextMobileId++,
+        x: door.x,
+        y: door.y,
+        prevX: door.x,
+        prevY: door.y,
+        facing: 'down',
+        moving: false,
+        homeId: camp.id,
+        inside: true,
+        state: 'idle',
+        tree: null,
+        chopTicks: 0,
+        load: 0,
+        // Ils ne sortent pas du même pas : le second suit le premier.
+        searchTicks: 1 + i * 12,
+        ...wanderFrom(door.x, door.y),
+      };
+
+      this.mobiles.set(lumberjack.id, lumberjack);
+    }
+  }
+
+  /**
+   * Les arbres encore debout dans le rayon de la cabane — zéro : « Plus
+   * d'arbres à portée ». La fenêtre le demande à chaque image : le compte
+   * n'est refait qu'une fois par tick.
+   */
+  public treesLeft(camp: LumberCamp): number {
+    if (this.treeCount?.id !== camp.id || this.treeCount.tick !== this.tickCount) {
+      this.treeCount = { id: camp.id, tick: this.tickCount, count: treesInRange(camp, this.resources).length };
+    }
+    return this.treeCount.count;
+  }
+
+  /**
+   * Un tick de bûcheron. Hors d'un voyage, il cherche un arbre toutes les
+   * `retryTicks` — à condition qu'il y ait au coffre la place d'un voyage,
+   * réservée aussitôt : le bois rapporté y entre toujours. Coffre plein, il
+   * attend devant la porte ; plus d'arbre à portée, il flâne. La nuit, il ne
+   * repart pas ; pendant une vague, il rentre s'abriter, bois compris, et
+   * reprend son voyage ensuite.
+   */
+  private stepLumberjack(lumberjack: Lumberjack, alarm: boolean, bedtime: boolean): void {
+    const camp = this.entities.get(lumberjack.homeId);
+
+    // Sa cabane est tombée : il lâche son arbre et quitte la colonie.
+    if (camp?.kind !== 'lumberCamp') {
+      this.releaseTree(lumberjack);
+      this.mobiles.delete(lumberjack.id);
+      return;
+    }
+
+    const door = doorOf(camp);
+
+    if (alarm) {
+      // Il reprendra son arbre après la vague : il lui faudra d'abord y retourner.
+      if (lumberjack.state === 'chop') lumberjack.state = 'toTree';
+      this.goHome(lumberjack, door);
+      return;
+    }
+
+    switch (lumberjack.state) {
+      case 'idle':
+      case 'wait':
+        lumberjack.searchTicks -= 1;
+        if (lumberjack.searchTicks <= 0 && !bedtime && lumberjack.load === 0) {
+          lumberjack.searchTicks = LUMBERJACKS.retryTicks;
+          this.startTrip(lumberjack, camp, door);
+        }
+        if (lumberjack.state === 'idle') this.idle(lumberjack, door, bedtime);
+        else if (lumberjack.state === 'wait') this.waitAtCamp(lumberjack, door, bedtime);
+        else lumberjack.inside = false;
+        break;
+
+      case 'toTree': {
+        const tree = lumberjack.tree;
+
+        lumberjack.inside = false;
+        if (!tree || !isTree(this.resources, tree.tx, tree.ty)) {
+          // Adam l'a coupé avant lui : il en cherche un autre sans attendre.
+          this.endTrip(lumberjack, door);
+          break;
+        }
+
+        const spot = chopSpot(tree);
+
+        if (walkToward(lumberjack, spot.x, spot.y, STEP_SECONDS)) {
+          lumberjack.state = 'chop';
+          lumberjack.facing = 'right';
+          lumberjack.chopTicks = LUMBERJACKS.chopTicks;
+        }
+        break;
+      }
+
+      case 'chop':
+        standStill(lumberjack);
+        lumberjack.inside = false;
+        lumberjack.chopTicks -= 1;
+        if (lumberjack.chopTicks <= 0) this.chop(lumberjack, door);
+        break;
+
+      case 'toCamp':
+        lumberjack.inside = false;
+        if (walkToward(lumberjack, door.x, door.y, STEP_SECONDS)) this.storeWood(lumberjack, camp);
+        break;
+    }
+  }
+
+  /** Un voyage commence : la place au coffre, puis l'arbre — les deux réservés, ou rien. */
+  private startTrip(lumberjack: Lumberjack, camp: LumberCamp, door: { x: number; y: number }): void {
+    if (!camp.store.reserveIn('wood', LUMBERJACKS.carry)) {
+      lumberjack.state = 'wait';
+      return;
+    }
+
+    const tree = pickTree(camp, door, this.resources, this.claimedTrees, this.lineIsClear);
+
+    if (!tree) {
+      camp.store.releaseIn('wood', LUMBERJACKS.carry);
+      lumberjack.state = 'idle';
+      return;
+    }
+
+    this.claimedTrees.add(coordKey(tree.tx, tree.ty));
+    lumberjack.tree = tree;
+    lumberjack.state = 'toTree';
+  }
+
+  /** Un coup de hache : une unité de bois dans les bras. Arbre tombé ou bras pleins, il rentre. */
+  private chop(lumberjack: Lumberjack, door: { x: number; y: number }): void {
+    const tree = lumberjack.tree;
+    const taken = tree ? this.resources.take(tree.tx, tree.ty) : null;
+
+    if (!tree || !taken || taken.resource.id !== 'tree') {
+      this.endTrip(lumberjack, door);
+      return;
+    }
+
+    lumberjack.load += 1;
+    lumberjack.chopTicks = LUMBERJACKS.chopTicks;
+    // La même règle que pour Adam : entamé à mi-chemin, disparu à la dernière unité.
+    if (taken.stageChanged) this.dirtyTile(tree.tx, tree.ty);
+    this.events.emit('treeChopped', {
+      lumberjackId: lumberjack.id,
+      tx: tree.tx,
+      ty: tree.ty,
+      remaining: taken.resource.remaining,
+    });
+
+    if (taken.resource.remaining <= 0 || lumberjack.load >= LUMBERJACKS.carry) this.endTrip(lumberjack, door);
+  }
+
+  /** Plus rien à couper ici : l'arbre est lâché ; avec du bois, il le rapporte, sinon il repart aussitôt. */
+  private endTrip(lumberjack: Lumberjack, door: { x: number; y: number }): void {
+    this.releaseTree(lumberjack);
+
+    if (lumberjack.load > 0) {
+      lumberjack.state = 'toCamp';
+      return;
+    }
+
+    const camp = this.entities.get(lumberjack.homeId);
+
+    if (camp?.kind === 'lumberCamp') camp.store.releaseIn('wood', LUMBERJACKS.carry);
+    lumberjack.state = 'idle';
+    lumberjack.searchTicks = 0;
+    Object.assign(lumberjack, wanderFrom(door.x, door.y));
+  }
+
+  /** À la porte : la place réservée devient du bois dans le coffre. */
+  private storeWood(lumberjack: Lumberjack, camp: LumberCamp): void {
+    camp.store.releaseIn('wood', LUMBERJACKS.carry);
+
+    const stored = camp.store.add('wood', lumberjack.load);
+
+    lumberjack.load -= stored;
+    if (stored > 0) this.events.emit('woodStored', { lumberjackId: lumberjack.id, id: camp.id, amount: stored });
+
+    // Ce qui ne rentre pas — une sauvegarde retouchée, jamais en jeu — reste dans ses bras : il attend.
+    lumberjack.state = lumberjack.load > 0 ? 'wait' : 'idle';
+    lumberjack.searchTicks = 0;
+  }
+
+  /** Coffre plein : devant la porte, bois dans les bras s'il en a, jusqu'à ce qu'un porteur fasse de la place. */
+  private waitAtCamp(lumberjack: Lumberjack, door: { x: number; y: number }, bedtime: boolean): void {
+    if (lumberjack.load > 0) {
+      const camp = this.entities.get(lumberjack.homeId);
+
+      if (camp?.kind === 'lumberCamp' && camp.store.freeSpace() > 0) {
+        const stored = camp.store.add('wood', lumberjack.load);
+
+        lumberjack.load -= stored;
+        if (stored > 0) this.events.emit('woodStored', { lumberjackId: lumberjack.id, id: camp.id, amount: stored });
+      }
+    }
+    if (bedtime && lumberjack.load === 0) {
+      this.goHome(lumberjack, door);
+      return;
+    }
+    lumberjack.inside = false;
+    if (walkToward(lumberjack, door.x, door.y, STEP_SECONDS)) lumberjack.facing = 'down';
+  }
+
+  private releaseTree(lumberjack: Lumberjack): void {
+    if (lumberjack.tree) this.claimedTrees.delete(coordKey(lumberjack.tree.tx, lumberjack.tree.ty));
+    lumberjack.tree = null;
+  }
+
+  /**
+   * Après un chargement : les arbres visés et la place réservée au coffre se
+   * rejouent depuis les bûcherons sauvegardés. Un arbre déjà pris par un
+   * autre — une sauvegarde retouchée — est lâché.
+   */
+  private restoreLumberjacks(): void {
+    this.claimedTrees.clear();
+
+    for (const lumberjack of this.lumberjacks()) {
+      const camp = this.entities.get(lumberjack.homeId);
+      const onTrip = lumberjack.state === 'toTree' || lumberjack.state === 'chop' || lumberjack.state === 'toCamp';
+
+      if (lumberjack.tree) {
+        const key = coordKey(lumberjack.tree.tx, lumberjack.tree.ty);
+
+        if (this.claimedTrees.has(key) || !onTrip) lumberjack.tree = null;
+        else this.claimedTrees.add(key);
+      }
+      if (onTrip && camp?.kind === 'lumberCamp') camp.store.reserveIn('wood', LUMBERJACKS.carry);
+    }
+  }
+
   /** Après un chargement : les réservations se rejouent depuis les jobs sauvegardés. */
   private restoreJobs(): void {
     const workers = [...this.workers()];
@@ -3041,7 +3351,13 @@ export class World {
   private takeAll(id: EntityId): void {
     const entity = this.entities.get(id);
 
-    if (entity?.kind !== 'drill' && entity?.kind !== 'farm' && entity?.kind !== 'forge' && entity?.kind !== 'lab') {
+    if (
+      entity?.kind !== 'drill' &&
+      entity?.kind !== 'farm' &&
+      entity?.kind !== 'forge' &&
+      entity?.kind !== 'lab' &&
+      entity?.kind !== 'lumberCamp'
+    ) {
       this.events.emit('takeRejected', { id, reason: 'missing' });
       return;
     }
@@ -3073,7 +3389,7 @@ export class World {
    * restent au four ; au labo, le reste d'une recherche abandonnée, jamais
    * ce que la recherche en cours attend.
    */
-  public takeable(producer: Drill | Farm | Forge | Lab): [ItemId, number][] {
+  public takeable(producer: Producer | Lab): [ItemId, number][] {
     if (producer.kind === 'lab') {
       return producer.store.entries().flatMap(([item]): [ItemId, number][] => {
         const surplus = labSurplus(producer, item);
@@ -3092,7 +3408,7 @@ export class World {
   }
 
   /** Du coffre au sac : le coffre se vide (et la machine repart), le sac reçoit. */
-  private takeInto(producer: Drill | Farm | Forge | Lab, item: ItemId, amount: number): void {
+  private takeInto(producer: Producer | Lab, item: ItemId, amount: number): void {
     const taken = this.withdraw(producer.id, item, amount);
 
     if (taken <= 0) return;
@@ -3136,6 +3452,7 @@ function saveEntity(entity: Entity): SavedEntity {
 /** Un mobile copié : un ouvrier emporte son job, qui ne doit pas être partagé entre deux mondes. */
 function copyMobile(mobile: Mobile): Mobile {
   if (mobile.kind === 'worker') return { ...mobile, job: mobile.job && { ...mobile.job } };
+  if (mobile.kind === 'lumberjack') return { ...mobile, tree: mobile.tree && { ...mobile.tree } };
   return { ...mobile };
 }
 

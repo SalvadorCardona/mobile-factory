@@ -3,7 +3,9 @@ import { TILE_SIZE } from '../core/grid.ts';
 import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
 import { ENEMIES } from '../data/enemies.ts';
 import { ITEM_IDS, type ItemId } from '../data/items.ts';
-import { JOB_PRIORITY } from '../data/workers.ts';
+import { DAY_CYCLE } from '../data/dayNight.ts';
+import { JOB_PRIORITY, WANDER } from '../data/workers.ts';
+import { doorOf } from './jobs.ts';
 import { decodeSave, encodeSave, type SavedEntity } from './save.ts';
 import { isWalkable, terrainAt } from './terrain.ts';
 import type { EntityId, Site, TownHall, Worker } from './types.ts';
@@ -149,6 +151,13 @@ function expectCoveredPromises(world: World): void {
   }
 }
 
+/** À portée de flânerie de sa porte. */
+function nearHome(world: World, worker: Worker): boolean {
+  const door = doorOf(world.entities.get(worker.homeId)!);
+
+  return Math.hypot(worker.x - door.x, worker.y - door.y) <= WANDER.radius * TILE_SIZE + 1;
+}
+
 function run(world: World, ticks: number, each?: () => void): void {
   for (let i = 0; i < ticks; i += 1) {
     world.tick();
@@ -157,12 +166,34 @@ function run(world: World, ticks: number, each?: () => void): void {
 }
 
 describe('porteurs', () => {
-  it('la maison des constructeurs loge ses ouvriers, chez eux tant qu’il n’y a rien à porter', () => {
+  it('la maison des constructeurs loge ses ouvriers ; sans rien à porter, ils flânent devant chez eux', () => {
     const world = colony({ hall: {}, houses: 1 });
 
     expect(workers(world)).toHaveLength(BUILDINGS.builderHouse.workers);
+
+    let walked = 0;
+
+    run(world, 600, () => {
+      for (const worker of workers(world)) {
+        expect(worker.job).toBeNull();
+        if (worker.x !== worker.prevX || worker.y !== worker.prevY) walked += 1;
+      }
+    });
+    // Visibles, à deux pas de leur porte, et ils bougent.
+    expect(workers(world).every((worker) => !worker.inside && nearHome(world, worker))).toBe(true);
+    expect(walked).toBeGreaterThan(0);
+  });
+
+  it('au crépuscule, les ouvriers sans travail rentrent dormir', () => {
+    const world = colony({ hall: {}, houses: 1 });
+
     run(world, 200);
-    expect(workers(world).every((worker) => worker.inside && worker.job === null)).toBe(true);
+    expect(workers(world).some((worker) => !worker.inside)).toBe(true);
+
+    // Le cycle démarre juste avant le crépuscule.
+    world.cycleStartTick = world.tickCount - DAY_CYCLE.day + 1;
+    run(world, 250);
+    expect(workers(world).every((worker) => worker.inside)).toBe(true);
   });
 
   it('un chantier se remplit seul si la mairie a le stock — et le dernier objet porté l’achève', () => {
@@ -184,8 +215,9 @@ describe('porteurs', () => {
     expect(completed).toEqual([site!.id]);
     expect(hallOf(world).store.count('wood')).toBe(40 - BUILDINGS.farm.cost.wood);
     expect(hallOf(world).store.count('stone')).toBe(40 - BUILDINGS.farm.cost.stone);
-    // Le travail fini, tout le monde rentre dormir.
-    expect(workers(world).every((worker) => worker.inside && worker.job === null)).toBe(true);
+    // Le travail fini, tout le monde revient flâner devant chez soi.
+    run(world, 600);
+    expect(workers(world).every((worker) => worker.job === null && nearHome(world, worker))).toBe(true);
   });
 
   it('sous charge — 10 ouvriers, 5 chantiers, un stock trop court : aucune double réservation, rien de perdu ni de dupliqué', () => {

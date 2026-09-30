@@ -42,3 +42,39 @@ export const JOB_PRIORITY = {
 } as const;
 
 export type JobPriority = (typeof JOB_PRIORITY)[keyof typeof JOB_PRIORITY];
+
+/**
+ * Bûcherons — les ouvriers de la cabane de bûcheron (`BUILDINGS.lumberCamp`).
+ *
+ * En boucle : sortir, marcher jusqu'à l'arbre intact le plus proche dans le
+ * rayon de la cabane, le couper à coups de hache — une unité de bois par
+ * coup, comme Adam la récolte —, rapporter le bois au coffre de la cabane.
+ * Les porteurs le vident ensuite dans la mairie, comme une foreuse.
+ */
+export const LUMBERJACKS = {
+  /** Rayon de coupe, en tuiles, depuis le centre de la cabane : c'est le cercle affiché. */
+  radius: 7,
+  /** Vitesse de marche, en tuiles par seconde. */
+  speed: 2.2,
+  /** Ticks entre deux coups de hache ; chaque coup détache une unité de bois. */
+  chopTicks: 16,
+  /** Bois porté en un voyage : un arbre entier. */
+  carry: 5,
+  /** Ticks avant qu'un bûcheron sans arbre ni place au coffre réessaie. */
+  retryTicks: 40,
+} as const;
+
+/**
+ * La flânerie d'un ouvrier sans travail : de petits trajets en ligne droite
+ * autour de sa porte, entrecoupés de pauses. Aucun chemin à calculer — un
+ * point tiré, une ligne vérifiée hors de l'eau, et c'est tout.
+ */
+export const WANDER = {
+  /** Rayon de flânerie autour de la porte, en tuiles. */
+  radius: 3,
+  /** Allure d'un ouvrier qui flâne, en part de sa vitesse de marche. */
+  pace: 0.55,
+  /** Pause entre deux trajets, en ticks : un minimum, plus une part tirée au hasard. */
+  pauseTicks: 30,
+  pauseJitter: 90,
+} as const;

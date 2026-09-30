@@ -15,6 +15,7 @@
  * - un **tir** tend l'arc puis le relâche ;
  * - une **attaque** de bête fait claquer les pinces du crabe, bondir le loup ;
  * - un ouvrier qui **porte** a sa charge sur la tête, qui suit le rebond du pas ;
+ * - un bûcheron qui **coupe** abat sa hache, pivot dans la main, à chaque coup ;
  * - un patient **boitille** : le corps penche d'un côté à chaque pas, une
  *   jambe traîne ; assommé, il prend une **pose** (`pose()`) qui remplace son corps.
  *
@@ -65,6 +66,7 @@ export class Puppet {
   private readonly halo: Sprite | null;
   private readonly claws: Sprite | null;
   private readonly load: Sprite | null;
+  private readonly axe: Sprite | null;
   private loadItem: ItemId | null = null;
 
   private readonly library: SpriteLibrary;
@@ -102,13 +104,14 @@ export class Puppet {
     this.body = this.part('down');
     this.bow = id === 'adam' ? this.part('bow') : null;
     this.claws = 'claws' in this.proto.parts ? this.part('claws') : null;
-    this.load = id === 'worker' || id === 'exMutant' ? this.part('load.wood') : null;
+    this.load = id === 'worker' || id === 'exMutant' || id === 'lumberjack' ? this.part('load.wood') : null;
+    this.axe = 'axe' in this.proto.parts ? this.part('axe') : null;
 
     if (this.halo) this.halo.alpha = 0.35;
     if (this.load) this.load.visible = false;
 
     this.figure.addChild(
-      ...[this.halo, ...this.feet, this.body, this.bow, this.claws, this.load].filter((sprite) => sprite !== null),
+      ...[this.halo, ...this.feet, this.body, this.bow, this.axe, this.claws, this.load].filter((sprite) => sprite !== null),
     );
     this.root.addChild(this.shadow, this.figure);
   }
@@ -186,6 +189,8 @@ export class Puppet {
     let bodyY = 0;
     let tilt = 0;
     let squash: number;
+    /** L'abattement de la hache, de 0 (levée) à 1 (dans le bois). */
+    let chop = 0;
 
     if (verb === 'walk' && this.gait === 'scuttle') {
       // De côté : le corps se dandine, les peignes de pattes se lèvent tour à tour.
@@ -236,6 +241,7 @@ export class Puppet {
 
         const punch = Math.max(0, Math.sin(this.phase));
 
+        chop = punch;
         squash = -punch * 0.1;
         if (view === 'side') bodyX = punch * 3;
         else bodyY = view === 'down' ? punch * 2 : -punch * 2;
@@ -279,6 +285,14 @@ export class Puppet {
       this.claws.scale.set(1 + snap * 0.18, 1 - snap * 0.12);
     }
 
+    if (this.axe) {
+      // Elle suit la main, et s'abat vers l'avant au coup.
+      const [px, py] = this.proto.pivots?.['axe'] ?? [0, 0];
+
+      this.axe.position.set(bodyX + px - this.proto.anchorX * this.proto.width, bodyY + py - this.proto.anchorY * this.proto.height);
+      this.axe.rotation = chop * 1.3;
+    }
+
     if (this.bow) {
       // Tendu (écrasé en largeur), puis relâché en vibrant.
       const t = this.shot / SHOT_MS;
@@ -314,4 +328,7 @@ export class Puppet {
 }
 
 /** Sprites qui s'animent en pantin. */
-export type PuppetId = Extract<SpriteId, 'adam' | 'eve' | 'mutant' | 'kid' | 'worker' | 'exMutant' | 'patient' | 'crab' | 'wolf'>;
+export type PuppetId = Extract<
+  SpriteId,
+  'adam' | 'eve' | 'mutant' | 'kid' | 'worker' | 'lumberjack' | 'exMutant' | 'patient' | 'crab' | 'wolf'
+>;

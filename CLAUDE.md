@@ -55,13 +55,21 @@ ressource qu'on récolterait pour rien.
 constructeurs et la ferme en emploient quatre, comptés dans la population
 une fois le bâtiment fini. Ceux de la maison sont des **porteurs** (mobile
 `worker`, `src/sim/workers.ts`, `PORTERS` dans `src/data/workers.ts`) : ils
-vident foreuses et fermes dans la mairie et livrent les chantiers depuis
+vident foreuses, fermes et cabanes de bûcheron dans la mairie et livrent les chantiers depuis
 la mairie. Un job est réservé des deux côtés **à sa création**
 (`src/sim/jobs.ts` : `Store.reserveOut`/`reserveIn`, registre des chantiers)
 — décider sur `available()`, jamais sur le stock brut. Ligne droite, jamais
-à travers l'eau ; à l'abri chez eux pendant une vague, et chez eux quand il
-n'y a rien à porter. Les réservations ne sont pas sauvegardées : elles se
+à travers l'eau ; à l'abri chez eux pendant une vague. Les réservations ne sont pas sauvegardées : elles se
 rejouent depuis les jobs au chargement.
+La **cabane de bûcheron** loge deux **bûcherons** (mobile `lumberjack`,
+`LUMBERJACKS` dans `src/data/workers.ts`, choix de l'arbre dans
+`src/sim/lumberjacks.ts`) : l'arbre le plus proche dans son rayon (cercle
+mint au placement et à la sélection), réservé — jamais deux sur le même —,
+coupé une unité par coup comme par Adam, le bois rapporté au coffre de la
+cabane, que les porteurs vident (priorité d'une foreuse). Coffre plein, ils
+attendent devant la porte. Un ouvrier sans travail **flâne** devant chez
+lui (`wander()`, hachage de la seed, sans PRNG ni chemin) et ne rentre que
+le soir (crépuscule, nuit) ou pendant une vague.
 
 **Jour et nuit** — dès que la mairie est debout, le cycle démarre
 (`src/data/dayNight.ts`, horloge pure dans `src/sim/dayNight.ts`) : une

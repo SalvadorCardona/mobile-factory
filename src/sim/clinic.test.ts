@@ -79,7 +79,7 @@ function patient(x: number, y: number, clinicId: number, state: Patient['state']
 }
 
 function exMutant(id: number, clinicId: number, x: number, y: number): Worker {
-  return { kind: 'worker', id, x, y, prevX: x, prevY: y, facing: 'down', moving: false, homeId: clinicId, exMutant: true, inside: true, job: null, searchTicks: 1 };
+  return { kind: 'worker', id, x, y, prevX: x, prevY: y, facing: 'down', moving: false, homeId: clinicId, exMutant: true, inside: true, job: null, searchTicks: 1, wanderX: x, wanderY: y, wanderTicks: 0 };
 }
 
 function mobilesOf<K extends Mobile['kind']>(world: World, kind: K): Extract<Mobile, { kind: K }>[] {

@@ -7,7 +7,8 @@
  *
  * Deux conteneurs seulement :
  * - `world`, translaté par la caméra, où vit tout ce qui a des coordonnées
- *   monde : le sol baké, l'eau qui bouge par-dessus, les ombres portées, puis le conteneur trié en
+ *   monde : le sol baké, l'eau qui bouge par-dessus, le rayon de coupe d'une
+ *   cabane, les ombres portées, puis le conteneur trié en
  *   profondeur (bâtiments, arbres, rochers, personnages), les particules, la
  *   nuit (une passe de teinte et ses lueurs) et le fantôme de construction ;
  * - `hud`, en pixels écran, où vivent le joystick et les repères de bord.
@@ -21,6 +22,7 @@ import { GROUND, hex } from '../data/artDirection.ts';
 import type { ItemId } from '../data/items.ts';
 import type { JoystickState } from '../input/joystick.ts';
 import type { GhostState } from '../input/placement.ts';
+import type { EntityId } from '../sim/types.ts';
 import { STEP_MS, type World } from '../sim/world.ts';
 import { createAtlas, type Atlas } from './atlas.ts';
 import { Camera } from './camera.ts';
@@ -34,6 +36,7 @@ import { ResourceLayer } from './resourceLayer.ts';
 import { SpriteLibrary, type AtlasStats } from './spriteLibrary.ts';
 import { TerrainTiles, terrainSources } from './terrainTiles.ts';
 import { WaterLayer, type WaterStats } from './waterLayer.ts';
+import { WorkReachLayer } from './workReach.ts';
 
 export class GameRenderer {
   public readonly camera = new Camera();
@@ -46,6 +49,9 @@ export class GameRenderer {
   private readonly entityLayer: EntityLayer;
   private readonly resourceLayer: ResourceLayer;
   private readonly ghostLayer: GhostLayer;
+  private readonly workReach: WorkReachLayer;
+  /** Le bâtiment dont la fenêtre est ouverte : une cabane y montre son rayon de coupe. */
+  private selected: EntityId | null = null;
   private readonly nightLayer: NightLayer;
   public readonly particles = new ParticleLayer();
   private readonly joystickBase: Sprite;
@@ -69,11 +75,13 @@ export class GameRenderer {
     this.resourceLayer = new ResourceLayer(world, library, this.tiles, this.entityLayer.container, this.shadows);
     this.indicators = new IndicatorLayer(world, library);
     this.ghostLayer = new GhostLayer(world, library);
+    this.workReach = new WorkReachLayer(world);
     this.nightLayer = new NightLayer(app.renderer, world);
 
     this.worldContainer.addChild(
       this.chunkLayer.container,
       this.waterLayer.container,
+      this.workReach.container,
       this.shadows,
       this.entityLayer.container,
       this.particles.container,
@@ -142,6 +150,11 @@ export class GameRenderer {
     this.indicators.setObjective(item);
   }
 
+  /** Le bâtiment sélectionné — sa fenêtre est ouverte —, ou `null`. */
+  public setSelected(id: EntityId | null): void {
+    this.selected = id;
+  }
+
   /** Le repère de la mairie est-il sous ce point écran ? */
   public homeIndicatorAt(x: number, y: number): boolean {
     return this.indicators.homeAt(x, y);
@@ -201,6 +214,7 @@ export class GameRenderer {
     this.particles.update(this.app.ticker.deltaMS);
     this.nightLayer.update(alpha);
     this.ghostLayer.update(building, ghost, block, this.app.ticker.deltaMS);
+    this.workReach.update(building ? ghost : null, this.selected);
     this.indicators.update(this.camera, this.app.ticker.deltaMS, alpha);
 
     this.joystickBase.visible = joystick.active;
@@ -233,6 +247,7 @@ export class GameRenderer {
     this.resourceLayer.destroy();
     this.entityLayer.destroy();
     this.ghostLayer.destroy();
+    this.workReach.destroy();
     this.nightLayer.destroy();
     this.indicators.destroy();
     this.particles.destroy();

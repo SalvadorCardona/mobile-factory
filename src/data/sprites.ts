@@ -31,6 +31,8 @@ import { FORGE } from '../art/forge.ts';
 import { KID } from '../art/kid.ts';
 import { LAB } from '../art/lab.ts';
 import { LOOT } from '../art/loot.ts';
+import { LUMBER_CAMP } from '../art/lumberCamp.ts';
+import { LUMBERJACK } from '../art/lumberjack.ts';
 import { MUTANT } from '../art/mutant.ts';
 import { NURSERY } from '../art/nursery.ts';
 import { PATIENT } from '../art/patient.ts';
@@ -67,6 +69,8 @@ export const SPRITES = {
   mutant: MUTANT,
   kid: KID,
   worker: WORKER,
+  /** Un bûcheron : chemise à carreaux, barbe, et sa hache, qui s'abat à chaque coup. */
+  lumberjack: LUMBERJACK,
   /** Un mutant assommé, puis qui suit Adam jusqu'à la clinique. */
   patient: PATIENT,
   /** Un mutant guéri : un habitant, porteur, avec sa touffe fluo. */
@@ -99,6 +103,7 @@ export const SPRITES = {
   reinforcedTower: REINFORCED_TOWER,
   clinic: CLINIC_SPRITE,
   lab: LAB,
+  lumberCamp: LUMBER_CAMP,
 
   /** Décor de surface : un morceau par élément, cf. `data/decor.ts`. */
   decor: DECOR_ART,
@@ -111,7 +116,7 @@ export const SPRITE_IDS = Object.keys(SPRITES) as SpriteId[];
 /** Noms de morceaux valides pour un sprite donné. */
 export type PartOf<S extends SpriteId> = keyof (typeof SPRITES)[S]['parts'] & string;
 
-/** Les morceaux qu'un marcheur (Adam, Ève, mutant, enfant, ouvrier, patient, ex-mutant) doit fournir. */
+/** Les morceaux qu'un marcheur (Adam, Ève, mutant, enfant, ouvrier, bûcheron, patient, ex-mutant) doit fournir. */
 export const WALKER_PARTS = ['down', 'up', 'side', 'foot'] as const;
 
 /** Les morceaux qu'un bâtiment doit fournir. */

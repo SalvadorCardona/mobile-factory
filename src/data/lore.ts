@@ -103,6 +103,15 @@ export const LORE = {
       description: 'Le cœur de la colonie : si elle tombe, tout est perdu.',
       effect: 'Le cœur de la colonie : si elle tombe, tout est perdu.',
     },
+    lumberCamp: {
+      name: 'Cabane de bûcheron',
+      site: 'Quelques rondins empilés, une hache plantée dans la souche : la cabane attend ses murs.',
+      description:
+        'Une cabane de rondins, sa pile de bûches et sa hache plantée dans la souche. ' +
+        'Deux bûcherons y vivent : ils coupent seuls les arbres alentour et rangent le bois ' +
+        'dans son coffre, que les porteurs vident à la mairie.',
+      effect: '2 bûcherons coupent seuls les arbres alentour.',
+    },
     drill: {
       name: 'Foreuse',
       site: 'Un bâti de pierre qui attend son fer. Posée sur un filon, elle l’extraira seule.',
