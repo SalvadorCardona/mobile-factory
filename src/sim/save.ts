@@ -22,6 +22,7 @@ import { JOB_PRIORITY, type JobPriority } from '../data/workers.ts';
 import { PERKS, type PerkId } from '../data/perks.ts';
 import { RESEARCH, type ResearchId } from '../data/research.ts';
 import type { SchedulerSnapshot } from './scheduler.ts';
+import { canPause, clampStaff } from './staffing.ts';
 import type { Store, StoreSnapshot } from './store.ts';
 import type {
   BeastState,
@@ -314,7 +315,15 @@ function parseEntity(raw: unknown): SavedEntity {
 
   if (entity['kind'] !== kind) throw new SaveError(`${proto} n'est pas un ${String(entity['kind'])}`);
 
-  const built = { ...placed, store: stock(entity['store']), hp: int(entity['hp']), level: int(entity['level']) };
+  const built = {
+    ...placed,
+    store: stock(entity['store']),
+    hp: int(entity['hp']),
+    level: int(entity['level']),
+    // Absents des sauvegardes d'avant la pause et les effectifs : en marche, au complet.
+    paused: entity['paused'] === undefined ? false : bool(entity['paused']) && canPause(proto),
+    staff: entity['staff'] === undefined ? BUILDINGS[proto].workers : clampStaff(proto, int(entity['staff'])),
+  };
 
   if (built.hp <= 0) throw new SaveError(`${proto} sans points de vie`);
   if (built.level < 1 || built.level > maxLevel(proto)) throw new SaveError(`${proto} au niveau ${built.level}`);

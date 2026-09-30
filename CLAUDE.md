@@ -67,7 +67,13 @@ La **cabane de bûcheron** loge deux **bûcherons** (mobile `lumberjack`,
 mint au placement et à la sélection), réservé — jamais deux sur le même —,
 coupé une unité par coup comme par Adam, le bois rapporté au coffre de la
 cabane, que les porteurs vident (priorité d'une foreuse). Coffre plein, ils
-attendent devant la porte. Un ouvrier sans travail **flâne** devant chez
+attendent devant la porte. Depuis sa fenêtre, un producteur (foreuse,
+ferme, forge, nurserie, cabane) se met **en pause** (`pauseBuilding` : il ne
+produit ni ne consomme, ses ouvriers finissent leur geste, bulle ⏸ et sprite
+pâli sur la carte), et un bâtiment qui emploie règle ses ouvriers entre
+`minWorkers` et `workers` (`setWorkers`, sélecteur − / + ; zéro vaut pause) :
+`sim/staffing.ts` répartit la population de la ville par id, un poste sans
+ouvrier libre reste vide, « ouvrier manquant ». Un ouvrier sans travail **flâne** devant chez
 lui (`wander()`, hachage de la seed, sans PRNG ni chemin) et ne rentre que
 le soir (crépuscule, nuit) ou pendant une vague.
 

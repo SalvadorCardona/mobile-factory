@@ -36,6 +36,7 @@ import { LUMBERJACK } from '../art/lumberjack.ts';
 import { MUTANT } from '../art/mutant.ts';
 import { NURSERY } from '../art/nursery.ts';
 import { PATIENT } from '../art/patient.ts';
+import { PAUSED } from '../art/paused.ts';
 import { PUDDLE } from '../art/puddle.ts';
 import { ROCK_COAL, ROCK_IRON, ROCK_STONE } from '../art/rocks.ts';
 import { STORE_FULL } from '../art/storeFull.ts';
@@ -82,6 +83,8 @@ export const SPRITES = {
   target: TARGET,
   /** Bulle « coffre plein » au-dessus d'une foreuse ou d'une ferme arrêtée. */
   storeFull: STORE_FULL,
+  /** Bulle « en pause » au-dessus d'un producteur que le joueur a arrêté. */
+  paused: PAUSED,
   /** La flaque d'où sortent les mutants d'une vague. */
   puddle: PUDDLE,
   /** Le butin qu'ils lâchent : un morceau par objet. */

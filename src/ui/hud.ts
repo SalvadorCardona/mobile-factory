@@ -989,8 +989,8 @@ function chip(icon: 'people' | 'mutant', value: number, label: string): HTMLElem
   return node;
 }
 
-/** Le détail des ouvriers : une ligne par bâtiment qui emploie, puis ce que font les porteurs. */
-function crewDetail({ byBuilding, porters }: Workforce): HTMLElement {
+/** Le détail des ouvriers : une ligne par bâtiment qui emploie, affectés et libres, puis ce que font les porteurs. */
+function crewDetail({ byBuilding, porters, assigned, free, missing }: Workforce): HTMLElement {
   const detail = element('div', 'hud-quest-crew-detail');
   const row = (icon: HTMLElement, label: string, count: number): HTMLElement => {
     const node = element('div', 'hud-quest-crew-row');
@@ -1001,6 +1001,10 @@ function crewDetail({ byBuilding, porters }: Workforce): HTMLElement {
 
   if (byBuilding.length === 0) detail.append(text('hud-quest-crew-label', 'Aucun ouvrier pour l’instant.', 'div'));
   for (const { proto, count } of byBuilding) detail.append(row(buildingIcon(proto, 22), BUILDINGS[proto].label, count));
+  if (byBuilding.length > 0) {
+    detail.append(row(uiIcon('worker', 22), 'Affectés', assigned), row(uiIcon('worker', 22), 'Libres', free));
+  }
+  if (missing > 0) detail.append(row(uiIcon('worker', 22), 'Postes vides', missing));
   if (porters.busy + porters.idle > 0) {
     detail.append(
       row(uiIcon('worker', 22), 'Porteurs occupés', porters.busy),

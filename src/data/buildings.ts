@@ -55,10 +55,16 @@ export interface BuildingProto {
   /** Points de vie du bâtiment fini. */
   hp: number;
   /**
-   * Ouvriers que le bâtiment emploie ou héberge une fois terminé. Ils
-   * comptent dans la population de la colonie ; les porteurs en sortiront.
+   * Ouvriers que le bâtiment héberge une fois terminé, et le plus qu'il en
+   * emploie : son maximum. Ils comptent dans la population de la colonie ;
+   * les porteurs en sortiront. À la construction, il les emploie tous.
    */
   workers: number;
+  /**
+   * Le moins d'ouvriers qu'on peut lui laisser depuis sa fenêtre (sélecteur
+   * − / + de `sim/staffing.ts`). Zéro : c'est une pause de fait.
+   */
+  minWorkers: number;
   /** Proposé dans le menu de construction ? La mairie, unique, ne l'est pas. */
   menu: boolean;
   /** Un seul par colonie, chantier compris : le labo de recherche. */
@@ -121,6 +127,7 @@ export const BUILDINGS = {
     logisticRadius: 10,
     hp: 120,
     workers: 0,
+    minWorkers: 0,
     menu: false,
     unique: true,
     plan: false,
@@ -142,6 +149,7 @@ export const BUILDINGS = {
     logisticRadius: 0,
     hp: 50,
     workers: 2,
+    minWorkers: 0,
     menu: true,
     unique: false,
     plan: false,
@@ -163,6 +171,7 @@ export const BUILDINGS = {
     logisticRadius: 0,
     hp: 40,
     workers: 0,
+    minWorkers: 0,
     menu: true,
     unique: false,
     plan: false,
@@ -184,6 +193,7 @@ export const BUILDINGS = {
     logisticRadius: 0,
     hp: 60,
     workers: 0,
+    minWorkers: 0,
     menu: true,
     unique: false,
     plan: false,
@@ -205,6 +215,7 @@ export const BUILDINGS = {
     logisticRadius: 0,
     hp: 70,
     workers: 4,
+    minWorkers: 0,
     menu: true,
     unique: false,
     plan: true,
@@ -226,6 +237,7 @@ export const BUILDINGS = {
     logisticRadius: 0,
     hp: 50,
     workers: 4,
+    minWorkers: 0,
     menu: true,
     unique: false,
     plan: false,
@@ -247,6 +259,7 @@ export const BUILDINGS = {
     logisticRadius: 0,
     hp: 60,
     workers: 0,
+    minWorkers: 0,
     menu: true,
     unique: false,
     plan: false,
@@ -279,6 +292,7 @@ export const BUILDINGS = {
     logisticRadius: 0,
     hp: 60,
     workers: 0,
+    minWorkers: 0,
     menu: true,
     unique: false,
     plan: false,
@@ -300,6 +314,7 @@ export const BUILDINGS = {
     logisticRadius: 0,
     hp: 60,
     workers: 0,
+    minWorkers: 0,
     menu: true,
     unique: false,
     plan: false,
@@ -322,6 +337,7 @@ export const BUILDINGS = {
     logisticRadius: 0,
     hp: 60,
     workers: 0,
+    minWorkers: 0,
     menu: true,
     unique: true,
     plan: false,

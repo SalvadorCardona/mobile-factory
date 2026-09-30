@@ -62,7 +62,7 @@ function colony(layout: Layout): World {
   const state = world.snapshot();
   const slots = [...SLOTS];
   const entities: SavedEntity[] = [
-    { kind: 'townHall', id: world.townHallId, proto: 'townHall', tx: hx, ty: hy, width: 3, height: 3, store: layout.hall, hp: BUILDINGS.townHall.hp, level: 1 },
+    { kind: 'townHall', id: world.townHallId, proto: 'townHall', tx: hx, ty: hy, width: 3, height: 3, store: layout.hall, hp: BUILDINGS.townHall.hp, level: 1, paused: false, staff: BUILDINGS.townHall.workers },
   ];
   let nextId = state.nextId;
 
@@ -74,11 +74,11 @@ function colony(layout: Layout): World {
   };
 
   for (let i = 0; i < layout.houses; i += 1) {
-    entities.push({ ...place('builderHouse'), kind: 'house', store: {}, hp: BUILDINGS.builderHouse.hp, level: 1 });
+    entities.push({ ...place('builderHouse'), kind: 'house', store: {}, hp: BUILDINGS.builderHouse.hp, level: 1, paused: false, staff: BUILDINGS.builderHouse.workers });
   }
   for (const proto of layout.sites ?? []) entities.push({ ...place(proto), kind: 'site', delivered: {} });
   for (const store of layout.drills ?? []) {
-    entities.push({ ...place('drill'), kind: 'drill', store, hp: BUILDINGS.drill.hp, level: 1, output: 'ironOre', blocked: true });
+    entities.push({ ...place('drill'), kind: 'drill', store, hp: BUILDINGS.drill.hp, level: 1, paused: false, staff: BUILDINGS.drill.workers, output: 'ironOre', blocked: true });
   }
 
   // Adam à l'écart, immobile : ce sont les porteurs qu'on regarde.
@@ -386,6 +386,9 @@ describe('porteurs', () => {
       total: houses,
       byBuilding: [{ proto: 'builderHouse', count: houses }],
       porters: { busy: 0, idle: houses },
+      assigned: houses,
+      free: 0,
+      missing: 0,
     });
 
     run(world, 60);
@@ -413,6 +416,24 @@ describe('porteurs', () => {
     world.entities.delete(house.id);
     expect(world.workforce().total).toBe(BUILDINGS.builderHouse.workers + BUILDINGS.farm.workers);
     expect(world.workforce().porters.busy + world.workforce().porters.idle).toBe(BUILDINGS.builderHouse.workers);
+  });
+
+  it('une maison réglée à 2 ouvriers : deux porteurs travaillent, les autres flânent', () => {
+    const world = colony({ hall: { wood: 40, stone: 40 }, houses: 1, sites: ['farm', 'nursery'] });
+    const house = [...world.entities.values()].find((entity) => entity.kind === 'house')!;
+    const busy = new Set<number>();
+
+    world.push({ type: 'setWorkers', id: house.id, count: 2 });
+    run(world, 1500, () => {
+      for (const worker of workers(world)) if (worker.job) busy.add(worker.id);
+    });
+
+    const ids = workers(world)
+      .map((worker) => worker.id)
+      .sort((a, b) => a - b);
+
+    expect([...busy].sort((a, b) => a - b)).toEqual(ids.slice(0, 2));
+    expect(world.workforce().free).toBe(BUILDINGS.builderHouse.workers - 2);
   });
 
   it('ne trace jamais une ligne droite à travers l’eau', () => {

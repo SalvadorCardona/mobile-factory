@@ -15,6 +15,8 @@
  * la ferme ondulent, la cheminée du labo fume quand une recherche tourne. Une foreuse ou une ferme bloquée, coffre plein, porte
  * au-dessus du toit une bulle qui flotte : il faut venir la vider. Une
  * cabane de bûcheron aussi, quand son coffre n'a plus la place d'un voyage.
+ * Un producteur à l'arrêt — mis en pause, ou sans un ouvrier — porte à la
+ * place la bulle « pause », son sprite pâlit, sa roue et ses cultures se figent.
  *
  * Tri en profondeur : les enfants sont ordonnés par le bas de leur emprise,
  * pour qu'Adam passe derrière la mairie quand il est au-dessus d'elle et
@@ -37,6 +39,7 @@ import { SPRITES, type SpriteId, type SpriteProto } from '../data/sprites.ts';
 import { LUMBERJACKS } from '../data/workers.ts';
 import type { Entity, EntityId } from '../sim/types.ts';
 import { terrainAt } from '../sim/terrain.ts';
+import { canPause } from '../sim/staffing.ts';
 import { siteMissing, type World } from '../sim/world.ts';
 import { PLAYER_MAX_HP } from '../sim/player.ts';
 import { MobileLayer, drawHp } from './mobileLayer.ts';
@@ -55,6 +58,9 @@ const HP_FG = hex(PALETTE.coral.base);
 const POP_MS = 420;
 const HIT_MS = 220;
 const HIT_TINT = hex(PALETTE.coral.light);
+
+/** Un producteur à l'arrêt pâlit, comme délavé : lavande, la couleur des faces de l'interface. */
+const PAUSED_TINT = hex(PALETTE.paper.shade);
 
 /** La pointe de la bulle « coffre plein » descend d'autant sous le haut du cadre, et monte d'autant sur une barre de vie. */
 const FULL_DIP = 6;
@@ -79,6 +85,10 @@ interface EntityView {
   moving: Sprite | null;
   /** Bulle « coffre plein » d'une foreuse ou d'une ferme, visible quand elle est bloquée. */
   full: Sprite | null;
+  /** Bulle « pause » d'un producteur, visible quand il est à l'arrêt. */
+  pause: Sprite | null;
+  /** Teinte de repos du sprite, à laquelle il revient après un coup : blanc, ou pâli à l'arrêt. */
+  tint: number;
   shadow: Sprite;
   /** Barre d'avancement d'un chantier, ou barre de vie d'un bâtiment entamé. */
   bar: Graphics;
@@ -236,7 +246,31 @@ export class EntityLayer {
       root.addChild(full);
     }
 
-    return { root, main, moving: movingSprite, full, shadow, bar, pop: 0, hit: 0, baseX: 0, shown, barKey: '' };
+    let pause: Sprite | null = null;
+
+    if (entity.kind !== 'site' && canPause(entity.proto)) {
+      pause = new Sprite(this.library.part('paused', 'bubble'));
+      pause.anchor.set(SPRITES.paused.anchorX, SPRITES.paused.anchorY);
+      pause.x = (entity.width * TILE_SIZE) / 2;
+      pause.visible = false;
+      root.addChild(pause);
+    }
+
+    return {
+      root,
+      main,
+      moving: movingSprite,
+      full,
+      pause,
+      tint: 0xffffff,
+      shadow,
+      bar,
+      pop: 0,
+      hit: 0,
+      baseX: 0,
+      shown,
+      barKey: '',
+    };
   }
 
   /** Fini ou cabossé, selon ce qu'il reste de points de vie. */
@@ -319,6 +353,7 @@ export class EntityLayer {
 
       this.drawBar(view, entity);
       this.showFull(view, entity, ticker.lastTime);
+      this.showPause(view, entity, ticker.lastTime);
       this.feel(view, ticker.deltaMS);
       this.animate(view, entity, ticker.lastTime);
     }
@@ -328,11 +363,14 @@ export class EntityLayer {
   private showFull(view: EntityView, entity: Entity, now: number): void {
     if (!view.full) return;
 
+    // À l'arrêt, c'est la bulle « pause » qui parle.
+    const stopped = entity.kind !== 'site' && canPause(entity.proto) && this.world.stopped(entity);
     const blocked =
-      (entity.kind === 'drill' && entity.output !== null && entity.blocked) ||
+      !stopped &&
+      ((entity.kind === 'drill' && entity.output !== null && entity.blocked) ||
       (entity.kind === 'farm' && entity.blocked) ||
       // Plus la place d'un voyage au coffre : les bûcherons attendent un porteur.
-      (entity.kind === 'lumberCamp' && entity.store.total() > entity.store.capacity - LUMBERJACKS.carry);
+      (entity.kind === 'lumberCamp' && entity.store.total() > entity.store.capacity - LUMBERJACKS.carry));
 
     view.full.visible = blocked;
     if (!blocked) return;
@@ -341,6 +379,22 @@ export class EntityLayer {
     const top = entity.height * TILE_SIZE - SPRITES[spriteOf(entity)].height;
 
     view.full.y = top + FULL_DIP - (view.bar.visible ? FULL_ABOVE_BAR : 0) + Math.sin(now * 0.004) * 2;
+  }
+
+  /** La bulle « pause » flotte au-dessus d'un producteur à l'arrêt, et le sprite pâlit. */
+  private showPause(view: EntityView, entity: Entity, now: number): void {
+    if (!view.pause || entity.kind === 'site') return;
+
+    const stopped = this.world.stopped(entity);
+
+    view.pause.visible = stopped;
+    view.tint = stopped ? PAUSED_TINT : 0xffffff;
+    if (view.hit <= 0) view.main.tint = view.tint;
+    if (!stopped) return;
+
+    const top = entity.height * TILE_SIZE - SPRITES[spriteOf(entity)].height;
+
+    view.pause.y = top + FULL_DIP - (view.bar.visible ? FULL_ABOVE_BAR : 0) + Math.sin(now * 0.004) * 2;
   }
 
   /** L'ombre d'Adam prend la teinte du sol sous ses pieds. */
@@ -357,6 +411,9 @@ export class EntityLayer {
   /** La roue tourne quand la foreuse travaille ; les cultures ondulent ; le labo fume quand il cherche. */
   private animate(view: EntityView, entity: Entity, now: number): void {
     if (!view.moving) return;
+
+    // À l'arrêt, tout se fige.
+    if (entity.kind !== 'site' && canPause(entity.proto) && this.world.stopped(entity)) return;
 
     if (entity.kind === 'drill') {
       if (entity.output !== null && !entity.blocked) view.moving.rotation = (now * 0.006) % (Math.PI * 2);
@@ -401,10 +458,10 @@ export class EntityLayer {
       const strength = view.hit / HIT_MS;
 
       root.x = view.baseX + Math.sin(view.hit * 0.25) * 3 * strength;
-      view.main.tint = strength > 0.35 ? HIT_TINT : 0xffffff;
+      view.main.tint = strength > 0.35 ? HIT_TINT : view.tint;
     } else if (root.x !== view.baseX) {
       root.x = view.baseX;
-      view.main.tint = 0xffffff;
+      view.main.tint = view.tint;
     }
   }
 

@@ -101,7 +101,7 @@ function colony(layout: Layout = {}): World {
   let nextId = state.nextId;
   const campId = nextId++;
   const entities: SavedEntity[] = [
-    { kind: 'townHall', id: world.townHallId, proto: 'townHall', ...SPOT.hall, width: 3, height: 3, store: {}, hp: BUILDINGS.townHall.hp, level: 1 },
+    { kind: 'townHall', id: world.townHallId, proto: 'townHall', ...SPOT.hall, width: 3, height: 3, store: {}, hp: BUILDINGS.townHall.hp, level: 1, paused: false, staff: BUILDINGS.townHall.workers },
     {
       kind: 'lumberCamp',
       id: campId,
@@ -112,11 +112,13 @@ function colony(layout: Layout = {}): World {
       store: layout.campStore ? { wood: layout.campStore } : {},
       hp: BUILDINGS.lumberCamp.hp,
       level: 1,
+      paused: false,
+      staff: BUILDINGS.lumberCamp.workers,
     },
   ];
 
   if (layout.house && SPOT.house) {
-    entities.push({ kind: 'house', id: nextId++, proto: 'builderHouse', ...SPOT.house, width: 2, height: 2, store: {}, hp: BUILDINGS.builderHouse.hp, level: 1 });
+    entities.push({ kind: 'house', id: nextId++, proto: 'builderHouse', ...SPOT.house, width: 2, height: 2, store: {}, hp: BUILDINGS.builderHouse.hp, level: 1, paused: false, staff: BUILDINGS.builderHouse.workers });
   }
 
   if (layout.bare) {
@@ -280,6 +282,61 @@ describe('bûcherons', () => {
     world.withdraw(camp.id, 'wood', BUILDINGS.lumberCamp.storage);
     run(world, 1200);
     expect(chopped).toBeGreaterThan(0);
+  });
+
+  it('en pause : le bûcheron rapporte le bois qu’il a, puis plus personne ne coupe ; à la reprise, ils repartent', () => {
+    const world = colony();
+    const camp = campOf(world);
+    let chopped = 0;
+
+    world.events.on('treeChopped', () => (chopped += 1));
+    // Jusqu'à ce qu'un bûcheron ait du bois dans les bras.
+    for (let i = 0; i < 2000 && !lumberjacks(world).some((lumberjack) => lumberjack.load > 0); i += 1) world.tick();
+    expect(lumberjacks(world).some((lumberjack) => lumberjack.load > 0)).toBe(true);
+
+    world.push({ type: 'pauseBuilding', id: camp.id, paused: true });
+    run(world, 600);
+
+    // Son geste fini : le bois est au coffre, rien dans les bras, et ils flânent.
+    const stored = camp.store.count('wood');
+
+    expect(stored).toBe(chopped);
+    expect(lumberjacks(world).every((lumberjack) => lumberjack.load === 0 && lumberjack.state === 'idle')).toBe(true);
+    run(world, 600);
+    expect(chopped).toBe(stored);
+
+    world.push({ type: 'pauseBuilding', id: camp.id, paused: false });
+    run(world, 1200);
+    expect(chopped).toBeGreaterThan(stored);
+  });
+
+  it('de 2 à 1 ouvrier : un seul bûcheron travaille, l’autre redevient libre', () => {
+    const world = colony();
+    const camp = campOf(world);
+
+    world.push({ type: 'setWorkers', id: camp.id, count: 1 });
+    run(world, 300);
+
+    const [first, second] = lumberjacks(world).sort((a, b) => a.id - b.id);
+    const out = new Set<number>();
+
+    run(world, 2000, () => {
+      for (const lumberjack of lumberjacks(world)) {
+        if (lumberjack.state !== 'idle') out.add(lumberjack.id);
+      }
+    });
+
+    expect(out).toEqual(new Set([first!.id]));
+    expect(second!.state).toBe('idle');
+    expect(world.staffing(camp)).toMatchObject({ wanted: 1, filled: 1 });
+    expect(world.workforce()).toMatchObject({ total: 2, assigned: 1, free: 1 });
+
+    // Rendu à la cabane, il reprend la hache.
+    world.push({ type: 'setWorkers', id: camp.id, count: 2 });
+    run(world, 1500, () => {
+      if (second!.state !== 'idle') out.add(second!.id);
+    });
+    expect(out.has(second!.id)).toBe(true);
   });
 
   it('les porteurs vident la cabane dans la mairie : tout le bois coupé arrive, rien de plus', () => {

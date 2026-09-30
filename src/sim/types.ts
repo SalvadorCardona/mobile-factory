@@ -54,13 +54,25 @@ interface Built extends Placed {
    * entrée de `BUILDINGS[proto].upgrades` : points de vie, arme, sprite.
    */
   level: number;
+  /**
+   * En pause (`sim/staffing.ts`) : un producteur ne produit ni ne consomme
+   * plus rien, ses ouvriers finissent leur geste puis flânent. Toujours faux
+   * pour un bâtiment qui ne produit rien.
+   */
+  paused: boolean;
+  /**
+   * Ouvriers voulus, entre `minWorkers` et `workers` du prototype — le
+   * maximum à la construction. Les postes réellement occupés se comptent
+   * dans la population de la ville (`World.staffing()`).
+   */
+  staff: number;
 }
 
 export interface Drill extends Built {
   kind: 'drill';
   /** Objet extrait par le gisement sous la foreuse, `null` si elle est posée à sec. */
   output: ItemId | null;
-  /** Vrai quand le coffre est plein : la foreuse ne se replanifie plus. */
+  /** Vrai quand la foreuse ne se replanifie plus : coffre plein, ou en pause. */
   blocked: boolean;
 }
 
@@ -103,7 +115,7 @@ export interface House extends Built {
 /** La ferme : ses ouvriers font pousser de la nourriture dans son coffre, à la cadence de la recette. */
 export interface Farm extends Built {
   kind: 'farm';
-  /** Vrai quand le coffre est plein : la ferme ne se replanifie plus. */
+  /** Vrai quand la ferme ne se replanifie plus : coffre plein, en pause, ou sans ouvrier. */
   blocked: boolean;
 }
 
@@ -113,7 +125,7 @@ export interface Farm extends Built {
  */
 export interface Forge extends Built {
   kind: 'forge';
-  /** Vrai quand il manque une entrée : la forge ne se replanifie plus. */
+  /** Vrai quand la forge ne se replanifie plus : il manque une entrée, ou elle est en pause. */
   blocked: boolean;
 }
 

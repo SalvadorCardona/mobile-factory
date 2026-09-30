@@ -112,6 +112,7 @@ import { Store } from './store.ts';
 import { findSpawn, habitatAt, isBuildable, isWalkable, oreAt, terrainAt } from './terrain.ts';
 import { inLogisticRange } from './warehouse.ts';
 import { chopSpot, isTree, pickTree, treesInRange } from './lumberjacks.ts';
+import { allocateStaff, canPause, clampStaff, employs, type Staffing } from './staffing.ts';
 import { carryOf, clearLine, standStill, walkToward, wander, wanderFrom } from './workers.ts';
 import { nextWeather, spoilsNight, weatherAt, type WeatherSpell } from './weather.ts';
 import type {
@@ -213,6 +214,11 @@ export interface Workforce {
   byBuilding: { proto: BuildingId; count: number }[];
   /** Les porteurs logés : `busy` ont un job, `idle` attendent du travail. */
   porters: { busy: number; idle: number };
+  /** Les postes occupés dans les bâtiments qui emploient ; le reste du `total` est libre. */
+  assigned: number;
+  free: number;
+  /** Postes demandés mais vides, faute d'ouvrier libre. */
+  missing: number;
 }
 
 export type WorldEvents = {
@@ -324,6 +330,10 @@ export type WorldEvents = {
   porterDelivered: { workerId: MobileId; id: EntityId; item: ItemId; amount: number };
   /** Un bûcheron a donné un coup de hache : une unité de bois s'est détachée de l'arbre. `remaining` à 0 : il est tombé. */
   treeChopped: { lumberjackId: MobileId; tx: number; ty: number; remaining: number };
+  /** Un bâtiment producteur a été mis en pause, ou il repart. */
+  buildingPaused: { id: EntityId; paused: boolean };
+  /** L'effectif voulu d'un bâtiment a changé. */
+  workersChanged: { id: EntityId; staff: number };
   /** Un bûcheron a rangé `amount` bois dans le coffre de sa cabane. */
   woodStored: { lumberjackId: MobileId; id: EntityId; amount: number };
   /** Un mutant vaincu est tombé assommé plutôt que de s'évaporer : `id` est le patient qu'il devient. */
@@ -446,6 +456,12 @@ export class World {
 
   /** La météo du tick en cours : relue dans la seed au début de chaque tick, jamais sauvegardée. */
   private spell: WeatherSpell | null = null;
+
+  /**
+   * La répartition des ouvriers, cf. `staffing()` : refaite une fois par tick,
+   * ou quand un effectif, un bâtiment fini ou tombé la change. Jamais sauvegardée.
+   */
+  private duty: { tick: number; filled: Map<EntityId, number>; onDuty: Set<MobileId> } | null = null;
 
   public constructor(seed: number) {
     this.seed = seed >>> 0;
@@ -698,6 +714,14 @@ export class World {
 
       case 'transferToLab':
         this.transferToLab(command.id);
+        break;
+
+      case 'pauseBuilding':
+        this.setPaused(command.id, command.paused);
+        break;
+
+      case 'setWorkers':
+        this.setStaff(command.id, command.count);
         break;
     }
   }
@@ -1627,6 +1651,8 @@ export class World {
       store: new Store(proto.storage),
       hp: proto.hp,
       level: 1,
+      paused: false,
+      staff: proto.workers,
     };
     let building: Building;
 
@@ -1685,6 +1711,7 @@ export class World {
 
     this.entities.set(site.id, building);
     this.dirtyTile(site.tx, site.ty);
+    this.duty = null;
     this.events.emit('buildingCompleted', { id: site.id });
 
     switch (building.kind) {
@@ -1801,7 +1828,8 @@ export class World {
     const recipe = RECIPES[DRILL_RECIPE];
     const item = drill.output;
 
-    if (!item) {
+    // À sec ou en pause : elle ne se replanifie plus — « Reprendre » la relance.
+    if (!item || drill.paused) {
       drill.blocked = true;
       return;
     }
@@ -1834,6 +1862,12 @@ export class World {
    * s'endort et ne coûte plus rien jusqu'à ce qu'on vienne la vider.
    */
   private runFarm(farm: Farm): void {
+    // En pause, ou personne aux champs : elle s'endort jusqu'à ce qu'on la relance.
+    if (this.stopped(farm)) {
+      farm.blocked = true;
+      return;
+    }
+
     const recipe = RECIPES[FARM_RECIPE];
     const [item, base] = (Object.entries(recipe.outputs) as [ItemId, number][])[0] ?? ['food', 1];
     // Fermes fertiles (labo) : la même récolte, plus généreuse.
@@ -1850,8 +1884,12 @@ export class World {
     this.scheduleFarm(farm);
   }
 
+  /** La cadence de la recette est celle de la ferme au complet : à moitié d'ouvriers, deux fois plus lente. */
   private scheduleFarm(farm: Farm): void {
-    this.scheduler.schedule(farm.id, this.tickCount + RECIPES[FARM_RECIPE].duration, this.tickCount);
+    const { filled, max } = this.staffing(farm) ?? { filled: 1, max: 1 };
+    const duration = Math.ceil((RECIPES[FARM_RECIPE].duration * max) / Math.max(1, filled));
+
+    this.scheduler.schedule(farm.id, this.tickCount + duration, this.tickCount);
   }
 
   /**
@@ -1862,7 +1900,8 @@ export class World {
   private runForge(forge: Forge): void {
     const recipe: RecipeProto = RECIPES[FORGE_RECIPE];
 
-    if (canCraft(forge.store, recipe)) {
+    // En pause, le four ne mange rien : le cycle en cours ne se termine pas.
+    if (!forge.paused && canCraft(forge.store, recipe)) {
       for (const [item, amount] of amountsOf(recipe.inputs)) forge.store.remove(item, amount);
       for (const [item, amount] of amountsOf(recipe.outputs)) {
         forge.store.add(item, amount);
@@ -1876,7 +1915,7 @@ export class World {
   private startForge(forge: Forge): void {
     const recipe: RecipeProto = RECIPES[FORGE_RECIPE];
 
-    if (!canCraft(forge.store, recipe)) {
+    if (forge.paused || !canCraft(forge.store, recipe)) {
       forge.blocked = true;
       return;
     }
@@ -1891,6 +1930,9 @@ export class World {
    */
   private runNursery(nursery: Nursery): void {
     const recipe: RecipeProto = RECIPES[NURSERY_RECIPE];
+
+    // En pause : l'heure passe sans naissance ni repas, et rien n'est replanifié — « Reprendre » la relance.
+    if (nursery.paused) return;
 
     if (!hasInputs(nursery.store, recipe)) {
       if (!nursery.hungry) this.events.emit('nurseryHungry', { id: nursery.id });
@@ -2014,13 +2056,16 @@ export class World {
   /**
    * Les ouvriers, comptés comme `population()` : ceux qu'emploient les
    * bâtiments finis. Les porteurs dont la maison est tombée quittent la
-   * colonie : ils ne comptent plus.
+   * colonie : ils ne comptent plus. Ceux qu'on a retirés d'un poste
+   * (`setWorkers`) sont libres.
    */
   public workforce(): Workforce {
     const counts = new Map<BuildingId, number>();
     let total = 0;
     let busy = 0;
     let idle = 0;
+    let assigned = 0;
+    let missing = 0;
 
     for (const entity of this.entities.values()) {
       const { workers } = BUILDINGS[entity.proto];
@@ -2028,6 +2073,11 @@ export class World {
       if (entity.kind === 'site' || workers === 0) continue;
       counts.set(entity.proto, (counts.get(entity.proto) ?? 0) + workers);
       total += workers;
+
+      const filled = this.roster().filled.get(entity.id) ?? 0;
+
+      assigned += filled;
+      missing += entity.staff - filled;
     }
     for (const worker of this.workers()) {
       if (!this.entities.has(worker.homeId)) continue;
@@ -2041,7 +2091,7 @@ export class World {
       return count ? [{ proto, count }] : [];
     });
 
-    return { total, byBuilding, porters: { busy, idle } };
+    return { total, byBuilding, porters: { busy, idle }, assigned, free: total - assigned, missing };
   }
 
   /**
@@ -2887,7 +2937,8 @@ export class World {
       return;
     }
 
-    if (!worker.job) {
+    // Sans poste — on l'a retiré de la maison —, il finit sa livraison puis ne cherche plus rien.
+    if (!worker.job && this.onDuty(worker)) {
       worker.searchTicks -= 1;
 
       if (worker.searchTicks <= 0) {
@@ -3126,11 +3177,19 @@ export class World {
       return;
     }
 
+    // Cabane en pause, ou lui retiré de son poste : il finit son geste — rapporter le bois qu'il a —, puis flâne.
+    const working = !camp.paused && this.onDuty(lumberjack);
+
+    if (!working) {
+      if (lumberjack.state === 'toTree' || lumberjack.state === 'chop') this.endTrip(lumberjack, door);
+      else if (lumberjack.state === 'wait' && lumberjack.load === 0) lumberjack.state = 'idle';
+    }
+
     switch (lumberjack.state) {
       case 'idle':
       case 'wait':
         lumberjack.searchTicks -= 1;
-        if (lumberjack.searchTicks <= 0 && !bedtime && lumberjack.load === 0) {
+        if (lumberjack.searchTicks <= 0 && working && !bedtime && lumberjack.load === 0) {
           lumberjack.searchTicks = LUMBERJACKS.retryTicks;
           this.startTrip(lumberjack, camp, door);
         }
@@ -3412,6 +3471,8 @@ export class World {
 
   private destroyBuilding(building: Building): void {
     this.entities.delete(building.id);
+    this.duty = null;
+    this.restartFarms();
     this.chunks.release(building.id, building.tx, building.ty, building.width, building.height);
     this.dirtyTile(building.tx, building.ty);
     this.events.emit('buildingDestroyed', {
@@ -3425,6 +3486,142 @@ export class World {
       this.defeated = true;
       this.defeatTick = this.tickCount;
       this.events.emit('townHallDestroyed', {});
+    }
+  }
+
+  /* ------------------------------------------------- pause et effectifs */
+
+  /** La commande `pauseBuilding` : un producteur s'arrête, ou repart. Sans effet sur un bâtiment qui ne produit rien. */
+  private setPaused(id: EntityId, paused: boolean): void {
+    const entity = this.entities.get(id);
+
+    if (!entity || entity.kind === 'site' || !canPause(entity.proto) || entity.paused === paused) return;
+
+    entity.paused = paused;
+    this.events.emit('buildingPaused', { id, paused });
+    // En pause, rien à faire : le prochain réveil trouvera la machine arrêtée et ne se replanifiera pas.
+    if (!paused) this.restart(entity);
+  }
+
+  /** La commande `setWorkers` : l'effectif voulu, ramené dans les bornes du bâtiment. */
+  private setStaff(id: EntityId, count: number): void {
+    const entity = this.entities.get(id);
+
+    if (!entity || entity.kind === 'site' || !employs(entity.proto)) return;
+
+    const staff = clampStaff(entity.proto, count);
+
+    if (staff === entity.staff) return;
+
+    entity.staff = staff;
+    this.duty = null;
+    this.events.emit('workersChanged', { id, staff });
+    this.restartFarms();
+  }
+
+  /**
+   * Les postes d'un bâtiment qui emploie : bornes, effectif voulu, postes
+   * occupés. `null` pour un bâtiment sans ouvriers.
+   */
+  public staffing(building: Building): Staffing | null {
+    if (!employs(building.proto)) return null;
+
+    const { minWorkers, workers } = BUILDINGS[building.proto];
+
+    return {
+      min: minWorkers,
+      max: workers,
+      wanted: building.staff,
+      filled: this.roster().filled.get(building.id) ?? 0,
+    };
+  }
+
+  /** Un producteur à l'arrêt : en pause, ou sans un seul ouvrier en poste. */
+  public stopped(building: Building): boolean {
+    if (building.paused) return true;
+
+    const staffing = this.staffing(building);
+
+    return staffing !== null && staffing.filled === 0;
+  }
+
+  /**
+   * Qui travaille : la population de la ville — les ouvriers que logent les
+   * bâtiments finis — répartie entre les bâtiments qui emploient
+   * (`allocateStaff`, par id). Dans chaque bâtiment, ce sont ses premiers
+   * logés, par id, qui prennent les postes ; les autres finissent leur geste
+   * et sont libres. Un ex-mutant n'occupe pas de poste : il porte toujours.
+   */
+  private roster(): { filled: Map<EntityId, number>; onDuty: Set<MobileId> } {
+    if (this.duty?.tick === this.tickCount) return this.duty;
+
+    let pool = 0;
+    const demands: { id: EntityId; wanted: number }[] = [];
+
+    for (const entity of this.entities.values()) {
+      if (entity.kind === 'site' || !employs(entity.proto)) continue;
+      pool += BUILDINGS[entity.proto].workers;
+      demands.push({ id: entity.id, wanted: entity.staff });
+    }
+
+    const filled = allocateStaff(demands, pool);
+    const crews = new Map<EntityId, MobileId[]>();
+
+    for (const mobile of this.mobiles.values()) {
+      if (mobile.kind !== 'lumberjack' && (mobile.kind !== 'worker' || mobile.exMutant)) continue;
+
+      const crew = crews.get(mobile.homeId);
+
+      if (crew) crew.push(mobile.id);
+      else crews.set(mobile.homeId, [mobile.id]);
+    }
+
+    const onDuty = new Set<MobileId>();
+
+    for (const [home, crew] of crews) {
+      crew.sort((a, b) => a - b);
+      for (const id of crew.slice(0, filled.get(home) ?? 0)) onDuty.add(id);
+    }
+
+    this.duty = { tick: this.tickCount, filled, onDuty };
+    return this.duty;
+  }
+
+  /** L'ouvrier a-t-il un poste ? Sinon, il finit son geste, puis flâne. */
+  private onDuty(mobile: Worker | Lumberjack): boolean {
+    return (mobile.kind === 'worker' && mobile.exMutant) || this.roster().onDuty.has(mobile.id);
+  }
+
+  /**
+   * Relance un producteur endormi qui a de nouveau de quoi tourner : un
+   * coffre qu'on vide, une pause levée, des ouvriers revenus. Une machine qui
+   * attend déjà un réveil n'est pas touchée — elle n'en a jamais deux.
+   */
+  private restart(building: Building): void {
+    if (this.stopped(building)) return;
+
+    if (building.kind === 'drill' && building.blocked && building.output) {
+      building.blocked = false;
+      this.scheduleDrill(building);
+    } else if (building.kind === 'farm' && building.blocked) {
+      building.blocked = false;
+      this.scheduleFarm(building);
+    } else if (building.kind === 'forge' && building.blocked) {
+      this.startForge(building);
+    } else if (
+      building.kind === 'nursery' &&
+      // Son réveil est passé pendant la pause ; à ce tick même, il n'a pas encore sonné et s'en chargera.
+      building.nextBirthTick < this.tickCount &&
+      (!building.hungry || hasInputs(building.store, RECIPES[NURSERY_RECIPE]))
+    ) {
+      this.runNursery(building);
+    }
+  }
+
+  /** Les effectifs ont changé : une ferme qui n'avait plus personne peut repartir. */
+  private restartFarms(): void {
+    for (const entity of this.entities.values()) {
+      if (entity.kind === 'farm') this.restart(entity);
     }
   }
 
@@ -3444,15 +3641,7 @@ export class World {
     if (removed <= 0) return 0;
 
     // Une machine bloquée ne se replanifiait plus : c'est ce retrait qui la réveille.
-    if (entity.kind === 'drill' && entity.blocked && entity.output) {
-      entity.blocked = false;
-      this.scheduleDrill(entity);
-    } else if (entity.kind === 'farm' && entity.blocked) {
-      entity.blocked = false;
-      this.scheduleFarm(entity);
-    } else if (entity.kind === 'forge' && entity.blocked) {
-      this.startForge(entity);
-    }
+    this.restart(entity);
     return removed;
   }
 
