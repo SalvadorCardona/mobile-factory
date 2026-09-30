@@ -12,6 +12,17 @@
  * - `placing` le fantôme est posé, le doigt peut le déplacer au drag, et un
  *             bouton de confirmation valide.
  *
+ * Poser ramène à `idle` : Adam doit pouvoir marcher tout de suite, une
+ * attaque n'attend pas qu'on ait trouvé « Annuler ». Pour enchaîner trois
+ * foreuses, « Poser encore » valide et reste armé.
+ *
+ * Le placement ne garde pas tous les doigts pour lui : il ne prend que les
+ * **taps** (le fantôme saute là où le doigt s'est levé) et les **glissés qui
+ * partent du fantôme**. Un doigt qui glisse ailleurs est rendu au routeur,
+ * qui le propose au joystick — on peut donc déplacer Adam au pouce pendant
+ * qu'on vise. Si personne n'en veut (moitié droite), le glissé déplace le
+ * fantôme, comme avant.
+ *
  * Rien n'est modifié dans le monde ici : la validation pousse une commande
  * `placeBuilding` que le tick consomme.
  */
@@ -19,7 +30,7 @@
 import { TILE_SIZE } from '../core/grid.ts';
 import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
 import type { World } from '../sim/world.ts';
-import type { PointerConsumer, PointerSample } from './pointer.ts';
+import { TAP_SLOP, type PointerConsumer, type PointerSample } from './pointer.ts';
 
 export interface GhostState {
   building: BuildingId;
@@ -40,9 +51,15 @@ export class Placement implements PointerConsumer {
   public mode: PlacementMode = 'idle';
   public ghost: GhostState | null = null;
 
-  /** Bâtiment choisi dans le menu, conservé entre deux poses. */
+  /** Bâtiment choisi dans le menu ; conservé après une pose seulement par « Poser encore ». */
   private armed: BuildingId | null = null;
   private pointerId: number | null = null;
+  private startX = 0;
+  private startY = 0;
+  /** Le doigt s'est posé sur le fantôme : son glissé le déplace. */
+  private fromGhost = false;
+  /** Le doigt a dépassé `TAP_SLOP` : ce n'est plus un tap. */
+  private dragging = false;
 
   private readonly world: World;
   private readonly screenToWorld: (x: number, y: number) => { x: number; y: number };
@@ -83,8 +100,11 @@ export class Placement implements PointerConsumer {
     this.onChange();
   }
 
-  /** Le bouton de confirmation. Seul chemin vers une construction réelle. */
-  public confirm(): void {
+  /**
+   * Le bouton de confirmation. Seul chemin vers une construction réelle.
+   * `again` : « Poser encore », on reste armé sur le même bâtiment.
+   */
+  public confirm(again = false): void {
     if (this.mode !== 'placing' || !this.ghost) return;
 
     this.world.push({
@@ -94,8 +114,10 @@ export class Placement implements PointerConsumer {
       ty: this.ghost.ty,
     });
 
-    // On reste armé : poser trois foreuses d'affilée ne doit pas obliger à
-    // rouvrir le menu entre chaque.
+    if (!again) {
+      this.cancel();
+      return;
+    }
     this.mode = 'armed';
     this.ghost = null;
     this.onChange();
@@ -114,18 +136,51 @@ export class Placement implements PointerConsumer {
     if (this.mode === 'idle' || this.pointerId !== null) return false;
 
     this.pointerId = sample.id;
-    this.moveGhost(sample);
+    this.startX = sample.x;
+    this.startY = sample.y;
+    this.fromGhost = this.isOnGhost(sample);
+    this.dragging = false;
     return true;
   }
 
-  public onMove(sample: PointerSample): void {
+  public onMove(sample: PointerSample): 'release' | void {
     if (sample.id !== this.pointerId) return;
+
+    if (!this.dragging) {
+      if (Math.hypot(sample.x - this.startX, sample.y - this.startY) <= TAP_SLOP) return;
+      this.dragging = true;
+      // Un glissé parti d'ailleurs que du fantôme appartient d'abord au
+      // joystick. S'il n'en veut pas, le routeur nous rend ce même mouvement.
+      if (!this.fromGhost) return 'release';
+    }
     this.moveGhost(sample);
   }
 
   public onUp(sample: PointerSample): void {
     if (sample.id !== this.pointerId) return;
     this.pointerId = null;
+    // Un tap pose le fantôme là où le doigt s'est levé.
+    if (!this.dragging) this.moveGhost(sample);
+  }
+
+  /** Le doigt touche le fantôme — ou le vise, avec le décalage au-dessus du pouce. */
+  private isOnGhost(sample: PointerSample): boolean {
+    const ghost = this.ghost;
+
+    if (!ghost) return false;
+
+    const proto = BUILDINGS[ghost.building];
+    const inside = (point: { x: number; y: number }): boolean => {
+      const tx = point.x / TILE_SIZE;
+      const ty = point.y / TILE_SIZE;
+
+      return tx >= ghost.tx && tx < ghost.tx + proto.width && ty >= ghost.ty && ty < ghost.ty + proto.height;
+    };
+
+    return (
+      inside(this.screenToWorld(sample.x, sample.y)) ||
+      inside(this.screenToWorld(sample.x, sample.y - FINGER_OFFSET_Y))
+    );
   }
 
   private moveGhost(sample: PointerSample): void {
