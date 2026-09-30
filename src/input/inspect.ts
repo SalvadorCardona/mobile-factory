@@ -8,11 +8,19 @@
  * la main. Un doigt revendiqué qui glisse au-delà de `TAP_SLOP` n'ouvre rien —
  * c'était un mouvement, pas un tap.
  *
+ * Le doigt vise ce qu'il **voit** : un bâtiment est dessiné en 3/4, son
+ * cadre monte au-dessus de l'emprise (toit, grue, drapeau). La zone tapable
+ * est donc ce cadre entier, emprise comprise — pas seulement les tuiles
+ * occupées. Tout est en pixels monde : le DPR n'entre jamais en jeu, et le
+ * zoom est absorbé par `screenToWorld`.
+ *
  * Aucune commande ici : ouvrir une fenêtre ne modifie pas le monde.
  */
 
-import { worldToTile } from '../core/grid.ts';
-import type { EntityId } from '../sim/types.ts';
+import { TILE_SIZE } from '../core/grid.ts';
+import { BUILDINGS } from '../data/buildings.ts';
+import { SPRITES } from '../data/sprites.ts';
+import type { Entity, EntityId } from '../sim/types.ts';
 import type { World } from '../sim/world.ts';
 import type { PointerConsumer, PointerSample } from './pointer.ts';
 
@@ -77,8 +85,36 @@ export class Inspect implements PointerConsumer {
 
   private entityAt(sample: PointerSample): EntityId | undefined {
     const position = this.screenToWorld(sample.x, sample.y);
-    const { tx, ty } = worldToTile(position.x, position.y);
 
-    return this.world.chunks.occupantAt(tx, ty);
+    return buildingAt(this.world.entities.values(), position.x, position.y);
   }
+}
+
+/**
+ * Le bâtiment dessiné sous un point monde : son emprise, plus la partie du
+ * sprite qui dépasse au-dessus (cadre ancré en (0, 1) au pied de l'emprise,
+ * cf. `render/entityLayer.ts`).
+ *
+ * Deux cadres se chevauchent quand le toit d'un bâtiment de devant couvre
+ * celui de derrière : le plus bas à l'écran gagne, comme le tri en
+ * profondeur du rendu — on ouvre ce qu'on voit par-dessus.
+ */
+export function buildingAt(entities: Iterable<Entity>, x: number, y: number): EntityId | undefined {
+  let found: EntityId | undefined;
+  let foundBottom = -Infinity;
+
+  for (const entity of entities) {
+    const art = SPRITES[BUILDINGS[entity.proto].sprite];
+    const left = entity.tx * TILE_SIZE;
+    const right = left + Math.max(entity.width * TILE_SIZE, art.width);
+    const bottom = (entity.ty + entity.height) * TILE_SIZE;
+    const top = bottom - Math.max(entity.height * TILE_SIZE, art.height);
+
+    if (x < left || x >= right || y < top || y >= bottom) continue;
+    if (bottom <= foundBottom) continue;
+
+    found = entity.id;
+    foundBottom = bottom;
+  }
+  return found;
 }

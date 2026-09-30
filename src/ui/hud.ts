@@ -25,7 +25,9 @@ import { ITEMS, type ItemId } from '../data/items.ts';
 import { LORE } from '../data/lore.ts';
 import type { AtlasStats } from '../render/spriteLibrary.ts';
 import type { PlacementRejection } from '../sim/commands.ts';
+import type { EntityId } from '../sim/types.ts';
 import { TICKS_PER_SECOND, siteMissing, type World } from '../sim/world.ts';
+import { tutorialHint } from './hint.ts';
 import { itemAmount, itemIcon, uiIcon } from './icons.ts';
 
 const REJECTION_LABELS: Record<PlacementRejection, string> = {
@@ -80,6 +82,7 @@ export class Hud {
   private delivered = false;
 
   private project: Projector = (x, y) => ({ x, y });
+  private inspected: () => EntityId | null = () => null;
 
   private readonly world: World;
 
@@ -188,6 +191,11 @@ export class Hud {
   /** Le renderer sait où est Adam à l'écran ; le HUD non. `main.ts` fait le lien. */
   public setProjector(project: Projector): void {
     this.project = project;
+  }
+
+  /** Le bâtiment dont la fenêtre est ouverte : le conseil qui invite à le taper se tait. */
+  public setInspected(inspected: () => EntityId | null): void {
+    this.inspected = inspected;
   }
 
   /** Bas de la quête, en pixels écran : les repères de bord du renderer restent dessous. */
@@ -345,36 +353,22 @@ export class Hud {
 
   /* --------------------------------------------------------------- conseil */
 
-  /**
-   * Le tutoriel, sans tutoriel : une seule phrase, choisie d'après l'état du
-   * monde. Elle disparaît d'elle-même une fois l'étape franchie — un joueur
-   * qui sait déjà jouer ne la voit presque pas.
-   */
+  /** Le conseil sous la quête, cf. `hint.ts`. */
   private currentHint(): string | null {
     const { world } = this;
-    const hall = world.entities.get(world.townHallId);
-    const { inventory } = world.player;
-
-    if (world.defeated || !hall) return null;
-
-    if (hall.kind === 'site') {
-      const cost = BUILDINGS[hall.proto].cost as Partial<Record<ItemId, number>>;
-      const needs = (item: ItemId): boolean => (hall.delivered[item] ?? 0) < (cost[item] ?? 0);
-      const carries = (Object.keys(cost) as ItemId[]).some((item) => needs(item) && inventory.count(item) > 0);
-
-      if (siteMissing(hall) === 0) return 'Tapez le chantier, puis « Construire ».';
-      if (inventory.freeSpace() <= 0) return 'Sac plein ! Marchez contre le chantier pour livrer.';
-      if (!this.harvestedWood && needs('wood')) return 'Marchez contre un arbre pour couper du bois.';
-      if (!this.harvestedStone && needs('stone')) return 'Il faut de la pierre : foncez dans un rocher rose.';
-      if (carries && !this.delivered) return 'Marchez contre le chantier pour livrer — ou tapez-le.';
-      return null;
-    }
-
     const towers = [...world.entities.values()].some((entity) => entity.kind === 'tower');
 
-    if (world.wave === 0 && !towers) return 'Les mutants arrivent : construisez une tour de guet.';
-    if (this.mutantCount() > 0 && world.wave <= 2) return 'Restez près d’eux : votre arc tire tout seul.';
-    return null;
+    return tutorialHint(
+      world,
+      {
+        harvestedWood: this.harvestedWood,
+        harvestedStone: this.harvestedStone,
+        delivered: this.delivered,
+        inspected: this.inspected(),
+      },
+      towers,
+      this.mutantCount(),
+    );
   }
 
   private updateHint(): void {

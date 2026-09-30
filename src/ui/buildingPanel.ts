@@ -105,6 +105,11 @@ export class BuildingPanel {
     return this.entityId !== null;
   }
 
+  /** Le bâtiment affiché, ou `null` si la fenêtre est fermée. */
+  public get shown(): EntityId | null {
+    return this.entityId;
+  }
+
   public show(id: EntityId): void {
     const entity = this.world.entities.get(id);
 
