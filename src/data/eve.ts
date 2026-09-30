@@ -48,6 +48,8 @@ export const EVE_LINES = {
     deliver: 'Pose tout ça : marche contre le chantier, ou tape-le.',
     tower: 'Les mutants sortent la nuit ! Une tour de guet, vite.',
     bow: 'Reste près d’eux : ton arc tire tout seul.',
+    /** Plus de pierre en ville et pas de carrière : la source qui ne s'épuise pas. */
+    quarry: 'Plus de pierre en ville ? Pose une carrière : ses ouvriers la taillent dans les ruines.',
     /** Par radio, entre deux nuits, tant qu'elle n'est pas là. `{n}` : nuits restantes. */
     coming: 'Tiens bon : encore {n} nuit{s} et j’arrive avec ma machine !',
     /** Une fois la forge débloquée, tant qu'elle n'est pas bâtie : le charbon sert enfin. */

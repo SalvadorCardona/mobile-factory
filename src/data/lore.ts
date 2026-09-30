@@ -144,6 +144,15 @@ export const LORE = {
         'qui, bientôt, porteront les ressources à la place d’Adam.',
       effect: 'Loge 4 ouvriers. Pas encore d’autre effet.',
     },
+    quarry: {
+      name: 'Carrière',
+      site: 'Une grue de fortune au-dessus d’un vieux parking effondré : trois ouvriers y casseront le béton.',
+      description:
+        'Un parking effondré, une grue bricolée et des tas de moellons roses. Trois ouvriers ' +
+        'y taillent la pierre dans les ruines du vieux monde et la rangent dans son coffre, ' +
+        'que les porteurs vident à la mairie. Pas besoin de rocher : les ruines ne manquent pas.',
+      effect: '3 ouvriers taillent la pierre, sans rocher.',
+    },
     farm: {
       name: 'Ferme',
       site: 'Une cabane à outils à monter avant de retourner la terre. Quatre ouvriers y travailleront.',

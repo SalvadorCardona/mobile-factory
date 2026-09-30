@@ -58,9 +58,23 @@ describe('tutorialHint', () => {
     expect(tutorialAdvice(builtWorld(), FRESH, false, 0)?.wants).toBeNull();
   });
 
+  it('envoie poser une carrière quand la pierre manque en ville, et se tait dès qu’il y en a', () => {
+    const world = builtWorld();
+
+    expect(world.townStock()!.available('stone')).toBe(0);
+    expect(tutorialHint(world, FRESH, true, 0)).toBe(EVE_LINES.hints.quarry);
+    // Pendant une vague, l'arc d'abord.
+    expect(tutorialHint(world, FRESH, true, 1)).not.toBe(EVE_LINES.hints.quarry);
+
+    world.townStock()!.add('stone', 1);
+    expect(tutorialHint(world, FRESH, true, 0)).toBeNull();
+  });
+
   it('annonce la forge une fois débloquée, et envoie chercher du charbon', () => {
     const world = builtWorld();
 
+    // De la pierre en ville : Ève ne parle pas de carrière.
+    world.townStock()!.add('stone', 1);
     expect(tutorialAdvice(world, FRESH, true, 0)).toBeNull();
 
     // Tant qu'Ève annonce son arrivée par radio, c'est elle qui parle d'abord.
@@ -140,6 +154,10 @@ describe('conseil du sac plein', () => {
     expect(world.wanted('wood')).toBeGreaterThan(0);
     expect(harvestRefusedText('wood', world.wanted('wood'))).not.toMatch(/aucun chantier/);
     expect(harvestRefusedText('wood', world.wanted('wood'))).toBe('Assez de bois dans le sac pour les chantiers — allez les livrer');
+  });
+
+  it('dit que la ville en a assez, quand c’est elle qui refuse', () => {
+    expect(harvestRefusedText('wood', 0, true)).toBe('La ville a assez de bois — Adam n’en ramasse plus en passant');
   });
 
   it('dit « aucun chantier » quand plus personne n’attend l’objet', () => {

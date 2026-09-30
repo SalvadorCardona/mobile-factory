@@ -238,7 +238,7 @@ export class EntityLayer {
 
     let full: Sprite | null = null;
 
-    if (entity.kind === 'drill' || entity.kind === 'farm' || entity.kind === 'lumberCamp') {
+    if (entity.kind === 'drill' || entity.kind === 'farm' || entity.kind === 'quarry' || entity.kind === 'lumberCamp') {
       full = new Sprite(this.library.part('storeFull', 'bubble'));
       full.anchor.set(SPRITES.storeFull.anchorX, SPRITES.storeFull.anchorY);
       full.x = (entity.width * TILE_SIZE) / 2;
@@ -368,7 +368,7 @@ export class EntityLayer {
     const blocked =
       !stopped &&
       ((entity.kind === 'drill' && entity.output !== null && entity.blocked) ||
-      (entity.kind === 'farm' && entity.blocked) ||
+      ((entity.kind === 'farm' || entity.kind === 'quarry') && entity.blocked) ||
       // Plus la place d'un voyage au coffre : les bûcherons attendent un porteur.
       (entity.kind === 'lumberCamp' && entity.store.total() > entity.store.capacity - LUMBERJACKS.carry));
 

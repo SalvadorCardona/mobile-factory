@@ -32,6 +32,13 @@ export const ITEMS = {
 
 export type ItemId = keyof typeof ITEMS;
 
+/**
+ * Au-delà de ce stock en ville, Adam ne ramasse plus l'objet en passant : la
+ * ville en a assez, le sac garde sa place pour ce qui manque. Il en prend
+ * encore ce qu'un chantier ou une recette attend, plus sa petite réserve.
+ */
+export const TOWN_PLENTY = 60;
+
 export const ITEM_IDS = Object.keys(ITEMS) as ItemId[];
 
 export function isItemId(value: string): value is ItemId {

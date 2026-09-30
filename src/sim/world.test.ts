@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_SIZE, tileToChunk, worldToTile } from '../core/grid.ts';
 import { BUILDINGS, type BuildingId, type BuildingProto } from '../data/buildings.ts';
-import type { ItemId } from '../data/items.ts';
+import { TOWN_PLENTY, type ItemId } from '../data/items.ts';
 import { RECIPES } from '../data/recipes.ts';
 import { RESOURCES } from '../data/resources.ts';
 import type { PlacementRejection } from './commands.ts';
@@ -963,6 +963,50 @@ describe('sac : ce qu’Adam accepte de porter', () => {
 
     expect(world.townStock()).not.toBeNull();
     expect(world.carryLimit('coal')).toBe(Infinity);
+  });
+
+  /*
+   * Le playtest du 30/09/2026 : 285 bois en ville, et Adam remplissait encore
+   * son sac de bois à chaque arbre frôlé — « Sac plein » près des rochers.
+   */
+  it('ne ramasse plus en passant ce dont la ville a assez', () => {
+    const world = new World(1);
+
+    world.player.inventory.add('wood', 25);
+    world.player.inventory.add('stone', 12);
+    world.push({ type: 'transferToSite', id: world.townHallId });
+    world.tick();
+    world.townStock()!.add('wood', TOWN_PLENTY - 1);
+
+    expect(world.townHasPlenty('wood')).toBe(false);
+    expect(world.carryLimit('wood')).toBe(Infinity);
+
+    world.townStock()!.add('wood', 1);
+
+    expect(world.townHasPlenty('wood')).toBe(true);
+    expect(world.carryLimit('wood')).toBe(SPARE_CARRY);
+    expect(world.carryLimit('stone')).toBe(Infinity);
+  });
+
+  it('dit, en refusant la récolte, que la ville en a assez', () => {
+    const world = new World(1);
+
+    completeSite(world, world.townHallId);
+
+    const { tx, ty, axis } = harvestable(world)!;
+    const item = RESOURCES[world.resources.at(tx, ty)!.id].item;
+    const events: { plenty: boolean; wanted: number }[] = [];
+
+    world.townStock()!.add(item, TOWN_PLENTY);
+    world.player.inventory.add(item, SPARE_CARRY);
+    world.events.on('harvestRefused', (event) => events.push(event));
+    world.push({ type: 'setMoveAxis', ...axis });
+
+    for (let i = 0; i < 60; i += 1) world.tick();
+
+    expect(events.length).toBeGreaterThan(0);
+    expect(events.every((event) => event.plenty && event.wanted === 0)).toBe(true);
+    expect(world.player.inventory.count(item)).toBe(SPARE_CARRY);
   });
 
   it('refuse la récolte d’un objet dont Adam porte déjà assez, et le signale', () => {

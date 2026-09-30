@@ -25,6 +25,7 @@ export type BuildingKind =
   | 'tower'
   | 'house'
   | 'farm'
+  | 'quarry'
   | 'forge'
   | 'clinic'
   | 'lab'
@@ -159,6 +160,29 @@ export const BUILDINGS = {
     weapon: null,
     upgrades: [],
   },
+  quarry: {
+    label: LORE.buildings.quarry.name,
+    siteDescription: LORE.buildings.quarry.site,
+    description: LORE.buildings.quarry.description,
+    effect: LORE.buildings.quarry.effect,
+    kind: 'quarry',
+    width: 2,
+    height: 2,
+    // Tout en bois, la ressource abondante : c'est elle qui donne la pierre qui manque.
+    cost: { wood: 18 },
+    storage: 30,
+    logisticRadius: 0,
+    hp: 60,
+    workers: 3,
+    minWorkers: 0,
+    menu: true,
+    unique: false,
+    plan: false,
+    unlockNight: 0,
+    sprite: 'quarry',
+    weapon: null,
+    upgrades: [],
+  },
   logisticsPost: {
     label: LORE.buildings.logisticsPost.name,
     siteDescription: LORE.buildings.logisticsPost.site,
@@ -211,7 +235,8 @@ export const BUILDINGS = {
     kind: 'nursery',
     width: 2,
     height: 2,
-    cost: { wood: 14, stone: 6 },
+    // Le bois abonde, la pierre manque : les bâtiments du début en demandent peu.
+    cost: { wood: 18, stone: 3 },
     storage: 12,
     logisticRadius: 0,
     hp: 60,
@@ -277,7 +302,7 @@ export const BUILDINGS = {
     kind: 'tower',
     width: 2,
     height: 2,
-    cost: { wood: 12, stone: 4 },
+    cost: { wood: 16, stone: 2 },
     storage: 0,
     logisticRadius: 0,
     hp: 60,

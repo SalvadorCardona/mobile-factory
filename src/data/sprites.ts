@@ -39,6 +39,7 @@ import { MUTANT } from '../art/mutant.ts';
 import { NURSERY } from '../art/nursery.ts';
 import { PATIENT } from '../art/patient.ts';
 import { PAUSED } from '../art/paused.ts';
+import { QUARRY } from '../art/quarry.ts';
 import { PUDDLE } from '../art/puddle.ts';
 import { ROCK_COAL, ROCK_IRON, ROCK_STONE } from '../art/rocks.ts';
 import { STORE_FULL } from '../art/storeFull.ts';
@@ -112,6 +113,7 @@ export const SPRITES = {
   clinic: CLINIC_SPRITE,
   lab: LAB,
   lumberCamp: LUMBER_CAMP,
+  quarry: QUARRY,
   logisticsPost: LOGISTICS_POST,
 
   /** Décor de surface : un morceau par élément, cf. `data/decor.ts`. */

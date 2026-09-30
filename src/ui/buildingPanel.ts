@@ -329,9 +329,13 @@ export class BuildingPanel {
       const pausable = canPause(entity.proto);
       const stopped = this.world.stopped(entity);
 
-      // Une foreuse, une ferme, une forge ou une cabane de bûcheron remplit son coffre : Adam vient le vider.
+      // Une foreuse, une ferme, une carrière, une forge ou une cabane de bûcheron remplit son coffre : Adam vient le vider.
       const producer =
-        entity.kind === 'drill' || entity.kind === 'farm' || entity.kind === 'forge' || entity.kind === 'lumberCamp';
+        entity.kind === 'drill' ||
+        entity.kind === 'farm' ||
+        entity.kind === 'quarry' ||
+        entity.kind === 'forge' ||
+        entity.kind === 'lumberCamp';
       // Une nurserie ou une forge consomme : Adam vient la remplir.
       const consumer = entity.kind === 'nursery' || entity.kind === 'forge';
 
@@ -411,6 +415,18 @@ export class BuildingPanel {
                 : entity.blocked
                   ? BLOCKED
                   : 'Les sillons poussent.',
+          );
+          break;
+
+        case 'quarry':
+          lines.push(
+            entity.paused
+              ? PAUSED
+              : stopped
+                ? 'À l’arrêt : personne à la taille — ajoutez un ouvrier.'
+                : entity.blocked
+                  ? BLOCKED
+                  : 'Les pioches entament la ruine.',
           );
           break;
 
