@@ -35,6 +35,19 @@ export function carriesWanted(world: World): boolean {
 }
 
 /**
+ * Le message d'une récolte refusée (`harvestRefused`) : c'est le jeu qui
+ * parle, il vouvoie. Tant qu'un chantier ou une recette attend l'objet
+ * (`wanted` > 0), le sac en contient déjà assez — il faut aller livrer ;
+ * « aucun chantier » ne se dit que si plus personne n'en veut.
+ */
+export function harvestRefusedText(item: ItemId, wanted: number): string {
+  const label = ITEMS[item].label.toLowerCase();
+
+  if (wanted > 0) return `Assez de ${label} dans le sac pour les chantiers — allez les livrer`;
+  return `Assez de ${label} : aucun chantier n’en attend plus`;
+}
+
+/**
  * Le conseil d'un sac plein dont personne ne veut rien : il ne sert à rien
  * d'aller livrer, il faut poser un chantier ou jeter. On nomme l'objet qui
  * prend le plus de place. `null` si le sac n'est pas dans ce cas.

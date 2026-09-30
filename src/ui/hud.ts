@@ -55,7 +55,7 @@ import type { Entity } from '../sim/types.ts';
 import { ticksToNight } from '../sim/dayNight.ts';
 import { currentQuest, questProgress } from '../sim/eve.ts';
 import { TICKS_PER_SECOND, type Workforce, type World } from '../sim/world.ts';
-import { carriesWanted, tutorialAdvice, type Advice } from './hint.ts';
+import { carriesWanted, harvestRefusedText, tutorialAdvice, type Advice } from './hint.ts';
 import { buildingIcon, itemAmount, itemIcon, uiIcon } from './icons.ts';
 import { effectLine } from './researchText.ts';
 import { mapUrl, seedLine } from './seed.ts';
@@ -334,9 +334,9 @@ export class Hud {
       if (reason === 'bagFull') this.notify('Sac plein — rien à prendre de plus', 'bad');
     });
     world.events.on('inventoryFull', () => this.notify(this.bagFullMessage(), 'bad'));
-    world.events.on('harvestRefused', ({ item }) => {
+    world.events.on('harvestRefused', ({ item, wanted }) => {
       this.refused(item);
-      this.notify(`Assez de ${ITEMS[item].label.toLowerCase()} : aucun chantier n’en attend plus`, 'info');
+      this.notify(harvestRefusedText(item, wanted), 'info');
     });
     world.events.on('buildingCompleted', ({ id }) => {
       const entity = world.entities.get(id);

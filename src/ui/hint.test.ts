@@ -3,7 +3,7 @@ import { BUILDINGS } from '../data/buildings.ts';
 import { EVE, EVE_LINES } from '../data/eve.ts';
 import { World } from '../sim/world.ts';
 import { INVENTORY_CAPACITY } from '../sim/player.ts';
-import { tutorialAdvice, tutorialHint, uselessBagHint, type HintProgress } from './hint.ts';
+import { harvestRefusedText, tutorialAdvice, tutorialHint, uselessBagHint, type HintProgress } from './hint.ts';
 
 const FRESH: HintProgress = { harvestedWood: false, harvestedStone: false, delivered: false };
 
@@ -127,5 +127,25 @@ describe('conseil du sac plein', () => {
     world.player.inventory.add('coal', INVENTORY_CAPACITY);
 
     expect(uselessBagHint(world)).toBeNull();
+  });
+
+  /*
+   * Le playtest du 30/09/2026 : sac à 30 bois, mairie à 0/20, et le refus de
+   * récolte disait « aucun chantier n'en attend plus ».
+   */
+  it('refuse la récolte sans dire « aucun chantier » tant qu’un chantier attend l’objet', () => {
+    const world = new World(1);
+
+    world.player.inventory.add('wood', world.carryLimit('wood'));
+    expect(world.wanted('wood')).toBeGreaterThan(0);
+    expect(harvestRefusedText('wood', world.wanted('wood'))).not.toMatch(/aucun chantier/);
+    expect(harvestRefusedText('wood', world.wanted('wood'))).toBe('Assez de bois dans le sac pour les chantiers — allez les livrer');
+  });
+
+  it('dit « aucun chantier » quand plus personne n’attend l’objet', () => {
+    const world = new World(1);
+
+    expect(world.wanted('coal')).toBe(0);
+    expect(harvestRefusedText('coal', world.wanted('coal'))).toBe('Assez de charbon : aucun chantier n’en attend plus');
   });
 });
