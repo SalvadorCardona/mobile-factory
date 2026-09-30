@@ -272,6 +272,7 @@ export class World {
       resources: this.resources.toJSON(),
       entities: [...this.entities.values()].map(saveEntity),
       mobiles: [...this.mobiles.values()].map((mobile) => ({ ...mobile })),
+      dens: [...this.dens].map(([id, den]) => ({ id, ...den })),
       scheduler: this.scheduler.toJSON(this.tickCount),
     };
   }
@@ -326,6 +327,9 @@ export class World {
 
     this.mobiles.clear();
     for (const mobile of state.mobiles) this.mobiles.set(mobile.id, { ...mobile });
+
+    this.dens.clear();
+    for (const { id, members, readyTick } of state.dens) this.dens.set(id, { members, readyTick });
 
     this.scheduler.restore(state.scheduler);
   }
