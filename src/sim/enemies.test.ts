@@ -422,6 +422,13 @@ describe('mise en scène des vagues', () => {
     world.events.on('lootPicked', ({ id }) => picked.push(id));
     world.player.x = dropped[0]!.x;
     world.player.y = dropped[0]!.y;
+
+    // La récolte de proximité ne doit pas se mêler au butin : pas d'arbre ni de rocher autour.
+    const spot = worldToTile(world.player.x, world.player.y);
+
+    for (let ty = spot.ty - 3; ty <= spot.ty + 3; ty += 1) {
+      for (let tx = spot.tx - 3; tx <= spot.tx + 3; tx += 1) world.resources.clear(tx, ty);
+    }
     for (let i = 0; i < 20; i += 1) world.tick();
 
     expect(picked.sort()).toEqual(dropped.map((loot) => loot.id).sort());
