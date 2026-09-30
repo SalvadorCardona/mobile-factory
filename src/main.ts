@@ -20,6 +20,7 @@ import { PALETTE, hex } from './data/artDirection.ts';
 import { MENU_BUILDING_IDS } from './data/buildings.ts';
 import type { WildlifeId } from './data/enemies.ts';
 import type { ItemId } from './data/items.ts';
+import { seedsFor, type PerkId } from './data/perks.ts';
 import { IndicatorTap } from './input/indicatorTap.ts';
 import { Inspect } from './input/inspect.ts';
 import { Joystick } from './input/joystick.ts';
@@ -27,7 +28,9 @@ import { Keyboard, isTyping, type KeyboardState } from './input/keyboard.ts';
 import { Placement } from './input/placement.ts';
 import { PointerRouter } from './input/pointer.ts';
 import { GameRenderer } from './render/renderer.ts';
+import { activePerks, harvestSeeds, plant, type Garden } from './sim/garden.ts';
 import { STEP_MS, World } from './sim/world.ts';
+import { LocalGarden } from './storage/localGarden.ts';
 import { LocalSave, type LoadResult } from './storage/localSave.ts';
 import { TILE_SIZE } from './core/grid.ts';
 import { BuildingPanel } from './ui/buildingPanel.ts';
@@ -151,12 +154,17 @@ async function main(): Promise<void> {
   let paused = false;
 
   const autosave = wireSave(world, saves, () => started);
+  const garden = wireGarden(world, LocalGarden.browser());
 
   const pause = new PauseScreen(world.seed, () => setPaused(false), () => autosave.restart());
   const title = new TitleScreen({
     resume: loaded.status === 'ok',
     notice: LOAD_NOTICES[loaded.status] ?? linkNotice(world),
+    garden: garden.current(),
+    gardenActions: garden,
     onPlay: () => {
+      // Une nouvelle colonie part avec les bonus du jardin ; une colonie reprise garde les siens.
+      if (loaded.status !== 'ok') world.push({ type: 'applyPerks', perks: activePerks(garden.current()) });
       started = true;
       hud.root.dataset['started'] = 'true';
       window.umami?.track(loaded.status === 'ok' ? 'partie-reprise' : 'partie-demarree');
@@ -404,6 +412,36 @@ function wireSave(world: World, saves: LocalSave, started: () => boolean): Autos
       window.umami?.track('partie-recommencee');
       window.location.reload();
     },
+  };
+}
+
+interface GardenWiring {
+  current(): Garden;
+  plant(perk: PerkId): Garden;
+  setPure(pure: boolean): Garden;
+}
+
+/**
+ * Le jardin des souvenirs : les graines de la colonie tombée y entrent à la
+ * chute de la mairie, une seule fois — la partie perdue est effacée juste
+ * après, elle ne retombera pas. Chaque changement est écrit tout de suite,
+ * sous sa propre clé : « Recommencer » n'y touche pas.
+ */
+function wireGarden(world: World, gardens: LocalGarden): GardenWiring {
+  let garden = gardens.load();
+
+  const keep = (next: Garden): Garden => {
+    garden = next;
+    gardens.save(next);
+    return next;
+  };
+
+  world.events.on('townHallDestroyed', () => keep(harvestSeeds(garden, seedsFor(world.colonyScore()))));
+
+  return {
+    current: () => garden,
+    plant: (perk) => keep(plant(garden, perk)),
+    setPure: (pure) => keep({ ...garden, pure }),
   };
 }
 

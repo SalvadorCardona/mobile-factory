@@ -26,6 +26,15 @@ import { mulberry32, type StatefulRng } from '../core/rng.ts';
 import { BUILDINGS, NURSERY_BIRTH_TICKS, type BuildingId } from '../data/buildings.ts';
 import { ENEMIES, WAVES, WILDLIFE, WILDLIFE_SPAWN, waveSize } from '../data/enemies.ts';
 import type { ItemId } from '../data/items.ts';
+import {
+  PERKS,
+  bagBonus,
+  freeSites,
+  harvestTicksWith,
+  startingItems,
+  type ColonyScore,
+  type PerkId,
+} from '../data/perks.ts';
 import { RECIPES, type RecipeId } from '../data/recipes.ts';
 import { RESOURCES } from '../data/resources.ts';
 import { WEAPONS } from '../data/weapons.ts';
@@ -39,6 +48,7 @@ import { denSize, densOfChunk, stepBeast, type Den } from './wildlife.ts';
 import { facingOf } from './motion.ts';
 import {
   BUILD_REACH_TILES,
+  INVENTORY_CAPACITY,
   PLAYER_CALM_TICKS,
   PLAYER_MAX_HP,
   PLAYER_REGEN_TICKS,
@@ -177,6 +187,12 @@ export class World {
   /** Tick où la mairie est tombée ; 0 tant qu'elle tient. */
   public defeatTick = 0;
 
+  /** Les bonus du jardin des souvenirs avec lesquels la colonie est partie. Vide en « partie pure ». */
+  public perks: readonly PerkId[] = [];
+
+  /** Chantiers offerts par les bonus et pas encore ouverts : le prochain de ce bâtiment arrive livré. */
+  private giftedSites: BuildingId[] = [];
+
   private readonly scheduler = new Scheduler();
   private readonly queue: Command[] = [];
   private readonly log: CommandLogEntry[] = [];
@@ -268,6 +284,8 @@ export class World {
       kills: this.kills,
       defeated: this.defeated,
       defeatTick: this.defeatTick,
+      perks: [...this.perks],
+      giftedSites: [...this.giftedSites],
       player: { ...player, inventory: inventory.toJSON() },
       resources: this.resources.toJSON(),
       entities: [...this.entities.values()].map(saveEntity),
@@ -308,10 +326,13 @@ export class World {
     this.kills = state.kills;
     this.defeated = state.defeated;
     this.defeatTick = state.defeatTick;
+    this.perks = [...state.perks];
+    this.giftedSites = [...state.giftedSites];
 
     const { inventory, ...player } = state.player;
+    const capacity = INVENTORY_CAPACITY + bagBonus(this.perks);
 
-    Object.assign(this.player, player, { inventory: Store.fromJSON(this.player.inventory.capacity, inventory) });
+    Object.assign(this.player, player, { inventory: Store.fromJSON(capacity, inventory) });
     this.resources.restore(state.resources);
 
     for (const saved of state.entities) {
@@ -394,6 +415,34 @@ export class World {
       case 'takeFromBuilding':
         this.takeAll(command.id);
         break;
+
+      case 'applyPerks':
+        this.applyPerks(command.perks);
+        break;
+    }
+  }
+
+  /**
+   * Les bonus du jardin, au départ de la colonie : un sac plus grand, de quoi
+   * démarrer, un chantier offert, une récolte plus vive. Refusés une fois la
+   * partie lancée — un bonus ne s'ajoute pas en cours de route — et appliqués
+   * une seule fois, doublons écartés.
+   */
+  private applyPerks(perks: readonly PerkId[]): void {
+    if (this.tickCount > 1 || this.perks.length > 0) return;
+
+    const unique = [...new Set(perks)].filter((id) => Object.hasOwn(PERKS, id));
+
+    if (unique.length === 0) return;
+
+    const { inventory } = this.player;
+
+    this.perks = unique;
+    this.giftedSites = freeSites(unique);
+    this.player.inventory = Store.fromJSON(inventory.capacity + bagBonus(unique), inventory.toJSON());
+
+    for (const [item, amount] of Object.entries(startingItems(unique)) as [ItemId, number][]) {
+      this.player.inventory.add(item, amount);
     }
   }
 
@@ -511,7 +560,9 @@ export class World {
     if (resource) {
       this.player.harvesting = true;
 
-      if (this.contactTicks % RESOURCES[resource.id].harvestTicks === 0) {
+      const ticks = harvestTicksWith(this.perks, resource.id, RESOURCES[resource.id].harvestTicks);
+
+      if (this.contactTicks % ticks === 0) {
         this.harvest(contact.tx, contact.ty);
       }
       return;
@@ -647,7 +698,19 @@ export class World {
     this.chunks.occupy(id, tx, ty, proto.width, proto.height);
     this.events.emit('buildingPlaced', { id, tx, ty });
 
-    if (siteMissing(site) === 0) this.complete(site);
+    if (siteMissing(site) === 0) {
+      this.complete(site);
+      return id;
+    }
+
+    // Un chantier offert par le jardin : livré d'avance, il attend quand même « Construire ».
+    const gift = this.giftedSites.indexOf(building);
+
+    if (gift >= 0) {
+      this.giftedSites.splice(gift, 1);
+      site.delivered = { ...proto.cost };
+      this.events.emit('siteReady', { id });
+    }
 
     return id;
   }
@@ -936,6 +999,26 @@ export class World {
       if (entity.kind !== 'site') workers += BUILDINGS[entity.proto].workers;
     }
     return { adults: 1, children, workers };
+  }
+
+  /**
+   * Le bilan de la colonie, lu par le barème des graines : vagues
+   * repoussées, enfants encore là, bâtiments finis — la mairie comptée même
+   * tombée, puisqu'elle a tenu jusqu'à la défaite.
+   */
+  public colonyScore(): ColonyScore {
+    let buildings = 0;
+
+    for (const entity of this.entities.values()) {
+      if (entity.kind !== 'site') buildings += 1;
+    }
+    if (this.defeated) buildings += 1;
+
+    return {
+      waves: Math.max(0, this.wave - 1),
+      children: this.population().children,
+      buildings,
+    };
   }
 
   private stepMobiles(): void {

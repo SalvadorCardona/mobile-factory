@@ -16,13 +16,15 @@
  * - le **sac** d'Adam, à droite ;
  * - des **bulles** empilées pour les événements, et des gains qui flottent
  *   au-dessus de la tête d'Adam ;
- * - l'écran de **défaite**, avec le bilan de la partie ;
+ * - l'écran de **défaite**, avec le bilan de la partie et les graines qu'elle
+ *   laisse au jardin des souvenirs ;
  * - les statistiques de debug, seulement avec `?debug` (ou la touche `²`/`` ` ``).
  */
 
 import { BUILDINGS } from '../data/buildings.ts';
 import { ITEMS, type ItemId } from '../data/items.ts';
 import { LORE } from '../data/lore.ts';
+import { seedsFor } from '../data/perks.ts';
 import type { AtlasStats } from '../render/spriteLibrary.ts';
 import type { PlacementRejection } from '../sim/commands.ts';
 import type { EntityId } from '../sim/types.ts';
@@ -71,6 +73,7 @@ export class Hud {
   private readonly countdown: HTMLElement;
   private readonly defeat: HTMLElement;
   private readonly defeatStats: HTMLElement;
+  private readonly defeatSeeds: HTMLElement;
   public readonly audioButton: HTMLButtonElement;
   public readonly pauseButton: HTMLButtonElement;
   private lastBag = '';
@@ -136,6 +139,7 @@ export class Hud {
     const fresh = element('button', 'button-secondary');
 
     this.defeatStats = element('dl', 'overlay-stats');
+    this.defeatSeeds = element('div', 'overlay-seeds');
     defeatTitle.textContent = `La ${LORE.buildings.townHall.name.toLowerCase()} est tombée`;
     defeatText.textContent = 'Les mutants ont eu raison du premier toit de la colonie.';
     // La sauvegarde est déjà effacée : l'adresse seule décide de la carte.
@@ -145,7 +149,7 @@ export class Hud {
     fresh.type = 'button';
     fresh.textContent = 'Nouvelle carte';
     fresh.addEventListener('click', () => window.location.assign(mapUrl(window.location.href, null)));
-    defeatPanel.append(defeatTitle, defeatText, this.defeatStats, replay, fresh, seedLine(world.seed));
+    defeatPanel.append(defeatTitle, defeatText, this.defeatStats, this.defeatSeeds, replay, fresh, seedLine(world.seed));
     this.defeat.append(defeatPanel);
 
     // Le haut de l'écran se met en page tout seul : la quête, son conseil
@@ -462,6 +466,13 @@ export class Hud {
     this.defeatStats.replaceChildren(
       ...rows.flatMap(([label, value]) => [text('', label, 'dt'), text('', value, 'dd')]),
     );
+
+    // Les mêmes graines que `main.ts` verse au jardin : le barème est une fonction pure du bilan.
+    const seeds = seedsFor(world.colonyScore());
+    const amount = text('overlay-seeds-amount', `+${seeds} graine${seeds > 1 ? 's' : ''}`);
+
+    amount.prepend(uiIcon('seed', 28));
+    this.defeatSeeds.replaceChildren(amount, text('overlay-seeds-hint', 'À planter au jardin des souvenirs, sur l’écran titre.'));
     this.defeat.hidden = false;
   }
 

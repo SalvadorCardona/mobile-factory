@@ -9,6 +9,7 @@
  */
 
 import type { BuildingId } from '../data/buildings.ts';
+import type { PerkId } from '../data/perks.ts';
 import type { EntityId } from './types.ts';
 
 export type Command =
@@ -30,7 +31,12 @@ export type Command =
    * Vide le coffre d'une foreuse ou d'une ferme dans le sac, dans la limite
    * de la place. Le bouton « Prendre » de la fenêtre du bâtiment.
    */
-  | { type: 'takeFromBuilding'; id: EntityId };
+  | { type: 'takeFromBuilding'; id: EntityId }
+  /**
+   * Les bonus plantés au jardin des souvenirs, au départ d'une nouvelle
+   * colonie. Poussée avant le premier tick ; ignorée ensuite.
+   */
+  | { type: 'applyPerks'; perks: readonly PerkId[] };
 
 /** Motif de refus d'une commande sur un chantier — remonté à l'UI par un événement. */
 export type SiteRejection =

@@ -166,6 +166,12 @@ Rien ne joue avant un geste du joueur.
   y est dans un try/catch. Un nouvel état de simulation doit entrer dans
   `World.snapshot()` / `restore()` — sinon il se perd au rechargement ; un
   changement incompatible incrémente `SAVE_VERSION`.
+- Le **jardin des souvenirs** (graines laissées par chaque colonie tombée,
+  bonus plantés, « Partie pure ») n'est pas l'état d'une partie : format
+  versionné dans `sim/garden.ts`, clé dédiée `mobile-factory:garden`
+  (`storage/localGarden.ts`), jamais effacé par « Recommencer ». Les bonus
+  sont de la donnée (`src/data/perks.ts`) et entrent dans la partie par la
+  commande `applyPerks`, au départ d'une nouvelle colonie seulement.
 - Le contenu est de la donnée (`src/data/*.ts`, `as const satisfies`).
   `validatePrototypes()` tourne au démarrage en dev et dans les tests.
 - Pas d'ECS, pas de moteur physique, pas de multijoueur.
