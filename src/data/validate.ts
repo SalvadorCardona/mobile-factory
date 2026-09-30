@@ -4,7 +4,8 @@
  * TypeScript attrape déjà les ids inconnus. Ce qu'il n'attrape pas, ce sont les
  * incohérences entre tables : une recette dont le bâtiment n'existe plus, une
  * quantité nulle, un libellé dupliqué, un sprite à qui il manque un morceau
- * ou qui enfreint la direction artistique. Tout ça se voit ici, au chargement,
+ * ou qui enfreint la direction artistique — ou un objet sans débouché, qu'on
+ * récolterait pour remplir son sac pour rien. Tout ça se voit ici, au chargement,
  * plutôt qu'en jeu trois semaines plus tard.
  *
  * Plus tard s'ajouteront les cycles dans l'arbre techno et les déblocages en
@@ -13,13 +14,13 @@
 
 import { TILE_SIZE } from '../core/grid.ts';
 import { auditSvg } from './artDirection.ts';
-import { BUILDINGS, NURSERY_BIRTH_TICKS } from './buildings.ts';
+import { BUILDINGS } from './buildings.ts';
 import { ENEMIES, WAVES, WILDLIFE, WILDLIFE_SPAWN, type WildlifeProto } from './enemies.ts';
 import { EVE } from './eve.ts';
 import { ICON_SIZE, ITEM_ICONS } from './icons.ts';
 import { ITEMS } from './items.ts';
 import { QUESTS, QUEST_IDS, TOOLS, type QuestProto } from './quests.ts';
-import { RECIPES } from './recipes.ts';
+import { RECIPES, type RecipeProto } from './recipes.ts';
 import { RESOURCES } from './resources.ts';
 import { BUILDING_PARTS, RESOURCE_PARTS, SPRITES, WALKER_PARTS, type SpriteProto } from './sprites.ts';
 import { WEAPONS } from './weapons.ts';
@@ -62,6 +63,9 @@ export function validatePrototypes(): string[] {
     if (building.workers < 0 || !Number.isInteger(building.workers)) {
       errors.push(`BUILDINGS.${id} : nombre d'ouvriers invalide`);
     }
+    if (building.unlockWave < 0 || !Number.isInteger(building.unlockWave)) {
+      errors.push(`BUILDINGS.${id} : vague de déblocage invalide`);
+    }
     if (building.weapon !== null && !(building.weapon in WEAPONS)) {
       errors.push(`BUILDINGS.${id} : arme inconnue « ${String(building.weapon)} »`);
     }
@@ -78,7 +82,7 @@ export function validatePrototypes(): string[] {
       if (!building.effect.includes(range)) errors.push(`BUILDINGS.${id} : l'effet doit citer la portée (« ${range} »)`);
     }
     if (building.kind === 'nursery') {
-      const minutes = `${NURSERY_BIRTH_TICKS / (20 * 60)} min`;
+      const minutes = `${RECIPES.raiseChild.duration / (20 * 60)} min`;
 
       if (!building.effect.includes(minutes)) errors.push(`BUILDINGS.${id} : l'effet doit citer « ${minutes} »`);
     }
@@ -108,7 +112,7 @@ export function validatePrototypes(): string[] {
 
   const buildingsWithRecipe = new Set<string>();
 
-  for (const [id, recipe] of Object.entries(RECIPES)) {
+  for (const [id, recipe] of Object.entries(RECIPES) as [string, RecipeProto][]) {
     if (!(recipe.building in BUILDINGS)) {
       errors.push(`RECIPES.${id} : bâtiment inconnu « ${recipe.building} »`);
     } else {
@@ -128,13 +132,38 @@ export function validatePrototypes(): string[] {
       }
     }
 
-    if (Object.keys(recipe.outputs).length === 0) {
+    // La nurserie seule produit autre chose qu'un objet : un enfant.
+    if (Object.keys(recipe.outputs).length === 0 && BUILDINGS[recipe.building].kind !== 'nursery') {
       errors.push(`RECIPES.${id} : aucune sortie`);
+    }
+
+    const needs = sum(recipe.inputs);
+
+    if (needs > BUILDINGS[recipe.building].storage) {
+      errors.push(`RECIPES.${id} : le coffre de « ${recipe.building} » ne peut pas contenir ses entrées`);
+    }
+  }
+
+  // Un débouché par objet : un coût de bâtiment ou une entrée de recette.
+  const consumed = new Set<string>();
+
+  for (const building of Object.values(BUILDINGS)) {
+    for (const itemId of Object.keys(building.cost)) consumed.add(itemId);
+  }
+  for (const recipe of Object.values(RECIPES) as RecipeProto[]) {
+    for (const itemId of Object.keys(recipe.inputs)) consumed.add(itemId);
+  }
+  for (const id of Object.keys(ITEMS)) {
+    if (!consumed.has(id)) {
+      errors.push(`ITEMS.${id} : aucun débouché — ni coût de bâtiment, ni entrée de recette`);
     }
   }
 
   for (const [id, building] of Object.entries(BUILDINGS)) {
-    if ((building.kind === 'drill' || building.kind === 'farm') && !buildingsWithRecipe.has(id)) {
+    if (
+      (building.kind === 'drill' || building.kind === 'farm' || building.kind === 'nursery' || building.kind === 'forge') &&
+      !buildingsWithRecipe.has(id)
+    ) {
       errors.push(`BUILDINGS.${id} : aucun bâtiment producteur sans recette associée`);
     }
     if (building.kind === 'farm' && building.storage <= 0) {
@@ -290,6 +319,10 @@ export function validatePrototypes(): string[] {
   }
 
   return errors;
+}
+
+function sum(amounts: Partial<Record<string, number>>): number {
+  return Object.values(amounts).reduce<number>((total, amount) => total + (amount ?? 0), 0);
 }
 
 /** Lance la validation et hurle en console. Appelé depuis `main.ts` en dev seulement. */

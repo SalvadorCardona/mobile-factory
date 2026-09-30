@@ -31,7 +31,7 @@ const W = 64;
 const H = 128;
 const FOOTPRINT = 64;
 
-const { ink, orange, yellow } = PALETTE;
+const { ink, orange, yellow, cyan } = PALETTE;
 
 function sandbags(y: number): string {
   return (
@@ -42,7 +42,22 @@ function sandbags(y: number): string {
   );
 }
 
-function tower(): string {
+/** Plaques de fer vissées sur le devant de la plateforme : la tour renforcée. */
+function armor(): string {
+  return [7, 25, 43]
+    .map(
+      (x) =>
+        rect(x, 35, 14, 10, cyan.shade, 3) +
+        rect(x, 35, 14, 8, cyan.base, 3) +
+        pill(x + 2, 36, 6, 2, cyan.light) +
+        circle(x + 3, 41, 1, ink.base) +
+        circle(x + 11, 41, 1, ink.base),
+    )
+    .join('');
+}
+
+/** `reinforced` : la même tour, blindée de fer, au drapeau jaune. */
+function tower(reinforced = false): string {
   return (
     // Poteaux de derrière, plus clairs : ils sont plus loin.
     rect(17, 44, 4, 70, ink.light, 2) +
@@ -53,9 +68,10 @@ function tower(): string {
     rect(50, 42, 5, 80, ink.base, 2.5) +
     ladder(28.5, 48, 72) +
     shadedBlock(3, 32, 58, 16, 6, 'yellow', 6) +
+    (reinforced ? armor() : '') +
     railing(6, 22, 52, 10, 6) +
     gableRoof(0, 64, 24, 8, 'paper') +
-    flag(32, 0, 10, 'cyan') +
+    flag(32, 0, 10, reinforced ? 'yellow' : 'cyan') +
     line(48, 24, 48, 27, ink.base) +
     circle(48, 29.5, 3, yellow.base) +
     circle(47.2, 28.7, 1.2, yellow.light) +
@@ -65,7 +81,7 @@ function tower(): string {
   );
 }
 
-function site(): string {
+function site(reinforced = false): string {
   return (
     siteGround(W, H, FOOTPRINT) +
     // Les pilotis sont plantés à leur hauteur finale ; la plateforme manque.
@@ -80,7 +96,8 @@ function site(): string {
     // Les planches de la plateforme attendent au pied.
     planks(20, 116, 26) +
     siteClutter(W, H) +
-    siteSign(22, 92, flag(26, 93, 8, 'cyan'))
+    // Les plaques de fer de la tour renforcée attendent sur le panneau.
+    siteSign(22, 92, reinforced ? rect(24, 94, 10, 6, cyan.base, 2) : flag(26, 93, 8, 'cyan'))
   );
 }
 
@@ -93,5 +110,21 @@ export const WATCHTOWER = {
     site: svg(W, H, site()),
     built: svg(W, H, tower()),
     damaged: svg(W, H, tower(), damageMarks(3, 32, 58, 16)),
+  },
+} satisfies SpriteProto;
+
+/**
+ * La tour de guet renforcée : la même silhouette, la plateforme blindée de
+ * plaques de fer cyan rivetées, le drapeau jaune. On la distingue de loin.
+ */
+export const REINFORCED_TOWER = {
+  width: W,
+  height: H,
+  anchorX: 0,
+  anchorY: 1,
+  parts: {
+    site: svg(W, H, site(true)),
+    built: svg(W, H, tower(true)),
+    damaged: svg(W, H, tower(true), damageMarks(3, 32, 58, 16)),
   },
 } satisfies SpriteProto;

@@ -8,10 +8,12 @@
  *
  * Sur un chantier, deux boutons : « Transférer le sac » vide dans le chantier
  * tout ce qu'il attend et qu'Adam possède ; « Construire » apparaît quand
- * tout est livré. Sur une foreuse ou une ferme, « Prendre » vide son coffre
- * dans le sac, dans la limite de la place. La fenêtre ne modifie rien
- * elle-même : chaque bouton pousse une commande (`transferToSite`,
- * `buildSite`, `takeFromBuilding`) que le tick consomme.
+ * tout est livré. Sur une foreuse, une ferme ou une forge, « Prendre » vide
+ * son coffre dans le sac, dans la limite de la place. Sur une nurserie ou
+ * une forge, « Transférer le sac » y verse ce que sa recette consomme. La
+ * fenêtre ne modifie rien elle-même : chaque bouton pousse une commande
+ * (`transferToSite`, `buildSite`, `takeFromBuilding`, `supplyBuilding`) que
+ * le tick consomme.
  *
  * Elle **lit** le monde à chaque frame tant qu'elle est ouverte, et se ferme
  * seule si l'entité disparaît — rasée par un mutant, par exemple.
@@ -19,6 +21,7 @@
 
 import { BUILDINGS } from '../data/buildings.ts';
 import { ITEMS, type ItemId } from '../data/items.ts';
+import { RECIPES, type RecipeProto } from '../data/recipes.ts';
 import { WEAPONS } from '../data/weapons.ts';
 import type { Entity, EntityId } from '../sim/types.ts';
 import { TICKS_PER_SECOND, siteMissing, type World } from '../sim/world.ts';
@@ -91,7 +94,12 @@ export class BuildingPanel {
     this.transferButton.type = 'button';
     this.transferButton.textContent = 'Transférer le sac';
     this.transferButton.addEventListener('click', () => {
-      if (this.entityId !== null) this.world.push({ type: 'transferToSite', id: this.entityId });
+      if (this.entityId === null) return;
+
+      // Le même bouton sert au chantier et aux bâtiments qui consomment.
+      const kind = this.world.entities.get(this.entityId)?.kind;
+
+      this.world.push({ type: kind === 'site' ? 'transferToSite' : 'supplyBuilding', id: this.entityId });
     });
 
     this.buildButton = document.createElement('button');
@@ -203,15 +211,18 @@ export class BuildingPanel {
       lines.push(`Points de vie ${entity.hp}/${proto.hp}`);
       if (proto.workers > 0) lines.push(`${proto.workers} ouvriers y travaillent.`);
 
-      // Une foreuse ou une ferme produit dans son coffre : Adam vient le vider.
-      const producer = entity.kind === 'drill' || entity.kind === 'farm';
+      // Une foreuse, une ferme ou une forge produit dans son coffre : Adam vient le vider.
+      const producer = entity.kind === 'drill' || entity.kind === 'farm' || entity.kind === 'forge';
+      // Une nurserie ou une forge consomme : Adam vient la remplir.
+      const consumer = entity.kind === 'nursery' || entity.kind === 'forge';
 
-      this.actions.hidden = !producer;
-      this.transferButton.hidden = true;
+      this.actions.hidden = !producer && !consumer;
+      this.transferButton.hidden = !consumer;
+      this.transferButton.disabled = !inReach || !this.world.canSupply(entity);
       this.buildButton.hidden = true;
       this.takeButton.hidden = !producer;
       this.takeButton.disabled =
-        !inReach || entity.store.isEmpty() || this.world.player.inventory.freeSpace() <= 0;
+        !inReach || !producer || this.world.takeable(entity).length === 0 || this.world.player.inventory.freeSpace() <= 0;
 
       switch (entity.kind) {
         case 'townHall': {
@@ -232,10 +243,24 @@ export class BuildingPanel {
         case 'nursery': {
           const remaining = Math.max(0, entity.nextBirthTick - this.world.tickCount);
 
-          lines.push(`Prochain enfant dans ${clock(remaining)}`);
+          lines.push(`Chaque naissance mange ${recipeLine(RECIPES.raiseChild.inputs)}.`);
+          lines.push(
+            entity.hungry
+              ? 'En attente : il manque de quoi nourrir l’enfant — apportez de la nourriture.'
+              : `Prochain enfant dans ${clock(remaining)}`,
+          );
           lines.push(`Enfants nés ici : ${entity.born}`);
           break;
         }
+
+        case 'forge':
+          lines.push(`${recipeLine(RECIPES.smeltPlate.inputs)} → ${recipeLine(RECIPES.smeltPlate.outputs)}`);
+          lines.push(
+            entity.blocked
+              ? 'À l’arrêt : il manque du fer ou du charbon — heurtez-la ou transférez le sac.'
+              : 'Le four chauffe.',
+          );
+          break;
 
         case 'tower': {
           const weapon = proto.weapon ? WEAPONS[proto.weapon] : null;
@@ -297,6 +322,13 @@ export function panelDescription(entity: Entity): string {
   const proto = BUILDINGS[entity.proto];
 
   return entity.kind === 'site' ? proto.siteDescription : proto.description;
+}
+
+/** « 2 minerai de fer + 1 charbon » à partir des quantités d'une recette. */
+function recipeLine(amounts: RecipeProto['inputs']): string {
+  return (Object.entries(amounts) as [ItemId, number][])
+    .map(([item, amount]) => `${amount} ${ITEMS[item].label.toLowerCase()}`)
+    .join(' + ');
 }
 
 /** « 9 min 32 s » à partir d'un nombre de ticks. */

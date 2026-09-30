@@ -12,7 +12,7 @@
  * charbon indigo. Le HUD les affiche telles quelles (`ui/icons.ts`).
  */
 
-import { PALETTE, circle, cushion, line, pill, polygon, rect, shadedPill, svg } from './artDirection.ts';
+import { PALETTE, RADIUS, circle, cushion, line, pill, polygon, rect, shadedBlock, shadedPill, svg } from './artDirection.ts';
 import type { ItemId } from './items.ts';
 
 /** Côté d'une icône, dans son propre repère. */
@@ -63,5 +63,15 @@ export const ITEM_ICONS: Record<ItemId, string> = {
     cushion(8, 17, 8, 6),
     cushion(16.5, 17, 8, 6),
     line(12.5, 21, 12.5, 23, mint.shade),
+  ),
+  /** Une plaque de fer cyan, forgée, rivetée d'indigo aux quatre coins. */
+  ironPlate: svg(
+    S,
+    S,
+    shadedBlock(3, 5, 18, 15, 4, 'cyan', RADIUS.small),
+    circle(6.5, 8.5, 1.3, ink.base),
+    circle(17.5, 8.5, 1.3, ink.base),
+    circle(6.5, 14, 1.3, ink.base),
+    circle(17.5, 14, 1.3, ink.base),
   ),
 };

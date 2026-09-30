@@ -22,6 +22,13 @@ fenêtre), ce qui la relance si elle était bloquée. Les ressources et les
 bâtiments sont solides, on ne les traverse pas. Un tap sur un chantier ouvre
 sa fenêtre : « Transférer le sac » y vide d'un coup ce qu'il attend, et
 « Construire » l'achève — **un chantier livré ne se termine jamais seul**.
+Une nurserie ou une forge heurtée (ou « Transférer le sac ») reçoit ce que
+sa recette consomme ; la forge (débloquée après la vague 2, `unlockWave`)
+fond fer + charbon en plaques de fer, qui bâtissent la tour renforcée.
+
+**Débouchés** — tout objet entre dans un coût de bâtiment ou une entrée de
+recette (`src/data/recipes.ts`) ; `validatePrototypes()` refuse une
+ressource qu'on récolterait pour rien.
 
 **Ouvriers** — chaque bâtiment déclare `workers` ; la maison des
 constructeurs et la ferme en emploient quatre, comptés dans la population
@@ -44,7 +51,8 @@ surgit dans le champ d'une flaque vert fluo — un mutant qui émerge
 chaque mutant abattu lâche un butin (`MUTANT_LOOT`) qu'Adam ramasse en
 marchant dessus. L'arc d'Adam et la tour de guet
 (`src/data/weapons.ts`) tirent seuls. La mairie à zéro = partie perdue.
-La **nurserie** fait naître un enfant toutes les dix minutes.
+La **nurserie** fait naître un enfant toutes les dix minutes, contre quatre
+nourritures (recette `raiseChild`) : sans elles, elle attend.
 
 **Ève** — ingénieure bricoleuse, taquine (`src/data/eve.ts`, `src/sim/eve.ts`).
 Elle **tutoie** Adam, qui reste muet ; le jeu (bulles, boutons, écrans)

@@ -68,5 +68,10 @@ export function tutorialAdvice(world: World, progress: HintProgress, towers: boo
 
     return say(lines.coming.replace('{n}', String(left)).replace('{s}', left > 1 ? 's' : ''));
   }
+
+  // La forge se débloque après quelques vagues : le charbon, jusque-là sans usage, devient un objectif.
+  const forged = [...world.entities.values()].some((entity) => BUILDINGS[entity.proto].kind === 'forge');
+
+  if (mutants === 0 && world.isUnlocked('forge') && !forged) return say(lines.forge, 'coal');
   return null;
 }

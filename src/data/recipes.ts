@@ -6,6 +6,14 @@
  *
  * Une foreuse n'a pas d'entrée : elle extrait ce que le gisement sous elle
  * fournit. La recette ne décrit donc que la cadence et la sortie de référence.
+ *
+ * La nurserie a une recette sans sortie : ce qu'elle produit est un enfant,
+ * pas un objet. Sa recette dit ce que coûte une naissance, et tous les
+ * combien.
+ *
+ * Tout objet doit entrer quelque part — un coût de bâtiment ou une entrée de
+ * recette : `validatePrototypes()` refuse une ressource qu'on récolterait
+ * pour rien.
  */
 
 import type { BuildingId } from './buildings.ts';
@@ -35,6 +43,20 @@ export const RECIPES = {
     duration: 20 * 30,
     inputs: {},
     outputs: { food: 4 },
+  },
+  raiseChild: {
+    label: 'Naissance',
+    building: 'nursery',
+    duration: 20 * 60 * 10,
+    inputs: { food: 4 },
+    outputs: {},
+  },
+  smeltPlate: {
+    label: 'Fonte',
+    building: 'forge',
+    duration: 20 * 6,
+    inputs: { ironOre: 2, coal: 1 },
+    outputs: { ironPlate: 1 },
   },
 } as const satisfies Record<string, RecipeProto>;
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BUILDINGS } from '../data/buildings.ts';
-import { EVE_LINES } from '../data/eve.ts';
+import { EVE, EVE_LINES } from '../data/eve.ts';
 import { World } from '../sim/world.ts';
 import { tutorialAdvice, tutorialHint, type HintProgress } from './hint.ts';
 
@@ -55,5 +55,20 @@ describe('tutorialHint', () => {
     expect(tutorialAdvice(world, FRESH, false, 0)?.wants).toBe('wood');
     expect(tutorialAdvice(world, { ...FRESH, harvestedWood: true }, false, 0)?.wants).toBe('stone');
     expect(tutorialAdvice(readyWorld(), FRESH, false, 0)?.wants).toBeNull();
+  });
+
+  it('annonce la forge une fois débloquée, et envoie chercher du charbon', () => {
+    const world = readyWorld();
+
+    world.push({ type: 'buildSite', id: world.townHallId });
+    world.tick();
+
+    expect(tutorialAdvice(world, FRESH, true, 0)).toBeNull();
+
+    // Tant qu'Ève annonce son arrivée par radio, c'est elle qui parle d'abord.
+    world.wave = Math.max(BUILDINGS.forge.unlockWave, EVE.arrivalWave);
+    expect(tutorialAdvice(world, FRESH, true, 0)?.wants).toBe('coal');
+    // Pendant une vague, l'arc d'abord.
+    expect(tutorialAdvice(world, FRESH, true, 3)?.wants).not.toBe('coal');
   });
 });

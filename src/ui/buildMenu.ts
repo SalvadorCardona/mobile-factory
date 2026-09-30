@@ -30,6 +30,10 @@
  * à chaque frame, lesquels le joueur peut bâtir. Un bâtiment à plan reste
  * caché tant qu'Ève n'a pas donné le plan (`data/quests.ts`).
  *
+ * Un bâtiment qui attend sa vague (`unlockWave`) garde sa carte, grisée de
+ * la même façon, avec son coût et « Après la vague N » : le joueur voit à
+ * quoi servira le charbon avant de pouvoir poser la forge.
+ *
  * Au clavier (`handleKey`) : Espace ouvre le tiroir sur la première carte
  * (ou sur le bâtiment déjà armé), les flèches ou ZQSD/WASD passent d'une
  * carte à l'autre dans la grille, Entrée choisit, Espace ou Échap referment.
@@ -72,6 +76,7 @@ export class BuildMenu {
   private readonly repeatButton: HTMLButtonElement;
   private readonly cancelButton: HTMLButtonElement;
   private readonly cards = new Map<BuildingId, HTMLButtonElement>();
+  private readonly locks = new Map<BuildingId, HTMLElement>();
   private readonly costs: { item: ItemId; amount: number; element: HTMLElement }[] = [];
   private opened = false;
 
@@ -166,7 +171,7 @@ export class BuildMenu {
   private card(id: BuildingId): HTMLButtonElement {
     const proto = BUILDINGS[id];
     const card = button('', () => {
-      if (!this.unlocked()) return;
+      if (this.lockReason(id) !== null) return;
       this.close();
       this.placement.select(id);
     });
@@ -219,7 +224,7 @@ export class BuildMenu {
     const lock = document.createElement('div');
 
     lock.className = 'build-card-lock';
-    lock.textContent = 'Débloqué après la mairie';
+    this.locks.set(id, lock);
     body.append(lock);
 
     card.append(body);
@@ -328,15 +333,28 @@ export class BuildMenu {
     return this.world.entities.get(this.world.townHallId)?.kind === 'townHall';
   }
 
+  /** Pourquoi la carte est grisée, ou `null` si le joueur peut la choisir. */
+  private lockReason(id: BuildingId): string | null {
+    if (!this.unlocked()) return 'Débloqué après la mairie';
+
+    const { unlockWave } = BUILDINGS[id];
+
+    return this.world.wave < unlockWave ? `Après la vague ${unlockWave}` : null;
+  }
+
   /** Recalcule l'état visible. Appelé à chaque changement de placement et à chaque frame. */
   public refresh(): void {
     const armed = this.placement.armedBuilding();
-    const locked = String(!this.unlocked());
 
     for (const [id, card] of this.cards) {
+      const reason = this.lockReason(id);
+      const locked = String(reason !== null);
+      const lock = this.locks.get(id);
+
       card.dataset['active'] = String(armed === id);
       card.hidden = !this.available(id);
       if (card.getAttribute('aria-disabled') !== locked) card.setAttribute('aria-disabled', locked);
+      if (lock && reason !== null && lock.textContent !== reason) lock.textContent = reason;
     }
 
     // Le sac ne compte que tiroir ouvert : fermé, personne ne voit les coûts.

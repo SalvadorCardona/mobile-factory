@@ -106,8 +106,9 @@ export const LORE = {
       site: 'Des murs à monter avant d’y installer le berceau. Il lui faut du bois et de la pierre.',
       description:
         'Un abri chauffé, des couvertures, un berceau. Toutes les dix minutes, ' +
-        'un enfant y naît et la colonie grandit d’un survivant.',
-      effect: '+1 enfant toutes les 10 min.',
+        'un enfant y naît et la colonie grandit d’un survivant — s’il y a de ' +
+        'quoi le nourrir : chaque naissance mange quatre nourritures de la ferme.',
+      effect: '+1 enfant toutes les 10 min, contre 4 nourritures.',
     },
     builderHouse: {
       name: 'Maison des constructeurs',
@@ -123,7 +124,7 @@ export const LORE = {
       description:
         'Quelques sillons dans la terre irradiée et une cabane à outils. Quatre ' +
         'ouvriers y font pousser de quoi nourrir la colonie.',
-      effect: 'Cultive de la nourriture, sans usage pour l’instant.',
+      effect: 'Cultive la nourriture de la nurserie.',
     },
     watchtower: {
       name: 'Tour de guet',
@@ -132,6 +133,22 @@ export const LORE = {
         'Une plateforme de planches sur quatre poteaux, avec un arc et un carquois. ' +
         'Elle tire seule sur tout mutant qui passe à sa portée.',
       effect: 'Tire sur les mutants à 8 cases.',
+    },
+    forge: {
+      name: 'Forge',
+      site: 'Un four de pierre et sa cheminée, encore sans feu. Il lui faut du minerai de fer pour l’armer.',
+      description:
+        'Un four de pierre, une cheminée qui fume et une enclume. Deux minerais de fer ' +
+        'et un charbon y deviennent une plaque de fer.',
+      effect: '2 fer + 1 charbon → 1 plaque de fer.',
+    },
+    reinforcedTower: {
+      name: 'Tour de guet renforcée',
+      site: 'Les pilotis d’une tour, et des plaques de fer à visser sur la plateforme.',
+      description:
+        'Une tour de guet blindée de plaques de fer. Son arc porte plus loin ' +
+        'et tire plus vite que celui d’une tour de planches.',
+      effect: 'Tire sur les mutants à 10 cases, 30 % plus vite.',
     },
   },
 } as const;

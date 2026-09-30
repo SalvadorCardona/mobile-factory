@@ -795,3 +795,165 @@ describe('géométrie de placement', () => {
     throw new Error('aucune case constructible hors de portée trouvée');
   });
 });
+
+/** Pose le bâtiment sur la première case posable à portée et l'achève, quel que soit le seed. */
+function buildNear(world: World, building: BuildingId): Entity {
+  const origin = worldToTile(world.player.x, world.player.y);
+
+  for (let dy = -BUILD_REACH_TILES; dy <= BUILD_REACH_TILES; dy += 1) {
+    for (let dx = -BUILD_REACH_TILES; dx <= BUILD_REACH_TILES; dx += 1) {
+      if (world.canPlace(building, origin.tx + dx, origin.ty + dy) !== null) continue;
+
+      const before = new Set(world.entities.keys());
+
+      world.push({ type: 'placeBuilding', building, tx: origin.tx + dx, ty: origin.ty + dy });
+      world.tick();
+
+      const id = [...world.entities.keys()].find((key) => !before.has(key));
+
+      if (id !== undefined) return completeSite(world, id);
+    }
+  }
+  throw new Error('aucune case posable à portée');
+}
+
+describe('forge', () => {
+  const SMELT = RECIPES.smeltPlate;
+  const FORGE = BUILDINGS.forge;
+
+  it('reste verrouillée tant que les premières vagues ne sont pas passées', () => {
+    const world = new World(7);
+    const origin = worldToTile(world.player.x, world.player.y);
+    const rejected: PlacementRejection[] = [];
+
+    world.events.on('placementRejected', ({ reason }) => rejected.push(reason));
+    expect(world.isUnlocked('forge')).toBe(false);
+    expect(world.canPlace('forge', origin.tx + 2, origin.ty)).toBe('locked');
+
+    world.push({ type: 'placeBuilding', building: 'forge', tx: origin.tx + 2, ty: origin.ty });
+    world.tick();
+    expect(rejected).toEqual(['locked']);
+
+    world.wave = FORGE.unlockWave;
+    expect(world.isUnlocked('forge')).toBe(true);
+  });
+
+  it('fond fer et charbon en plaques, à la cadence de la recette, puis s’arrête faute d’entrées', () => {
+    const world = new World(7);
+
+    world.wave = FORGE.unlockWave;
+
+    const forge = buildNear(world, 'forge');
+    const produced: ItemId[] = [];
+
+    if (forge.kind !== 'forge') throw new Error('pas une forge');
+    world.events.on('forgeProduced', ({ item }) => produced.push(item));
+
+    // Coffre vide : la forge dort, sans réveil planifié.
+    expect(forge.blocked).toBe(true);
+    const idleWakes = world.pendingWakes();
+
+    // Deux cycles de fer, et un peu de pierre qu'elle ne prend pas.
+    world.player.inventory.add('ironOre', 4);
+    world.player.inventory.add('coal', 2);
+    world.player.inventory.add('stone', 3);
+    world.push({ type: 'supplyBuilding', id: forge.id });
+    world.tick();
+
+    expect(forge.store.count('ironOre')).toBe(4);
+    expect(forge.store.count('coal')).toBe(2);
+    expect(world.player.inventory.count('stone')).toBe(3);
+    expect(forge.blocked).toBe(false);
+    expect(world.pendingWakes()).toBe(idleWakes + 1);
+
+    for (let i = 0; i < SMELT.duration - 1; i += 1) world.tick();
+    expect(produced).toEqual([]);
+    world.tick();
+    expect(produced).toEqual(['ironPlate']);
+
+    for (let i = 0; i < SMELT.duration; i += 1) world.tick();
+    expect(produced).toEqual(['ironPlate', 'ironPlate']);
+    expect(forge.store.entries()).toEqual([['ironPlate', 2]]);
+
+    // Plus de fer ni de charbon : elle ne se replanifie plus.
+    expect(forge.blocked).toBe(true);
+    expect(world.pendingWakes()).toBe(idleWakes);
+  });
+
+  it('ne rend que ses plaques, et garde le fer et le charbon au four', () => {
+    const world = new World(7);
+
+    world.wave = FORGE.unlockWave;
+
+    const forge = buildNear(world, 'forge');
+
+    if (forge.kind !== 'forge') throw new Error('pas une forge');
+
+    world.player.inventory.add('ironOre', 3);
+    world.player.inventory.add('coal', 3);
+    world.push({ type: 'supplyBuilding', id: forge.id });
+    for (let i = 0; i < SMELT.duration + 2; i += 1) world.tick();
+
+    world.push({ type: 'takeFromBuilding', id: forge.id });
+    world.tick();
+
+    expect(world.player.inventory.count('ironPlate')).toBe(1);
+    expect(world.player.inventory.count('ironOre')).toBe(0);
+    expect(forge.store.count('ironOre')).toBe(1);
+    expect(forge.store.count('coal')).toBe(2);
+    expect(forge.store.count('ironPlate')).toBe(0);
+  });
+
+  it('partage son coffre entre fer et charbon, au prorata de la recette', () => {
+    const world = new World(7);
+
+    world.wave = FORGE.unlockWave;
+
+    const forge = buildNear(world, 'forge');
+
+    if (forge.kind !== 'forge') throw new Error('pas une forge');
+
+    // Le fer seul ne remplit pas le coffre : il reste la place du charbon.
+    expect(world.accepts(forge, 'ironOre')).toBe((FORGE.storage * 2) / 3);
+    expect(world.accepts(forge, 'coal')).toBe(FORGE.storage / 3);
+    expect(world.accepts(forge, 'stone')).toBe(0);
+  });
+
+  it('se remplit au contact d’Adam, puis lui rend ses plaques', () => {
+    const world = new World(7);
+
+    world.wave = FORGE.unlockWave;
+
+    const forge = buildNear(world, 'forge');
+
+    if (forge.kind !== 'forge') throw new Error('pas une forge');
+
+    world.player.inventory.add('ironOre', 2);
+    world.player.inventory.add('coal', 1);
+
+    const axis = standNextTo(world, forge.tx, forge.ty, forge.width, forge.height);
+
+    if (!axis) throw new Error('forge inaccessible');
+    world.push({ type: 'setMoveAxis', ...axis });
+
+    for (let i = 0; i < SMELT.duration + 40; i += 1) world.tick();
+
+    expect(world.player.inventory.count('ironOre')).toBe(0);
+    expect(world.player.inventory.count('coal')).toBe(0);
+    expect(world.player.inventory.count('ironPlate')).toBe(1);
+    expect(forge.store.isEmpty()).toBe(true);
+  });
+});
+
+describe('débouchés', () => {
+  it('donne un usage à chaque objet récoltable : un coût ou une entrée de recette', () => {
+    const consumed = new Set<string>([
+      ...Object.values(BUILDINGS).flatMap((building) => Object.keys(building.cost)),
+      ...Object.values(RECIPES).flatMap((recipe) => Object.keys(recipe.inputs)),
+    ]);
+
+    for (const resource of Object.values(RESOURCES)) expect(consumed).toContain(resource.item);
+    expect(consumed).toContain('food');
+    expect(consumed).toContain('ironPlate');
+  });
+});

@@ -1168,7 +1168,7 @@ button {
   font-weight: 600;
 }
 
-/* Avant la mairie : la carte se lit, mais ne se choisit pas. */
+/* Avant la mairie, ou avant sa vague : la carte se lit, mais ne se choisit pas. */
 .build-card[aria-disabled='true'] {
   background: var(--paper-shade);
   box-shadow: 0 4px 0 var(--violet-light);

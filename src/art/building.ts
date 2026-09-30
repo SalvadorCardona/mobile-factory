@@ -14,6 +14,8 @@
  * | constructeurs | atelier plat et une grue | cyan (bâche) | grue, marteau, scie |
  * | ferme | champ bas, sans toit | ambre (terre) et menthe | sillons, épouvantail |
  * | tour de guet | la plus haute, sur pilotis | blanc (auvent de toile) | plateforme, drapeau |
+ * | tour renforcée | celle de la tour de guet | cyan (plaques de fer) | plaques rivetées, drapeau jaune |
+ * | forge | bloc trapu, haute cheminée | indigo (cheminée) | four, fumée, enclume, plaques |
  *
  * Chacun existe en trois états, trois morceaux du même cadre :
  *

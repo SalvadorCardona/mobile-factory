@@ -30,7 +30,13 @@ export type Command =
    * Vide le coffre d'une foreuse ou d'une ferme dans le sac, dans la limite
    * de la place. Le bouton « Prendre » de la fenêtre du bâtiment.
    */
-  | { type: 'takeFromBuilding'; id: EntityId };
+  | { type: 'takeFromBuilding'; id: EntityId }
+  /**
+   * Vide dans le coffre d'une nurserie ou d'une forge ce que sa recette
+   * consomme et qu'Adam porte, dans la limite de la place. Le bouton
+   * « Transférer le sac » de sa fenêtre.
+   */
+  | { type: 'supplyBuilding'; id: EntityId };
 
 /** Motif de refus d'une commande sur un chantier — remonté à l'UI par un événement. */
 export type SiteRejection =
@@ -54,6 +60,15 @@ export type TakeRejection =
   /** Le sac est plein : rien n'est pris, rien n'est jeté. */
   | 'bagFull';
 
+/** Motif de refus d'un « Transférer le sac » vers une nurserie ou une forge. */
+export type SupplyRejection =
+  /** Le bâtiment n'existe plus, ou ne consomme rien. */
+  | 'missing'
+  /** Adam est trop loin de l'emprise. */
+  | 'outOfReach'
+  /** Adam n'a rien dans le sac que le bâtiment attende, ou son coffre est plein. */
+  | 'nothingToGive';
+
 /** Motif de refus d'un placement — remonté à l'UI par un événement. */
 export type PlacementRejection =
   | 'occupied'
@@ -63,7 +78,10 @@ export type PlacementRejection =
   | 'resource'
   /** Le joueur est dans l'emprise : un bâtiment est solide, il y resterait coincé. */
   | 'onPlayer'
-  /** Il faut d'abord le plan, qu'Ève donne en récompense d'une quête. */
+  /**
+   * Pas encore débloqué : il faut d'abord le plan, qu'Ève donne en récompense
+   * d'une quête, ou passer d'autres vagues (`unlockWave`).
+   */
   | 'locked';
 
 export interface CommandLogEntry {
