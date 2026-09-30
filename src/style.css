@@ -667,6 +667,63 @@ button.hud-stock:active {
   display: none;
 }
 
+/* Le résumé de la pastille (ville, objet réclamé) ne sert que sur un téléphone. */
+.hud-bag-town,
+.hud-bag-wanted {
+  display: none;
+}
+
+/*
+ * Sur un téléphone, on joue à la vue : la ville et le sac n'y font plus
+ * qu'une pastille, de la largeur des boutons. Le compte et la jauge du sac,
+ * ce que compte la ville, et l'objet que le conseil réclame ; un tap ouvre
+ * le panneau, qui a tout le détail.
+ */
+@media (max-width: 599px), (max-height: 499px) {
+  .hud-town {
+    display: none;
+  }
+
+  .hud-bag {
+    width: 104px;
+    gap: 4px;
+    padding: 6px 10px 8px;
+    border-radius: 18px;
+  }
+
+  .hud-bag .hud-bag-title {
+    flex-wrap: wrap;
+    gap: 2px 6px;
+    font-size: 15px;
+    letter-spacing: 0;
+  }
+
+  .hud-bag .hud-stock-name,
+  .hud-bag .hud-stock-items {
+    display: none;
+  }
+
+  .hud-bag-town,
+  .hud-bag-wanted {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+
+  .hud-bag-town {
+    color: var(--yellow-shade);
+  }
+
+  .hud-bag-wanted {
+    color: var(--ink);
+  }
+
+  .hud-bag-wanted .icon {
+    width: 18px;
+    height: 18px;
+  }
+}
+
 /* ------------------------------------------------------------ panneau du sac */
 
 .inventory-panel h2 {

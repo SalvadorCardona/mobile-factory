@@ -18,14 +18,18 @@
  *   c'est Ève qui le dit, son portrait devant ; au bout de cinq secondes, il
  *   se replie en ampoule à côté du titre ;
  * - dans la ligne de la mairie, le **compteur d'ouvriers** : un tap déplie
- *   leur détail par bâtiment, et ce que font les porteurs ;
+ *   leur détail par bâtiment, et ce que font les porteurs ; il se replie
+ *   seul au bout de cinq secondes, ou dès qu'on touche ailleurs ;
  * - la **quête d'Ève** en cours, une fois qu'elle est arrivée ;
  * - la **bulle** d'Ève au-dessus de sa tête : son arrivée, ses quêtes, ce
  *   qu'elle répond quand on la tape. Courte, jamais bloquante ;
  * - les boutons pause et son à droite de la quête, et dessous les deux
  *   stocks, en version compacte : la **ville** (le coffre de la mairie) et
  *   le **sac** d'Adam avec son remplissage — un tap sur le sac ouvre le
- *   panneau inventaire (`inventoryPanel.ts`) ;
+ *   panneau inventaire (`inventoryPanel.ts`). Sur un téléphone, les deux
+ *   cartes n'en font plus qu'une, repliée en pastille : la jauge du sac, ce
+ *   que compte la ville, et la ressource que réclame le conseil — le
+ *   détail est dans le panneau ;
  * - des **bulles** empilées pour les événements, des gains qui flottent
  *   au-dessus de la tête d'Adam, et le nom d'un bâtiment achevé qui monte
  *   de son toit (« Mairie bâtie ! ») ;
@@ -91,6 +95,9 @@ const SPEECH_PER_CHAR_MS = 45;
  */
 const HINT_FOLD_TICKS = 5 * TICKS_PER_SECOND;
 
+/** Le détail des ouvriers se replie seul au bout de ce délai, compté en ticks comme le conseil. */
+const CREW_FOLD_TICKS = 5 * TICKS_PER_SECOND;
+
 /** Sous ce seuil, le compte à rebours de la nuit passe au rouge — le crépuscule y est déjà. */
 const WAVE_WARNING_SECONDS = 10;
 
@@ -155,6 +162,14 @@ export class Hud {
   private lastQuest = '';
   /** Le détail des ouvriers, déplié d'un tap sur leur compteur. */
   private crewOpen = false;
+  /** Tick où le détail des ouvriers a été déplié. */
+  private crewSince = 0;
+  /** Un toucher hors du compteur replie le détail des ouvriers. */
+  private readonly foldCrewOnTouch = (event: PointerEvent): void => {
+    if (!this.crewOpen) return;
+    if (event.target instanceof Element && event.target.closest('.hud-quest-crew')) return;
+    this.crewOpen = false;
+  };
   private lastHint = '';
   /** Tick où le conseil a été montré (ou déplié) : il se replie `HINT_FOLD_TICKS` plus tard. */
   private hintSince = 0;
@@ -300,6 +315,8 @@ export class Hud {
       this.stats,
       this.defeat,
     );
+
+    document.addEventListener('pointerdown', this.foldCrewOnTouch, { capture: true });
 
     world.events.on('placementRejected', ({ reason }) => this.notify(REJECTION_LABELS[reason], 'bad'));
     world.events.on('resourceHarvested', ({ item, amount }) => {
@@ -705,6 +722,8 @@ export class Hud {
     // Pendant la nuit, le temps qu'il reste avant l'aube ; sinon, avant la prochaine nuit.
     const seconds = time ? Math.ceil((dark ? time.left : ticksToNight(time)) / TICKS_PER_SECOND) : 0;
     const next = time ? time.cycle + (time.phase === 'dawn' ? 1 : 0) : 1;
+    if (this.crewOpen && world.tickCount - this.crewSince >= CREW_FOLD_TICKS) this.crewOpen = false;
+
     const status =
       mutants > 0
         ? `Nuit ${world.night} · ${mutants} mutant${mutants > 1 ? 's' : ''}`
@@ -751,7 +770,7 @@ export class Hud {
     }
   }
 
-  /** Le compteur d'ouvriers : un tap déplie leur détail sous la ligne, un autre le replie. */
+  /** Le compteur d'ouvriers : un tap déplie leur détail sous la ligne, un autre le replie — le temps s'en charge sinon. */
   private crewChip(total: number): HTMLElement {
     const node = text('hud-quest-chip hud-quest-crew', String(total), 'button');
 
@@ -761,6 +780,7 @@ export class Hud {
     node.prepend(uiIcon('worker', 18));
     node.addEventListener('click', () => {
       this.crewOpen = !this.crewOpen;
+      this.crewSince = this.world.tickCount;
       this.updateQuest();
     });
     return node;
@@ -849,11 +869,18 @@ export class Hud {
    * Le sac : son pictogramme, « 7/60 », la jauge de remplissage, et une
    * pastille « icône + quantité » par objet. Le DOM n'est reconstruit que si
    * le contenu change — comparer une clé texte coûte moins qu'un diff.
+   *
+   * Sur un téléphone, la carte se replie en pastille (cf. `style.css`) :
+   * seuls restent le compte, la jauge, le total de la ville et l'objet que
+   * le conseil réclame, tous déjà là, cachés sur grand écran.
    */
   private updateBag(): void {
     const { inventory } = this.world.player;
     const entries = inventory.entries();
-    const key = `${inventory.total()}/${inventory.capacity}|${entries.map(([item, amount]) => `${item}:${amount}`).join(',')}`;
+    const stock = this.world.townStock();
+    const town = stock?.entries().reduce((sum, [, amount]) => sum + amount, 0) ?? null;
+    const wanted = this.wanted;
+    const key = `${inventory.total()}/${inventory.capacity}|${entries.map(([item, amount]) => `${item}:${amount}`).join(',')}|${town}|${wanted}`;
 
     if (key === this.lastBag) return;
     this.lastBag = key;
@@ -863,8 +890,23 @@ export class Hud {
     const ratio = inventory.total() / inventory.capacity;
 
     title.append(uiIcon('bag', 20), text('hud-stock-name', 'Sac'), text('hud-bag-count', `${inventory.total()}/${inventory.capacity}`));
+    if (town !== null) {
+      const summary = text('hud-bag-town', String(town));
+
+      summary.prepend(uiIcon('town', 18));
+      title.append(summary);
+    }
+    if (wanted) {
+      const chip = itemAmount(wanted, inventory.count(wanted));
+
+      chip.classList.add('hud-bag-wanted');
+      title.append(chip);
+    }
     title.dataset['full'] = String(inventory.freeSpace() <= 0);
-    this.bag.setAttribute('aria-label', `Ouvrir le sac : ${inventory.total()} objets sur ${inventory.capacity}`);
+    this.bag.setAttribute(
+      'aria-label',
+      `Ouvrir le sac : ${inventory.total()} objets sur ${inventory.capacity}${town === null ? '' : `, ${town} en ville`}`,
+    );
     fill.style.setProperty('--fill', `${Math.round(ratio * 100)}%`);
     fill.dataset['full'] = String(inventory.freeSpace() <= 0);
 
@@ -954,6 +996,7 @@ export class Hud {
   }
 
   public destroy(): void {
+    document.removeEventListener('pointerdown', this.foldCrewOnTouch, { capture: true });
     this.root.remove();
   }
 }
