@@ -1,108 +1,90 @@
 /**
- * Joystick virtuel flottant.
+ * Joystick virtuel fixe.
  *
- * Il n'a pas de position fixe : il apparaît là où le pouce se pose, sur la
- * moitié gauche de l'écran. C'est ce qui le rend utilisable sur un téléphone
- * qu'on tient d'une main comme sur une tablette à deux mains — un joystick
- * ancré en bas à gauche oblige à regarder l'écran pour le retrouver.
+ * Il est toujours au même endroit, en bas d'écran, et toujours affiché : le
+ * joueur sait où poser le pouce avant même d'avoir touché l'écran. Toutes
+ * les coordonnées sont des **décalages** en pixels CSS depuis le centre de
+ * l'anneau ; où est l'anneau à l'écran, c'est l'affaire de `ui/joystick.ts`.
  *
  * La sortie est **analogique** : la vitesse dépend de la distance au centre,
- * pas seulement de la direction. Au-delà du rayon, la sortie sature à 1.
+ * pas seulement de la direction. Au-delà du rayon, le bouton reste collé au
+ * bord dans la bonne direction et la sortie sature à 1 — le doigt peut sortir
+ * de l'anneau sans que le mouvement s'arrête.
  *
- * Aucun import Pixi ici : ce fichier ne produit qu'un état. Le rendu du
- * joystick est fait par `render/`, qui lit cet état.
+ * Aucun import Pixi ni DOM ici : ce fichier ne produit qu'un état, testé en Node.
  */
 
-import type { PointerConsumer, PointerSample } from './pointer.ts';
+/** Rayon de l'anneau en pixels CSS : la course du bouton, et la vitesse maximale. */
+export const STICK_RADIUS = 56;
 
-/** Rayon en pixels CSS au-delà duquel la sortie sature. */
-const RADIUS = 64;
+/** Rayon du bouton blanc, en pixels CSS. */
+export const KNOB_RADIUS = 26;
 
 /** Zone morte : sous ce rayon, la sortie est nulle. Évite la dérive au repos. */
-const DEAD_ZONE = 6;
+export const DEAD_ZONE = 8;
 
-export interface JoystickState {
-  active: boolean;
-  /** Centre du joystick, en pixels CSS écran. */
-  originX: number;
-  originY: number;
-  /** Position du pouce, bornée au rayon. */
+/** Rayon de la zone où un doigt qui se pose prend le joystick : plus large que l'anneau, pour le pouce. */
+export const TOUCH_RADIUS = 84;
+
+export interface StickOutput {
+  /** Position du bouton, bornée au rayon. */
   knobX: number;
   knobY: number;
-  /** Sortie analogique, chaque composante dans [-1, 1]. */
+  /** Sortie analogique, chaque composante dans [-1, 1], de norme au plus 1. */
   axisX: number;
   axisY: number;
 }
 
-export class Joystick implements PointerConsumer {
-  public readonly state: JoystickState = {
-    active: false,
-    originX: 0,
-    originY: 0,
-    knobX: 0,
-    knobY: 0,
-    axisX: 0,
-    axisY: 0,
-  };
+/** Le bouton et la sortie pour un doigt à (`dx`, `dy`) du centre. */
+export function readStick(dx: number, dy: number): StickOutput {
+  const distance = Math.hypot(dx, dy);
+
+  if (distance < DEAD_ZONE) return { knobX: dx, knobY: dy, axisX: 0, axisY: 0 };
+
+  const clamped = Math.min(distance, STICK_RADIUS);
+  const nx = dx / distance;
+  const ny = dy / distance;
+  // Amplitude remise à l'échelle depuis la zone morte : la vitesse démarre à
+  // zéro juste après le seuil, au lieu de sauter d'un coup à 15 %.
+  const amplitude = (clamped - DEAD_ZONE) / (STICK_RADIUS - DEAD_ZONE);
+
+  return { knobX: nx * clamped, knobY: ny * clamped, axisX: nx * amplitude, axisY: ny * amplitude };
+}
+
+export interface JoystickState extends StickOutput {
+  /** Un doigt tient le joystick. */
+  active: boolean;
+}
+
+export class Joystick {
+  public readonly state: JoystickState = { active: false, knobX: 0, knobY: 0, axisX: 0, axisY: 0 };
 
   private pointerId: number | null = null;
 
-  private readonly viewWidth: () => number;
+  /** Un doigt se pose. Renvoie `true` s'il prend le joystick : un seul doigt à la fois, dans la zone tactile. */
+  public press(id: number, dx: number, dy: number): boolean {
+    if (this.pointerId !== null || Math.hypot(dx, dy) > TOUCH_RADIUS) return false;
 
-  /** `viewWidth` est relu à chaque appui : l'écran peut tourner en cours de partie. */
-  public constructor(viewWidth: () => number) {
-    this.viewWidth = viewWidth;
-  }
-
-  public onDown(sample: PointerSample): boolean {
-    // Un seul doigt à la fois, et seulement sur la moitié gauche.
-    if (this.pointerId !== null || sample.x > this.viewWidth() / 2) return false;
-
-    this.pointerId = sample.id;
+    this.pointerId = id;
     this.state.active = true;
-    this.state.originX = sample.x;
-    this.state.originY = sample.y;
-    this.state.knobX = sample.x;
-    this.state.knobY = sample.y;
-    this.state.axisX = 0;
-    this.state.axisY = 0;
+    this.drag(id, dx, dy);
     return true;
   }
 
-  public onMove(sample: PointerSample): void {
-    if (sample.id !== this.pointerId) return;
-
-    const dx = sample.x - this.state.originX;
-    const dy = sample.y - this.state.originY;
-    const distance = Math.hypot(dx, dy);
-
-    if (distance < DEAD_ZONE) {
-      this.state.knobX = this.state.originX;
-      this.state.knobY = this.state.originY;
-      this.state.axisX = 0;
-      this.state.axisY = 0;
-      return;
-    }
-
-    const clamped = Math.min(distance, RADIUS);
-    const nx = dx / distance;
-    const ny = dy / distance;
-    // Amplitude remise à l'échelle depuis la zone morte : la vitesse démarre à
-    // zéro juste après le seuil, au lieu de sauter d'un coup à 10 %.
-    const amplitude = (clamped - DEAD_ZONE) / (RADIUS - DEAD_ZONE);
-
-    this.state.knobX = this.state.originX + nx * clamped;
-    this.state.knobY = this.state.originY + ny * clamped;
-    this.state.axisX = nx * amplitude;
-    this.state.axisY = ny * amplitude;
+  public drag(id: number, dx: number, dy: number): void {
+    if (id !== this.pointerId) return;
+    Object.assign(this.state, readStick(dx, dy));
   }
 
-  public onUp(sample: PointerSample): void {
-    if (sample.id !== this.pointerId) return;
+  /** Le doigt se lève : le bouton revient au centre, Adam s'arrête. */
+  public release(id: number): void {
+    if (id !== this.pointerId) return;
+    this.reset();
+  }
 
+  /** Lâche le doigt quel qu'il soit : joystick masqué, onglet caché. */
+  public reset(): void {
     this.pointerId = null;
-    this.state.active = false;
-    this.state.axisX = 0;
-    this.state.axisY = 0;
+    Object.assign(this.state, { active: false, knobX: 0, knobY: 0, axisX: 0, axisY: 0 });
   }
 }

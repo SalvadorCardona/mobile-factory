@@ -16,12 +16,10 @@
  * attaque n'attend pas qu'on ait trouvé « Annuler ». Pour enchaîner trois
  * foreuses, « Poser encore » valide et reste armé.
  *
- * Le placement ne garde pas tous les doigts pour lui : il ne prend que les
- * **taps** (le fantôme saute là où le doigt s'est levé) et les **glissés qui
- * partent du fantôme**. Un doigt qui glisse ailleurs est rendu au routeur,
- * qui le propose au joystick — on peut donc déplacer Adam au pouce pendant
- * qu'on vise. Si personne n'en veut (moitié droite), le glissé déplace le
- * fantôme, comme avant.
+ * Un **tap** fait sauter le fantôme là où le doigt s'est levé ; un **glissé**
+ * le promène sous le doigt. Le joystick n'a pas à se battre avec lui : il
+ * vit dans le DOM, au-dessus du canvas, et garde ses doigts — on déplace
+ * donc Adam au pouce pendant qu'on vise de l'autre main.
  *
  * **À la souris** (mode PC, décidé par `pointerType`, jamais par la taille
  * d'écran), le premier tap n'a plus de raison d'être : le curseur ne cache
@@ -65,8 +63,6 @@ export class Placement implements PointerConsumer {
   private pointerId: number | null = null;
   private startX = 0;
   private startY = 0;
-  /** Le doigt s'est posé sur le fantôme : son glissé le déplace. */
-  private fromGhost = false;
   /** Le doigt a dépassé `TAP_SLOP` : ce n'est plus un tap. */
   private dragging = false;
 
@@ -167,20 +163,16 @@ export class Placement implements PointerConsumer {
     this.pointerId = sample.id;
     this.startX = sample.x;
     this.startY = sample.y;
-    this.fromGhost = this.isOnGhost(sample);
     this.dragging = false;
     return true;
   }
 
-  public onMove(sample: PointerSample): 'release' | void {
+  public onMove(sample: PointerSample): void {
     if (sample.id !== this.pointerId) return;
 
     if (!this.dragging) {
       if (Math.hypot(sample.x - this.startX, sample.y - this.startY) <= TAP_SLOP) return;
       this.dragging = true;
-      // Un glissé parti d'ailleurs que du fantôme appartient d'abord au
-      // joystick. S'il n'en veut pas, le routeur nous rend ce même mouvement.
-      if (!this.fromGhost) return 'release';
     }
     this.moveGhost(sample);
   }
@@ -195,26 +187,6 @@ export class Placement implements PointerConsumer {
     if (!sample.mouse) return;
     if (this.isConfirmable()) this.confirm();
     else this.onRefuse();
-  }
-
-  /** Le doigt touche le fantôme — ou le vise, avec le décalage au-dessus du pouce. */
-  private isOnGhost(sample: PointerSample): boolean {
-    const ghost = this.ghost;
-
-    if (!ghost) return false;
-
-    const proto = BUILDINGS[ghost.building];
-    const inside = (point: { x: number; y: number }): boolean => {
-      const tx = point.x / TILE_SIZE;
-      const ty = point.y / TILE_SIZE;
-
-      return tx >= ghost.tx && tx < ghost.tx + proto.width && ty >= ghost.ty && ty < ghost.ty + proto.height;
-    };
-
-    return (
-      inside(this.screenToWorld(sample.x, sample.y)) ||
-      inside(this.screenToWorld(sample.x, sample.y - FINGER_OFFSET_Y))
-    );
   }
 
   private moveGhost(sample: PointerSample): void {
