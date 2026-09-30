@@ -10,10 +10,20 @@ import { PointerDispatch, TAP_SLOP, type PointerSample } from './pointer.ts';
 const VIEW_WIDTH = 390;
 
 /** Le routeur de `main.ts`, sans l'inspection : placement, puis joystick. Écran = monde, au pixel près. */
-function setup() {
+function setup(blocked = false) {
   const pushed: Command[] = [];
-  const world = { push: (command: Command) => pushed.push(command), canPlace: () => null } as unknown as World;
-  const placement = new Placement(world, (x, y) => ({ x, y }), () => {});
+  let refused = 0;
+  const world = {
+    push: (command: Command) => pushed.push(command),
+    canPlace: () => null,
+    placementBlock: () => (blocked ? { reason: 'occupied', tiles: [] } : null),
+  } as unknown as World;
+  const placement = new Placement(
+    world,
+    (x, y) => ({ x, y }),
+    () => {},
+    () => (refused += 1),
+  );
   const joystick = new Joystick(() => VIEW_WIDTH);
   const pointers = new PointerDispatch();
 
@@ -26,7 +36,9 @@ function setup() {
     pointers.up(at(x, y));
   };
 
-  return { pushed, placement, joystick, pointers, at, tap };
+  const mouse = (x: number, y: number, button = 0): PointerSample => ({ id: 1, x, y, mouse: true, button });
+
+  return { pushed, placement, joystick, pointers, at, tap, mouse, refused: () => refused };
 }
 
 describe('routeur de doigts pendant le placement', () => {
@@ -135,5 +147,64 @@ describe('après « Poser »', () => {
     expect(pushed).toHaveLength(1);
     expect(placement.mode).toBe('armed');
     expect(placement.armedBuilding()).toBe('watchtower');
+  });
+});
+
+describe('à la souris', () => {
+  it('le fantôme suit le survol, sans décalage de doigt', () => {
+    const { placement, mouse } = setup();
+
+    placement.hover(mouse(300, 300));
+    expect(placement.ghost).toBeNull();
+
+    placement.select('watchtower');
+    placement.hover(mouse(300, 300));
+    expect(placement.mode).toBe('placing');
+    expect(placement.ghost).toMatchObject({ tx: Math.round(300 / TILE_SIZE - 1), ty: Math.round(300 / TILE_SIZE - 1), follow: true });
+  });
+
+  it('un doigt ne survole pas : le fantôme ne bouge pas', () => {
+    const { placement, at } = setup();
+
+    placement.select('watchtower');
+    placement.hover(at(300, 300));
+    expect(placement.ghost).toBeNull();
+  });
+
+  it('un clic gauche pose là où est le curseur, du premier coup', () => {
+    const { pushed, placement, pointers, mouse } = setup();
+
+    placement.select('watchtower');
+    pointers.down(mouse(300, 300));
+    pointers.up(mouse(300, 300));
+
+    expect(pushed).toEqual([{ type: 'placeBuilding', building: 'watchtower', tx: Math.round(300 / TILE_SIZE - 1), ty: Math.round(300 / TILE_SIZE - 1) }]);
+    expect(placement.mode).toBe('idle');
+  });
+
+  it('un clic sur un emplacement refusé ne pose rien et le signale', () => {
+    const { pushed, placement, pointers, mouse, refused } = setup(true);
+
+    placement.select('watchtower');
+    pointers.down(mouse(300, 300));
+    pointers.up(mouse(300, 300));
+
+    expect(pushed).toHaveLength(0);
+    expect(refused()).toBe(1);
+    expect(placement.mode).toBe('placing');
+  });
+
+  it('un clic droit annule, sans faire marcher Adam', () => {
+    const { pushed, placement, joystick, pointers, mouse } = setup();
+
+    placement.select('watchtower');
+    placement.hover(mouse(60, 500));
+    pointers.down(mouse(60, 500, 2));
+    pointers.up(mouse(60, 500, 2));
+
+    expect(pushed).toHaveLength(0);
+    expect(placement.mode).toBe('idle');
+    expect(placement.ghost).toBeNull();
+    expect(joystick.state.active).toBe(false);
   });
 });

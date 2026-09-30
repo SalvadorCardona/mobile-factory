@@ -27,6 +27,13 @@ export interface PointerSample {
   /** Coordonnées en pixels CSS, relatives au coin haut-gauche du canvas. */
   x: number;
   y: number;
+  /**
+   * L'appui vient d'une souris (`pointerType === 'mouse'`) : le mode PC du
+   * placement. Jamais déduit de la taille d'écran — un doigt reste un doigt.
+   */
+  mouse?: boolean;
+  /** Bouton de l'appui (`PointerEvent.button`) : 2 pour le clic droit. */
+  button?: number;
 }
 
 /** Déplacement en pixels CSS au-delà duquel un appui n'est plus un tap. */
@@ -109,14 +116,27 @@ export class PointerRouter {
 
   private readonly canvas: HTMLCanvasElement;
 
-  public constructor(canvas: HTMLCanvasElement) {
+  private readonly onHover: (sample: PointerSample) => void;
+
+  /**
+   * `onHover` : une souris qui survole le canvas sans bouton enfoncé. Un
+   * doigt ne survole jamais ; le tactile ne passe pas par là.
+   */
+  public constructor(canvas: HTMLCanvasElement, onHover: (sample: PointerSample) => void = () => {}) {
     this.canvas = canvas;
+    this.onHover = onHover;
 
     const down = (event: PointerEvent) => this.handleDown(event);
     const move = (event: PointerEvent) => this.handleMove(event);
     const up = (event: PointerEvent) => this.handleUp(event);
+    // Le clic droit annule un placement : pas de menu du navigateur par-dessus.
+    // Un appui long au doigt, lui, garde son comportement.
+    const menu = (event: MouseEvent) => {
+      if (!(event instanceof PointerEvent) || event.pointerType === 'mouse') event.preventDefault();
+    };
 
     canvas.addEventListener('pointerdown', down, { passive: false });
+    canvas.addEventListener('contextmenu', menu);
     // move/up sur window : un doigt qui sort du canvas doit rester suivi,
     // sinon le joystick reste collé en butée quand le pouce déborde.
     window.addEventListener('pointermove', move, { passive: false });
@@ -125,6 +145,7 @@ export class PointerRouter {
 
     this.detach = () => {
       canvas.removeEventListener('pointerdown', down);
+      canvas.removeEventListener('contextmenu', menu);
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
       window.removeEventListener('pointercancel', up);
@@ -138,7 +159,13 @@ export class PointerRouter {
   private sample(event: PointerEvent): PointerSample {
     const rect = this.canvas.getBoundingClientRect();
 
-    return { id: event.pointerId, x: event.clientX - rect.left, y: event.clientY - rect.top };
+    return {
+      id: event.pointerId,
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+      mouse: event.pointerType === 'mouse',
+      button: event.button,
+    };
   }
 
   private handleDown(event: PointerEvent): void {
@@ -147,7 +174,11 @@ export class PointerRouter {
   }
 
   private handleMove(event: PointerEvent): void {
-    if (!this.dispatch.owns(event.pointerId)) return;
+    if (!this.dispatch.owns(event.pointerId)) {
+      // Sur le HUD, le curseur vise un bouton, pas la carte.
+      if (event.pointerType === 'mouse' && event.target === this.canvas) this.onHover(this.sample(event));
+      return;
+    }
 
     event.preventDefault();
     this.dispatch.move(this.sample(event));

@@ -39,7 +39,8 @@
  * carte à l'autre dans la grille, Entrée choisit, Espace ou Échap referment.
  * La sélection est le vrai focus du navigateur : un lecteur d'écran suit, et
  * Tab continue de marcher. Tant que le tiroir est ouvert, ces touches sont au
- * menu — `main.ts` ne les passe ni au déplacement ni à la pause.
+ * menu — `main.ts` ne les passe ni au déplacement ni à la pause. Tiroir
+ * fermé, Échap annule un placement armé au lieu de mettre en pause.
  */
 
 import { gridStep, type GridMove } from '../core/gridNav.ts';
@@ -274,6 +275,11 @@ export class BuildMenu {
    */
   public handleKey(code: string, repeat: boolean, canOpen: boolean): boolean {
     if (!this.opened) {
+      // Échap annule un placement en cours avant de mettre en pause.
+      if (code === 'Escape' && this.placement.mode !== 'idle') {
+        if (!repeat) this.placement.cancel();
+        return true;
+      }
       if (code !== 'Space' || !canOpen || this.placement.mode !== 'idle') return false;
       if (!repeat) this.open(true);
       return true;

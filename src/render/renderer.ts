@@ -153,6 +153,11 @@ export class GameRenderer {
     this.camera.zoomOut(zoom, holdMs, focus);
   }
 
+  /** Un clic de souris refusé : le fantôme secoue la tête. */
+  public refuseGhost(): void {
+    this.ghostLayer.refuse();
+  }
+
   /** Secoue la caméra : 0.2 pour un coup, 0.6 pour un effondrement. */
   public shake(amount: number): void {
     this.camera.shake(amount);
@@ -190,7 +195,7 @@ export class GameRenderer {
     this.resourceLayer.update(this.camera, this.app.ticker.deltaMS, block?.reason === 'resource' ? block.tiles : []);
     this.entityLayer.update(alpha, this.app.ticker);
     this.particles.update(this.app.ticker.deltaMS);
-    this.ghostLayer.update(building, ghost, block);
+    this.ghostLayer.update(building, ghost, block, this.app.ticker.deltaMS);
     this.indicators.update(this.camera, this.app.ticker.deltaMS, alpha);
 
     this.joystickBase.visible = joystick.active;

@@ -141,6 +141,10 @@ async function main(): Promise<void> {
     world,
     (x, y) => renderer.screenToWorld(x, y),
     () => buildMenu.refresh(),
+    () => {
+      audio.play('deny');
+      renderer.refuseGhost();
+    },
   );
 
   const debug = import.meta.env.DEV && new URLSearchParams(window.location.search).has('debug');
@@ -259,7 +263,10 @@ async function main(): Promise<void> {
   // gauche de l'écran), le joystick en dernier. Un glissé qui ne part pas du
   // fantôme, le placement le lâche : il revient au joystick, et Adam marche
   // pendant qu'on vise.
-  const pointers = new PointerRouter(renderer.canvas);
+  //
+  // À la souris, le survol seul fait suivre le fantôme au curseur : le mode
+  // PC se décide à l'événement (`pointerType`), le tactile n'en voit rien.
+  const pointers = new PointerRouter(renderer.canvas, (sample) => placement.hover(sample));
 
   pointers.add(homeTap);
   pointers.add(inspect);

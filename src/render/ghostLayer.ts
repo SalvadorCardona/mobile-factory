@@ -14,6 +14,12 @@
  * seules les **cases fautives** de l'emprise passent au rouge, et le sprite
  * pâlit pour laisser voir l'arbre ou l'eau qu'il recouvrait.
  *
+ * À la souris, le fantôme suit le curseur (`GhostState.follow`) : il
+ * **respire** — son opacité et son liseré battent doucement — pour qu'on ne
+ * le prenne pas pour un bâtiment posé, et il **secoue la tête** quand un clic
+ * tombe sur un emplacement refusé (`refuse()`). Deux minuteurs de vue, figés
+ * sous `prefers-reduced-motion` ; le fantôme posé au doigt ne bouge pas.
+ *
  * Le `Graphics` n'est redessiné que lorsque la case ou la validité change :
  * retesseller un rectangle à 120 Hz pour rien serait le genre de gaspillage
  * qu'on paye en batterie.
@@ -39,6 +45,14 @@ const PREVIEW_ALPHA_BLOCKED = 0.4;
 /** Retrait d'une case fautive dans sa tuile : deux cases voisines restent deux cases. */
 const CELL_INSET = 2;
 
+/** Respiration du fantôme qui suit la souris : période, et part d'opacité qui bat. */
+const BREATH_MS = 1200;
+const BREATH_DEPTH = 0.3;
+/** Secousse de refus : durée, amplitude en pixels monde, allers-retours. */
+const REFUSE_MS = 320;
+const REFUSE_PX = 5;
+const REFUSE_SWINGS = 3;
+
 /** Rayon de la grille autour du joueur, en tuiles : un peu plus que la portée. */
 const GRID_RADIUS = BUILD_REACH_TILES + 3;
 
@@ -51,7 +65,14 @@ export class GhostLayer {
   private readonly cells = new Graphics();
   private readonly reach = new Graphics();
   private readonly preview = new Sprite();
+  /** Le fantôme lui-même — sprite, cases, liseré — : c'est lui qui secoue la tête. */
+  private readonly ghost = new Container();
   private lastKey = '';
+  /** Opacité du sprite avant respiration. */
+  private previewAlpha = PREVIEW_ALPHA;
+  private clock = 0;
+  private refuseLeft = 0;
+  private readonly reducedMotion: MediaQueryList | null;
   private lastGridKey = '';
 
   private readonly world: World;
@@ -64,7 +85,10 @@ export class GhostLayer {
     // Ancré au pied de l'emprise : le toit dépasse vers le haut, comme le bâtiment fini.
     this.preview.anchor.set(0, 1);
 
-    this.container.addChild(this.grid, this.footprints, this.reach, this.preview, this.cells, this.outline);
+    this.reducedMotion = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
+
+    this.ghost.addChild(this.preview, this.cells, this.outline);
+    this.container.addChild(this.grid, this.footprints, this.reach, this.ghost);
     this.container.visible = false;
   }
 
@@ -73,11 +97,12 @@ export class GhostLayer {
    * ou non). `ghost` : le fantôme, s'il est posé. `block` : pourquoi il ne
    * se pose pas, calculé une fois par le renderer.
    */
-  public update(building: boolean, ghost: GhostState | null, block: PlacementBlock | null): void {
+  public update(building: boolean, ghost: GhostState | null, block: PlacementBlock | null, deltaMs: number): void {
     if (!building) {
       this.container.visible = false;
       this.lastKey = '';
       this.lastGridKey = '';
+      this.refuseLeft = 0;
       return;
     }
 
@@ -103,6 +128,8 @@ export class GhostLayer {
     const tiles = block?.tiles.map(({ tx, ty }) => `${tx},${ty}`).join(';') ?? '';
     const key = `${ghost.building}:${ghost.tx}:${ghost.ty}:${block?.reason ?? 'ok'}:${tiles}`;
 
+    this.animate(ghost.follow, deltaMs);
+
     if (key === this.lastKey) return;
     this.lastKey = key;
 
@@ -112,7 +139,8 @@ export class GhostLayer {
     this.preview.texture = this.library.texture(`${proto.sprite}.built`);
     this.preview.position.set(ghost.tx * TILE_SIZE, (ghost.ty + proto.height) * TILE_SIZE);
     this.preview.tint = block ? WHITE : VALID;
-    this.preview.alpha = block ? PREVIEW_ALPHA_BLOCKED : PREVIEW_ALPHA;
+    this.previewAlpha = block ? PREVIEW_ALPHA_BLOCKED : PREVIEW_ALPHA;
+    this.animate(ghost.follow, 0);
 
     this.cells.clear();
     for (const tile of block?.tiles ?? []) {
@@ -140,6 +168,31 @@ export class GhostLayer {
       .stroke({ width: STROKE.width * 1.5, color, alignment: 1 });
 
     this.drawReach();
+  }
+
+  /** Un clic est tombé sur un emplacement refusé : le fantôme secoue la tête. */
+  public refuse(): void {
+    this.refuseLeft = REFUSE_MS;
+  }
+
+  /** Respiration et secousse : du ressenti, rien que des minuteurs de vue. */
+  private animate(follow: boolean, deltaMs: number): void {
+    const still = this.reducedMotion?.matches ?? false;
+
+    this.clock = (this.clock + deltaMs) % BREATH_MS;
+    this.refuseLeft = Math.max(0, this.refuseLeft - deltaMs);
+
+    const breath = follow && !still ? (1 - Math.cos((this.clock / BREATH_MS) * Math.PI * 2)) / 2 : 0;
+
+    this.preview.alpha = this.previewAlpha * (1 - BREATH_DEPTH * breath);
+    this.outline.alpha = 1 - BREATH_DEPTH * breath;
+
+    const progress = 1 - this.refuseLeft / REFUSE_MS;
+
+    this.ghost.x =
+      this.refuseLeft > 0 && !still
+        ? Math.sin(progress * Math.PI * 2 * REFUSE_SWINGS) * REFUSE_PX * (1 - progress)
+        : 0;
   }
 
   private drawReach(): void {
