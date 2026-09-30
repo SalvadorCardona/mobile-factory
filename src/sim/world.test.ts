@@ -1109,3 +1109,158 @@ describe('débouchés', () => {
     expect(consumed).toContain('ironPlate');
   });
 });
+
+/**
+ * Ouvre un chantier `building` sur la première emprise posable dont le centre
+ * est à `min`–`max` tuiles de la mairie, en y téléportant Adam. Renvoie son id.
+ */
+function openSiteAround(world: World, building: BuildingId, min: number, max: number): EntityId {
+  const hall = world.entities.get(world.townHallId)!;
+  const cx = hall.tx + hall.width / 2;
+  const cy = hall.ty + hall.height / 2;
+  const proto = BUILDINGS[building];
+
+  for (let d = min; d <= max; d += 1) {
+    for (const [dx, dy] of [[d, 0], [-d, 0], [0, d], [0, -d]] as const) {
+      const tx = Math.round(cx + dx - proto.width / 2);
+      const ty = Math.round(cy + dy - proto.height / 2);
+      const distance = Math.hypot(tx + proto.width / 2 - cx, ty + proto.height / 2 - cy);
+
+      if (distance < min || distance > max) continue;
+
+      for (let y = ty - 1; y <= ty + proto.height; y += 1) {
+        for (let x = tx - 1; x <= tx + proto.width; x += 1) world.resources.clear(x, y);
+      }
+      // Adam juste sous l'emprise, à portée de construction.
+      world.player.x = world.player.prevX = (tx + proto.width / 2) * TILE_SIZE;
+      world.player.y = world.player.prevY = (ty + proto.height + 1.5) * TILE_SIZE;
+      if (world.canPlace(building, tx, ty) !== null) continue;
+
+      world.push({ type: 'placeBuilding', building, tx, ty });
+      world.tick();
+      return Math.max(...world.entities.keys());
+    }
+  }
+  throw new Error('aucune emprise posable à cette distance — la génération a changé');
+}
+
+describe('la mairie, entrepôt de la colonie', () => {
+  it('avale le sac quand Adam la heurte, une fois par contact', () => {
+    const world = new World(7);
+
+    completeSite(world, world.townHallId);
+
+    const hall = world.warehouse()!;
+    const axis = standNextTo(world, hall.tx, hall.ty, hall.width, hall.height);
+    let deposits = 0;
+
+    if (!axis) throw new Error('mairie inaccessible');
+    world.events.on('townDeposited', () => (deposits += 1));
+    world.player.inventory.add('wood', 30);
+    world.push({ type: 'setMoveAxis', ...axis });
+
+    for (let i = 0; i < 40; i += 1) world.tick();
+
+    expect(world.player.inventory.isEmpty()).toBe(true);
+    expect(hall.store.count('wood')).toBe(30);
+    expect(deposits).toBe(1);
+  });
+
+  it('achève en un tap un chantier dans son rayon quand le stock suffit', () => {
+    const world = new World(7);
+
+    completeSite(world, world.townHallId);
+
+    const stock = world.warehouse()!.store;
+    const cost = BUILDINGS.farm.cost;
+
+    stock.add('wood', cost.wood + 5);
+    stock.add('stone', cost.stone);
+
+    const id = openSiteAround(world, 'farm', 4, BUILDINGS.townHall.logisticRadius);
+    const site = world.entities.get(id);
+
+    if (site?.kind !== 'site') throw new Error('pas un chantier');
+    expect(world.inTownRange(site)).toBe(true);
+    expect(world.shortfall(site)).toBe(0);
+
+    // Sac vide : « Transférer » va tout chercher dans le stock, et le dernier objet achève le chantier.
+    world.push({ type: 'transferToSite', id });
+    world.tick();
+
+    expect(world.entities.get(id)?.kind).toBe('farm');
+    expect(stock.count('wood')).toBe(5);
+    expect(stock.count('stone')).toBe(0);
+  });
+
+  it('complète au transfert avec le sac d’abord, le stock ensuite, sans toucher au stock promis', () => {
+    const world = new World(7);
+    const sources: string[] = [];
+
+    completeSite(world, world.townHallId);
+
+    const stock = world.warehouse()!.store;
+    const cost = BUILDINGS.farm.cost;
+
+    stock.add('wood', cost.wood);
+    stock.add('stone', cost.stone);
+    // Un porteur a déjà promis deux pierres ailleurs : elles ne sont plus à prendre.
+    stock.reserveOut('stone', 2);
+
+    const id = openSiteAround(world, 'farm', 4, BUILDINGS.townHall.logisticRadius);
+    const site = world.entities.get(id);
+
+    if (site?.kind !== 'site') throw new Error('pas un chantier');
+
+    world.events.on('siteDelivered', ({ item, source }) => sources.push(`${item}:${source}`));
+    world.player.inventory.add('wood', 4);
+    expect(world.shortfall(site)).toBe(2);
+
+    world.push({ type: 'transferToSite', id });
+    world.tick();
+
+    expect(sources).toEqual(['wood:bag', 'wood:town', 'stone:town']);
+    expect(world.player.inventory.isEmpty()).toBe(true);
+    // Il manque les pierres promises : le chantier reste ouvert.
+    expect(siteMissing(site)).toBe(2);
+    expect(world.entities.get(id)?.kind).toBe('site');
+    expect(stock.count('wood')).toBe(4);
+    expect(stock.count('stone')).toBe(2);
+    expect(stock.available('stone')).toBe(0);
+  });
+
+  it('laisse les chantiers hors de son rayon à livrer à la main', () => {
+    const world = new World(7);
+    const rejected: string[] = [];
+
+    completeSite(world, world.townHallId);
+    world.warehouse()!.store.add('wood', 100);
+    world.warehouse()!.store.add('stone', 100);
+    world.events.on('siteRejected', ({ reason }) => rejected.push(reason));
+
+    const radius = BUILDINGS.townHall.logisticRadius;
+    const id = openSiteAround(world, 'farm', radius + 2, radius + 30);
+    const site = world.entities.get(id);
+
+    if (site?.kind !== 'site') throw new Error('pas un chantier');
+    expect(world.inTownRange(site)).toBe(false);
+
+    world.push({ type: 'transferToSite', id });
+    world.tick();
+
+    expect(rejected).toEqual(['nothingToGive']);
+    expect(siteMissing(site)).toBe(BUILDINGS.farm.cost.wood + BUILDINGS.farm.cost.stone);
+  });
+
+  it('garde le stock à la sauvegarde', () => {
+    const world = new World(7);
+
+    completeSite(world, world.townHallId);
+    world.warehouse()!.store.add('wood', 49);
+
+    const restored = World.restore(world.snapshot());
+
+    expect(restored.warehouse()?.store.count('wood')).toBe(49);
+    expect(restored.warehouse()?.store.capacity).toBe(Infinity);
+  });
+});

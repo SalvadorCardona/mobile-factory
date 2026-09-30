@@ -15,7 +15,8 @@
  * **contact** — un arbre ou un rocher heurté se récolte, un chantier heurté
  * reçoit ce qu'il attend, une foreuse ou une ferme heurtée donne ce que son
  * coffre contient, une nurserie ou une forge heurtée reçoit ce que sa recette
- * consomme. Une fois la mairie debout, le jour et la nuit
+ * consomme, la mairie finie heurtée reçoit tout le sac dans le stock de la
+ * ville. Une fois la mairie debout, le jour et la nuit
  * alternent (`sim/dayNight.ts`) : on bâtit le jour, et la nuit les mutants
  * arrivent par vagues et marchent droit dessus ; l'arc d'Adam et les tours de
  * guet tirent seuls. À l'aube, les survivants fuient et le butin tombe. Si la mairie tombe, la partie est perdue. Loin du village, la faune
@@ -87,6 +88,7 @@ import type { SavedEntity, WorldState } from './save.ts';
 import { Scheduler } from './scheduler.ts';
 import { Store } from './store.ts';
 import { findSpawn, habitatAt, isBuildable, isWalkable, oreAt, terrainAt } from './terrain.ts';
+import { inLogisticRange } from './warehouse.ts';
 import { carryOf, clearLine, standStill, walkToward } from './workers.ts';
 import type {
   Beast,
@@ -112,6 +114,7 @@ import type {
   Player,
   Site,
   Tower,
+  TownHall,
   Worker,
 } from './types.ts';
 
@@ -634,8 +637,9 @@ export class World {
 
   /**
    * Tout ce que le chantier attend, en une fois : le sac d'abord, puis le
-   * stock de la ville pour ce qui manque encore. La ville ne donne que son
-   * disponible — ce que les porteurs ont déjà promis n'est pas à elle.
+   * stock de la ville pour ce qui manque encore, si le chantier est dans le
+   * rayon de la mairie. La ville ne donne que son disponible — ce que les
+   * porteurs ont déjà promis n'est pas à elle.
    */
   private transfer(id: EntityId): void {
     const found = this.siteFor(id);
@@ -646,7 +650,7 @@ export class World {
     }
 
     const { site } = found;
-    const town = this.townStock();
+    const town = this.townStockFor(site);
     let moved = this.transferFrom(site, this.player.inventory, 'bag');
 
     if (town) moved += this.transferFrom(site, town, 'town');
@@ -684,7 +688,7 @@ export class World {
    * sur cette réponse, le tick décide sur la même.
    */
   public canTransfer(site: Site): boolean {
-    const town = this.townStock();
+    const town = this.townStockFor(site);
 
     return (Object.keys(BUILDINGS[site.proto].cost) as ItemId[]).some(
       (item) =>
@@ -715,9 +719,47 @@ export class World {
    * porteurs, dans la ville.
    */
   public townStock(): Store | null {
+    return this.warehouse()?.store ?? null;
+  }
+
+  /** La mairie finie, dont le coffre est le stock de la ville ; `null` tant qu'elle est en chantier ou tombée. */
+  public warehouse(): TownHall | null {
     const hall = this.entities.get(this.townHallId);
 
-    return hall?.kind === 'townHall' ? hall.store : null;
+    return hall?.kind === 'townHall' ? hall : null;
+  }
+
+  /**
+   * Le stock de la ville, si le chantier est dans le rayon logistique de la
+   * mairie (`logisticRadius`, le cercle jaune du mode construction). Hors du
+   * rayon, on livre à la main ou par les porteurs : un stock global trop
+   * pratique les rendrait inutiles.
+   */
+  private townStockFor(site: Site): Store | null {
+    const hall = this.warehouse();
+
+    return hall && inLogisticRange(hall, site) ? hall.store : null;
+  }
+
+  /** Le chantier est-il dans le rayon de la mairie finie ? */
+  public inTownRange(site: Site): boolean {
+    return this.townStockFor(site) !== null;
+  }
+
+  /** Ce qui manquerait encore au chantier après « Transférer » : ni dans le sac, ni dans la ville à sa portée. */
+  public shortfall(site: Site): number {
+    const town = this.townStockFor(site);
+    let short = 0;
+
+    // Le même calcul que `transferFrom`, sac puis ville, sans rien déplacer.
+    for (const item of Object.keys(BUILDINGS[site.proto].cost) as ItemId[]) {
+      const needed = this.siteNeeds(site, item, 'bag');
+      const fromBag = Math.min(needed, this.player.inventory.available(item));
+      const fromTown = Math.min(Math.max(0, this.siteNeeds(site, item, 'town') - fromBag), town?.available(item) ?? 0);
+
+      short += needed - fromBag - fromTown;
+    }
+    return short;
   }
 
   /** Adam peut-il déposer en ville d'ici ? La mairie doit être debout et à portée. */
@@ -747,6 +789,13 @@ export class World {
       this.events.emit('depositRejected', { reason: 'empty' });
       return;
     }
+
+    this.depositFromBag(town, entries);
+  }
+
+  /** Passe ces objets du sac dans le coffre de la mairie — au bouton, ou quand Adam la heurte. */
+  private depositFromBag(town: Store, entries: [ItemId, number][]): void {
+    const { inventory } = this.player;
 
     for (const [item, count] of entries) {
       const amount = town.add(item, inventory.remove(item, count));
@@ -829,6 +878,11 @@ export class World {
 
     const occupant = this.chunks.occupantAt(contact.tx, contact.ty);
     const entity = occupant === undefined ? undefined : this.entities.get(occupant);
+
+    // La mairie finie heurtée avale tout le sac, une fois par contact.
+    if (entity?.kind === 'townHall' && this.contactTicks === DELIVER_TICKS) {
+      this.depositFromBag(entity.store, this.player.inventory.entries());
+    }
 
     if (this.contactTicks % DELIVER_TICKS !== 0) return;
 

@@ -23,7 +23,7 @@ dans le sac (bouton « Prendre » dans sa fenêtre), ce qui la relance si elle
 était bloquée. Rochers et bâtiments sont solides ; d'un arbre, seul le tronc
 l'arrête et il glisse autour — une forêt n'est jamais un mur. Un tap sur un
 chantier ouvre sa fenêtre : « Transférer » y vide d'un coup ce qu'il attend
-— le sac d'abord, puis le stock de la ville.
+— le sac d'abord, puis le stock de la ville s'il est dans son rayon.
 **Le dernier objet livré achève le chantier**, sans bouton de validation
 (poussière, rebond, son, « Mairie bâtie ! » qui flotte).
 Une nurserie ou une forge heurtée (ou « Transférer le sac ») reçoit ce que
@@ -32,8 +32,10 @@ fond fer + charbon en plaques de fer, qui bâtissent la tour renforcée.
 
 **Ville et sac** — deux stocks. Le **sac** (`player.inventory`, plafonné)
 est ce qu'Adam porte ; la **ville** est le coffre de la mairie
-(`World.townStock()`), rempli par Adam (« Déposer en ville », à portée de
-la mairie) et par les porteurs. Les chantiers puisent dans les deux. Le HUD
+(`World.townStock()`), rempli par Adam (« Déposer en ville », « Déposer le
+sac » dans sa fenêtre, ou en la heurtant) et par les porteurs. Les chantiers
+puisent dans les deux, la ville seulement dans son rayon (`logisticRadius`,
+`sim/warehouse.ts`, le cercle jaune du mode construction). Le HUD
 les montre en deux cartes compactes ; le sac (tap, ou touche I) ouvre
 `ui/inventoryPanel.ts`, sans pause, comme la fenêtre d'un bâtiment. Loin de
 la mairie, « Jeter » pose le sac au sol en tas (le mobile `pickup` du

@@ -36,6 +36,12 @@ export interface BuildingProto {
   cost: Partial<Record<ItemId, number>>;
   /** Capacité du coffre interne, en nombre total d'objets. `Infinity` pour un entrepôt. */
   storage: number;
+  /**
+   * Rayon logistique, en tuiles, depuis le centre de l'emprise : un chantier
+   * dans ce rayon puise dans le coffre du bâtiment fini. `0` pour un bâtiment
+   * qui n'est pas un entrepôt, `Infinity` pour supprimer la notion de distance.
+   */
+  logisticRadius: number;
   /** Points de vie du bâtiment fini. */
   hp: number;
   /**
@@ -73,6 +79,7 @@ export const BUILDINGS = {
     height: 3,
     cost: { wood: 20, stone: 12 },
     storage: Infinity,
+    logisticRadius: 10,
     hp: 120,
     workers: 0,
     menu: false,
@@ -91,6 +98,7 @@ export const BUILDINGS = {
     height: 2,
     cost: { stone: 6, ironOre: 4 },
     storage: 50,
+    logisticRadius: 0,
     hp: 40,
     workers: 0,
     menu: true,
@@ -109,6 +117,7 @@ export const BUILDINGS = {
     height: 2,
     cost: { wood: 14, stone: 6 },
     storage: 12,
+    logisticRadius: 0,
     hp: 60,
     workers: 0,
     menu: true,
@@ -127,6 +136,7 @@ export const BUILDINGS = {
     height: 2,
     cost: { wood: 16, stone: 8 },
     storage: 0,
+    logisticRadius: 0,
     hp: 70,
     workers: 4,
     menu: true,
@@ -145,6 +155,7 @@ export const BUILDINGS = {
     height: 2,
     cost: { wood: 10, stone: 4 },
     storage: 40,
+    logisticRadius: 0,
     hp: 50,
     workers: 4,
     menu: true,
@@ -163,6 +174,7 @@ export const BUILDINGS = {
     height: 2,
     cost: { wood: 12, stone: 4 },
     storage: 0,
+    logisticRadius: 0,
     hp: 60,
     workers: 0,
     menu: true,
@@ -181,6 +193,7 @@ export const BUILDINGS = {
     height: 2,
     cost: { wood: 8, stone: 10, ironOre: 4 },
     storage: 30,
+    logisticRadius: 0,
     hp: 60,
     workers: 0,
     menu: true,
@@ -199,6 +212,7 @@ export const BUILDINGS = {
     height: 2,
     cost: { wood: 10, stone: 6, ironPlate: 4 },
     storage: 0,
+    logisticRadius: 0,
     hp: 90,
     workers: 0,
     menu: true,

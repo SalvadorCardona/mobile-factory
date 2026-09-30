@@ -10,12 +10,14 @@
  * Sur un chantier, un bouton : « Transférer » vide dans le chantier tout ce
  * qu'il attend et qu'Adam porte, puis le complète avec le stock de la ville —
  * le dernier objet livré achève le chantier, la fenêtre montre alors le
- * bâtiment. La mairie montre le stock de la ville. Sur une foreuse, une ferme
- * ou une forge, « Prendre » vide son coffre dans le sac, dans la limite de la
- * place. Sur une nurserie ou une forge, « Transférer le sac » y verse ce que
- * sa recette consomme. La fenêtre ne modifie rien elle-même : chaque bouton
- * pousse une commande (`transferToSite`, `takeFromBuilding`, `supplyBuilding`)
- * que le tick consomme.
+ * bâtiment. La ville ne sert que les chantiers dans le rayon de la mairie
+ * (`logisticRadius`) : ailleurs, on livre à la main ou par les porteurs. La
+ * mairie montre le stock de la ville, et « Déposer le sac » l'y vide. Sur une
+ * foreuse, une ferme ou une forge, « Prendre » vide son coffre dans le sac,
+ * dans la limite de la place. Sur une nurserie ou une forge, « Transférer le
+ * sac » y verse ce que sa recette consomme. La fenêtre ne modifie rien
+ * elle-même : chaque bouton pousse une commande (`transferToSite`,
+ * `takeFromBuilding`, `supplyBuilding`, `depositToTown`) que le tick consomme.
  *
  * Elle **lit** le monde à chaque frame tant qu'elle est ouverte, et se ferme
  * seule si l'entité disparaît — rasée par un mutant, par exemple.
@@ -45,6 +47,7 @@ export class BuildingPanel {
   private readonly actions: HTMLElement;
   private readonly transferButton: HTMLButtonElement;
   private readonly takeButton: HTMLButtonElement;
+  private readonly depositButton: HTMLButtonElement;
   private lastText = '';
   private lastItems = '';
 
@@ -111,7 +114,14 @@ export class BuildingPanel {
       if (this.entityId !== null) this.world.push({ type: 'takeFromBuilding', id: this.entityId });
     });
 
-    this.actions.append(this.transferButton, this.takeButton);
+    this.depositButton = document.createElement('button');
+    this.depositButton.type = 'button';
+    this.depositButton.textContent = 'Déposer le sac';
+    this.depositButton.addEventListener('click', () => {
+      if (this.entityId !== null) this.world.push({ type: 'depositToTown' });
+    });
+
+    this.actions.append(this.transferButton, this.takeButton, this.depositButton);
 
     this.root.append(header, this.description, this.bar, this.items, this.lines, this.actions);
   }
@@ -172,13 +182,18 @@ export class BuildingPanel {
       const total = Object.values(proto.cost).reduce((sum, amount) => sum + amount, 0);
       const missing = siteMissing(entity);
       const canGive = this.world.canTransfer(entity);
+      const fromTown = this.world.inTownRange(entity);
 
       ratio = total === 0 ? 1 : 1 - missing / total;
       barClass = 'progress';
       lines.push(
-        inReach
-          ? 'Chantier en cours — transférez le sac et la ville, ou heurtez-le.'
-          : 'Chantier en cours — rapprochez-vous pour livrer.',
+        !inReach
+          ? 'Chantier en cours — rapprochez-vous pour livrer.'
+          : !fromTown
+            ? 'Chantier en cours — transférez le sac, ou heurtez-le.'
+            : this.world.shortfall(entity) === 0
+              ? 'Le stock de la ville couvre le reste : transférez pour l’achever.'
+              : 'Chantier en cours — transférez le sac et la ville, ou heurtez-le.',
       );
       if (proto.workers > 0) lines.push(`Emploiera ${proto.workers} ouvriers.`);
 
@@ -193,6 +208,7 @@ export class BuildingPanel {
       this.transferButton.textContent = this.world.townStock() ? 'Transférer' : 'Transférer le sac';
       this.transferButton.disabled = !inReach || !canGive;
       this.takeButton.hidden = true;
+      this.depositButton.hidden = true;
     } else {
       ratio = entity.hp / proto.hp;
       barClass = 'hp';
@@ -211,6 +227,7 @@ export class BuildingPanel {
       this.takeButton.hidden = !producer;
       this.takeButton.disabled =
         !inReach || !producer || this.world.takeable(entity).length === 0 || this.world.player.inventory.freeSpace() <= 0;
+      this.depositButton.hidden = true;
 
       switch (entity.kind) {
         case 'townHall': {
@@ -220,6 +237,10 @@ export class BuildingPanel {
             `Population : ${adults} adulte${adults > 1 ? 's' : ''}, ${children} enfant${children > 1 ? 's' : ''}, ${workers} ouvrier${workers > 1 ? 's' : ''}`,
           );
           lines.push(this.world.night === 0 ? 'Aucune nuit pour l’instant.' : `Nuits affrontées : ${this.world.night}.`);
+          lines.push(`Les chantiers à ${proto.logisticRadius} cases à la ronde puisent dans son coffre.`);
+          this.actions.hidden = false;
+          this.depositButton.hidden = false;
+          this.depositButton.disabled = !inReach || this.world.player.inventory.isEmpty();
           break;
         }
 
