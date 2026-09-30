@@ -19,6 +19,7 @@
 
 import { hash3, noise2 } from '../core/rng.ts';
 import { DECOR, DECOR_DENSITY, DECOR_IDS, type DecorId, type DecorTerrain } from '../data/decor.ts';
+import type { Habitat } from '../data/enemies.ts';
 import type { ItemId } from '../data/items.ts';
 import { ROCK_OF_ORE, type ResourceId } from '../data/resources.ts';
 
@@ -155,6 +156,25 @@ export function resourceAt(seed: number, tx: number, ty: number): ResourceId | n
   const roll = hash3(seed ^ 0x1b873593, tx, ty) / 4294967296;
 
   return roll < TREE_DENSITY ? 'tree' : null;
+}
+
+/**
+ * Le cœur d'un massif, un peu au-dessus du seuil de forêt : les lisières
+ * clairsemées n'abritent pas de loups.
+ */
+const FOREST_CORE = FOREST_THRESHOLD + 0.05;
+
+/**
+ * L'habitat de la faune sur une tuile, ou `null`. Le sable est la rive (il
+ * ne borde que l'eau) ; la forêt est l'herbe au cœur d'un massif, qu'un
+ * arbre y pousse ou non. Pur, comme le reste : rien n'est stocké.
+ */
+export function habitatAt(seed: number, tx: number, ty: number): Habitat | null {
+  const terrain = terrainAt(seed, tx, ty);
+
+  if (terrain === 'sand') return 'shore';
+  if (terrain !== 'grass') return null;
+  return smoothNoise(seed ^ 0x7f4a7c15, tx, ty, FOREST_CELL) >= FOREST_CORE ? 'forest' : null;
 }
 
 /** Tables de tirage du décor, par terrain : ids et poids cumulés. */

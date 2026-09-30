@@ -27,6 +27,13 @@ export const BUILD_REACH_TILES = 7;
 /** Capacité du sac, en nombre total d'objets. */
 export const INVENTORY_CAPACITY = 60;
 
+/** Points de vie d'Adam. */
+export const PLAYER_MAX_HP = 10;
+
+/** Ticks sans coup reçu avant qu'Adam récupère, puis ticks par point récupéré. */
+export const PLAYER_CALM_TICKS = 20 * 4;
+export const PLAYER_REGEN_TICKS = 20;
+
 /** Demi-largeur et demi-hauteur de la boîte de collision, en pixels monde. */
 export const PLAYER_HALF_W = 10;
 export const PLAYER_HALF_H = 7;
@@ -43,6 +50,9 @@ export function createPlayer(x: number, y: number): Player {
     moving: false,
     harvesting: false,
     bowCooldown: 0,
+    target: null,
+    hp: PLAYER_MAX_HP,
+    calmTicks: 0,
     inventory: new Store(INVENTORY_CAPACITY),
   };
 }

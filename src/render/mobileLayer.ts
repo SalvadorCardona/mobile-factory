@@ -1,5 +1,5 @@
 /**
- * Mutants, flèches et enfants.
+ * Mutants, bêtes sauvages, flèches et enfants.
  *
  * Les mobiles n'ont pas d'événement de création : ils apparaissent dans
  * `world.mobiles`, et cette couche s'y synchronise à chaque frame — une vue
@@ -14,18 +14,22 @@
  * Un mutant touché fait la grimace (yeux en croix) et gicle ; un mutant qui
  * apparaît sort de la brume en fondu ; un mutant qui meurt s'écrase comme
  * une flaque et s'efface. Ce sont des minuteurs de vue : la simulation ne
- * connaît que ses points de vie.
+ * connaît que ses points de vie. Crabes et loups font de même, et frappent
+ * (pinces qui claquent, bond) quand ils touchent Adam.
+ *
+ * Le marqueur de cible — un anneau jaune au sol et une pointe au-dessus de
+ * la tête — suit ce que l'arc d'Adam vise (`player.target`).
  */
 
 import { Container, Graphics, Sprite, type Ticker } from 'pixi.js';
 import { TILE_SIZE, floorDiv } from '../core/grid.ts';
 import { PALETTE, hex } from '../data/artDirection.ts';
-import { ENEMIES } from '../data/enemies.ts';
+import { ENEMIES, WILDLIFE } from '../data/enemies.ts';
 import { SPRITES } from '../data/sprites.ts';
 import type { Mobile, MobileId } from '../sim/types.ts';
 import { terrainAt } from '../sim/terrain.ts';
 import type { World } from '../sim/world.ts';
-import { Puppet } from './puppet.ts';
+import { Puppet, type PuppetId } from './puppet.ts';
 import type { SpriteLibrary } from './spriteLibrary.ts';
 import type { TerrainTiles } from './terrainTiles.ts';
 
@@ -34,6 +38,20 @@ const HP_FG = hex(PALETTE.coral.base);
 
 const SPAWN_MS = 500;
 const DEATH_MS = 520;
+
+/** Le pantin de chaque marcheur : sprite, ombre, écart des pieds, allure. */
+function puppetOf(mobile: Exclude<Mobile, { kind: 'arrow' }>): { id: PuppetId; shadowWidth: number; stride: number; gait?: 'scuttle' } {
+  switch (mobile.kind) {
+    case 'mutant':
+      return { id: ENEMIES[mobile.proto].sprite, shadowWidth: 22, stride: 4 };
+    case 'kid':
+      return { id: 'kid', shadowWidth: 15, stride: 3 };
+    case 'beast':
+      return mobile.proto === 'crab'
+        ? { id: WILDLIFE.crab.sprite, shadowWidth: 22, stride: 8, gait: 'scuttle' }
+        : { id: WILDLIFE.wolf.sprite, shadowWidth: 26, stride: 3 };
+  }
+}
 
 interface MobileView {
   root: Container;
@@ -62,13 +80,26 @@ export class MobileLayer {
   private readonly tiles: TerrainTiles;
   private readonly container: Container;
 
+  /** Le marqueur de cible : anneau au sol, pointe au-dessus de la tête. */
+  private readonly ring: Sprite;
+  private readonly pointer: Sprite;
+  private clock = 0;
+
   public constructor(world: World, library: SpriteLibrary, tiles: TerrainTiles, container: Container) {
     this.world = world;
     this.library = library;
     this.tiles = tiles;
     this.container = container;
 
-    world.events.on('mutantDied', ({ id, x, y }) => {
+    this.ring = new Sprite(library.part('target', 'ring'));
+    this.pointer = new Sprite(library.part('target', 'pointer'));
+    this.ring.anchor.set(SPRITES.target.anchorX, SPRITES.target.anchorY);
+    this.pointer.anchor.set(0.5, 1);
+    this.ring.visible = false;
+    this.pointer.visible = false;
+    container.addChild(this.ring, this.pointer);
+
+    const fall = ({ id, x, y }: { id: number; x: number; y: number }): void => {
       const view = this.views.get(id);
 
       if (view?.puppet) {
@@ -81,7 +112,11 @@ export class MobileLayer {
         this.container.addChild(view.puppet.root);
         this.corpses.push({ puppet: view.puppet, left: DEATH_MS });
       }
-    });
+    };
+
+    world.events.on('mutantDied', fall);
+    world.events.on('beastDied', fall);
+    world.events.on('playerHurt', ({ by }) => this.views.get(by)?.puppet?.strike());
   }
 
   public update(alpha: number, ticker: Ticker): void {
@@ -102,14 +137,15 @@ export class MobileLayer {
           break;
 
         case 'mutant':
+        case 'beast':
         case 'kid': {
           const puppet = view.puppet!;
 
           view.root.zIndex = y + 6;
           this.ground(view, x, y);
 
-          if (mobile.kind === 'mutant' && view.hp) {
-            const max = ENEMIES[mobile.proto].hp;
+          if (mobile.kind !== 'kid' && view.hp) {
+            const max = mobile.kind === 'mutant' ? ENEMIES[mobile.proto].hp : WILDLIFE[mobile.proto].hp;
 
             view.hp.visible = mobile.hp < max;
             if (view.hp.visible) drawHp(view.hp, mobile.hp / max);
@@ -137,6 +173,33 @@ export class MobileLayer {
     }
 
     this.bury(deltaMs);
+    this.mark(alpha, deltaMs);
+  }
+
+  /** Pose le marqueur sur la cible de l'arc d'Adam, et le fait respirer. */
+  private mark(alpha: number, deltaMs: number): void {
+    const id = this.world.player.target;
+    const target = id === null ? undefined : this.world.mobiles.get(id);
+    const visible = target !== undefined && (target.kind === 'mutant' || target.kind === 'beast');
+
+    this.ring.visible = visible;
+    this.pointer.visible = visible;
+    if (!visible) return;
+
+    this.clock += deltaMs;
+
+    const x = target.prevX + (target.x - target.prevX) * alpha;
+    const y = target.prevY + (target.y - target.prevY) * alpha;
+    const sprite = SPRITES[puppetOf(target).id];
+    const breath = Math.sin(this.clock * 0.008);
+    const head = y - sprite.height * sprite.anchorY + 4;
+
+    this.ring.position.set(x, y);
+    this.ring.scale.set(0.9 + breath * 0.06);
+    this.ring.zIndex = y - 1;
+    this.pointer.position.set(x, head - 2 + breath * 1.5);
+    this.pointer.scale.set(0.6);
+    this.pointer.zIndex = y + 64;
   }
 
   private add(mobile: Mobile): MobileView {
@@ -150,17 +213,14 @@ export class MobileLayer {
       root.addChild(sprite);
       view = { root, puppet: null, hp: null, lastHp: 0, age: SPAWN_MS, tile: '' };
     } else {
-      const mutant = mobile.kind === 'mutant';
-      const id = mutant ? ENEMIES[mobile.proto].sprite : 'kid';
-      const puppet = new Puppet(this.library, id, this.tiles.shadow('grass'), {
-        shadowWidth: mutant ? 22 : 15,
-        stride: mutant ? 4 : 3,
-      });
+      const foe = mobile.kind !== 'kid';
+      const { id, ...options } = puppetOf(mobile);
+      const puppet = new Puppet(this.library, id, this.tiles.shadow('grass'), options);
       let hp: Graphics | null = null;
 
       root.addChild(puppet.root);
 
-      if (mutant) {
+      if (foe) {
         const proto = SPRITES[id];
 
         hp = new Graphics();
@@ -169,7 +229,7 @@ export class MobileLayer {
         root.addChild(hp);
         root.alpha = 0;
       }
-      view = { root, puppet, hp, lastHp: mutant ? mobile.hp : 0, age: mutant ? 0 : SPAWN_MS, tile: '' };
+      view = { root, puppet, hp, lastHp: foe ? mobile.hp : 0, age: foe ? 0 : SPAWN_MS, tile: '' };
     }
 
     this.views.set(mobile.id, view);
@@ -220,7 +280,7 @@ export class MobileLayer {
 }
 
 /** Une capsule blanche et son remplissage corail, au-dessus de la tête. */
-function drawHp(graphics: Graphics, ratio: number): void {
+export function drawHp(graphics: Graphics, ratio: number): void {
   graphics.clear().roundRect(0, 0, 18, 6, 3).fill(HP_TRACK);
   if (ratio > 0) graphics.roundRect(1.5, 1.5, Math.max(3, 15 * ratio), 3, 1.5).fill(HP_FG);
 }

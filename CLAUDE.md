@@ -31,6 +31,14 @@ tout sauf le bâti, qu'ils cassent. L'arc d'Adam et la tour de guet
 (`src/data/weapons.ts`) tirent seuls. La mairie à zéro = partie perdue.
 La **nurserie** fait naître un enfant toutes les dix minutes.
 
+**Faune** — en plus des mutants, des **crabes** vivent sur le sable et des
+**loups** au cœur des forêts (`WILDLIFE`, `src/data/enemies.ts` ;
+`src/sim/wildlife.ts`). Leurs tanières se tirent de la seed par chunk ; une
+tanière se peuple hors de la vue d'Adam et loin du village, sous un
+plafond. Ils ne s'en prennent qu'à Adam (qui a des PV et se réveille à la
+mairie s'il tombe) ; l'arc d'Adam vise l'ennemi le plus proche, bête ou
+mutant, et le marque (`player.target`) ; les tours ne visent que les mutants.
+
 ## Direction artistique
 
 **Vectoriel « post-apo joyeux » : la vie reprend ses droits sur la ruine.**

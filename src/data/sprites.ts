@@ -19,6 +19,7 @@
 import { ADAM } from '../art/adam.ts';
 import { ARROW } from '../art/arrow.ts';
 import { BUILDER_HOUSE } from '../art/builderHouse.ts';
+import { CRAB } from '../art/crab.ts';
 import { DECOR_ART } from '../art/decor.ts';
 import { DRILL } from '../art/drill.ts';
 import { FARM } from '../art/farm.ts';
@@ -26,9 +27,11 @@ import { KID } from '../art/kid.ts';
 import { MUTANT } from '../art/mutant.ts';
 import { NURSERY } from '../art/nursery.ts';
 import { ROCK_COAL, ROCK_IRON, ROCK_STONE } from '../art/rocks.ts';
+import { TARGET } from '../art/target.ts';
 import { TOWN_HALL } from '../art/townHall.ts';
 import { TREE, TREE_DEAD, TREE_PINE } from '../art/trees.ts';
 import { WATCHTOWER } from '../art/watchtower.ts';
+import { WOLF } from '../art/wolf.ts';
 
 export interface SpriteProto {
   /** Cadre commun à tous les morceaux, en pixels monde. */
@@ -50,7 +53,10 @@ export const SPRITES = {
   adam: ADAM,
   mutant: MUTANT,
   kid: KID,
+  crab: CRAB,
+  wolf: WOLF,
   arrow: ARROW,
+  target: TARGET,
 
   tree: TREE,
   treePine: TREE_PINE,

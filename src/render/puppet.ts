@@ -1,15 +1,19 @@
 /**
  * Un pantin : un personnage animé par morceaux.
  *
- * Plus de planche d'images. Adam, un mutant, un enfant sont des morceaux —
- * un corps par direction, deux pieds, un arc, un halo — superposés au même
- * point (les pieds) et animés par transformation :
- * - la **marche** fait alterner les pieds et rebondir le corps ;
+ * Plus de planche d'images. Adam, un mutant, un enfant, un crabe, un loup
+ * sont des morceaux — un corps par direction, deux pieds, un arc, un halo,
+ * des pinces — superposés au même point (les pieds) et animés par
+ * transformation :
+ * - la **marche** fait alterner les pieds et rebondir le corps ; un crabe,
+ *   lui, **trottine de côté** : le corps se dandine, les deux peignes de
+ *   pattes se lèvent tour à tour ;
  * - le repos le fait respirer ;
  * - la **frappe** (Adam contre un arbre) l'écrase et le pousse vers ce qu'il
  *   heurte ;
  * - un **coup reçu** montre le corps « touché » un instant et le fait gicler ;
- * - un **tir** tend l'arc puis le relâche.
+ * - un **tir** tend l'arc puis le relâche ;
+ * - une **attaque** de bête fait claquer les pinces du crabe, bondir le loup.
  *
  * Le profil gauche est le miroir du profil droit ; l'ombre portée, elle, ne
  * se retourne pas : la lumière vient toujours d'en haut à gauche.
@@ -34,12 +38,15 @@ const WALK_RATE = 0.018;
 const ACT_RATE = 0.028;
 const HURT_MS = 150;
 const SHOT_MS = 260;
+const STRIKE_MS = 240;
 
 export interface PuppetOptions {
   /** Largeur de l'ombre portée, en pixels monde. */
   shadowWidth: number;
   /** Écart des pieds de part et d'autre du centre. */
   stride: number;
+  /** `scuttle` : l'allure du crabe, de côté. Par défaut, la marche. */
+  gait?: 'walk' | 'scuttle';
 }
 
 export class Puppet {
@@ -52,24 +59,28 @@ export class Puppet {
   private readonly feet: [Sprite, Sprite];
   private readonly bow: Sprite | null;
   private readonly halo: Sprite | null;
+  private readonly claws: Sprite | null;
 
   private readonly library: SpriteLibrary;
-  private readonly id: 'adam' | 'mutant' | 'kid';
+  private readonly id: PuppetId;
   private readonly proto: SpriteProto;
   private readonly stride: number;
+  private readonly gait: 'walk' | 'scuttle';
 
   private phase = 0;
   private clock = Math.random() * 1000;
   private hurt = 0;
   private shot = 0;
+  private strikeLeft = 0;
   private view: View | '' = '';
   private hurtShown = false;
 
-  public constructor(library: SpriteLibrary, id: 'adam' | 'mutant' | 'kid', shadow: Texture, options: PuppetOptions) {
+  public constructor(library: SpriteLibrary, id: PuppetId, shadow: Texture, options: PuppetOptions) {
     this.library = library;
     this.id = id;
     this.proto = SPRITES[id];
     this.stride = options.stride;
+    this.gait = options.gait ?? 'walk';
 
     this.shadow = new Sprite(shadow);
     this.shadow.anchor.set(0.5);
@@ -81,10 +92,13 @@ export class Puppet {
     this.feet = [this.part('foot'), this.part('foot')];
     this.body = this.part('down');
     this.bow = id === 'adam' ? this.part('bow') : null;
+    this.claws = 'claws' in this.proto.parts ? this.part('claws') : null;
 
     if (this.halo) this.halo.alpha = 0.35;
 
-    this.figure.addChild(...[this.halo, ...this.feet, this.body, this.bow].filter((sprite) => sprite !== null));
+    this.figure.addChild(
+      ...[this.halo, ...this.feet, this.body, this.bow, this.claws].filter((sprite) => sprite !== null),
+    );
     this.root.addChild(this.shadow, this.figure);
   }
 
@@ -113,18 +127,29 @@ export class Puppet {
     this.shot = SHOT_MS;
   }
 
+  /** Attaque d'une bête : les pinces claquent, le loup bondit. */
+  public strike(): void {
+    this.strikeLeft = STRIKE_MS;
+  }
+
   public update(deltaMs: number, facing: Facing, verb: Verb): void {
-    const view: View = facing === 'left' || facing === 'right' ? 'side' : facing;
+    const turned: View = facing === 'left' || facing === 'right' ? 'side' : facing;
+    // Un sprite sans ce point de vue (le crabe, toujours de face) garde sa face.
+    const view: View = turned in this.proto.parts ? turned : 'down';
     const hurting = this.hurt > 0;
 
     this.clock += deltaMs;
     this.hurt = Math.max(0, this.hurt - deltaMs);
     this.shot = Math.max(0, this.shot - deltaMs);
+    this.strikeLeft = Math.max(0, this.strikeLeft - deltaMs);
 
     if (view !== this.view || hurting !== this.hurtShown) {
       this.view = view;
       this.hurtShown = hurting;
-      this.body.texture = this.library.texture(`${this.id}.${view}${hurting && this.id === 'mutant' ? 'Hurt' : ''}`);
+
+      const hurt = `${view}Hurt`;
+
+      this.body.texture = this.library.texture(`${this.id}.${hurting && hurt in this.proto.parts ? hurt : view}`);
     }
 
     this.figure.scale.x = facing === 'left' ? -1 : 1;
@@ -134,7 +159,18 @@ export class Puppet {
     let bodyY = 0;
     let squash: number;
 
-    if (verb === 'walk') {
+    if (verb === 'walk' && this.gait === 'scuttle') {
+      // De côté : le corps se dandine, les peignes de pattes se lèvent tour à tour.
+      this.phase += deltaMs * WALK_RATE * 1.6;
+
+      const lift = Math.sin(this.phase);
+
+      bodyX = lift * 1.2;
+      bodyY = -Math.abs(Math.cos(this.phase)) * 0.8;
+      squash = 0;
+      left.position.set(-this.stride + lift * 1.2, -Math.max(0, lift) * 1.6);
+      right.position.set(this.stride + lift * 1.2, -Math.max(0, -lift) * 1.6);
+    } else if (verb === 'walk') {
       this.phase += deltaMs * WALK_RATE;
 
       const lift = Math.sin(this.phase);
@@ -179,8 +215,29 @@ export class Puppet {
       bodyY -= t * 2;
     }
 
+    // L'attaque : un bond vers la cible, puis l'atterrissage écrasé.
+    const strike = Math.sin((this.strikeLeft / STRIKE_MS) * Math.PI);
+
+    if (this.strikeLeft > 0 && !this.claws) {
+      if (view === 'side') bodyX += strike * 4;
+      else bodyY += view === 'down' ? strike * 3 : -strike * 3;
+      squash -= strike * 0.12;
+    }
+
     this.body.position.set(bodyX, bodyY);
     this.body.scale.set(1 - squash * 0.6, 1 + squash);
+
+    if (this.claws) {
+      // Les pinces suivent le corps ; à l'attaque, elles se lèvent et claquent.
+      const [px, py] = this.proto.pivots?.['claws'] ?? [0, 0];
+      const snap = this.strikeLeft > 0 ? Math.abs(Math.sin(this.strikeLeft * 0.05)) : 0;
+
+      this.claws.position.set(
+        bodyX + px - this.proto.anchorX * this.proto.width,
+        bodyY + py - this.proto.anchorY * this.proto.height - strike * 3,
+      );
+      this.claws.scale.set(1 + snap * 0.18, 1 - snap * 0.12);
+    }
 
     if (this.bow) {
       // Tendu (écrasé en largeur), puis relâché en vibrant.
@@ -217,4 +274,4 @@ export class Puppet {
 }
 
 /** Sprites qui s'animent en pantin. */
-export type PuppetId = Extract<SpriteId, 'adam' | 'mutant' | 'kid'>;
+export type PuppetId = Extract<SpriteId, 'adam' | 'mutant' | 'kid' | 'crab' | 'wolf'>;

@@ -8,12 +8,12 @@
  * Deux familles :
  * - les **entités** posées sur la grille — chantiers et bâtiments — qui
  *   dorment entre deux réveils du scheduler ;
- * - les **mobiles** — mutants, flèches, enfants — qui bougent à chaque tick.
+ * - les **mobiles** — mutants, bêtes, flèches, enfants — qui bougent à chaque tick.
  *   Ils sont peu nombreux, et c'est ce qui rend le tick par mobile acceptable.
  */
 
 import type { BuildingId } from '../data/buildings.ts';
-import type { EnemyId } from '../data/enemies.ts';
+import type { EnemyId, WildlifeId } from '../data/enemies.ts';
 import type { ItemId } from '../data/items.ts';
 import type { Store } from './store.ts';
 
@@ -111,6 +111,12 @@ export interface Player {
   harvesting: boolean;
   /** Ticks avant la prochaine flèche de l'arc. */
   bowCooldown: number;
+  /** Ce que l'arc vise ce tick : le rendu y pose un marqueur. `null` si rien n'est à portée. */
+  target: MobileId | null;
+  /** Points de vie : les crabes pincent, les loups mordent. À zéro, Adam se réveille à la mairie. */
+  hp: number;
+  /** Ticks depuis le dernier coup reçu : Adam ne récupère qu'au calme. */
+  calmTicks: number;
   /** Le sac à dos. */
   inventory: Store;
 }
@@ -145,6 +151,37 @@ export interface Mutant extends Moving {
   attackCooldown: number;
 }
 
+/**
+ * Ce que fait une bête sauvage :
+ * - `roam` : elle flâne autour de sa tanière, sans quitter son habitat ;
+ * - `chase` : Adam est entré dans son rayon, elle le charge ;
+ * - `return` : il s'est éloigné, ou elle s'est trop écartée — elle rentre,
+ *   sans se retourner, jusqu'à sa tanière.
+ */
+export type BeastState = 'roam' | 'chase' | 'return';
+
+/** Une bête sauvage : un crabe sur la plage, un loup en forêt. */
+export interface Beast extends Moving {
+  kind: 'beast';
+  proto: WildlifeId;
+  hp: number;
+  /** La tanière d'où elle vient, et où elle rentre. */
+  denId: number;
+  homeX: number;
+  homeY: number;
+  state: BeastState;
+  /** Direction de la flânerie courante, nulle à l'arrêt. */
+  dirX: number;
+  dirY: number;
+  /** Ticks avant de changer d'idée. */
+  wanderTicks: number;
+  /** Ticks avant le prochain coup sur Adam. */
+  attackCooldown: number;
+}
+
+/** Ce que les arcs peuvent viser : un mutant ou une bête. */
+export type Foe = Mutant | Beast;
+
 /** Une flèche : une ligne droite, une durée de vie, et le premier mutant touché. */
 export interface Arrow extends Moving {
   kind: 'arrow';
@@ -170,4 +207,4 @@ export interface Kid extends Moving {
   wanderTicks: number;
 }
 
-export type Mobile = Mutant | Arrow | Kid;
+export type Mobile = Mutant | Beast | Arrow | Kid;

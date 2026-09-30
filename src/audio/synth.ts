@@ -24,7 +24,9 @@ export type SoundName =
   | 'baby'
   | 'defeat'
   | 'open'
-  | 'countdown';
+  | 'countdown'
+  | 'bite'
+  | 'faint';
 
 /** Une seconde de bruit blanc, partagée par tous les sons qui en ont besoin. */
 let noiseBuffer: AudioBuffer | null = null;
@@ -197,6 +199,20 @@ export const SOUNDS: Record<SoundName, (ctx: AudioContext, out: AudioNode, at: n
   countdown(ctx, out, at) {
     tone(ctx, out, at, 'square', 330, 330, { attack: 0.005, decay: 0.09, peak: 0.14 });
     tone(ctx, out, at, 'triangle', 165, 160, { decay: 0.12, peak: 0.3 });
+  },
+
+  /** Une pince ou un croc sur Adam : un claquement sec et un petit cri qui monte. */
+  bite(ctx, out, at) {
+    const v = vary(0.1);
+
+    burst(ctx, out, at, 'highpass', 3000 * v, 1800 * v, { decay: 0.04, peak: 0.7 });
+    tone(ctx, out, at + 0.03, 'square', 420 * v, 620 * v, { decay: 0.08, peak: 0.16 });
+  },
+
+  /** Adam tombe dans les pommes : une glissade qui descend, sans drame. */
+  faint(ctx, out, at) {
+    tone(ctx, out, at, 'triangle', 660, 180, { attack: 0.02, decay: 0.5, peak: 0.35 });
+    tone(ctx, out, at + 0.12, 'sine', 330, 110, { decay: 0.45, peak: 0.25 });
   },
 
   /** Une fenêtre qui s'ouvre. */

@@ -32,7 +32,8 @@ import { SPRITES, type SpriteProto } from '../data/sprites.ts';
 import type { Entity, EntityId } from '../sim/types.ts';
 import { terrainAt } from '../sim/terrain.ts';
 import { siteMissing, type World } from '../sim/world.ts';
-import { MobileLayer } from './mobileLayer.ts';
+import { PLAYER_MAX_HP } from '../sim/player.ts';
+import { MobileLayer, drawHp } from './mobileLayer.ts';
 import { Puppet } from './puppet.ts';
 import type { SpriteLibrary } from './spriteLibrary.ts';
 import type { TerrainTiles } from './terrainTiles.ts';
@@ -85,6 +86,9 @@ export class EntityLayer {
 
   private readonly views = new Map<EntityId, EntityView>();
   private readonly adam: Puppet;
+  /** Sa barre de vie, au-dessus de la tête, dès qu'une bête l'a entamé. */
+  private readonly adamHp = new Graphics();
+  private adamHpShown = -1;
   private readonly mobiles: MobileLayer;
   private readonly shadows: Container;
   private groundTile = '';
@@ -102,6 +106,9 @@ export class EntityLayer {
     this.mobiles = new MobileLayer(world, library, tiles, this.container);
 
     this.adam = new Puppet(library, 'adam', tiles.shadow('grass'), { shadowWidth: 22, stride: 4 });
+    this.adamHp.position.set(-9, -SPRITES.adam.height * SPRITES.adam.anchorY - 2);
+    this.adamHp.visible = false;
+    this.adam.root.addChild(this.adamHp);
     this.container.addChild(this.adam.root);
 
     world.events.on('buildingPlaced', ({ id }) => this.add(id));
@@ -117,6 +124,7 @@ export class EntityLayer {
 
       if (view) view.hit = HIT_MS;
     });
+    world.events.on('playerHurt', () => this.adam.hit());
     world.events.on('arrowShot', ({ x, y }) => {
       const { player } = world;
 
@@ -253,6 +261,13 @@ export class EntityLayer {
     this.adam.root.zIndex = y + PLAYER_FOOT;
     this.adam.update(ticker.deltaMS, player.facing, player.harvesting ? 'act' : player.moving ? 'walk' : 'idle');
     this.updateShadow(x, y);
+
+    if (player.hp !== this.adamHpShown) {
+      this.adamHpShown = player.hp;
+      this.adamHp.visible = player.hp < PLAYER_MAX_HP;
+      if (this.adamHp.visible) drawHp(this.adamHp, player.hp / PLAYER_MAX_HP);
+    }
+
     this.mobiles.update(alpha, ticker);
 
     for (const [id, view] of this.views) {

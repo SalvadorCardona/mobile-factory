@@ -18,6 +18,7 @@ import { AudioEngine } from './audio/engine.ts';
 import { assertPrototypes } from './data/validate.ts';
 import { PALETTE, hex } from './data/artDirection.ts';
 import { MENU_BUILDING_IDS } from './data/buildings.ts';
+import type { WildlifeId } from './data/enemies.ts';
 import type { ItemId } from './data/items.ts';
 import { Inspect } from './input/inspect.ts';
 import { Joystick } from './input/joystick.ts';
@@ -85,6 +86,10 @@ declare global {
 }
 
 const MUTANT_COLORS = [PALETTE.toxic.base, PALETTE.toxic.light, PALETTE.toxic.shade].map(hex);
+const BEAST_COLORS: Record<WildlifeId, readonly number[]> = {
+  crab: [PALETTE.coral.base, PALETTE.orange.base, PALETTE.coral.light].map(hex),
+  wolf: [PALETTE.violet.base, PALETTE.violet.light, PALETTE.ink.light].map(hex),
+};
 const RUBBLE_COLORS = [PALETTE.yellow.base, PALETTE.yellow.shade, PALETTE.orange.base, PALETTE.violet.light].map(hex);
 const CELEBRATION_COLORS = [PALETTE.yellow.base, PALETTE.coral.base, PALETTE.cyan.base, PALETTE.mint.base, PALETTE.violet.base].map(hex);
 
@@ -294,6 +299,12 @@ function wireAudio(world: World, audio: AudioEngine, hud: Hud): void {
   world.events.on('arrowShot', () => audio.play('arrow'));
   world.events.on('mutantHit', () => audio.play('hit'));
   world.events.on('mutantDied', () => audio.play('die'));
+  world.events.on('beastHit', () => audio.play('hit'));
+  world.events.on('beastDied', () => audio.play('die'));
+  world.events.on('playerHurt', ({ hp }) => {
+    if (hp > 0) audio.play('bite');
+  });
+  world.events.on('playerKnockedOut', () => audio.play('faint'));
   world.events.on('buildingDamaged', ({ hp }) => {
     if (hp > 0) audio.play('thud');
   });
@@ -368,6 +379,8 @@ function wireParticles(world: World, renderer: GameRenderer): void {
   );
   world.events.on('mutantHit', ({ x, y }) => particles.burst(x, y - 12, MUTANT_COLORS, 4));
   world.events.on('mutantDied', ({ x, y }) => particles.burst(x, y - 12, MUTANT_COLORS, 12, 0.12));
+  world.events.on('beastHit', ({ proto, x, y }) => particles.burst(x, y - 8, BEAST_COLORS[proto], 4));
+  world.events.on('beastDied', ({ proto, x, y }) => particles.burst(x, y - 8, BEAST_COLORS[proto], 10, 0.12));
   world.events.on('buildingDamaged', ({ id }) => {
     const entity = world.entities.get(id);
 
@@ -397,6 +410,8 @@ function wireShake(world: World, renderer: GameRenderer): void {
   world.events.on('waveStarted', () => renderer.shake(0.3));
   world.events.on('buildingCompleted', () => renderer.shake(0.18));
   world.events.on('townHallDestroyed', () => renderer.shake(1));
+  world.events.on('playerHurt', () => renderer.shake(0.12));
+  world.events.on('playerKnockedOut', () => renderer.shake(0.4));
 }
 
 /**
