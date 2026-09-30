@@ -737,6 +737,13 @@ describe('nurserie', () => {
 
   it('prend la nourriture au contact d’Adam, et elle seule, dans la limite de son coffre', () => {
     const world = new World(7);
+    const home = worldToTile(world.player.x, world.player.y);
+
+    // La récolte de proximité remplirait le sac pendant le chantier : pas d'arbre ni de rocher autour.
+    for (let ty = home.ty - 10; ty <= home.ty + 10; ty += 1) {
+      for (let tx = home.tx - 10; tx <= home.tx + 10; tx += 1) world.resources.clear(tx, ty);
+    }
+
     const nursery = build(world, 'nursery');
     const rejected: string[] = [];
 
