@@ -348,6 +348,7 @@ function parseEntity(raw: unknown): SavedEntity {
     case 'tower':
       return { ...built, kind, armed: bool(entity['armed']) };
     case 'farm':
+    case 'quarry':
     case 'forge':
       return { ...built, kind, blocked: bool(entity['blocked']) };
     case 'townHall':

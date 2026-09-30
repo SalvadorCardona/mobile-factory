@@ -43,7 +43,7 @@ import { CLINIC } from '../data/clinic.ts';
 import { DAWN_REWARD } from '../data/dayNight.ts';
 import { ENEMIES, LOOT_DROPS, WAVES, WILDLIFE, WILDLIFE_SPAWN, waveSize, type LootTable } from '../data/enemies.ts';
 import { EVE } from '../data/eve.ts';
-import type { ItemId } from '../data/items.ts';
+import { TOWN_PLENTY, type ItemId } from '../data/items.ts';
 import {
   PERKS,
   bagBonus,
@@ -127,6 +127,7 @@ import type {
   Eve,
   EntityId,
   Farm,
+  Quarry,
   Foe,
   Forge,
   House,
@@ -149,7 +150,7 @@ import type {
 } from './types.ts';
 
 /** Ce qui remplit un coffre qu'Adam vient vider : foreuse, ferme, forge, cabane de bûcheron. */
-type Producer = Drill | Farm | Forge | LumberCamp;
+type Producer = Drill | Farm | Quarry | Forge | LumberCamp;
 
 /** 20 ticks de simulation par seconde. */
 export const TICKS_PER_SECOND = 20;
@@ -161,6 +162,9 @@ const DRILL_RECIPE: RecipeId = 'mineOre';
 
 /** Recette d'une ferme. */
 const FARM_RECIPE: RecipeId = 'growFood';
+
+/** Recette d'une carrière. */
+const QUARRY_RECIPE: RecipeId = 'cutStone';
 
 /** Ce que coûte une naissance à la nurserie, et tous les combien. */
 const NURSERY_RECIPE: RecipeId = 'raiseChild';
@@ -271,8 +275,10 @@ export type WorldEvents = {
    * (`carryLimit`) : rien n'est pris, et le joueur le voit. `wanted` dit ce
    * que chantiers et recettes en attendent encore (`World.wanted`) : zéro,
    * personne n'en veut ; sinon, le sac en contient assez, il faut livrer.
+   * `plenty` : la ville en a déjà assez (`TOWN_PLENTY`), Adam ne le ramasse
+   * plus en passant.
    */
-  harvestRefused: { tx: number; ty: number; item: ItemId; wanted: number };
+  harvestRefused: { tx: number; ty: number; item: ItemId; wanted: number; plenty: boolean };
   /**
    * Plus que `seconds` secondes avant la prochaine vague (3, 2, puis 1) : sa
    * nuit, son rang dans la nuit, son effectif, d'où elle vient et le point,
@@ -1089,7 +1095,9 @@ export class World {
     if (this.contactTicks % DELIVER_TICKS !== 0) return;
 
     if (entity?.kind === 'site') this.deliver(entity);
-    else if (entity?.kind === 'drill' || entity?.kind === 'farm' || entity?.kind === 'lumberCamp') this.collect(entity);
+    else if (entity?.kind === 'drill' || entity?.kind === 'farm' || entity?.kind === 'quarry' || entity?.kind === 'lumberCamp') {
+      this.collect(entity);
+    }
     else if (entity?.kind === 'nursery') this.supplyOne(entity);
     else if (entity?.kind === 'lab') this.supplyLabOne(entity);
     // La forge prend d'abord ce qu'Adam lui apporte, puis lui rend ses plaques.
@@ -1141,7 +1149,11 @@ export class World {
 
       // Assez de cet objet dans le sac : Adam n'en prend plus, et le joueur le voit.
       if (player.inventory.count(item) >= this.carryLimit(item)) {
-        if (!refused.has(item)) this.events.emit('harvestRefused', { tx: node.tx, ty: node.ty, item, wanted: this.wanted(item) });
+        if (!refused.has(item)) {
+          const plenty = this.townHasPlenty(item);
+
+          this.events.emit('harvestRefused', { tx: node.tx, ty: node.ty, item, wanted: plenty ? this.awaited(item) : this.wanted(item), plenty });
+        }
         refused.add(item);
         continue;
       }
@@ -1188,7 +1200,11 @@ export class World {
    */
   public wanted(item: ItemId): number {
     if (this.townStock()) return Infinity;
+    return this.awaited(item);
+  }
 
+  /** Ce que chantiers ouverts et recettes attendent encore de cet objet, ville ou pas. */
+  private awaited(item: ItemId): number {
     let wanted = 0;
 
     for (const entity of this.entities.values()) {
@@ -1203,10 +1219,18 @@ export class World {
 
   /**
    * Combien Adam accepte d'en porter : ce qui l'attend, plus une petite
-   * réserve. Au-delà, la récolte de cet objet est refusée.
+   * réserve. Au-delà, la récolte de cet objet est refusée. La ville prend
+   * tout, sauf ce dont elle a déjà assez (`TOWN_PLENTY`) : alors on revient
+   * à ce que chantiers et recettes attendent.
    */
   public carryLimit(item: ItemId): number {
-    return this.wanted(item) + SPARE_CARRY;
+    if (this.townStock() && !this.townHasPlenty(item)) return Infinity;
+    return this.awaited(item) + SPARE_CARRY;
+  }
+
+  /** La ville a-t-elle assez de cet objet pour qu'Adam ne le ramasse plus en passant ? */
+  public townHasPlenty(item: ItemId): boolean {
+    return (this.townStock()?.available(item) ?? 0) >= TOWN_PLENTY;
   }
 
   /** Pose un objet du sac sur le chantier — le premier qui manque et qu'Adam possède. Au contact, le chantier se remplit à vue. */
@@ -1733,6 +1757,10 @@ export class World {
         building = { ...base, kind: 'farm', blocked: false };
         break;
 
+      case 'quarry':
+        building = { ...base, kind: 'quarry', blocked: false };
+        break;
+
       case 'forge':
         building = { ...base, kind: 'forge', blocked: true };
         break;
@@ -1775,6 +1803,7 @@ export class World {
         break;
 
       case 'farm':
+      case 'quarry':
         this.scheduleFarm(building);
         break;
 
@@ -1851,6 +1880,7 @@ export class World {
         break;
 
       case 'farm':
+      case 'quarry':
         this.runFarm(entity);
         break;
 
@@ -1914,20 +1944,21 @@ export class World {
   }
 
   /**
-   * Un cycle de ferme : même logique que la foreuse — coffre plein, la ferme
-   * s'endort et ne coûte plus rien jusqu'à ce qu'on vienne la vider.
+   * Un cycle de ferme — ou de carrière, qui tourne pareil sur sa propre
+   * recette : même logique que la foreuse — coffre plein, elle s'endort et
+   * ne coûte plus rien jusqu'à ce qu'on vienne la vider.
    */
-  private runFarm(farm: Farm): void {
+  private runFarm(farm: Farm | Quarry): void {
     // En pause, ou personne aux champs : elle s'endort jusqu'à ce qu'on la relance.
     if (this.stopped(farm)) {
       farm.blocked = true;
       return;
     }
 
-    const recipe = RECIPES[FARM_RECIPE];
+    const recipe = RECIPES[farm.kind === 'farm' ? FARM_RECIPE : QUARRY_RECIPE];
     const [item, base] = (Object.entries(recipe.outputs) as [ItemId, number][])[0] ?? ['food', 1];
     // Fermes fertiles (labo) : la même récolte, plus généreuse.
-    const amount = base + this.bonus('farmYield');
+    const amount = farm.kind === 'farm' ? base + this.bonus('farmYield') : base;
     const accepted = farm.store.add(item, amount);
 
     if (accepted < amount) {
@@ -1936,14 +1967,15 @@ export class World {
     }
 
     farm.blocked = false;
-    this.events.emit('farmProduced', { id: farm.id, item });
+    if (farm.kind === 'farm') this.events.emit('farmProduced', { id: farm.id, item });
     this.scheduleFarm(farm);
   }
 
   /** La cadence de la recette est celle de la ferme au complet : à moitié d'ouvriers, deux fois plus lente. */
-  private scheduleFarm(farm: Farm): void {
+  private scheduleFarm(farm: Farm | Quarry): void {
     const { filled, max } = this.staffing(farm) ?? { filled: 1, max: 1 };
-    const duration = Math.ceil((RECIPES[FARM_RECIPE].duration * max) / Math.max(1, filled));
+    const recipe = RECIPES[farm.kind === 'farm' ? FARM_RECIPE : QUARRY_RECIPE];
+    const duration = Math.ceil((recipe.duration * max) / Math.max(1, filled));
 
     this.scheduler.schedule(farm.id, this.tickCount + duration, this.tickCount);
   }
@@ -3687,7 +3719,7 @@ export class World {
     if (building.kind === 'drill' && building.blocked && building.output) {
       building.blocked = false;
       this.scheduleDrill(building);
-    } else if (building.kind === 'farm' && building.blocked) {
+    } else if ((building.kind === 'farm' || building.kind === 'quarry') && building.blocked) {
       building.blocked = false;
       this.scheduleFarm(building);
     } else if (building.kind === 'forge' && building.blocked) {
@@ -3702,10 +3734,10 @@ export class World {
     }
   }
 
-  /** Les effectifs ont changé : une ferme qui n'avait plus personne peut repartir. */
+  /** Les effectifs ont changé : une ferme ou une carrière qui n'avait plus personne peut repartir. */
   private restartFarms(): void {
     for (const entity of this.entities.values()) {
-      if (entity.kind === 'farm') this.restart(entity);
+      if (entity.kind === 'farm' || entity.kind === 'quarry') this.restart(entity);
     }
   }
 
@@ -3736,6 +3768,7 @@ export class World {
     if (
       entity?.kind !== 'drill' &&
       entity?.kind !== 'farm' &&
+      entity?.kind !== 'quarry' &&
       entity?.kind !== 'forge' &&
       entity?.kind !== 'lab' &&
       entity?.kind !== 'lumberCamp'

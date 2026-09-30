@@ -33,7 +33,7 @@ import { JOB_PRIORITY, LOGISTICIANS, PORTERS } from '../data/workers.ts';
 import { labSurplus, labWants, researchCost } from './research.ts';
 import { consumerRecipe, consumerWants, isStarving } from './consumers.ts';
 import type { Store } from './store.ts';
-import type { Depot, Drill, Entity, EntityId, Farm, Job, LumberCamp, Site, TownHall } from './types.ts';
+import type { Depot, Drill, Entity, EntityId, Farm, Job, LumberCamp, Quarry, Site, TownHall } from './types.ts';
 
 /** Le trajet en ligne droite de (x0, y0) à (x1, y1) est-il praticable ? */
 export type LineTest = (x0: number, y0: number, x1: number, y1: number) => boolean;
@@ -59,8 +59,8 @@ export function inDepotRange(depot: Depot, entity: { tx: number; ty: number; wid
 }
 
 /** Un bâtiment qui produit dans son coffre, et que porteurs ou logisticiens vident dans la mairie. */
-export function isProducer(entity: Entity): entity is Drill | Farm | LumberCamp {
-  return entity.kind === 'drill' || entity.kind === 'farm' || entity.kind === 'lumberCamp';
+export function isProducer(entity: Entity): entity is Drill | Farm | Quarry | LumberCamp {
+  return entity.kind === 'drill' || entity.kind === 'farm' || entity.kind === 'quarry' || entity.kind === 'lumberCamp';
 }
 
 /**
@@ -197,6 +197,7 @@ export class JobBoard {
 
         case 'drill':
         case 'farm':
+        case 'quarry':
         case 'lumberCamp':
           // Un poste de logistique couvre ce producteur : ses logisticiens s'en chargent.
           if (depots.some((depot) => inDepotRange(depot, entity))) break;
@@ -211,7 +212,7 @@ export class JobBoard {
   }
 
   /** Vider le coffre d'un producteur dans la mairie : un voyage par objet qu'il contient. */
-  private emptyOffers(entity: Drill | Farm | LumberCamp, hall: TownHall, carry: number, offers: Offer[]): void {
+  private emptyOffers(entity: Drill | Farm | Quarry | LumberCamp, hall: TownHall, carry: number, offers: Offer[]): void {
     for (const [item] of entity.store.entries()) {
       const available = entity.store.available(item);
       const amount = Math.min(carry, available, hall.store.freeSpace());

@@ -119,6 +119,13 @@ export interface Farm extends Built {
   blocked: boolean;
 }
 
+/** La carrière : ses ouvriers taillent de la pierre dans son coffre, à la cadence de la recette, comme une ferme. */
+export interface Quarry extends Built {
+  kind: 'quarry';
+  /** Vrai quand la carrière ne se replanifie plus : coffre plein, en pause, ou sans ouvrier. */
+  blocked: boolean;
+}
+
 /**
  * La forge : fer et charbon, apportés par Adam, deviennent des plaques de
  * fer dans son coffre, à la cadence de la recette.
@@ -174,7 +181,20 @@ export interface Depot extends Built {
   kind: 'depot';
 }
 
-export type Entity = Site | Drill | TownHall | Nursery | Tower | House | Farm | Forge | Clinic | Lab | LumberCamp | Depot;
+export type Entity =
+  | Site
+  | Drill
+  | TownHall
+  | Nursery
+  | Tower
+  | House
+  | Farm
+  | Quarry
+  | Forge
+  | Clinic
+  | Lab
+  | LumberCamp
+  | Depot;
 
 export type Building = Exclude<Entity, Site>;
 

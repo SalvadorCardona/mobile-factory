@@ -219,13 +219,20 @@ export function validatePrototypes(): string[] {
 
   for (const [id, building] of Object.entries(BUILDINGS)) {
     if (
-      (building.kind === 'drill' || building.kind === 'farm' || building.kind === 'nursery' || building.kind === 'forge') &&
+      (building.kind === 'drill' ||
+        building.kind === 'farm' ||
+        building.kind === 'quarry' ||
+        building.kind === 'nursery' ||
+        building.kind === 'forge') &&
       !buildingsWithRecipe.has(id)
     ) {
       errors.push(`BUILDINGS.${id} : aucun bâtiment producteur sans recette associée`);
     }
     if (building.kind === 'farm' && building.storage <= 0) {
       errors.push(`BUILDINGS.${id} : une ferme sans coffre ne peut rien récolter`);
+    }
+    if (building.kind === 'quarry' && building.storage <= 0) {
+      errors.push(`BUILDINGS.${id} : une carrière sans coffre ne peut rien tailler`);
     }
   }
 

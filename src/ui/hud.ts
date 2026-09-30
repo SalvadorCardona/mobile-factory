@@ -337,9 +337,9 @@ export class Hud {
       if (reason === 'bagFull') this.notify('Sac plein — rien à prendre de plus', 'bad');
     });
     world.events.on('inventoryFull', () => this.notify(this.bagFullMessage(), 'bad'));
-    world.events.on('harvestRefused', ({ item, wanted }) => {
+    world.events.on('harvestRefused', ({ item, wanted, plenty }) => {
       this.refused(item);
-      this.notify(harvestRefusedText(item, wanted), 'info');
+      this.notify(harvestRefusedText(item, wanted, plenty), 'info');
     });
     world.events.on('buildingCompleted', ({ id }) => {
       const entity = world.entities.get(id);

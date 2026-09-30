@@ -47,7 +47,9 @@ butin, avec `amount`), qu'Adam reprend après s'en être éloigné.
 Tant que la mairie n'est pas debout, Adam ne récolte d'un objet que ce
 qu'on en attend (`World.wanted` : chantiers, recettes) plus une réserve
 (`SPARE_CARRY`) ; au-delà, il n'en prend plus (`harvestRefused`,
-signalé). Le conseil ne dit de livrer que si le sac contient ce qu'on attend.
+signalé). Ensuite la ville prend tout, sauf ce dont elle a déjà assez
+(`TOWN_PLENTY`, `data/items.ts`) : cet objet-là, il n'en ramasse plus en
+passant que pour un chantier ou une recette. Le conseil ne dit de livrer que si le sac contient ce qu'on attend.
 
 **Débouchés** — tout objet entre dans un coût de bâtiment ou une entrée de
 recette (`src/data/recipes.ts`) ; `validatePrototypes()` refuse une
@@ -77,6 +79,9 @@ pâli sur la carte), et un bâtiment qui emploie règle ses ouvriers entre
 `minWorkers` et `workers` (`setWorkers`, sélecteur − / + ; zéro vaut pause) :
 `sim/staffing.ts` répartit la population de la ville par id, un poste sans
 ouvrier libre reste vide, « ouvrier manquant ».
+La **carrière** (`quarry`, trois ouvriers, coût tout en bois) taille la
+pierre dans les ruines, sans rocher, comme une ferme sa nourriture (recette
+`cutStone`) ; porteurs et logisticiens la vident.
 Le **poste de logistique** (`logisticsPost`, kind `depot`) loge quatre
 **logisticiens** (des `worker` à `logistician: true`, `LOGISTICIANS` dans
 `src/data/workers.ts`, caisse au dos) : ils ne font que vider les

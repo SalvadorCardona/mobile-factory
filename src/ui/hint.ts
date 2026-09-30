@@ -38,11 +38,13 @@ export function carriesWanted(world: World): boolean {
  * Le message d'une récolte refusée (`harvestRefused`) : c'est le jeu qui
  * parle, il vouvoie. Tant qu'un chantier ou une recette attend l'objet
  * (`wanted` > 0), le sac en contient déjà assez — il faut aller livrer ;
- * « aucun chantier » ne se dit que si plus personne n'en veut.
+ * « aucun chantier » ne se dit que si plus personne n'en veut. Quand la
+ * ville en a déjà assez (`plenty`), c'est elle qui le dit.
  */
-export function harvestRefusedText(item: ItemId, wanted: number): string {
+export function harvestRefusedText(item: ItemId, wanted: number, plenty = false): string {
   const label = ITEMS[item].label.toLowerCase();
 
+  if (plenty) return `La ville a assez de ${label} — Adam n’en ramasse plus en passant`;
   if (wanted > 0) return `Assez de ${label} dans le sac pour les chantiers — allez les livrer`;
   return `Assez de ${label} : aucun chantier n’en attend plus`;
 }
@@ -93,6 +95,11 @@ export function tutorialAdvice(world: World, progress: HintProgress, towers: boo
 
   if (world.night === 0 && !towers) return say(lines.tower);
   if (mutants > 0 && world.night <= 2) return say(lines.bow);
+
+  // La pierre manque en ville, et rien n'en produit : la carrière, avant que les rochers ne soient vidés.
+  const quarried = [...world.entities.values()].some((entity) => BUILDINGS[entity.proto].kind === 'quarry');
+
+  if (mutants === 0 && !quarried && (world.townStock()?.available('stone') ?? 0) === 0) return say(lines.quarry);
 
   // Entre deux nuits, tant qu'elle n'est pas là : elle annonce son arrivée.
   if (mutants === 0 && world.night > 0 && world.night < EVE.arrivalNight && !world.eve()) {
