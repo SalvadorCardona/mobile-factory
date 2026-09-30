@@ -56,4 +56,25 @@ describe('Scheduler', () => {
     scheduler.due(10);
     expect(scheduler.size()).toBe(1);
   });
+
+  it('rend les mêmes réveils, dans le même ordre, une fois restauré', () => {
+    const original = new Scheduler();
+
+    original.schedule(1, 60, 30);
+    original.schedule(2, 60, 30);
+    original.schedule(3, 290, 30);
+    original.schedule(4, 700, 30);
+    // Une échéance partagée entre roue et map : la roue passe d'abord.
+    original.schedule(5, 300, 45);
+    original.schedule(6, 300, 30);
+
+    const copy = new Scheduler();
+
+    copy.restore(JSON.parse(JSON.stringify(original.toJSON(50))) as ReturnType<Scheduler['toJSON']>);
+    expect(copy.size()).toBe(original.size());
+
+    for (let tick = 51; tick <= 800; tick += 1) {
+      expect(copy.due(tick)).toEqual(original.due(tick));
+    }
+  });
 });

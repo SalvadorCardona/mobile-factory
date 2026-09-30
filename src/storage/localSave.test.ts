@@ -1,0 +1,102 @@
+import { describe, expect, it } from 'vitest';
+import { serialize } from '../sim/save.ts';
+import { World } from '../sim/world.ts';
+import { LocalSave, SAVE_KEY, type SaveStorage } from './localSave.ts';
+
+/** Un `localStorage` en mémoire, comme celui du navigateur. */
+function memoryStorage(): SaveStorage & { data: Map<string, string> } {
+  const data = new Map<string, string>();
+
+  return {
+    data,
+    getItem: (key) => data.get(key) ?? null,
+    setItem: (key, value) => void data.set(key, value),
+    removeItem: (key) => void data.delete(key),
+  };
+}
+
+/** Un stockage qui refuse tout : navigation privée, quota plein, stockage bloqué. */
+const hostile: SaveStorage = {
+  getItem: () => {
+    throw new DOMException('refusé', 'SecurityError');
+  },
+  setItem: () => {
+    throw new DOMException('plein', 'QuotaExceededError');
+  },
+  removeItem: () => {
+    throw new DOMException('refusé', 'SecurityError');
+  },
+};
+
+describe('LocalSave', () => {
+  it('relit la partie écrite sous sa clé', () => {
+    const storage = memoryStorage();
+    const saves = new LocalSave(storage);
+    const world = new World(99);
+
+    for (let i = 0; i < 50; i += 1) world.tick();
+
+    expect(saves.save(world)).toBe(true);
+    expect(storage.data.has(SAVE_KEY)).toBe(true);
+
+    const loaded = saves.load();
+
+    if (loaded.status !== 'ok') throw new Error(loaded.status);
+    expect(serialize(loaded.world)).toEqual(serialize(world));
+  });
+
+  it('dit « rien » quand il n’y a pas de sauvegarde', () => {
+    expect(new LocalSave(memoryStorage()).load()).toEqual({ status: 'none' });
+  });
+
+  it('ignore une sauvegarde corrompue ou d’une autre version', () => {
+    const storage = memoryStorage();
+    const saves = new LocalSave(storage);
+
+    storage.data.set(SAVE_KEY, '{"version":1,"state":');
+    expect(saves.load()).toEqual({ status: 'corrupt' });
+
+    storage.data.set(SAVE_KEY, JSON.stringify({ version: 999, savedAt: 0, state: {} }));
+    expect(saves.load()).toEqual({ status: 'version' });
+  });
+
+  it('« Recommencer » efface la clé', () => {
+    const storage = memoryStorage();
+    const saves = new LocalSave(storage);
+
+    saves.save(new World(1));
+    saves.clear();
+    expect(storage.data.has(SAVE_KEY)).toBe(false);
+    expect(saves.load()).toEqual({ status: 'none' });
+  });
+
+  it('un stockage qui lève n’empêche pas de jouer', () => {
+    const saves = new LocalSave(hostile);
+
+    expect(saves.load()).toEqual({ status: 'none' });
+    expect(saves.save(new World(1))).toBe(false);
+    expect(() => saves.clear()).not.toThrow();
+  });
+
+  it('un `localStorage` dont la simple lecture lève n’empêche pas de démarrer', () => {
+    const previous = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      get: () => {
+        throw new DOMException('cookies bloqués', 'SecurityError');
+      },
+    });
+
+    try {
+      const saves = LocalSave.browser();
+
+      expect(saves.load()).toEqual({ status: 'none' });
+      expect(saves.save(new World(1))).toBe(false);
+      expect(() => saves.clear()).not.toThrow();
+    } finally {
+      if (previous) Object.defineProperty(globalThis, 'localStorage', previous);
+      else delete (globalThis as { localStorage?: Storage }).localStorage;
+    }
+  });
+});

@@ -26,6 +26,7 @@ import { Placement } from './input/placement.ts';
 import { PointerRouter } from './input/pointer.ts';
 import { GameRenderer } from './render/renderer.ts';
 import { STEP_MS, World } from './sim/world.ts';
+import { LocalSave, type LoadResult } from './storage/localSave.ts';
 import { TILE_SIZE } from './core/grid.ts';
 import { BuildingPanel } from './ui/buildingPanel.ts';
 import { BuildMenu } from './ui/buildMenu.ts';
@@ -60,6 +61,19 @@ const HARVEST_COLORS: Record<ItemId, readonly number[]> = {
   food: [PALETTE.yellow.base, PALETTE.mint.base, PALETTE.mint.light].map(hex),
 };
 
+/**
+ * Sauvegarde automatique toutes les cinq secondes de jeu. Sérialiser le monde
+ * coûte quelques millisecondes : jamais à chaque frame, et jamais pendant un
+ * tick — seulement entre deux.
+ */
+const AUTOSAVE_MS = 5000;
+
+/** Ce que l'écran titre dit, discrètement, d'une sauvegarde qu'il n'a pas pu reprendre. */
+const LOAD_NOTICES: Partial<Record<LoadResult['status'], string>> = {
+  version: 'Ancienne sauvegarde d’une autre version : nouvelle partie.',
+  corrupt: 'Sauvegarde illisible : nouvelle partie.',
+};
+
 /** Les gestes qui comptent comme une activation utilisateur pour l'audio. */
 const GESTURES = ['pointerdown', 'pointerup', 'keydown'] as const;
 
@@ -83,7 +97,13 @@ async function main(): Promise<void> {
 
   if (!mount) throw new Error('#app introuvable');
 
-  const world = new World(readSeed());
+  // Une partie sauvegardée reprend là où elle s'était arrêtée ; sinon, une carte neuve.
+  const saves = LocalSave.browser();
+  const loaded = saves.load();
+  const world = loaded.status === 'ok' ? loaded.world : new World(readSeed());
+
+  // Le joystick repart au repos : un doigt posé au moment où l'onglet s'est fermé ne fait plus marcher Adam.
+  if (loaded.status === 'ok') world.push({ type: 'setMoveAxis', x: 0, y: 0 });
 
   const renderer = await GameRenderer.create(world, mount);
   const audio = new AudioEngine();
@@ -123,11 +143,18 @@ async function main(): Promise<void> {
   let started = false;
   let paused = false;
 
-  const pause = new PauseScreen(() => setPaused(false));
-  const title = new TitleScreen(() => {
-    started = true;
-    hud.root.dataset['started'] = 'true';
-    window.umami?.track('partie-demarree');
+  const autosave = wireSave(world, saves, () => started);
+
+  const pause = new PauseScreen(() => setPaused(false), () => autosave.restart());
+  const title = new TitleScreen({
+    resume: loaded.status === 'ok',
+    notice: LOAD_NOTICES[loaded.status],
+    onPlay: () => {
+      started = true;
+      hud.root.dataset['started'] = 'true';
+      window.umami?.track(loaded.status === 'ok' ? 'partie-reprise' : 'partie-demarree');
+    },
+    onRestart: () => autosave.restart(),
   });
 
   function setPaused(value: boolean): void {
@@ -161,10 +188,14 @@ async function main(): Promise<void> {
     { capture: true },
   );
 
-  // Onglet caché, appel entrant, écran verrouillé : la partie s'arrête d'elle-même.
+  // Onglet caché, appel entrant, écran verrouillé : la partie s'arrête d'elle-même,
+  // et elle est écrite tout de suite — sur mobile, un onglet caché peut être tué sans prévenir.
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) setPaused(true);
+    if (!document.hidden) return;
+    setPaused(true);
+    autosave.now();
   });
+  window.addEventListener('pagehide', () => autosave.now());
   window.addEventListener('keydown', (event) => {
     if (event.code === 'Escape' || event.code === 'KeyP') setPaused(!paused);
     if (event.code === 'Backquote' && import.meta.env.DEV) hud.toggleDebug();
@@ -198,6 +229,7 @@ async function main(): Promise<void> {
       world.tick();
       accumulator -= STEP_MS;
     }
+    if (started && !paused) autosave.update(ticker.deltaMS);
 
     renderer.draw(accumulator / STEP_MS, placement.mode !== 'idle', placement.ghost, joystick.state);
     hud.update(ticker.FPS, renderer.bakedChunks, renderer.atlasStats);
@@ -270,6 +302,61 @@ function wireAudio(world: World, audio: AudioEngine, hud: Hud): void {
   world.events.on('waveStarted', () => audio.play('alarm'));
   world.events.on('childBorn', () => audio.play('baby'));
   world.events.on('townHallDestroyed', () => audio.play('defeat'));
+}
+
+interface Autosave {
+  /** À appeler entre deux ticks : écrit la partie si l'intervalle est écoulé ou si un moment clé l'a demandé. */
+  update(deltaMs: number): void;
+  /** Écrit la partie sur-le-champ — onglet caché, page quittée. */
+  now(): void;
+  /** Efface la partie et recharge la page sur une carte neuve (ou la seed de l'URL). */
+  restart(): void;
+}
+
+/**
+ * La sauvegarde automatique. Elle n'écrit qu'une partie commencée — l'écran
+ * titre ne doit pas écraser la sauvegarde qu'il propose de continuer — et
+ * jamais une partie perdue : à la chute de la mairie, elle est effacée.
+ *
+ * Les moments clés (un bâtiment terminé, une vague repoussée) arrivent en
+ * plein tick ; ils ne font que lever un drapeau, et l'écriture attend la fin
+ * du tick, quand l'état est cohérent.
+ */
+function wireSave(world: World, saves: LocalSave, started: () => boolean): Autosave {
+  let elapsed = 0;
+  let due = false;
+  let enabled = true;
+
+  const write = (): void => {
+    elapsed = 0;
+    due = false;
+    if (!enabled || !started() || world.defeated) return;
+    saves.save(world);
+  };
+
+  world.events.on('buildingCompleted', () => {
+    due = true;
+  });
+  world.events.on('mutantDied', () => {
+    for (const mobile of world.mobiles.values()) if (mobile.kind === 'mutant') return;
+    due = true;
+  });
+  world.events.on('townHallDestroyed', () => saves.clear());
+
+  return {
+    update(deltaMs) {
+      elapsed += deltaMs;
+      if (due || elapsed >= AUTOSAVE_MS) write();
+    },
+    now: write,
+    restart() {
+      // Plus rien ne s'écrit : le `pagehide` du rechargement ressusciterait la partie effacée.
+      enabled = false;
+      saves.clear();
+      window.umami?.track('partie-recommencee');
+      window.location.reload();
+    },
+  };
 }
 
 /** Les éclats : copeaux à la coupe, sang vert à l'impact, gravats à l'effondrement. */

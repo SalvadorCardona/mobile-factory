@@ -7,17 +7,31 @@
  * simulation déjà lancée. Derrière le voile, la carte est déjà dessinée : on
  * voit le monde dans lequel on va entrer.
  *
- * Aucun de ces écrans ne touche au monde : ils disent à `main.ts` de jouer
- * ou d'arrêter l'horloge, et c'est tout.
+ * Quand une partie est sauvegardée, l'écran titre propose « Continuer » (le
+ * choix par défaut) et « Nouvelle partie ». Recommencer efface la colonie :
+ * les deux écrans le font confirmer avant.
+ *
+ * Aucun de ces écrans ne touche au monde ni à la sauvegarde : ils disent à
+ * `main.ts` de jouer, d'arrêter l'horloge ou de recommencer, et c'est tout.
  */
 
 import { LORE } from '../data/lore.ts';
 import { buildingIcon, itemIcon, uiIcon } from './icons.ts';
 
+export interface TitleOptions {
+  /** Une partie sauvegardée attend : « Continuer » et « Nouvelle partie » remplacent « Jouer ». */
+  resume: boolean;
+  /** Une ligne discrète sous les boutons — une vieille sauvegarde ignorée, par exemple. */
+  notice?: string;
+  onPlay: () => void;
+  /** « Nouvelle partie », confirmée : la sauvegarde est à effacer. */
+  onRestart: () => void;
+}
+
 export class TitleScreen {
   public readonly root: HTMLElement;
 
-  public constructor(onPlay: () => void) {
+  public constructor({ resume, notice, onPlay, onRestart }: TitleOptions) {
     this.root = document.createElement('div');
     this.root.className = 'overlay title-screen';
 
@@ -44,7 +58,7 @@ export class TitleScreen {
 
     play.type = 'button';
     play.className = 'button-primary title-play';
-    play.append(uiIcon('play', 26), 'Jouer');
+    play.append(uiIcon('play', 26), resume ? 'Continuer' : 'Jouer');
     play.addEventListener('click', () => {
       this.root.dataset['leaving'] = 'true';
       window.setTimeout(() => this.root.remove(), 380);
@@ -67,22 +81,58 @@ export class TitleScreen {
       controls.append(item);
     }
 
-    panel.append(kicker, title, pitch, play, controls);
-    this.root.append(panel);
+    panel.append(kicker, title, pitch, play);
+
+    if (resume) {
+      const confirm = confirmRestart(onRestart, () => {
+        confirm.hidden = true;
+        panel.hidden = false;
+        play.focus();
+      });
+      const fresh = document.createElement('button');
+
+      confirm.hidden = true;
+      fresh.type = 'button';
+      fresh.className = 'button-secondary title-new';
+      fresh.append(uiIcon('restart', 22), 'Nouvelle partie');
+      fresh.addEventListener('click', () => {
+        panel.hidden = true;
+        confirm.hidden = false;
+        confirm.querySelector<HTMLButtonElement>('.button-secondary')?.focus();
+      });
+      panel.append(fresh);
+      this.root.append(confirm);
+    }
+
+    if (notice) {
+      const line = document.createElement('p');
+
+      line.className = 'title-notice';
+      line.textContent = notice;
+      panel.append(line);
+    }
+
+    panel.append(controls);
+    this.root.prepend(panel);
+
+    // « Continuer » est le choix par défaut : Entrée ou Espace le prennent.
+    window.setTimeout(() => play.focus(), 0);
   }
 }
 
 export class PauseScreen {
   public readonly root: HTMLElement;
 
-  public constructor(onResume: () => void) {
+  private readonly panel: HTMLElement;
+  private readonly confirm: HTMLElement;
+
+  public constructor(onResume: () => void, onRestart: () => void) {
     this.root = document.createElement('div');
     this.root.className = 'overlay pause-screen';
     this.root.hidden = true;
 
-    const panel = document.createElement('div');
-
-    panel.className = 'panel overlay-panel';
+    this.panel = document.createElement('div');
+    this.panel.className = 'panel overlay-panel';
 
     const title = document.createElement('h2');
 
@@ -105,20 +155,63 @@ export class PauseScreen {
 
     restart.type = 'button';
     restart.className = 'button-secondary';
-    restart.textContent = 'Nouvelle partie';
-    restart.addEventListener('click', () => {
-      // Nouvelle carte : on retire la seed de l'URL, s'il y en avait une.
-      const url = new URL(window.location.href);
+    restart.append(uiIcon('restart', 22), 'Recommencer');
+    restart.addEventListener('click', () => this.asking(true));
 
-      url.searchParams.delete('seed');
-      window.location.href = url.toString();
-    });
-
-    panel.append(title, text, resume, restart);
-    this.root.append(panel);
+    this.confirm = confirmRestart(onRestart, () => this.asking(false));
+    this.panel.append(title, text, resume, restart);
+    this.root.append(this.panel, this.confirm);
+    this.asking(false);
   }
 
   public set visible(visible: boolean) {
     this.root.hidden = !visible;
+    // Rouvrir la pause, c'est retrouver la pause, pas une question laissée en plan.
+    if (visible) this.asking(false);
   }
+
+  private asking(asking: boolean): void {
+    this.panel.hidden = asking;
+    this.confirm.hidden = !asking;
+    if (asking) this.confirm.querySelector<HTMLButtonElement>('.button-secondary')?.focus();
+  }
+}
+
+/**
+ * « Ta colonie sera perdue » : la question avant d'effacer la partie. Le
+ * bouton corail recommence, le blanc annule — et c'est lui qui a le focus,
+ * pour qu'un Entrée distrait ne coûte pas une colonie.
+ */
+function confirmRestart(onConfirm: () => void, onCancel: () => void): HTMLElement {
+  const panel = document.createElement('div');
+
+  panel.className = 'panel overlay-panel confirm-panel';
+  panel.setAttribute('role', 'alertdialog');
+
+  const title = document.createElement('h2');
+
+  title.className = 'overlay-title';
+  title.textContent = 'Recommencer ?';
+
+  const text = document.createElement('p');
+
+  text.className = 'overlay-text';
+  text.textContent = 'Ta colonie sera perdue : la mairie, le sac, les enfants, tout.';
+
+  const confirm = document.createElement('button');
+
+  confirm.type = 'button';
+  confirm.className = 'button-primary';
+  confirm.append(uiIcon('restartLight', 22), 'Recommencer');
+  confirm.addEventListener('click', onConfirm);
+
+  const cancel = document.createElement('button');
+
+  cancel.type = 'button';
+  cancel.className = 'button-secondary';
+  cancel.textContent = 'Annuler';
+  cancel.addEventListener('click', onCancel);
+
+  panel.append(title, text, confirm, cancel);
+  return panel;
 }

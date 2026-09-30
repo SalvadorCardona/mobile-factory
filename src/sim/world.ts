@@ -20,7 +20,7 @@
 
 import { Emitter } from '../core/events.ts';
 import { CHUNK_TILES, TILE_SIZE, coordKey, distanceSq, floorDiv } from '../core/grid.ts';
-import { mulberry32, type Rng } from '../core/rng.ts';
+import { mulberry32, type StatefulRng } from '../core/rng.ts';
 import { BUILDINGS, NURSERY_BIRTH_TICKS, type BuildingId } from '../data/buildings.ts';
 import { ENEMIES, WAVES, waveSize } from '../data/enemies.ts';
 import type { ItemId } from '../data/items.ts';
@@ -35,6 +35,7 @@ import { stepKid } from './kids.ts';
 import { facingOf } from './motion.ts';
 import { BUILD_REACH_TILES, createPlayer, playerOverlaps, stepPlayer } from './player.ts';
 import { ResourceIndex } from './resources.ts';
+import type { SavedEntity, WorldState } from './save.ts';
 import { Scheduler } from './scheduler.ts';
 import { Store } from './store.ts';
 import { isBuildable, isWalkable, oreAt, terrainAt } from './terrain.ts';
@@ -153,7 +154,7 @@ export class World {
   private readonly scheduler = new Scheduler();
   private readonly queue: Command[] = [];
   private readonly log: CommandLogEntry[] = [];
-  private readonly rng: Rng;
+  private rng: StatefulRng;
   private nextId: EntityId = 1;
   private nextMobileId: MobileId = 1;
   private moveX = 0;
@@ -199,6 +200,93 @@ export class World {
   /** Journal des commandes : seed + ce journal = la partie rejouable. */
   public commandLog(): readonly CommandLogEntry[] {
     return this.log;
+  }
+
+  /* ------------------------------------------------------------ sauvegarde */
+
+  /**
+   * L'état complet, en données JSON, pris entre deux ticks. Ce qui se
+   * régénère depuis la seed n'y est pas ; les commandes pas encore consommées
+   * non plus — la sauvegarde se prend quand la file est vide.
+   */
+  public snapshot(): WorldState {
+    const { inventory, ...player } = this.player;
+
+    return {
+      seed: this.seed,
+      tick: this.tickCount,
+      rng: this.rng.state(),
+      nextId: this.nextId,
+      nextMobileId: this.nextMobileId,
+      moveX: this.moveX,
+      moveY: this.moveY,
+      contactKey: this.contactKey,
+      contactTicks: this.contactTicks,
+      wave: this.wave,
+      nextWaveTick: this.nextWaveTick,
+      kills: this.kills,
+      defeated: this.defeated,
+      defeatTick: this.defeatTick,
+      player: { ...player, inventory: inventory.toJSON() },
+      resources: this.resources.toJSON(),
+      entities: [...this.entities.values()].map(saveEntity),
+      mobiles: [...this.mobiles.values()].map((mobile) => ({ ...mobile })),
+      scheduler: this.scheduler.toJSON(this.tickCount),
+    };
+  }
+
+  /**
+   * Le monde d'une sauvegarde. La seed refait la carte, la clairière et la
+   * cible des mutants ; l'état sauvegardé remplace ensuite tout le reste.
+   * `state` doit avoir été validé (`sim/save.ts`).
+   */
+  public static restore(state: WorldState): World {
+    const world = new World(state.seed);
+
+    world.load(state);
+    return world;
+  }
+
+  private load(state: WorldState): void {
+    // Le chantier de départ ouvert par le constructeur laisse la place à ceux de la sauvegarde.
+    for (const entity of this.entities.values()) {
+      this.chunks.release(entity.id, entity.tx, entity.ty, entity.width, entity.height);
+    }
+    this.entities.clear();
+
+    this.tickCount = state.tick;
+    this.rng = mulberry32(state.rng);
+    this.nextId = state.nextId;
+    this.nextMobileId = state.nextMobileId;
+    this.moveX = state.moveX;
+    this.moveY = state.moveY;
+    this.contactKey = state.contactKey;
+    this.contactTicks = state.contactTicks;
+    this.wave = state.wave;
+    this.nextWaveTick = state.nextWaveTick;
+    this.kills = state.kills;
+    this.defeated = state.defeated;
+    this.defeatTick = state.defeatTick;
+
+    const { inventory, ...player } = state.player;
+
+    Object.assign(this.player, player, { inventory: Store.fromJSON(this.player.inventory.capacity, inventory) });
+    this.resources.restore(state.resources);
+
+    for (const saved of state.entities) {
+      const entity: Entity =
+        saved.kind === 'site'
+          ? { ...saved, delivered: { ...saved.delivered } }
+          : { ...saved, store: Store.fromJSON(BUILDINGS[saved.proto].storage, saved.store) };
+
+      this.entities.set(entity.id, entity);
+      this.chunks.occupy(entity.id, entity.tx, entity.ty, entity.width, entity.height);
+    }
+
+    this.mobiles.clear();
+    for (const mobile of state.mobiles) this.mobiles.set(mobile.id, { ...mobile });
+
+    this.scheduler.restore(state.scheduler);
   }
 
   /* ------------------------------------------------------------------ tick */
@@ -1016,6 +1104,12 @@ export class World {
       cy: floorDiv(floorDiv(this.player.y, TILE_SIZE), CHUNK_TILES),
     };
   }
+}
+
+/** Une entité en données : le coffre devient son stock, le reste est copié. */
+function saveEntity(entity: Entity): SavedEntity {
+  if (entity.kind === 'site') return { ...entity, delivered: { ...entity.delivered } };
+  return { ...entity, store: entity.store.toJSON() };
 }
 
 /** Ce qu'il manque encore à un chantier, tous objets confondus. */

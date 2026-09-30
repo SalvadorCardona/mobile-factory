@@ -1121,8 +1121,15 @@ button {
   color: var(--violet);
 }
 
-.hud-defeat .overlay-title {
+.hud-defeat .overlay-title,
+.confirm-panel .overlay-title {
   color: var(--coral);
+}
+
+/* Un écran qui pose une question cache son panneau : `hidden` doit l'emporter sur `display: flex`. */
+.overlay-panel[hidden],
+.title-panel[hidden] {
+  display: none;
 }
 
 .overlay-text {
@@ -1240,6 +1247,22 @@ button {
   50% {
     transform: scale(1.05);
   }
+}
+
+.title-new {
+  min-width: 210px;
+}
+
+/* Discret : une vieille sauvegarde ignorée ne mérite pas une alerte. */
+.title-notice {
+  margin: 0;
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow: 0 3px 0 var(--paper-shade);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
 }
 
 .title-controls {
