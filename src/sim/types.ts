@@ -165,7 +165,16 @@ export interface LumberCamp extends Built {
   kind: 'lumberCamp';
 }
 
-export type Entity = Site | Drill | TownHall | Nursery | Tower | House | Farm | Forge | Clinic | Lab | LumberCamp;
+/**
+ * Le poste de logistique : il loge ses logisticiens, qui vident les
+ * producteurs de son rayon (`LOGISTICIANS.radius`) dans la mairie. Il n'a
+ * rien à lui : la charge en route est dans le job de chaque logisticien.
+ */
+export interface Depot extends Built {
+  kind: 'depot';
+}
+
+export type Entity = Site | Drill | TownHall | Nursery | Tower | House | Farm | Forge | Clinic | Lab | LumberCamp | Depot;
 
 export type Building = Exclude<Entity, Site>;
 
@@ -351,6 +360,10 @@ export interface Wandering {
  *
  * Un ex-mutant sorti de la clinique est un ouvrier comme les autres, logé à
  * la clinique ; il porte plus lourd et marche plus lentement (`EX_MUTANT`).
+ *
+ * Un logisticien est un ouvrier logé au poste de logistique : même vie, mais
+ * il ne fait qu'un travail — vider les producteurs du rayon de son poste
+ * dans la mairie — et porte un peu plus (`LOGISTICIANS`).
  */
 export interface Worker extends Moving, Wandering {
   kind: 'worker';
@@ -358,6 +371,8 @@ export interface Worker extends Moving, Wandering {
   homeId: EntityId;
   /** Vrai pour un ex-mutant : plus fort, plus lent. */
   exMutant: boolean;
+  /** Vrai pour un logisticien du poste de logistique. */
+  logistician: boolean;
   /** Vrai s'il est chez lui : invisible, immobile. */
   inside: boolean;
   job: Job | null;

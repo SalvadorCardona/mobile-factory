@@ -30,7 +30,8 @@
  * la tête — suit ce que l'arc d'Adam vise (`player.target`).
  *
  * Un ouvrier chez lui n'est pas dessiné ; dehors, il porte sa charge sur la
- * tête tant que son job est ramassé. Un ex-mutant a son propre pantin. Un
+ * tête tant que son job est ramassé. Un ex-mutant a son propre pantin, un
+ * logisticien aussi : sa charge dépasse de la caisse qu'il a au dos. Un
  * bûcheron abat sa hache sur l'arbre qu'il coupe, et rapporte son bois sur
  * la tête.
  *
@@ -103,6 +104,7 @@ function puppetOf(
     case 'eve':
       return { id: 'eve', shadowWidth: 20, stride: 4 };
     case 'worker':
+      if (mobile.logistician) return { id: 'logistician', shadowWidth: 17, stride: 3 };
       return mobile.exMutant
         ? { id: 'exMutant', shadowWidth: 18, stride: 3.5 }
         : { id: 'worker', shadowWidth: 16, stride: 3 };

@@ -354,6 +354,7 @@ function parseEntity(raw: unknown): SavedEntity {
     case 'house':
     case 'clinic':
     case 'lumberCamp':
+    case 'depot':
       return { ...built, kind };
     case 'lab': {
       const research = entity['research'] === null ? null : (oneOf(entity['research'], RESEARCH) as ResearchId);
@@ -444,6 +445,8 @@ function parseMobile(raw: unknown): Mobile {
         homeId: int(mobile['homeId']),
         // Absent des sauvegardes d'avant la clinique : aucun ex-mutant.
         exMutant: mobile['exMutant'] === undefined ? false : bool(mobile['exMutant']),
+        // Absent des sauvegardes d'avant le poste de logistique : aucun logisticien.
+        logistician: mobile['logistician'] === undefined ? false : bool(mobile['logistician']),
         inside: bool(mobile['inside']),
         job: mobile['job'] === null ? null : parseJob(mobile['job']),
         searchTicks: int(mobile['searchTicks']),

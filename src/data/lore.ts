@@ -112,6 +112,15 @@ export const LORE = {
         'dans son coffre, que les porteurs vident à la mairie.',
       effect: '2 bûcherons coupent seuls les arbres alentour.',
     },
+    logisticsPost: {
+      name: 'Poste de logistique',
+      site: 'Des caisses empilées et un panneau fléché planté de travers : le poste attend son auvent.',
+      description:
+        'Un quai sous un auvent rayé, des caisses empilées, une charrette et un panneau fléché. ' +
+        'Quatre logisticiens, caisse au dos, y vident les coffres des producteurs alentour ' +
+        'et en rapportent tout à la mairie.',
+      effect: '4 logisticiens vident les producteurs alentour dans la mairie.',
+    },
     drill: {
       name: 'Foreuse',
       site: 'Un bâti de pierre qui attend son fer. Posée sur un filon, elle l’extraira seule.',
