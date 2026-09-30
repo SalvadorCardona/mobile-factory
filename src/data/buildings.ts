@@ -221,7 +221,7 @@ export const BUILDINGS = {
     workers: 0,
     menu: true,
     plan: false,
-    unlockWave: 1,
+    unlockNight: 1,
     sprite: 'clinic',
     weapon: null,
   },
