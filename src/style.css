@@ -1139,6 +1139,22 @@ button {
   flex-basis: 100%;
 }
 
+/* Pourquoi « Poser » est grisé : une ligne sous le nom, le motif en rouge, le remède à côté. */
+.build-armed-reason {
+  flex-basis: 100%;
+  margin-top: -4px;
+  font-size: 16px;
+  color: var(--muted);
+}
+
+.build-armed-reason strong {
+  color: var(--danger);
+}
+
+.build-armed-reason span::before {
+  content: ' · ';
+}
+
 .build-armed[data-placing='true'] button {
   flex: 1 1 auto;
   min-width: 0;

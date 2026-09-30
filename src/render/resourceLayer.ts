@@ -12,13 +12,16 @@
  * disparue), et elle **tremble** : un minuteur de vue, la simulation n'en
  * sait rien. Un chunk sali par la simulation est reconstruit en entier.
  *
+ * Pendant un placement, l'arbre ou le rocher qui empêche de poser
+ * **clignote** : c'est lui qu'Adam doit aller heurter.
+ *
  * Les ombres portées vont dans un conteneur à part, sous tout le reste :
  * elles sont au sol, rien ne passe dessous.
  */
 
 import type { Container} from 'pixi.js';
 import { Sprite } from 'pixi.js';
-import { CHUNK_TILES, TILE_SIZE, coordKey, floorDiv } from '../core/grid.ts';
+import { CHUNK_TILES, TILE_SIZE, coordKey, floorDiv, type TileCoord } from '../core/grid.ts';
 import { hash3 } from '../core/rng.ts';
 import { LIGHT } from '../data/artDirection.ts';
 import { RESOURCES } from '../data/resources.ts';
@@ -31,6 +34,9 @@ import type { TerrainTiles } from './terrainTiles.ts';
 
 /** Durée du tremblement d'une ressource frappée. */
 const WOBBLE_MS = 200;
+/** Période du clignotement d'une ressource qui gêne un placement, et son opacité au plus bas. */
+const BLINK_MS = 700;
+const BLINK_MIN_ALPHA = 0.35;
 /** Largeur de l'ombre portée d'un arbre et d'un rocher. */
 const TREE_SHADOW = 34;
 const ROCK_SHADOW = 28;
@@ -46,6 +52,9 @@ interface ResourceView {
 export class ResourceLayer {
   private readonly chunks = new Map<string, Map<string, ResourceView>>();
   private readonly wobbles = new Map<string, number>();
+  /** Tuiles qui clignotent, et l'horloge du clignotement. */
+  private blinking = new Set<string>();
+  private blinkClock = 0;
 
   private readonly world: World;
   private readonly library: SpriteLibrary;
@@ -66,7 +75,8 @@ export class ResourceLayer {
     });
   }
 
-  public update(camera: Camera, deltaMs: number): void {
+  /** `blocking` : les tuiles dont la ressource gêne le fantôme, à faire clignoter. */
+  public update(camera: Camera, deltaMs: number, blocking: readonly TileCoord[]): void {
     const visible = camera.visibleChunks(0);
 
     for (let cy = visible.minCy; cy <= visible.maxCy; cy += 1) {
@@ -91,6 +101,34 @@ export class ResourceLayer {
     }
 
     this.shake(deltaMs);
+    this.blink(blocking, deltaMs);
+  }
+
+  /** Clignotement des ressources qui gênent ; celles qui ne gênent plus retrouvent leur opacité. */
+  private blink(blocking: readonly TileCoord[], deltaMs: number): void {
+    const next = new Set(blocking.map(({ tx, ty }) => coordKey(tx, ty)));
+
+    for (const key of this.blinking) {
+      const view = next.has(key) ? undefined : this.view(key);
+
+      if (view) view.sprite.alpha = 1;
+    }
+    this.blinking = next;
+    this.blinkClock = next.size > 0 ? (this.blinkClock + deltaMs) % BLINK_MS : 0;
+
+    const wave = (1 + Math.cos((this.blinkClock / BLINK_MS) * Math.PI * 2)) / 2;
+
+    for (const key of next) {
+      const view = this.view(key);
+
+      if (view) view.sprite.alpha = BLINK_MIN_ALPHA + (1 - BLINK_MIN_ALPHA) * wave;
+    }
+  }
+
+  private view(key: string): ResourceView | undefined {
+    const [tx, ty] = key.split(',').map(Number) as [number, number];
+
+    return this.chunks.get(coordKey(floorDiv(tx, CHUNK_TILES), floorDiv(ty, CHUNK_TILES)))?.get(key);
   }
 
   private buildChunk(cx: number, cy: number): void {

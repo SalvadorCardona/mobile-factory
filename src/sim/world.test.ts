@@ -284,6 +284,46 @@ describe('World', () => {
     expect(world.canPlace('drill', tx, ty)).toBe('resource');
   });
 
+  it('désigne les cases qui bloquent, pas toute l’emprise', () => {
+    const { world, tx, ty } = worldWithHarvestable();
+    const block = world.placementBlock('drill', tx, ty);
+    const solid: { tx: number; ty: number }[] = [];
+
+    for (let y = ty; y < ty + DRILL.height; y += 1) {
+      for (let x = tx; x < tx + DRILL.width; x += 1) {
+        if (world.resources.isSolid(x, y)) solid.push({ tx: x, ty: y });
+      }
+    }
+
+    expect(block?.reason).toBe('resource');
+    expect(block?.tiles).toEqual(solid);
+    expect(block?.tiles).toContainEqual({ tx, ty });
+  });
+
+  it('sous Adam : seules les cases qu’il touche', () => {
+    const { world } = worldWithOre();
+    const origin = worldToTile(world.player.x, world.player.y);
+    const block = world.placementBlock('drill', origin.tx, origin.ty);
+
+    expect(block?.reason).toBe('onPlayer');
+    expect(block?.tiles).toContainEqual(origin);
+    expect(block!.tiles.length).toBeLessThan(DRILL.width * DRILL.height);
+  });
+
+  it('trop loin : toute l’emprise est fautive', () => {
+    const world = new World(1);
+    const origin = worldToTile(world.player.x, world.player.y);
+
+    for (let d = BUILD_REACH_TILES + 2; d < BUILD_REACH_TILES + 40; d += 1) {
+      const block = world.placementBlock('drill', origin.tx + d, origin.ty);
+
+      if (block?.reason !== 'outOfReach') continue;
+      expect(block.tiles).toHaveLength(DRILL.width * DRILL.height);
+      return;
+    }
+    throw new Error('aucune case libre hors de portée');
+  });
+
   it('marque le chunk sale au placement, pour que le rendu rebake', () => {
     const { world, spot } = worldWithOre();
 
