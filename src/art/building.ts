@@ -17,6 +17,7 @@
  * | tour renforcée | celle de la tour de guet | cyan (plaques de fer) | plaques rivetées, drapeau jaune |
  * | forge | bloc trapu, haute cheminée | indigo (cheminée) | four, fumée, enclume, plaques |
 | clinique | bloc bas, toit plat en toile blanche | menthe (croix sur médaillon blanc) | bandages, brancard, plante en pot |
+ * | labo de recherche | bloc coiffé d'une coupole d'observatoire | violet (coupole) | fioles, antenne, cheminée qui fume en recherche |
  *
  * Chacun existe en trois états, trois morceaux du même cadre :
  *

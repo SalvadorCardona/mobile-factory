@@ -43,6 +43,7 @@ import { EVE_LINES } from '../data/eve.ts';
 import { LORE } from '../data/lore.ts';
 import { seedsFor } from '../data/perks.ts';
 import { QUESTS, TOOLS, type QuestReward } from '../data/quests.ts';
+import { RESEARCH } from '../data/research.ts';
 import type { AtlasStats } from '../render/spriteLibrary.ts';
 import type { WaterStats } from '../render/waterLayer.ts';
 import type { PlacementRejection } from '../sim/commands.ts';
@@ -53,6 +54,7 @@ import { currentQuest, questProgress } from '../sim/eve.ts';
 import { TICKS_PER_SECOND, type Workforce, type World } from '../sim/world.ts';
 import { carriesWanted, tutorialAdvice, type Advice } from './hint.ts';
 import { buildingIcon, itemAmount, itemIcon, uiIcon } from './icons.ts';
+import { effectLine } from './researchText.ts';
 import { mapUrl, seedLine } from './seed.ts';
 
 const REJECTION_LABELS: Record<PlacementRejection, string> = {
@@ -62,6 +64,7 @@ const REJECTION_LABELS: Record<PlacementRejection, string> = {
   resource: 'Dégagez d’abord les arbres et rochers',
   onPlayer: 'Vous êtes sur l’emplacement',
   locked: 'Pas encore débloqué — il faut son plan, ou tenir encore une nuit',
+  unique: 'Un seul par colonie — il y en a déjà un',
 };
 
 /** Durée de vie d'un gain flottant, en ms (cf. `hud-float-up` dans le CSS). */
@@ -365,6 +368,19 @@ export class Hud {
     world.events.on('questCompleted', ({ quest }) => {
       this.say([QUESTS[quest].done]);
       this.notify(rewardLabel(QUESTS[quest].reward), 'good');
+    });
+    world.events.on('labSupplied', ({ item, amount, source }) => {
+      if (source === 'bag') this.float(item, -amount);
+    });
+    world.events.on('researchStarted', ({ research }) => this.notify(`${RESEARCH[research].label} : la recherche commence`, 'info'));
+    world.events.on('researchCompleted', ({ research }) =>
+      this.notify(`Recherche terminée — ${effectLine(research, world.researchDone, world.perks)}`, 'good'),
+    );
+    world.events.on('researchRejected', ({ reason }) => {
+      if (reason === 'busy') this.notify('Une recherche tourne déjà — une seule à la fois', 'bad');
+      if (reason === 'locked') this.notify('Il manque une recherche avant celle-ci', 'bad');
+      if (reason === 'outOfReach') this.notify(REJECTION_LABELS.outOfReach, 'bad');
+      if (reason === 'nothingToGive') this.notify('Rien dans le sac ni en ville que cette recherche attende', 'bad');
     });
   }
 

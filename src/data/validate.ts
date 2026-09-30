@@ -8,8 +8,9 @@
  * récolterait pour remplir son sac pour rien. Tout ça se voit ici, au chargement,
  * plutôt qu'en jeu trois semaines plus tard.
  *
- * Plus tard s'ajouteront les cycles dans l'arbre techno et les déblocages en
- * double, quand `technologies.ts` existera.
+ * Les recherches du labo (`research.ts`) y passent aussi : objets et
+ * quantités, prérequis connus et sans cycle, un coût qui tient dans le coffre
+ * du labo, un effet qui porte sur une statistique connue.
  */
 
 import { TILE_SIZE } from '../core/grid.ts';
@@ -23,6 +24,7 @@ import { ITEMS } from './items.ts';
 import { PERKS, type PerkProto } from './perks.ts';
 import { QUESTS, QUEST_IDS, TOOLS, type QuestProto } from './quests.ts';
 import { RECIPES, type RecipeProto } from './recipes.ts';
+import { RESEARCH, RESEARCH_STATS, type ResearchProto } from './research.ts';
 import { RESOURCES } from './resources.ts';
 import { BUILDING_PARTS, RESOURCE_PARTS, SPRITES, WALKER_PARTS, type SpriteProto } from './sprites.ts';
 import { WEAPONS } from './weapons.ts';
@@ -161,11 +163,16 @@ export function validatePrototypes(): string[] {
   for (const recipe of Object.values(RECIPES) as RecipeProto[]) {
     for (const itemId of Object.keys(recipe.inputs)) consumed.add(itemId);
   }
+  for (const research of Object.values(RESEARCH) as ResearchProto[]) {
+    for (const itemId of Object.keys(research.cost)) consumed.add(itemId);
+  }
   for (const id of Object.keys(ITEMS)) {
     if (!consumed.has(id)) {
-      errors.push(`ITEMS.${id} : aucun débouché — ni coût de bâtiment, ni entrée de recette`);
+      errors.push(`ITEMS.${id} : aucun débouché — ni coût de bâtiment, ni entrée de recette, ni coût de recherche`);
     }
   }
+
+  errors.push(...researchErrors());
 
   for (const [id, building] of Object.entries(BUILDINGS)) {
     if (
@@ -378,6 +385,64 @@ export function validatePrototypes(): string[] {
     labels.set(proto.label, id);
   }
 
+  return errors;
+}
+
+/**
+ * Les recherches : un coût d'objets connus en quantités entières, qui tient
+ * dans le coffre du labo ; une durée ; des prérequis connus, sans boucle ;
+ * un effet non nul sur une statistique connue. Et un labo pour les mener.
+ */
+function researchErrors(): string[] {
+  const errors: string[] = [];
+  const labs = Object.entries(BUILDINGS).filter(([, building]) => building.kind === 'lab');
+  const room = Math.min(...labs.map(([, building]) => building.storage));
+  const entries = Object.entries(RESEARCH) as [string, ResearchProto][];
+
+  if (labs.length === 0) errors.push('RESEARCH : aucun labo pour mener les recherches');
+  for (const [id, building] of labs) {
+    if (!building.unique) errors.push(`BUILDINGS.${id} : un labo doit être unique — une seule recherche à la fois`);
+  }
+
+  for (const [id, research] of entries) {
+    if (research.label.trim() === '' || research.description.trim() === '') errors.push(`RESEARCH.${id} : libellé ou description vide`);
+    if (!Number.isInteger(research.duration) || research.duration <= 0) errors.push(`RESEARCH.${id} : durée nulle ou fractionnaire`);
+    if (Object.keys(research.cost).length === 0) errors.push(`RESEARCH.${id} : une recherche gratuite`);
+    for (const [itemId, amount] of Object.entries<number>(research.cost)) {
+      if (!(itemId in ITEMS)) errors.push(`RESEARCH.${id} : coût en objet inconnu « ${itemId} »`);
+      if (!Number.isInteger(amount) || amount <= 0) errors.push(`RESEARCH.${id} : coût nul ou fractionnaire en « ${itemId} »`);
+    }
+    if (sum(research.cost) > room) errors.push(`RESEARCH.${id} : le coffre du labo ne peut pas contenir son coût`);
+    if (!(research.effect.stat in RESEARCH_STATS)) errors.push(`RESEARCH.${id} : statistique inconnue « ${research.effect.stat} »`);
+    if (research.effect.amount === 0) errors.push(`RESEARCH.${id} : effet nul`);
+    for (const required of research.requires) {
+      if (!(required in RESEARCH)) errors.push(`RESEARCH.${id} : prérequis inconnu « ${required} »`);
+      if (required === id) errors.push(`RESEARCH.${id} : se demande elle-même`);
+    }
+  }
+
+  // Un cycle de prérequis : aucune de ses recherches ne pourrait jamais être lancée.
+  const done = new Set<string>();
+  let progress = true;
+
+  while (progress) {
+    progress = false;
+    for (const [id, research] of entries) {
+      if (done.has(id) || !research.requires.every((required) => done.has(required))) continue;
+      done.add(id);
+      progress = true;
+    }
+  }
+  for (const [id] of entries) {
+    if (!done.has(id)) errors.push(`RESEARCH.${id} : prérequis en boucle, ou jamais accessibles`);
+  }
+
+  const labels = new Set<string>();
+
+  for (const [id, research] of entries) {
+    if (labels.has(research.label)) errors.push(`RESEARCH.${id} : libellé « ${research.label} » en double`);
+    labels.add(research.label);
+  }
   return errors;
 }
 

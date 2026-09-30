@@ -102,6 +102,16 @@ jamais bloquante). Elle porte la chaîne de quêtes (`src/data/quests.ts`) :
 chaque quête récompense un **plan** (un bâtiment `plan: true` n'entre au
 menu qu'une fois donné) ou un **outil**. Seul `questsDone` est de l'état.
 
+**Labo de recherche** (`src/data/research.ts`, `src/sim/research.ts`, un
+seul par colonie : `unique`) — on y choisit une recherche, on dépose son coût
+(sac, ville dans le rayon, porteurs, ou en le heurtant), puis le compte à
+rebours tourne ; une à la fois. Le coût mêle objets communs et **butin
+d'ennemis** : gelée de mutant, croc de loup, pince de crabe, objets qu'on ne
+récolte nulle part. Un effet est un modificateur additif sur une
+statistique, lu en un seul point, `World.bonus(stat)` ; les données ne
+bougent pas. `researchDone` est de l'état ; la recherche en cours est celle
+du labo. La fenêtre du labo est le panneau Recherche (`ui/researchPanel.ts`).
+
 **Faune** — en plus des mutants, des **crabes** vivent sur le sable et des
 **loups** au cœur des forêts (`WILDLIFE`, `src/data/enemies.ts` ;
 `src/sim/wildlife.ts`). Leurs tanières se tirent de la seed par chunk ; une

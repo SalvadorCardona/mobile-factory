@@ -69,7 +69,8 @@ export function createPlayer(x: number, y: number): Player {
  * Intègre un tick de déplacement et renvoie la tuile heurtée, s'il y en a une.
  *
  * `axisX` / `axisY` sont analogiques : la vitesse dépend de la distance au
- * centre du joystick, pas seulement de la direction.
+ * centre du joystick, pas seulement de la direction. `speedTiles` est la
+ * vitesse à pleine amplitude — celle de base, plus ce qu'ajoute la recherche.
  */
 export function stepPlayer(
   player: Player,
@@ -77,8 +78,9 @@ export function stepPlayer(
   axisY: number,
   obstacleAt: ObstacleTest,
   stepSeconds: number,
+  speedTiles: number = PLAYER_SPEED_TILES,
 ): Contact | null {
-  const speed = PLAYER_SPEED_TILES * TILE_SIZE * stepSeconds;
+  const speed = speedTiles * TILE_SIZE * stepSeconds;
   const contact = moveBoxAmong(player, PLAYER_BOX, axisX * speed, axisY * speed, obstacleAt);
 
   player.moving = player.x !== player.prevX || player.y !== player.prevY;

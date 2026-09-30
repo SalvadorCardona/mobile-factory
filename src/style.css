@@ -1608,6 +1608,166 @@ button.hud-stock:active {
   white-space: pre-wrap;
 }
 
+/* ------------------------------------------------------- panneau Recherche */
+
+/*
+ * La fenêtre du labo : la recherche en cours dans une carte lavande, puis la
+ * liste des recherches, groupées par thème, qui défile. Lisible en 390 px :
+ * une colonne, des lignes qui passent à la ligne plutôt que de rétrécir.
+ */
+.building-panel[data-kind='lab'] {
+  width: min(400px, calc(100vw - 28px));
+}
+
+.research[hidden],
+.research-cost[hidden],
+.research .building-panel-bar[hidden] {
+  display: none;
+}
+
+.research-current {
+  margin-top: 10px;
+  padding: 10px 12px 12px;
+  border-radius: 18px;
+  background: var(--paper-shade);
+}
+
+.research-current h3 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--violet-shade);
+}
+
+.research-current .building-panel-bar {
+  margin-top: 8px;
+  background: var(--paper);
+}
+
+.research-current .building-panel-actions {
+  margin-top: 10px;
+}
+
+.research-current .building-panel-actions button {
+  min-height: 46px;
+  font-size: 16px;
+}
+
+.building-panel-bar[data-kind='research'] div {
+  background: var(--mint);
+}
+
+.research-status {
+  margin: 4px 0 0;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.research-cost {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 6px;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+/* Ce qui manque se lit en rouge : c'est ce qu'il faut aller chercher. */
+.research .item-amount[data-done='false'] {
+  color: var(--danger);
+}
+
+.research-list {
+  max-height: min(36dvh, 340px);
+  margin-top: 12px;
+  padding-right: 2px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+
+.research-group + .research-group {
+  margin-top: 12px;
+}
+
+.research-group-title {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--violet);
+}
+
+.research-row {
+  padding: 8px 10px 10px;
+  border-radius: 16px;
+  background: var(--paper);
+  box-shadow: 0 3px 0 var(--paper-shade);
+}
+
+.research-row + .research-row {
+  margin-top: 8px;
+}
+
+.research-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.research-name {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.research-effect {
+  margin: 2px 0 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink-light);
+  font-variant-numeric: tabular-nums;
+}
+
+.research-launch {
+  flex: none;
+  min-width: 76px;
+  min-height: 40px;
+}
+
+.research-launch[disabled] {
+  opacity: 0.45;
+}
+
+.research-row[data-status='done'] {
+  background: var(--mint-light);
+  box-shadow: 0 3px 0 var(--mint);
+}
+
+.research-row[data-status='done'] .research-status {
+  color: var(--good);
+  font-weight: 700;
+}
+
+.research-row[data-status='running'],
+.research-row[data-status='collecting'] {
+  background: var(--yellow-light);
+  box-shadow: 0 3px 0 var(--yellow);
+}
+
+.research-row[data-status='locked'] .research-name,
+.research-row[data-status='locked'] .research-effect {
+  opacity: 0.6;
+}
+
+.research-row[data-status='locked'] .research-status {
+  color: var(--danger);
+}
+
 /* -------------------------------------------------------------- plein cadre */
 
 .overlay {

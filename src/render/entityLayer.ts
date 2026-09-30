@@ -12,7 +12,7 @@
  * le bâtiment fini, et le bâtiment cabossé, affiché dès que les mutants lui
  * ont pris la moitié de ses points de vie. Certains ont en plus un morceau
  * animé : la roue de la foreuse tourne quand elle travaille, les cultures de
- * la ferme ondulent. Une foreuse ou une ferme bloquée, coffre plein, porte
+ * la ferme ondulent, la cheminée du labo fume quand une recherche tourne. Une foreuse ou une ferme bloquée, coffre plein, porte
  * au-dessus du toit une bulle qui flotte : il faut venir la vider.
  *
  * Tri en profondeur : les enfants sont ordonnés par le bas de leur emprise,
@@ -70,7 +70,7 @@ interface EntityView {
   root: Container;
   /** Le bâtiment (ou le chantier) lui-même. */
   main: Sprite;
-  /** Morceau animé : roue de foreuse, cultures. */
+  /** Morceau animé : roue de foreuse, cultures, fumée du labo. */
   moving: Sprite | null;
   /** Bulle « coffre plein » d'une foreuse ou d'une ferme, visible quand elle est bloquée. */
   full: Sprite | null;
@@ -178,7 +178,7 @@ export class EntityLayer {
     const art: SpriteProto = SPRITES[proto.sprite];
     const shown = entity.kind === 'site' ? 'site' : this.faceOf(entity);
     const main = footSprite(this.library.texture(`${proto.sprite}.${shown}`), entity);
-    const moving = entity.kind !== 'site' && art.parts['wheel'] ? 'wheel' : entity.kind !== 'site' && art.parts['crops'] ? 'crops' : null;
+    const moving = entity.kind === 'site' ? null : (['wheel', 'crops', 'smoke'] as const).find((part) => art.parts[part]) ?? null;
     let movingSprite: Sprite | null = null;
 
     root.addChild(main);
@@ -338,7 +338,7 @@ export class EntityLayer {
     this.adam.setShadow(this.tiles.shadow(terrainAt(this.world.seed, tx, ty)));
   }
 
-  /** La roue tourne quand la foreuse travaille ; les cultures ondulent. */
+  /** La roue tourne quand la foreuse travaille ; les cultures ondulent ; le labo fume quand il cherche. */
   private animate(view: EntityView, entity: Entity, now: number): void {
     if (!view.moving) return;
 
@@ -349,6 +349,17 @@ export class EntityLayer {
 
       view.moving.skew.x = sway * 0.05;
       view.moving.scale.y = 1 + Math.sin(now * 0.004 + entity.id) * 0.03;
+    } else if (entity.kind === 'lab') {
+      // Une fumée légère qui monte et gonfle, en boucle, tant que le compte à rebours tourne.
+      const running = entity.endTick > 0;
+
+      view.moving.visible = running;
+      if (!running) return;
+
+      const t = (now * 0.0006 + entity.id * 0.37) % 1;
+
+      view.moving.pivot.y = t * 6;
+      view.moving.scale.set(0.85 + t * 0.3);
     }
   }
 

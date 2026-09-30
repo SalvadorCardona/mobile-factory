@@ -27,6 +27,7 @@ const LABELS: Readonly<Record<Exclude<PlacementRejection, 'resource'>, string>> 
   occupied: 'Case occupée',
   onPlayer: 'Vous êtes sur l’emplacement',
   outOfReach: 'Trop loin — rapprochez-vous',
+  unique: 'Un seul par colonie',
 };
 
 export function placementReason(block: PlacementBlock, world: World): PlacementReason {

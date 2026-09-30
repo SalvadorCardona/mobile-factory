@@ -29,6 +29,7 @@ import { EVE_SPRITE } from '../art/eve.ts';
 import { FARM } from '../art/farm.ts';
 import { FORGE } from '../art/forge.ts';
 import { KID } from '../art/kid.ts';
+import { LAB } from '../art/lab.ts';
 import { LOOT } from '../art/loot.ts';
 import { MUTANT } from '../art/mutant.ts';
 import { NURSERY } from '../art/nursery.ts';
@@ -97,6 +98,7 @@ export const SPRITES = {
   forge: FORGE,
   reinforcedTower: REINFORCED_TOWER,
   clinic: CLINIC_SPRITE,
+  lab: LAB,
 
   /** Décor de surface : un morceau par élément, cf. `data/decor.ts`. */
   decor: DECOR_ART,

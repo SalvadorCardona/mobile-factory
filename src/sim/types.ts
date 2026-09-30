@@ -15,6 +15,7 @@
 import type { BuildingId } from '../data/buildings.ts';
 import type { EnemyId, WildlifeId } from '../data/enemies.ts';
 import type { ItemId } from '../data/items.ts';
+import type { ResearchId } from '../data/research.ts';
 import type { JobPriority } from '../data/workers.ts';
 import type { Store } from './store.ts';
 
@@ -120,7 +121,26 @@ export interface Clinic extends Built {
   kind: 'clinic';
 }
 
-export type Entity = Site | Drill | TownHall | Nursery | Tower | House | Farm | Forge | Clinic;
+/**
+ * Le labo de recherche, un seul par colonie. Il mène une recherche à la
+ * fois : choisie, elle attend que son coût soit déposé dans le coffre ; payé,
+ * le coût est consommé et le compte à rebours tourne jusqu'à `endTick`, où
+ * le labo se réveille. Les recherches finies ne sont pas à lui mais à la
+ * colonie (`World.researchDone`) : elles survivent au labo.
+ *
+ * Ce que le coffre contient au-delà du coût de la recherche en cours — le
+ * reste d'une recherche abandonnée — repart à la mairie avec les porteurs,
+ * ou dans le sac avec « Prendre ».
+ */
+export interface Lab extends Built {
+  kind: 'lab';
+  /** La recherche choisie, `null` si le labo attend qu'on en choisisse une. */
+  research: ResearchId | null;
+  /** Tick de fin du compte à rebours ; 0 tant que le coût n'est pas réuni. */
+  endTick: number;
+}
+
+export type Entity = Site | Drill | TownHall | Nursery | Tower | House | Farm | Forge | Clinic | Lab;
 
 export type Building = Exclude<Entity, Site>;
 

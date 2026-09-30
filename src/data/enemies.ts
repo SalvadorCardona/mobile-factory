@@ -44,6 +44,8 @@ export const ENEMIES = {
       { item: 'ironOre', min: 1, max: 2, chance: 1 },
       { item: 'coal', min: 1, max: 1, chance: 0.35 },
       { item: 'ironPlate', min: 1, max: 1, chance: 0.08 },
+      // Une noix de gelée fluo : le labo en fait des merveilles.
+      { item: 'mutantGoo', min: 1, max: 1, chance: 0.5 },
     ],
   },
 } as const satisfies Record<string, EnemyProto>;
@@ -103,8 +105,10 @@ export type LootTable = readonly LootEntry[];
 /**
  * Le butin au sol : tout ennemi abattu — mutant, crabe, loup — lâche sa
  * table là où il tombe, un objet par exemplaire, et Adam le ramasse en
- * marchant dessus. Rien que des matériaux que la colonie connaît déjà — de
- * quoi faire rapporter le combat sans remplacer la récolte.
+ * marchant dessus. Surtout des matériaux que la colonie connaît déjà — de
+ * quoi faire rapporter le combat sans remplacer la récolte — et, parfois, un
+ * trophée propre à chaque ennemi (gelée, croc, pince) que seul le labo de
+ * recherche sait employer (`data/research.ts`).
  *
  * Sac plein, le butin reste au sol : il n'est ni perdu ni avalé. Oublié, il
  * disparaît au bout de `lifetimeTicks` ; au-delà de `cap` objets au sol, le
@@ -201,8 +205,11 @@ export const WILDLIFE = {
     groupMin: 2,
     groupMax: 3,
     respawnTicks: 20 * 90,
-    // Une pince à griller.
-    loot: [{ item: 'food', min: 1, max: 1, chance: 1 }],
+    // Une pince à griller, et parfois la pince elle-même, bonne pour le labo.
+    loot: [
+      { item: 'food', min: 1, max: 1, chance: 1 },
+      { item: 'crabClaw', min: 1, max: 1, chance: 0.4 },
+    ],
     sprite: 'crab',
     halfW: 8,
     halfH: 5,
@@ -228,6 +235,7 @@ export const WILDLIFE = {
     loot: [
       { item: 'food', min: 2, max: 3, chance: 1 },
       { item: 'ironOre', min: 1, max: 1, chance: 0.2 },
+      { item: 'wolfFang', min: 1, max: 1, chance: 0.5 },
     ],
     sprite: 'wolf',
     halfW: 9,

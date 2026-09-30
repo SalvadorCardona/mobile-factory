@@ -127,7 +127,7 @@ partagent jamais la leur :
 | pierre | corail | rochers de pierre |
 | fer | cyan | rochers de fer — sur l'herbe ou la roche, jamais confondus avec l'eau, qui est un sol |
 | charbon | indigo | rochers de charbon |
-| mutants | vert fluo | mutants, leurs halos, leurs flaques, les patients de la clinique |
+| mutants | vert fluo | mutants, leurs halos, leurs flaques, les patients de la clinique, la gelée de mutant qu'ils lâchent en butin |
 
 L'**ex-mutant** — un mutant soigné à la clinique, devenu habitant — est un
 humain : tunique orange, cheveux indigo. Il ne garde du vert fluo qu'**un

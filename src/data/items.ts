@@ -24,6 +24,10 @@ export const ITEMS = {
   ironOre: { label: 'Minerai de fer', stack: 100 },
   food: { label: 'Nourriture', stack: 100 },
   ironPlate: { label: 'Plaque de fer', stack: 50 },
+  // Le butin propre aux ennemis : on ne le récolte nulle part, il ne sert qu'au labo de recherche.
+  mutantGoo: { label: 'Gelée de mutant', stack: 50 },
+  wolfFang: { label: 'Croc de loup', stack: 50 },
+  crabClaw: { label: 'Pince de crabe', stack: 50 },
 } as const satisfies Record<string, ItemProto>;
 
 export type ItemId = keyof typeof ITEMS;

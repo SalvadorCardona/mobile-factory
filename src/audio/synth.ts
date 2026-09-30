@@ -32,7 +32,8 @@ export type SoundName =
   | 'horn'
   | 'gloop'
   | 'victory'
-  | 'pickup';
+  | 'pickup'
+  | 'eureka';
 
 /** Une seconde de bruit blanc, partagée par tous les sons qui en ont besoin. */
 let noiseBuffer: AudioBuffer | null = null;
@@ -250,6 +251,14 @@ export const SOUNDS: Record<SoundName, (ctx: AudioContext, out: AudioNode, at: n
       tone(ctx, out, at + i * 0.11, 'square', f, f, { attack: 0.01, decay: 0.16, peak: 0.14 });
     }
     tone(ctx, out, at + 0.44, 'triangle', 1047, 1047, { attack: 0.01, decay: 0.5, peak: 0.35 });
+  },
+
+  /** Une recherche aboutit : une bulle qui monte, puis trois notes claires en tierce — « eurêka ». */
+  eureka(ctx, out, at) {
+    tone(ctx, out, at, 'sine', 420, 1260, { attack: 0.01, decay: 0.16, peak: 0.22 });
+    for (const [i, f] of [784, 988, 1175].entries()) {
+      tone(ctx, out, at + 0.16 + i * 0.09, 'triangle', f, f, { attack: 0.01, decay: 0.28, peak: 0.26 });
+    }
   },
 
   /** Du butin ramassé : deux notes vives. */

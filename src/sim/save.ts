@@ -20,6 +20,7 @@ import { ENEMIES, WILDLIFE, type EnemyId, type WildlifeId } from '../data/enemie
 import { ITEMS, type ItemId } from '../data/items.ts';
 import { JOB_PRIORITY, type JobPriority } from '../data/workers.ts';
 import { PERKS, type PerkId } from '../data/perks.ts';
+import { RESEARCH, type ResearchId } from '../data/research.ts';
 import type { SchedulerSnapshot } from './scheduler.ts';
 import type { Store, StoreSnapshot } from './store.ts';
 import type { BeastState, Entity, EntityId, EveState, Facing, Job, Mobile, PatientState, Player } from './types.ts';
@@ -73,6 +74,8 @@ export interface WorldState {
   perks: PerkId[];
   /** Chantiers offerts par ces bonus, pas encore ouverts. */
   giftedSites: BuildingId[];
+  /** Recherches finies, dans l'ordre. Absent des sauvegardes d'avant le labo : aucune. */
+  researchDone: ResearchId[];
   player: SavedPlayer;
   /** Tuiles entamées : `"tx,ty"` → unités déjà prises. */
   resources: Record<string, number>;
@@ -190,6 +193,7 @@ function parseState(raw: unknown): WorldState {
     // Absents d'une sauvegarde d'avant le jardin : une colonie partie sans bonus.
     perks: array(state['perks'] ?? []).map((id) => oneOf(id, PERKS) as PerkId),
     giftedSites: array(state['giftedSites'] ?? []).map((id) => oneOf(id, BUILDINGS) as BuildingId),
+    researchDone: [...new Set(array(state['researchDone'] ?? []).map((id) => oneOf(id, RESEARCH) as ResearchId))],
     player: parsePlayer(state['player']),
     resources: parseResources(state['resources']),
     entities: unique(array(state['entities']).map(parseEntity)),
@@ -272,6 +276,13 @@ function parseEntity(raw: unknown): SavedEntity {
     case 'house':
     case 'clinic':
       return { ...built, kind };
+    case 'lab': {
+      const research = entity['research'] === null ? null : (oneOf(entity['research'], RESEARCH) as ResearchId);
+      const endTick = int(entity['endTick']);
+
+      if (endTick < 0 || (research === null && endTick > 0)) throw new SaveError('compte à rebours sans recherche');
+      return { ...built, kind, research, endTick };
+    }
   }
 }
 
