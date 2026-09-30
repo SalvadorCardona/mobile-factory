@@ -13,7 +13,7 @@
  * 12 × 12 pixels source, contour d'un pixel, palette du jeu.
  */
 
-import type { PaletteKey } from './artDirection.ts';
+import type { PaletteKey } from './legacyPixelArt.ts';
 import type { ItemId } from './items.ts';
 import type { PixelPalette } from './pixelmaps.ts';
 

@@ -9,7 +9,7 @@ import {
   verifySheet,
   type RgbaImage,
 } from '../tools/spriteSheet.ts';
-import { PALETTE } from './artDirection.ts';
+import { PALETTE } from './legacyPixelArt.ts';
 import { SPRITES, SPRITE_IDS, type SpriteProto } from './sprites.ts';
 
 const ONE_TILE: SpriteProto = {

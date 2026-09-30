@@ -17,7 +17,7 @@
 
 import { Container, Graphics } from 'pixi.js';
 import { TILE_SIZE } from '../core/grid.ts';
-import { PALETTE } from '../data/artDirection.ts';
+import { PALETTE } from '../data/legacyPixelArt.ts';
 import type { World } from '../sim/world.ts';
 import type { Camera } from './camera.ts';
 

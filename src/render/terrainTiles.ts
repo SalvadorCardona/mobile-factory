@@ -19,7 +19,7 @@
  */
 
 import { Texture } from 'pixi.js';
-import { ART_PIXELS_PER_TILE, PALETTE } from '../data/artDirection.ts';
+import { ART_PIXELS_PER_TILE, PALETTE } from '../data/legacyPixelArt.ts';
 import { mulberry32, type Rng } from '../core/rng.ts';
 import type { TerrainKind } from '../sim/terrain.ts';
 import { TERRAIN_COLORS } from './atlas.ts';

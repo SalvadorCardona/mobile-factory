@@ -11,7 +11,7 @@
  * que le menu de construction montre ce qu'on va poser.
  */
 
-import { PALETTE } from '../data/artDirection.ts';
+import { PALETTE } from '../data/legacyPixelArt.ts';
 import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
 import { ITEM_ICONS } from '../data/icons.ts';
 import { ITEMS, type ItemId } from '../data/items.ts';

@@ -10,7 +10,7 @@
  */
 
 import { Graphics, type Renderer, type Texture } from 'pixi.js';
-import { PALETTE } from '../data/artDirection.ts';
+import { PALETTE } from '../data/legacyPixelArt.ts';
 import type { PixelMap } from '../data/pixelmaps.ts';
 
 export function bakePixelMap(renderer: Renderer, map: PixelMap): Record<string, Texture[]> {

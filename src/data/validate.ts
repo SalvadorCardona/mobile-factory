@@ -11,7 +11,7 @@
  * double, quand `technologies.ts` existera.
  */
 
-import { ART_PIXELS_PER_TILE, PALETTE } from './artDirection.ts';
+import { ART_PIXELS_PER_TILE, PALETTE } from './legacyPixelArt.ts';
 import { BUILDINGS } from './buildings.ts';
 import { ENEMIES, WAVES } from './enemies.ts';
 import { ICON_SIZE, ITEM_ICONS } from './icons.ts';

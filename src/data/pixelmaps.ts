@@ -12,7 +12,7 @@
  * vérifie que chaque image a bien la taille annoncée dans `SPRITES`.
  */
 
-import type { PaletteKey } from './artDirection.ts';
+import type { PaletteKey } from './legacyPixelArt.ts';
 import type { SpriteId } from './sprites.ts';
 
 /** Caractère → couleur de la palette ; `.` est toujours transparent. */

@@ -13,7 +13,7 @@
  */
 
 import { Assets, Rectangle, Texture, type Renderer } from 'pixi.js';
-import { ART_PIXELS_PER_TILE } from '../data/artDirection.ts';
+import { ART_PIXELS_PER_TILE } from '../data/legacyPixelArt.ts';
 import { TILE_SIZE } from '../core/grid.ts';
 import { PIXEL_MAPS } from '../data/pixelmaps.ts';
 import { SPRITES, SPRITE_IDS, type AnimationOf, type SpriteId, type SpriteProto } from '../data/sprites.ts';

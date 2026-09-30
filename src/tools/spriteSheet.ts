@@ -8,7 +8,7 @@
  * `CLAUDE.md` ; ce module en est l'étape « normaliser puis vérifier ».
  */
 
-import { PALETTE } from '../data/artDirection.ts';
+import { PALETTE } from '../data/legacyPixelArt.ts';
 import { sheetGrid, type SpriteProto } from '../data/sprites.ts';
 
 /** Image RGBA décodée, 4 octets par pixel, lignes de haut en bas. */

@@ -14,7 +14,7 @@ import '@fontsource/jersey-15/latin.css';
 import './style.css';
 import { AudioEngine } from './audio/engine.ts';
 import { assertPrototypes } from './data/validate.ts';
-import { PALETTE } from './data/artDirection.ts';
+import { PALETTE } from './data/legacyPixelArt.ts';
 import { MENU_BUILDING_IDS } from './data/buildings.ts';
 import type { ItemId } from './data/items.ts';
 import { Inspect } from './input/inspect.ts';

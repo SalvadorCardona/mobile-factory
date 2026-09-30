@@ -33,64 +33,35 @@ La **nurserie** fait naître un enfant toutes les dix minutes.
 
 ## Direction artistique
 
-**Pixel art heroic fantasy 16 bits, sujet post-apocalyptique.**
-Référence : `docs/art-direction.md` ; version exécutable :
-`src/data/artDirection.ts` (`STYLE_PROMPT`, `SHEET_PROMPT`, `PALETTE`).
+**Vectoriel « post-apo joyeux » : la vie reprend ses droits sur la ruine.**
+Ruines arrondies envahies de lianes, fleurs, drapeaux, échelles, grues,
+antennes ; les mutants sont drôles plus qu'effrayants.
 
-- 16 px par tuile en source, affiché ×2 en `nearest`. Jamais de lissage.
-- Tout prompt de génération commence par `STYLE_PROMPT`. Ne jamais retaper
-  le style à la main : c'est ce préfixe qui garantit la cohérence.
-- Tant que `file` est `null`, le placeholder pixel art de
-  `src/data/pixelmaps.ts` est affiché. Un nouveau sprite a **toujours** un
-  placeholder — la validation des prototypes l'exige.
+**Charger le skill `art-direction` (`.claude/skills/art-direction/`) avant
+toute création ou modification de visuel.** Référence :
+`docs/art-direction.md` (règles, palette chiffrée, construction, maquette et
+dessins de l'illustrateur dans `docs/art-direction/`) ; version exécutable :
+`src/data/artDirection.ts` (`PALETTE`, `GROUND`, `RADIUS`, `STROKE`, `LIGHT`,
+`FAMILY_TONES`, helpers SVG, `auditSvg`).
 
-### Générer un asset avec le MCP OpenRouter
+**Tout nouveau visuel est un SVG construit avec les helpers de
+`artDirection.ts`.** Pas de couleur tapée à la main (le type `Color` la
+refuse), pas d'image générée par un modèle, pas de pixel art.
 
-Les assets se génèrent avec le **MCP OpenRouter** (génération d'image), pas
-avec un script du dépôt. Procédure, à suivre telle quelle :
+Les règles, en résumé :
 
-1. Lire `src/data/artDirection.ts` (`STYLE_PROMPT`, `SHEET_PROMPT`) et
-   l'entrée `SPRITES[id]` de `src/data/sprites.ts` (taille d'image,
-   animations, `prompt`). Pour un nouveau sprite, déclarer d'abord l'entrée
-   et son placeholder dans `src/data/pixelmaps.ts`.
-2. Composer le prompt, dans cet ordre et sans rien reformuler :
-   `STYLE_PROMPT` + `SPRITES[id].prompt` + `SHEET_PROMPT` + la grille
-   chiffrée : « Grid: R row(s) × C column(s); each frame W×H pixels; total
-   image exactly (C×W)×(R×H) pixels; row 1: "<animation>", N frame(s); … ;
-   unused cells stay fully transparent. » `sheetGrid(SPRITES[id])` donne R
-   et C.
-3. Appeler l'outil de génération d'image du MCP OpenRouter avec ce prompt.
-   Modèle par défaut : `google/gemini-3.1-flash-image` (Nano Banana 2) :
-   à prompt égal, il respecte la structure lignes × colonnes et n'écrit pas
-   de texte, là où `gemini-2.5-flash-image` produit une grille 4×4 légendée.
-   Aucun ne rend un vrai fond transparent (damier peint) ni une grille au
-   pixel : prévoir `--key` et un recadrage.
-4. Enregistrer le résultat brut hors du dépôt (scratchpad), puis le
-   normaliser : `npm run sprite:normalize -- <id> <brut.png>`. L'outil
-   (`src/tools/`) réduit en `nearest` à la grille, binarise l'alpha,
-   quantifie chaque pixel à `PALETTE` et écrit `public/sprites/<id>.png`.
-   Il refuse une image dont les dimensions ne sont pas la grille ou un
-   multiple entier : recadrer (`--crop x,y,w,h`) ou régénérer, jamais
-   étirer. Un fond opaque s'incruste avec `--key RRGGBB`. Le rapport donne
-   la « dérive » moyenne : grande, le modèle n'a pas suivi la palette et la
-   planche mérite un regard sévère.
-5. Regarder l'image (l'ouvrir avec `Read`) : grille respectée, fond
-   transparent, ancre cohérente avec `anchorX/anchorY`, palette proche de
-   `PALETTE`, pas de texte ni d'anti-aliasing.
-6. Seulement alors, renseigner `SPRITES[id].file = '<id>.png'`. Rien d'autre
-   ne change : `spriteLibrary` découpe la planche sur la grille déclarée.
-7. Lancer `npm run lint && npm run typecheck && npm test` — le test
-   `sprites.test.ts` revérifie grille, alpha et palette de tout PNG
-   référencé — puis vérifier en jeu avant de committer le PNG.
-
-Cohérence d'une planche à l'autre : c'est la quantification qui garantit la
-palette, pas le prompt. Générer d'abord la planche de référence (Adam),
-l'itérer jusqu'à satisfaction, ajuster `STYLE_PROMPT` si besoin, et seulement
-ensuite les autres, dans la même session et avec le même modèle. Ce qui doit
-se ressembler (Adam, Ève, l'enfant) se génère de préférence dans un même lot.
-
-Jamais de style improvisé, jamais d'asset non vérifié, jamais de PNG
-référencé sans être passé par ces étapes.
+- formes pures (capsules, rectangles très arrondis, cercles), **aucun contour** ;
+- trois tons par objet : base, ombre de même teinte tirée vers le violet/bleu
+  (jamais gris, noir ni transparent), reflet en capsule ; lumière en haut à gauche ;
+- palette courte et saturée ; l'**indigo** remplace le noir et le marron ;
+- traits réservés aux petits détails, **une seule épaisseur**, bouts ronds ;
+- arbres en coussins de feuillage empilés sur un tronc indigo, pas en boules ;
+- des détails qui racontent une vie plutôt que de la texture ;
+- ombres portées pleines, teinte foncée du sol ;
+- vue de dessus 3/4, grille lisible ;
+- une teinte dominante par famille, sans collision — vert fluo réservé aux mutants ;
+- personnages lisibles à petite taille (Adam : sac à dos, écharpe, arc ;
+  mutants : tête déformée, bras trop long, halo vert).
 
 ## Icônes et HUD
 
@@ -109,6 +80,10 @@ référencé sans être passé par ces étapes.
   (grille + emprises, `render/ghostLayer.ts`).
 
 ## Système de sprites
+
+> Transitoire : le rendu affiche encore les placeholders pixel art de
+> `pixelmaps.ts` (palette de `legacyPixelArt.ts`) le temps de leur
+> migration en SVG. Aucun nouveau visuel ne s'y ajoute.
 
 - `src/data/sprites.ts` : une planche = une grille, une animation par ligne,
   une image par colonne, taille d'image fixe, ancre, cadence.
