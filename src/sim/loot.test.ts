@@ -12,7 +12,7 @@ import { World } from './world.ts';
 const SEED = 7;
 
 function pickupAt(x: number, y: number, id = 700, item: ItemId = 'food'): Pickup {
-  return { kind: 'pickup', id, x, y, prevX: x, prevY: y, facing: 'down', moving: false, item, ttl: LOOT_DROPS.lifetimeTicks };
+  return { kind: 'pickup', id, x, y, prevX: x, prevY: y, facing: 'down', moving: false, item, amount: 1, waitForLeave: false, ttl: LOOT_DROPS.lifetimeTicks };
 }
 
 function pickups(world: World): Pickup[] {

@@ -35,7 +35,8 @@ export type PickupStep = 'wait' | 'reached' | 'expired';
  * Un tick d'un butin au sol. Il vieillit ; si Adam a de la place dans le sac
  * et passe à portée d'aimant, il glisse vers lui ; à portée de main, il est
  * `reached` — à l'appelant de le mettre dans le sac. Sac plein, il ne bouge
- * pas : il attend au sol, ni perdu ni avalé.
+ * pas : il attend au sol, ni perdu ni avalé. Un tas qu'Adam vient de jeter
+ * attend qu'il s'éloigne hors de portée d'aimant avant de se laisser reprendre.
  */
 export function stepPickup(pickup: Pickup, adam: { x: number; y: number }, room: boolean, stepSeconds: number): PickupStep {
   const reach = LOOT_DROPS.pickupRadius * TILE_SIZE;
@@ -47,6 +48,11 @@ export function stepPickup(pickup: Pickup, adam: { x: number; y: number }, room:
   pickup.ttl -= 1;
 
   const sq = distanceSq(adam.x, adam.y, pickup.x, pickup.y);
+
+  if (pickup.waitForLeave) {
+    if (sq > magnet * magnet) pickup.waitForLeave = false;
+    return pickup.ttl <= 0 ? 'expired' : 'wait';
+  }
 
   if (sq <= reach * reach) return 'reached';
   if (room && sq <= magnet * magnet) {

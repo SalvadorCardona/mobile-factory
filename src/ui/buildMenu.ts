@@ -18,8 +18,9 @@
  * (`placementReason.ts`), avec le remède quand Adam peut dégager la place.
  *
  * Une carte ne se grise pas quand le sac est vide : poser un chantier ne
- * coûte rien, c'est le remplir qui coûte. Le coût se colore seulement d'après
- * le sac — vert ce qu'Adam porte déjà, orange ce qui manque.
+ * coûte rien, c'est le remplir qui coûte. Le coût se colore d'après ce qui
+ * peut le payer — le sac d'Adam et le stock de la ville : vert ce qu'il y a
+ * déjà, orange ce qui manque.
  *
  * Tant que la mairie est en chantier, les cartes sont grisées et disent
  * « Débloqué après la mairie » : un débutant ne dépense pas son premier bois
@@ -363,12 +364,13 @@ export class BuildMenu {
       if (lock && reason !== null && lock.textContent !== reason) lock.textContent = reason;
     }
 
-    // Le sac ne compte que tiroir ouvert : fermé, personne ne voit les coûts.
+    // Le sac et la ville ne comptent que tiroir ouvert : fermé, personne ne voit les coûts.
     if (this.opened) {
       const { inventory } = this.world.player;
+      const town = this.world.townStock();
 
       for (const { item, amount, element } of this.costs) {
-        const done = String(inventory.count(item) >= amount);
+        const done = String(inventory.count(item) + (town?.available(item) ?? 0) >= amount);
 
         if (element.dataset['done'] !== done) element.dataset['done'] = done;
       }

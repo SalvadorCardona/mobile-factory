@@ -11,6 +11,7 @@ import {
   PALETTE,
   circle,
   curve,
+  flag,
   group,
   line,
   pill,
@@ -21,6 +22,7 @@ import {
   shadedPill,
   shape,
   svg,
+  windowPane,
 } from '../data/artDirection.ts';
 
 const S = 24;
@@ -188,6 +190,22 @@ export const UI_ICONS = {
     shadedBlock(5, 6.5, 14, 15, 3, 'violet', 5),
     rect(8, 14, 8, 4.5, violet.shade, 2),
     pill(9.5, 15, 3, 1.6, violet.light),
+  ),
+  /**
+   * La ville : la mairie en petit — murs jaunes de la colonie, toit corail,
+   * porte indigo et fanion. Devant le stock commun, face au sac d'Adam.
+   */
+  town: svg(
+    S,
+    S,
+    flag(12, 1, 6, 'mint'),
+    shadedBlock(4, 11, 16, 11, 3, 'yellow', 3),
+    polygon([2.5, 12.5, 12, 5, 21.5, 12.5], coral.shade),
+    polygon([3.5, 11.5, 12, 4.8, 20.5, 11.5], coral.base),
+    pill(8, 8, 4, 1.8, coral.light),
+    rect(10, 14.5, 4, 5, ink.base, 2),
+    windowPane(5.5, 13, 3, 3, 'yellow'),
+    windowPane(15.5, 13, 3, 3, 'yellow'),
   ),
   /** Une hache : manche indigo, fer bleu. */
   axe: svg(

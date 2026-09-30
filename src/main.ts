@@ -35,6 +35,7 @@ import { LocalGarden } from './storage/localGarden.ts';
 import { LocalSave, type LoadResult } from './storage/localSave.ts';
 import { TILE_SIZE } from './core/grid.ts';
 import { BuildingPanel } from './ui/buildingPanel.ts';
+import { InventoryPanel } from './ui/inventoryPanel.ts';
 import { BuildMenu } from './ui/buildMenu.ts';
 import { Hud } from './ui/hud.ts';
 import { PauseScreen, TitleScreen } from './ui/screens.ts';
@@ -156,7 +157,15 @@ async function main(): Promise<void> {
     () => audio.play('open'),
     (id) => isUnlocked(id, world.questsDone),
   );
-  const panel = new BuildingPanel(world, () => audio.play('open'));
+  // La fenêtre d'un bâtiment et le sac occupent la même place : l'un ferme l'autre.
+  const panel = new BuildingPanel(world, () => {
+    inventory.close();
+    audio.play('open');
+  });
+  const inventory = new InventoryPanel(world, () => {
+    panel.close();
+    audio.play('open');
+  });
   const inspect = new Inspect(
     world,
     (x, y) => renderer.screenToWorld(x, y),
@@ -168,7 +177,8 @@ async function main(): Promise<void> {
     },
   );
 
-  hud.root.append(buildMenu.root, panel.root);
+  hud.root.append(buildMenu.root, panel.root, inventory.root);
+  hud.bag.addEventListener('click', () => inventory.toggle());
   hud.setProjector((x, y) => renderer.worldToScreen(x, y));
 
   /*
@@ -239,6 +249,8 @@ async function main(): Promise<void> {
   window.addEventListener('pagehide', () => autosave.now());
   window.addEventListener('keydown', (event) => {
     if (event.code === 'Escape' || event.code === 'KeyP') setPaused(!paused);
+    // Le sac, comme dans la plupart des jeux sur PC : I, lu par position comme ZQSD.
+    if (event.code === 'KeyI' && !isTyping(event.target) && started && !paused) inventory.toggle();
     if (event.code === 'Backquote' && import.meta.env.DEV) hud.toggleDebug();
   });
 
@@ -300,6 +312,7 @@ async function main(): Promise<void> {
     renderer.setObjective(hud.wantedItem());
     buildMenu.refresh();
     panel.update();
+    inventory.update();
   });
 
   /**
@@ -310,7 +323,7 @@ async function main(): Promise<void> {
     const height = renderer.app.screen.height;
     let top = height - HUD_BOTTOM_INSET;
 
-    for (const node of [...buildMenu.root.children, panel.root]) {
+    for (const node of [...buildMenu.root.children, panel.root, inventory.root]) {
       const rect = node.getBoundingClientRect();
 
       if (rect.height > 0) top = Math.min(top, rect.top);
@@ -369,6 +382,8 @@ function wireAudio(world: World, audio: AudioEngine, hud: Hud): void {
   world.events.on('siteDelivered', () => audio.play('deliver'));
   world.events.on('storeTaken', () => audio.play('deliver'));
   world.events.on('buildingSupplied', () => audio.play('deliver'));
+  world.events.on('townDeposited', () => audio.play('deliver'));
+  world.events.on('itemDropped', () => audio.play('pickup'));
   world.events.on('buildingCompleted', () => audio.play('build'));
   world.events.on('arrowShot', () => audio.play('arrow'));
   world.events.on('mutantHit', () => audio.play('hit'));

@@ -51,6 +51,7 @@ import { nearestFoe, shoot, stepArrow } from './combat.ts';
 import type {
   Command,
   CommandLogEntry,
+  DepositRejection,
   PlacementRejection,
   SiteRejection,
   SupplyRejection,
@@ -131,6 +132,10 @@ const WAVE_COUNTDOWN_SECONDS = 3;
 /** Adam piétine du butin avec le sac plein : « sac plein » au plus une fois par seconde. */
 const LOOT_FULL_TICKS = TICKS_PER_SECOND;
 
+/** Où tombe ce qu'Adam jette, en pixels : un peu devant ses pieds, un tas par objet côte à côte. */
+const DROP_AHEAD = 12;
+const DROP_SPACING = 14;
+
 /** Le bâtiment que la partie ouvre en chantier au démarrage. */
 export const STARTING_BUILDING: BuildingId = 'townHall';
 
@@ -168,8 +173,14 @@ export type WorldEvents = {
   drillProduced: { id: EntityId; item: ItemId };
   /** Adam a arraché une unité à la tuile. `remaining` à 0 : elle a disparu. */
   resourceHarvested: { tx: number; ty: number; item: ItemId; remaining: number };
-  /** `amount` objets du sac viennent d'être posés sur le chantier. `missing` : ce qui manque encore, tous objets confondus. */
-  siteDelivered: { id: EntityId; item: ItemId; amount: number; missing: number };
+  /**
+   * `amount` objets viennent d'être posés sur le chantier, pris dans le sac
+   * d'Adam ou dans le stock de la ville (`source`). `missing` : ce qui manque
+   * encore, tous objets confondus.
+   */
+  siteDelivered: { id: EntityId; item: ItemId; amount: number; missing: number; source: 'bag' | 'town' };
+  /** Un chantier offert par le jardin des souvenirs vient d'ouvrir déjà livré. */
+  siteReady: { id: EntityId };
   /** Une commande sur un chantier a été refusée. */
   siteRejected: { id: EntityId; reason: SiteRejection };
   /** La ferme a récolté. */
@@ -200,8 +211,14 @@ export type WorldEvents = {
   waveCleared: { wave: number };
   /** Un mutant abattu a lâché du butin en (x, y). */
   lootDropped: { id: MobileId; item: ItemId; x: number; y: number };
-  /** Adam a ramassé du butin, qui est allé dans son sac. */
-  lootPicked: { id: MobileId; item: ItemId; x: number; y: number };
+  /** Adam a ramassé `amount` exemplaires d'un tas au sol, qui sont allés dans son sac. */
+  lootPicked: { id: MobileId; item: ItemId; amount: number; x: number; y: number };
+  /** `amount` objets du sac viennent d'entrer dans le stock de la ville. */
+  townDeposited: { item: ItemId; amount: number };
+  /** Un « Déposer en ville » a été refusé. */
+  depositRejected: { reason: DepositRejection };
+  /** Adam a jeté `amount` objets de son sac : un tas `id` à ses pieds, en (x, y). */
+  itemDropped: { id: MobileId; item: ItemId; amount: number; x: number; y: number };
   /** Un arc a tiré, depuis (x, y). */
   arrowShot: { x: number; y: number };
   /** Une flèche a touché un mutant ; `hp` est ce qui lui reste. */
@@ -528,6 +545,14 @@ export class World {
         this.supplyAll(command.id);
         break;
 
+      case 'depositToTown':
+        this.depositToTown(command.item);
+        break;
+
+      case 'dropItem':
+        this.dropFromBag(command.item);
+        break;
+
       case 'applyPerks':
         this.applyPerks(command.perks);
         break;
@@ -578,7 +603,11 @@ export class World {
     return distanceSq(this.player.x, this.player.y, centerX, centerY) <= reach * reach;
   }
 
-  /** Tout ce que le chantier attend et qu'Adam possède, en une fois. */
+  /**
+   * Tout ce que le chantier attend, en une fois : le sac d'abord, puis le
+   * stock de la ville pour ce qui manque encore. La ville ne donne que son
+   * disponible — ce que les porteurs ont déjà promis n'est pas à elle.
+   */
   private transfer(id: EntityId): void {
     const found = this.siteFor(id);
 
@@ -588,27 +617,133 @@ export class World {
     }
 
     const { site } = found;
-    const cost = BUILDINGS[site.proto].cost;
-    const { inventory } = this.player;
-    let moved = 0;
+    const town = this.townStock();
+    let moved = this.transferFrom(site, this.player.inventory, 'bag');
 
-    for (const [item, needed] of Object.entries(cost) as [ItemId, number][]) {
-      const delivered = site.delivered[item] ?? 0;
-      const amount = Math.min(needed - delivered, inventory.count(item));
-
-      if (amount <= 0) continue;
-
-      inventory.remove(item, amount);
-      site.delivered[item] = delivered + amount;
-      moved += amount;
-      this.events.emit('siteDelivered', { id: site.id, item, amount, missing: siteMissing(site) });
-    }
+    if (town) moved += this.transferFrom(site, town, 'town');
 
     if (moved === 0) {
       this.events.emit('siteRejected', { id, reason: 'nothingToGive' });
       return;
     }
     if (siteMissing(site) === 0) this.complete(site);
+  }
+
+  /**
+   * Ce que le chantier attend encore, pris dans `from`. Renvoie le nombre
+   * d'objets posés. Le sac livre tout ce qui manque, comme au contact ; la
+   * ville ne livre pas ce qu'un porteur apporte déjà.
+   */
+  private transferFrom(site: Site, from: Store, source: 'bag' | 'town'): number {
+    let moved = 0;
+
+    for (const item of Object.keys(BUILDINGS[site.proto].cost) as ItemId[]) {
+      const amount = Math.min(this.siteNeeds(site, item, source), from.available(item));
+
+      if (amount <= 0) continue;
+
+      from.remove(item, amount);
+      site.delivered[item] = (site.delivered[item] ?? 0) + amount;
+      moved += amount;
+      this.events.emit('siteDelivered', { id: site.id, item, amount, missing: siteMissing(site), source });
+    }
+    return moved;
+  }
+
+  /**
+   * Ce qu'un « Transférer » poserait sur le chantier : l'UI grise le bouton
+   * sur cette réponse, le tick décide sur la même.
+   */
+  public canTransfer(site: Site): boolean {
+    const town = this.townStock();
+
+    return (Object.keys(BUILDINGS[site.proto].cost) as ItemId[]).some(
+      (item) =>
+        (this.siteNeeds(site, item, 'bag') > 0 && this.player.inventory.count(item) > 0) ||
+        (this.siteNeeds(site, item, 'town') > 0 && (town?.available(item) ?? 0) > 0),
+    );
+  }
+
+  private siteNeeds(site: Site, item: ItemId, source: 'bag' | 'town'): number {
+    if (source === 'town') return this.jobs.siteWants(site, item);
+
+    const needed = (BUILDINGS[site.proto].cost as Partial<Record<ItemId, number>>)[item] ?? 0;
+
+    return Math.max(0, needed - (site.delivered[item] ?? 0));
+  }
+
+  /* ------------------------------------------------------- ville et sac */
+
+  /**
+   * Le stock de la ville : le coffre de la mairie, une fois bâtie. `null`
+   * tant qu'elle est en chantier, ou si elle est tombée.
+   *
+   * La frontière est là : le **sac** (`player.inventory`, plafonné) est ce
+   * qu'Adam porte sur lui — ce qu'il a récolté, ramassé ou pris dans un
+   * coffre et pas encore déposé ; la **ville** est ce qui a été déposé à la
+   * mairie, par Adam ou par les porteurs. Les chantiers puisent dans les
+   * deux : au contact et au bouton, dans le sac ; au bouton et par les
+   * porteurs, dans la ville.
+   */
+  public townStock(): Store | null {
+    const hall = this.entities.get(this.townHallId);
+
+    return hall?.kind === 'townHall' ? hall.store : null;
+  }
+
+  /** Adam peut-il déposer en ville d'ici ? La mairie doit être debout et à portée. */
+  public nearTown(): boolean {
+    const hall = this.entities.get(this.townHallId);
+
+    return hall?.kind === 'townHall' && this.inReach(hall);
+  }
+
+  /** Le bouton « Déposer en ville » : le sac, ou un seul objet, passe dans le coffre de la mairie. */
+  private depositToTown(only?: ItemId): void {
+    const town = this.townStock();
+
+    if (!town) {
+      this.events.emit('depositRejected', { reason: 'noTown' });
+      return;
+    }
+    if (!this.nearTown()) {
+      this.events.emit('depositRejected', { reason: 'outOfReach' });
+      return;
+    }
+
+    const { inventory } = this.player;
+    const entries = inventory.entries().filter(([item]) => only === undefined || item === only);
+
+    if (entries.length === 0) {
+      this.events.emit('depositRejected', { reason: 'empty' });
+      return;
+    }
+
+    for (const [item, count] of entries) {
+      const amount = town.add(item, inventory.remove(item, count));
+
+      this.events.emit('townDeposited', { item, amount });
+    }
+  }
+
+  /**
+   * « Jeter » : ce qu'Adam porte tombe à ses pieds, un tas par objet — le
+   * même tas que le butin, ramassable en repassant dessus, une fois qu'Adam
+   * s'en est éloigné. Rien n'est détruit : le tas s'efface seulement s'il
+   * est oublié, comme le butin.
+   */
+  private dropFromBag(only?: ItemId): void {
+    const { inventory } = this.player;
+    const dropped = inventory.entries().filter(([item]) => only === undefined || item === only);
+
+    // Les tas s'alignent juste devant ses pieds : sous lui, son sprite les cacherait.
+    for (const [index, [item, count]] of dropped.entries()) {
+      const amount = inventory.remove(item, count);
+      const x = this.player.x + (index - (dropped.length - 1) / 2) * DROP_SPACING;
+      const pickup = this.spawnPickup(item, amount, x, this.player.y + DROP_AHEAD, true);
+
+      this.events.emit('itemDropped', { id: pickup.id, item, amount, x: pickup.x, y: pickup.y });
+    }
   }
 
   /* -------------------------------------------------------------- collision */
@@ -718,7 +853,7 @@ export class World {
 
       const missing = siteMissing(site);
 
-      this.events.emit('siteDelivered', { id: site.id, item, amount: 1, missing });
+      this.events.emit('siteDelivered', { id: site.id, item, amount: 1, missing, source: 'bag' });
 
       // Le dernier objet posé achève le chantier : le joueur a déjà fait l'effort.
       if (missing === 0) this.complete(site);
@@ -1469,23 +1604,32 @@ export class World {
     for (const item of rollLoot(table, this.rng)) {
       const px = x + (this.rng() - 0.5) * 2 * spread;
       const py = y + (this.rng() - 0.5) * 2 * spread;
-      const pickup: Pickup = {
-        kind: 'pickup',
-        id: this.nextMobileId++,
-        x: px,
-        y: py,
-        prevX: px,
-        prevY: py,
-        facing: 'down',
-        moving: false,
-        item,
-        ttl: LOOT_DROPS.lifetimeTicks,
-      };
+      const pickup = this.spawnPickup(item, 1, px, py, false);
 
-      this.trimLoot();
-      this.mobiles.set(pickup.id, pickup);
       this.events.emit('lootDropped', { id: pickup.id, item, x: px, y: py });
     }
+  }
+
+  /** Pose un tas au sol, sous le plafond du butin. */
+  private spawnPickup(item: ItemId, amount: number, x: number, y: number, waitForLeave: boolean): Pickup {
+    const pickup: Pickup = {
+      kind: 'pickup',
+      id: this.nextMobileId++,
+      x,
+      y,
+      prevX: x,
+      prevY: y,
+      facing: 'down',
+      moving: false,
+      item,
+      amount,
+      waitForLeave,
+      ttl: LOOT_DROPS.lifetimeTicks,
+    };
+
+    this.trimLoot();
+    this.mobiles.set(pickup.id, pickup);
+    return pickup;
   }
 
   /** Plafond atteint : le butin le plus ancien — le moins de ticks restants — disparaît. */
@@ -1502,19 +1646,22 @@ export class World {
   }
 
   /**
-   * Adam passe dessus : le butin va dans le sac, s'il y a la place — sinon il
-   * reste au sol, et la valeur rendue le signale. Oublié trop longtemps, il
-   * disparaît.
+   * Adam passe dessus : le tas va dans le sac, autant qu'il y a de place — le
+   * reste attend au sol, et la valeur rendue le signale. Oublié trop
+   * longtemps, il disparaît.
    */
   private stepPickup(pickup: Pickup): boolean {
     const { inventory } = this.player;
     const step = stepPickup(pickup, this.player, inventory.freeSpace() > 0, STEP_SECONDS);
 
     if (step === 'reached') {
-      if (inventory.add(pickup.item, 1) > 0) {
-        this.mobiles.delete(pickup.id);
-        this.events.emit('lootPicked', { id: pickup.id, item: pickup.item, x: pickup.x, y: pickup.y });
-        return false;
+      const amount = inventory.add(pickup.item, pickup.amount);
+
+      if (amount > 0) {
+        pickup.amount -= amount;
+        if (pickup.amount === 0) this.mobiles.delete(pickup.id);
+        this.events.emit('lootPicked', { id: pickup.id, item: pickup.item, amount, x: pickup.x, y: pickup.y });
+        if (pickup.amount === 0) return false;
       }
       if (pickup.ttl > 0) return true;
     }

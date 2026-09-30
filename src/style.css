@@ -155,7 +155,7 @@ button {
 
 /* Ce qui ne fait qu'informer laisse passer le pouce vers le joystick. */
 .hud .hud-quest,
-.hud .hud-bag,
+.hud .hud-town,
 .hud .hud-stats {
   pointer-events: none;
 }
@@ -576,26 +576,60 @@ button {
   background: var(--paper-shade);
 }
 
-/* ------------------------------------------------------------------- sac */
+/* ------------------------------------------------------------ ville et sac */
 
-.hud-bag {
-  min-width: 112px;
+/*
+ * Deux cartes compactes l'une sur l'autre : la ville (stock commun, titre
+ * jaune de la colonie) et le sac (titre violet, comme le sac à dos d'Adam,
+ * avec sa jauge). Les objets tiennent en pastilles sur deux colonnes : le
+ * détail est dans le panneau inventaire.
+ */
+.hud-stock {
+  width: 124px;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 8px 12px 10px;
+  padding: 8px 10px 10px;
   font-variant-numeric: tabular-nums;
+}
+
+/* Le sac est un bouton : il garde l'allure d'une carte, et s'enfonce sur sa face au toucher. */
+button.hud-stock {
+  border: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+
+button.hud-stock:active {
+  transform: translateY(3px);
+  box-shadow: 0 2px 0 var(--paper-shade);
 }
 
 .hud-bag-title {
   display: flex;
-  justify-content: space-between;
-  gap: 8px;
+  align-items: center;
+  gap: 5px;
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--violet);
+}
+
+.hud-town .hud-bag-title {
+  color: var(--yellow-shade);
+}
+
+.hud-stock-name {
+  flex: 1;
+}
+
+.hud-town-state {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--muted);
 }
 
 .hud-bag-title[data-full='true'] .hud-bag-count {
@@ -613,14 +647,132 @@ button {
   animation: blink 0.8s steps(2) infinite;
 }
 
-.hud-bag-items {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+.hud-stock-items {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 6px;
+  font-size: 15px;
 }
 
-.hud-bag[data-empty='true'] .hud-bag-items {
+.hud-stock-items .icon {
+  width: 18px;
+  height: 18px;
+}
+
+.hud-stock[data-empty='true'] .hud-stock-items {
   display: none;
+}
+
+/* ------------------------------------------------------------ panneau du sac */
+
+.inventory-panel h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inventory-capacity {
+  margin: 6px 0 0;
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.inventory-capacity[data-full='true'] {
+  color: var(--danger);
+}
+
+.inventory-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.inventory-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+}
+
+.inventory-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 500;
+}
+
+.inventory-count {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.inventory-empty {
+  color: var(--muted);
+  font-size: 16px;
+}
+
+/* Le bouton d'une ligne : une petite capsule, menthe pour déposer, corail pour jeter. */
+.inventory-action {
+  min-width: 88px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--paper);
+  background: var(--coral);
+  box-shadow: 0 4px 0 var(--coral-shade);
+}
+
+.inventory-action[data-tone='deposit'],
+.inventory-panel .building-panel-actions button[data-tone='deposit'] {
+  background: var(--mint);
+  color: var(--paper);
+  box-shadow: 0 4px 0 var(--mint-shade);
+}
+
+.inventory-panel .building-panel-actions button[data-tone='drop'] {
+  background: var(--coral);
+  color: var(--paper);
+  box-shadow: 0 4px 0 var(--coral-shade);
+}
+
+.inventory-action:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--coral-shade);
+}
+
+.inventory-action[data-tone='deposit']:active {
+  box-shadow: 0 1px 0 var(--mint-shade);
+}
+
+.inventory-town {
+  margin-top: 14px;
+  padding: 8px 12px 10px;
+  border-radius: 16px;
+  background: var(--paper-shade);
+}
+
+.inventory-town[hidden] {
+  display: none;
+}
+
+.inventory-town-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--yellow-shade);
 }
 
 /* ---------------------------------------------------------------- bulles */

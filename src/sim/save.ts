@@ -337,7 +337,15 @@ function parseMobile(raw: unknown): Mobile {
         searchTicks: int(mobile['searchTicks']),
       };
     case 'pickup':
-      return { ...base, kind: 'pickup', item: oneOf(mobile['item'], ITEMS) as ItemId, ttl: int(mobile['ttl']) };
+      // Une sauvegarde d'avant les tas : un butin, c'était un exemplaire.
+      return {
+        ...base,
+        kind: 'pickup',
+        item: oneOf(mobile['item'], ITEMS) as ItemId,
+        amount: mobile['amount'] === undefined ? 1 : int(mobile['amount']),
+        waitForLeave: mobile['waitForLeave'] === undefined ? false : bool(mobile['waitForLeave']),
+        ttl: int(mobile['ttl']),
+      };
     default:
       throw new SaveError(`mobile inconnu : ${String(mobile['kind'])}`);
   }

@@ -370,7 +370,7 @@ describe('mise en scène des vagues', () => {
     // Un butin posé à la main : on n'attend pas qu'un mutant tombe.
     const { x, y } = mutant!;
 
-    world.mobiles.set(9999, { kind: 'pickup', id: 9999, x, y, prevX: x, prevY: y, facing: 'down', moving: false, item: 'food', ttl: 42 });
+    world.mobiles.set(9999, { kind: 'pickup', id: 9999, x, y, prevX: x, prevY: y, facing: 'down', moving: false, item: 'food', amount: 1, waitForLeave: false, ttl: 42 });
     // Les bêtes ne sont pas l'objet de ce test.
     for (const mobile of world.mobiles.values()) if (mobile.kind === 'beast') world.mobiles.delete(mobile.id);
 
