@@ -1558,6 +1558,74 @@ button.hud-stock:active {
   font-weight: 600;
 }
 
+/* Sur grand écran, chaque carte porte son effet : la ligne du pied ne sert qu'au téléphone. */
+.build-drawer-effect {
+  display: none;
+}
+
+/*
+ * Téléphone : deux colonnes de cartes compactes — vignette, nom, coût. Dans
+ * 390 × 844, une liste d'une colonne ne montrait que quatre cartes sur neuf.
+ * L'effet passe au pied du tiroir, lu à l'appui long.
+ */
+@media (max-width: 599px) {
+  .build-drawer-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 8px;
+  }
+
+  .build-card {
+    gap: 6px;
+    min-height: 64px;
+    padding: 6px 8px 6px 6px;
+    border-radius: 16px;
+    /* L'appui long lit l'effet : ni loupe, ni sélection de texte par-dessus. */
+    -webkit-touch-callout: none;
+    user-select: none;
+  }
+
+  .build-card .icon-building {
+    width: 34px;
+    height: 34px;
+    flex: none;
+    border-radius: 10px;
+  }
+
+  .build-card-name {
+    font-size: 15px;
+    hyphens: auto;
+  }
+
+  .build-card-effect,
+  .build-card-meta {
+    display: none;
+  }
+
+  .build-card-cost {
+    gap: 2px 6px;
+    font-size: 14px;
+  }
+
+  .build-card-cost .icon {
+    width: 16px;
+    height: 16px;
+  }
+
+  .build-card-lock {
+    padding: 1px 8px;
+    font-size: 12px;
+  }
+
+  .build-drawer-effect {
+    display: block;
+    min-height: 2.4em;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.2;
+    color: var(--muted);
+  }
+}
+
 /* Avant la mairie, ou avant sa vague : la carte se lit, mais ne se choisit pas. */
 .build-card[aria-disabled='true'] {
   background: var(--paper-shade);
