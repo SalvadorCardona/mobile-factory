@@ -19,6 +19,7 @@ import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
 import { ENEMIES, WILDLIFE, type EnemyId, type WildlifeId } from '../data/enemies.ts';
 import { ITEMS, type ItemId } from '../data/items.ts';
 import { JOB_PRIORITY, type JobPriority } from '../data/workers.ts';
+import { PERKS, type PerkId } from '../data/perks.ts';
 import type { SchedulerSnapshot } from './scheduler.ts';
 import type { Store, StoreSnapshot } from './store.ts';
 import type { BeastState, Entity, EntityId, EveState, Facing, Job, Mobile, Player } from './types.ts';
@@ -66,6 +67,10 @@ export interface WorldState {
   defeatTick: number;
   /** Quêtes d'Ève déjà finies. Absent des sauvegardes d'avant Ève : 0. */
   questsDone: number;
+  /** Bonus du jardin avec lesquels la colonie est partie. */
+  perks: PerkId[];
+  /** Chantiers offerts par ces bonus, pas encore ouverts. */
+  giftedSites: BuildingId[];
   player: SavedPlayer;
   /** Tuiles entamées : `"tx,ty"` → unités déjà prises. */
   resources: Record<string, number>;
@@ -163,6 +168,9 @@ function parseState(raw: unknown): WorldState {
     defeated: bool(state['defeated']),
     defeatTick: int(state['defeatTick']),
     questsDone: state['questsDone'] === undefined ? 0 : int(state['questsDone']),
+    // Absents d'une sauvegarde d'avant le jardin : une colonie partie sans bonus.
+    perks: array(state['perks'] ?? []).map((id) => oneOf(id, PERKS) as PerkId),
+    giftedSites: array(state['giftedSites'] ?? []).map((id) => oneOf(id, BUILDINGS) as BuildingId),
     player: parsePlayer(state['player']),
     resources: parseResources(state['resources']),
     entities: unique(array(state['entities']).map(parseEntity)),
