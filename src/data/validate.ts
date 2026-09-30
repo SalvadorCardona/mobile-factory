@@ -14,7 +14,7 @@
 import { TILE_SIZE } from '../core/grid.ts';
 import { auditSvg } from './artDirection.ts';
 import { BUILDINGS } from './buildings.ts';
-import { ENEMIES, WAVES } from './enemies.ts';
+import { ENEMIES, WAVES, WILDLIFE, WILDLIFE_SPAWN, type WildlifeProto } from './enemies.ts';
 import { ICON_SIZE, ITEM_ICONS } from './icons.ts';
 import { ITEMS } from './items.ts';
 import { RECIPES } from './recipes.ts';
@@ -165,6 +165,40 @@ export function validatePrototypes(): string[] {
         }
       }
     }
+  }
+
+  for (const [id, beast] of Object.entries(WILDLIFE)) {
+    const proto: WildlifeProto = beast;
+
+    if (proto.hp <= 0 || proto.speed <= 0 || proto.chargeSpeed <= 0 || proto.damage <= 0 || proto.attackTicks <= 0) {
+      errors.push(`WILDLIFE.${id} : points de vie, vitesses, dégâts ou cadence nuls`);
+    }
+    if (proto.halfW <= 0 || proto.halfH <= 0 || proto.halfW * 2 > TILE_SIZE) {
+      errors.push(`WILDLIFE.${id} : boîte de collision invalide`);
+    }
+    // Rentrer avant d'avoir repéré Adam, ou lâcher la poursuite dans son propre rayon : la bête tournerait en rond.
+    if (proto.aggroRadius <= 0 || proto.giveUpRadius <= proto.aggroRadius || proto.leashRadius <= proto.aggroRadius) {
+      errors.push(`WILDLIFE.${id} : rayons d'aggro, d'abandon et de laisse incohérents`);
+    }
+    if (proto.groupMin < 1 || proto.groupMax < proto.groupMin || proto.densPerChunk < 0 || proto.respawnTicks <= 0) {
+      errors.push(`WILDLIFE.${id} : effectif, densité ou repeuplement incohérents`);
+    }
+    if (proto.loot !== null && !(proto.loot in ITEMS)) {
+      errors.push(`WILDLIFE.${id} : butin inconnu « ${proto.loot} »`);
+    }
+    if (!(proto.sprite in SPRITES)) {
+      errors.push(`WILDLIFE.${id} : sprite inconnu « ${proto.sprite} »`);
+    } else {
+      for (const part of ['down', 'downHurt', 'foot']) {
+        if (!(part in SPRITES[proto.sprite].parts)) {
+          errors.push(`WILDLIFE.${id} : le sprite « ${proto.sprite} » n'a pas de morceau « ${part} »`);
+        }
+      }
+    }
+  }
+
+  if (WILDLIFE_SPAWN.minPlayerDistance >= WILDLIFE_SPAWN.despawnDistance || WILDLIFE_SPAWN.cap <= 0) {
+    errors.push('WILDLIFE_SPAWN : distances ou plafond incohérents');
   }
 
   for (const [id, weapon] of Object.entries(WEAPONS)) {

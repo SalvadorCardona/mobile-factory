@@ -15,37 +15,50 @@
  * **contact** — un arbre ou un rocher heurté se récolte, un chantier heurté
  * reçoit ce qu'il attend. Une fois la mairie debout, les mutants arrivent par
  * vagues et marchent droit dessus ; l'arc d'Adam et les tours de guet tirent
- * seuls. Si la mairie tombe, la partie est perdue.
+ * seuls. Si la mairie tombe, la partie est perdue. Loin du village, la faune
+ * — crabes sur les plages, loups en forêt — s'en prend à Adam s'il approche.
  */
 
 import { Emitter } from '../core/events.ts';
 import { CHUNK_TILES, TILE_SIZE, coordKey, distanceSq, floorDiv } from '../core/grid.ts';
 import { mulberry32, type StatefulRng } from '../core/rng.ts';
 import { BUILDINGS, NURSERY_BIRTH_TICKS, type BuildingId } from '../data/buildings.ts';
-import { ENEMIES, WAVES, waveSize } from '../data/enemies.ts';
+import { ENEMIES, WAVES, WILDLIFE, WILDLIFE_SPAWN, waveSize } from '../data/enemies.ts';
 import type { ItemId } from '../data/items.ts';
 import { RECIPES, type RecipeId } from '../data/recipes.ts';
 import { RESOURCES } from '../data/resources.ts';
 import { WEAPONS } from '../data/weapons.ts';
 import { ChunkIndex } from './chunk.ts';
-import { nearestMutant, shoot, stepArrow } from './combat.ts';
+import { nearestFoe, shoot, stepArrow } from './combat.ts';
 import type { Command, CommandLogEntry, PlacementRejection, SiteRejection } from './commands.ts';
+import type { WildlifeId } from '../data/enemies.ts';
 import { spawnPoint, stepMutant } from './enemies.ts';
 import { stepKid } from './kids.ts';
+import { denSize, densOfChunk, stepBeast, type Den } from './wildlife.ts';
 import { facingOf } from './motion.ts';
-import { BUILD_REACH_TILES, createPlayer, playerOverlaps, stepPlayer } from './player.ts';
+import {
+  BUILD_REACH_TILES,
+  PLAYER_CALM_TICKS,
+  PLAYER_MAX_HP,
+  PLAYER_REGEN_TICKS,
+  createPlayer,
+  playerOverlaps,
+  stepPlayer,
+} from './player.ts';
 import { ResourceIndex } from './resources.ts';
 import type { SavedEntity, WorldState } from './save.ts';
 import { Scheduler } from './scheduler.ts';
 import { Store } from './store.ts';
-import { isBuildable, isWalkable, oreAt, terrainAt } from './terrain.ts';
+import { habitatAt, isBuildable, isWalkable, oreAt, terrainAt } from './terrain.ts';
 import type {
+  Beast,
   Building,
   Contact,
   Drill,
   Entity,
   EntityId,
   Farm,
+  Foe,
   Kid,
   Mobile,
   MobileId,
@@ -117,6 +130,14 @@ export type WorldEvents = {
   buildingDestroyed: { id: EntityId; proto: BuildingId; tx: number; ty: number };
   /** La mairie est tombée : la partie est perdue. */
   townHallDestroyed: Record<string, never>;
+  /** Une flèche a touché une bête ; `hp` est ce qui lui reste. */
+  beastHit: { id: MobileId; proto: WildlifeId; hp: number; x: number; y: number };
+  /** Une bête est tombée ; `loot` est ce qui est allé dans le sac, s'il y avait la place. */
+  beastDied: { id: MobileId; proto: WildlifeId; x: number; y: number; loot: ItemId | null };
+  /** Une bête a frappé Adam ; `hp` est ce qui lui reste. */
+  playerHurt: { by: MobileId; hp: number };
+  /** Adam est tombé : il se réveille à la mairie, remis sur pied. */
+  playerKnockedOut: { x: number; y: number };
   /** La nurserie a produit un enfant. */
   childBorn: { nurseryId: EntityId; kidId: MobileId; x: number; y: number };
 };
@@ -167,6 +188,19 @@ export class World {
   /** Centre de la mairie en pixels monde : ce que les mutants visent. */
   private readonly target: { x: number; y: number };
 
+  /** Où Adam s'est éveillé au début de la partie : il s'y réveille s'il tombe et que la mairie n'est plus. */
+  private readonly spawnX: number;
+  private readonly spawnY: number;
+
+  /**
+   * Les tanières habitées, ou vidées par l'arc : seules les tanières qui ont
+   * servi sont de l'état. Les autres se relisent dans la seed.
+   */
+  private readonly dens = new Map<number, { members: number; readyTick: number }>();
+
+  /** Cache des tanières par chunk : un calcul pur, gardé pour ne pas le refaire à chaque passage. */
+  private readonly denCache = new Map<string, Den[]>();
+
   public constructor(seed: number) {
     this.seed = seed >>> 0;
     this.resources = new ResourceIndex(this.seed);
@@ -182,7 +216,9 @@ export class World {
       }
     }
 
-    this.player = createPlayer((sx + 0.5) * TILE_SIZE, (sy + 1.5) * TILE_SIZE);
+    this.spawnX = (sx + 0.5) * TILE_SIZE;
+    this.spawnY = (sy + 1.5) * TILE_SIZE;
+    this.player = createPlayer(this.spawnX, this.spawnY);
     this.townHallId = this.openSite(STARTING_BUILDING, sx - 1, sy - proto.height);
     this.target = { x: (sx + 0.5) * TILE_SIZE, y: (sy - proto.height / 2) * TILE_SIZE };
   }
@@ -300,6 +336,8 @@ export class World {
     this.handleContact(contact);
     this.announceWave();
     this.stepMobiles();
+    this.recover();
+    this.stepWildlife();
     this.shootPlayerBow();
 
     for (const id of this.scheduler.due(this.tickCount)) {
@@ -429,6 +467,10 @@ export class World {
     !isWalkable(terrainAt(this.seed, tx, ty)) ||
     this.resources.isSolid(tx, ty) ||
     this.chunks.occupantAt(tx, ty) !== undefined;
+
+  /** Ce qui arrête une bête qui se faufile entre les arbres : l'eau et le bâti, rien d'autre. */
+  private readonly isOpenGroundSolid = (tx: number, ty: number): boolean =>
+    !isWalkable(terrainAt(this.seed, tx, ty)) || this.chunks.occupantAt(tx, ty) !== undefined;
 
   /* ---------------------------------------------------------------- contact */
 
@@ -814,7 +856,7 @@ export class World {
 
     const x = (tower.tx + tower.width / 2) * TILE_SIZE;
     const y = (tower.ty + tower.height / 2) * TILE_SIZE;
-    const target = nearestMutant(this.mutants(), x, y, WEAPONS[weapon].range);
+    const target = nearestFoe(this.mutants(), x, y, WEAPONS[weapon].range);
 
     if (target) this.fire(weapon, x, y, target);
     if (this.hasMutants()) this.armTower(tower, WEAPONS[weapon].cooldown);
@@ -831,6 +873,19 @@ export class World {
   private *mutants(): IterableIterator<Mutant> {
     for (const mobile of this.mobiles.values()) {
       if (mobile.kind === 'mutant') yield mobile;
+    }
+  }
+
+  /** Tout ce que l'arc d'Adam peut viser : les mutants et les bêtes. */
+  private *foes(): IterableIterator<Foe> {
+    for (const mobile of this.mobiles.values()) {
+      if (mobile.kind === 'mutant' || mobile.kind === 'beast') yield mobile;
+    }
+  }
+
+  private *beasts(): IterableIterator<Beast> {
+    for (const mobile of this.mobiles.values()) {
+      if (mobile.kind === 'beast') yield mobile;
     }
   }
 
@@ -870,12 +925,21 @@ export class World {
           break;
         }
 
+        case 'beast': {
+          const solid = WILDLIFE[mobile.proto].throughTrees ? this.isOpenGroundSolid : this.isSolid;
+          const step = stepBeast(mobile, this.player, solid, this.seed, this.rng, STEP_SECONDS);
+
+          if (step.strikes) this.hurtPlayer(mobile, WILDLIFE[mobile.proto].damage);
+          break;
+        }
+
         case 'arrow': {
-          const hit = stepArrow(mobile, this.mutants());
+          const hit = stepArrow(mobile, this.foes());
 
           if (hit) {
             this.mobiles.delete(mobile.id);
-            this.hurtMutant(hit, mobile.damage);
+            if (hit.kind === 'mutant') this.hurtMutant(hit, mobile.damage);
+            else this.hurtBeast(hit, mobile.damage);
           } else if (mobile.ttl <= 0) {
             this.mobiles.delete(mobile.id);
           }
@@ -891,16 +955,22 @@ export class World {
 
   private readonly occupantAt = (tx: number, ty: number): EntityId | undefined => this.chunks.occupantAt(tx, ty);
 
-  /** L'arc d'Adam : automatique, dès qu'un mutant est à portée et que le délai est écoulé. */
+  /**
+   * L'arc d'Adam : automatique. À chaque tick, il vise l'ennemi le plus
+   * proche à portée — mutant, crabe ou loup — et tire dès que le délai est
+   * écoulé. Le joueur ne fait que se déplacer ; la cible est retenue dans
+   * `player.target` pour que le rendu y pose son marqueur.
+   */
   private shootPlayerBow(): void {
     const { player } = this;
 
     if (player.bowCooldown > 0) player.bowCooldown -= 1;
-    if (player.bowCooldown > 0) return;
 
-    const target = nearestMutant(this.mutants(), player.x, player.y, WEAPONS.bow.range);
+    const target = nearestFoe(this.foes(), player.x, player.y, WEAPONS.bow.range);
 
-    if (!target) return;
+    player.target = target?.id ?? null;
+
+    if (!target || player.bowCooldown > 0) return;
 
     // Le corps est au-dessus des pieds : la flèche part de la poitrine.
     this.fire('bow', player.x, player.y - 8, target);
@@ -912,7 +982,7 @@ export class World {
     }
   }
 
-  private fire(weapon: keyof typeof WEAPONS, x: number, y: number, target: Mutant): void {
+  private fire(weapon: keyof typeof WEAPONS, x: number, y: number, target: Foe): void {
     const arrow = shoot(this.nextMobileId++, weapon, x, y, target);
 
     this.mobiles.set(arrow.id, arrow);
@@ -930,6 +1000,190 @@ export class World {
     this.kills += 1;
     this.events.emit('mutantDied', { id: mutant.id, x: mutant.x, y: mutant.y });
   }
+
+  /* ------------------------------------------------------------------ faune */
+
+  /** Une bête touchée charge qui l'a blessée ; abattue, elle laisse sa tanière et parfois son butin. */
+  private hurtBeast(beast: Beast, damage: number): void {
+    beast.hp -= damage;
+
+    if (beast.hp > 0) {
+      if (beast.state === 'roam') beast.state = 'chase';
+      this.events.emit('beastHit', { id: beast.id, proto: beast.proto, hp: beast.hp, x: beast.x, y: beast.y });
+      return;
+    }
+
+    const proto = WILDLIFE[beast.proto];
+    const den = this.dens.get(beast.denId);
+
+    this.mobiles.delete(beast.id);
+
+    // Tanière vidée par l'arc : elle attend avant de se repeupler.
+    if (den) {
+      den.members -= 1;
+      if (den.members <= 0) den.readyTick = this.tickCount + proto.respawnTicks;
+    }
+
+    const loot = proto.loot !== null && this.player.inventory.add(proto.loot, 1) > 0 ? proto.loot : null;
+
+    this.events.emit('beastDied', { id: beast.id, proto: beast.proto, x: beast.x, y: beast.y, loot });
+  }
+
+  /** Un coup de pince ou de croc. À zéro, Adam tombe et se réveille à la mairie. */
+  private hurtPlayer(by: Beast, damage: number): void {
+    const { player } = this;
+
+    player.hp = Math.max(0, player.hp - damage);
+    player.calmTicks = 0;
+    this.events.emit('playerHurt', { by: by.id, hp: player.hp });
+
+    if (player.hp > 0) return;
+
+    const hall = this.entities.get(this.townHallId);
+    const spot = hall ? this.freeTileAround(hall.tx, hall.ty, hall.width, hall.height) : null;
+    const x = spot ? (spot.tx + 0.5) * TILE_SIZE : this.spawnX;
+    const y = spot ? (spot.ty + 0.5) * TILE_SIZE : this.spawnY;
+
+    player.x = player.prevX = x;
+    player.y = player.prevY = y;
+    player.hp = PLAYER_MAX_HP;
+    this.events.emit('playerKnockedOut', { x, y });
+  }
+
+  /** Au calme, Adam reprend des forces, un point à la fois. */
+  private recover(): void {
+    const { player } = this;
+
+    player.calmTicks += 1;
+
+    if (player.hp >= PLAYER_MAX_HP || player.calmTicks < PLAYER_CALM_TICKS) return;
+    if ((player.calmTicks - PLAYER_CALM_TICKS) % PLAYER_REGEN_TICKS === 0) player.hp += 1;
+  }
+
+  /**
+   * Les tanières autour d'Adam, une fois par seconde : range les bêtes trop
+   * loin de lui, puis peuple les tanières vides des chunks voisins — hors de
+   * sa vue, loin du village, sous le plafond. Tout vient de la seed et de
+   * l'état : deux parties jouées pareil voient les mêmes bêtes.
+   */
+  private stepWildlife(): void {
+    if (this.tickCount % WILDLIFE_SPAWN.checkTicks !== 0) return;
+
+    const { player } = this;
+    const despawn = WILDLIFE_SPAWN.despawnDistance * TILE_SIZE;
+    let alive = 0;
+
+    for (const beast of this.beasts()) {
+      if (beast.state !== 'chase' && distanceSq(player.x, player.y, beast.x, beast.y) > despawn * despawn) {
+        // Rangée, pas tuée : la tanière se repeuplera sans attendre au retour d'Adam.
+        this.mobiles.delete(beast.id);
+
+        const den = this.dens.get(beast.denId);
+
+        if (den) den.members -= 1;
+        continue;
+      }
+      alive += 1;
+    }
+
+    const { cx, cy } = this.playerChunk();
+    const radius = WILDLIFE_SPAWN.chunkRadius;
+    const near = WILDLIFE_SPAWN.minPlayerDistance * TILE_SIZE;
+
+    for (let dy = -radius; dy <= radius; dy += 1) {
+      for (let dx = -radius; dx <= radius; dx += 1) {
+        for (const den of this.densAt(cx + dx, cy + dy)) {
+          const state = this.dens.get(den.id);
+
+          if (state && (state.members > 0 || this.tickCount < state.readyTick)) continue;
+
+          const size = denSize(den);
+          const x = (den.tx + 0.5) * TILE_SIZE;
+          const y = (den.ty + 0.5) * TILE_SIZE;
+
+          if (alive + size > WILDLIFE_SPAWN.cap) return;
+          if (distanceSq(player.x, player.y, x, y) < near * near) continue;
+          if (!this.isWild(den)) continue;
+
+          this.populate(den, size);
+          alive += size;
+        }
+      }
+    }
+  }
+
+  /** Les tanières d'un chunk, calculées une fois. */
+  public densAt(cx: number, cy: number): readonly Den[] {
+    const key = coordKey(cx, cy);
+    let dens = this.denCache.get(key);
+
+    if (!dens) {
+      dens = densOfChunk(this.seed, cx, cy);
+      this.denCache.set(key, dens);
+    }
+    return dens;
+  }
+
+  /** Une tanière est-elle assez loin de la mairie et du village, et libre ? */
+  private isWild(den: Den): boolean {
+    const x = (den.tx + 0.5) * TILE_SIZE;
+    const y = (den.ty + 0.5) * TILE_SIZE;
+    const hall = WILDLIFE_SPAWN.townHallClearance * TILE_SIZE;
+    const clearance = WILDLIFE_SPAWN.buildingClearance * TILE_SIZE;
+
+    if (distanceSq(x, y, this.target.x, this.target.y) < hall * hall) return false;
+    if (this.isSolid(den.tx, den.ty)) return false;
+
+    for (const entity of this.entities.values()) {
+      const ex = (entity.tx + entity.width / 2) * TILE_SIZE;
+      const ey = (entity.ty + entity.height / 2) * TILE_SIZE;
+
+      if (distanceSq(x, y, ex, ey) < clearance * clearance) return false;
+    }
+    return true;
+  }
+
+  /** La tanière se peuple : `size` bêtes côte à côte, sur l'habitat, jamais dans un obstacle. */
+  private populate(den: Den, size: number): void {
+    const proto = WILDLIFE[den.species];
+    const homeX = (den.tx + 0.5) * TILE_SIZE;
+    const homeY = (den.ty + 0.5) * TILE_SIZE;
+
+    for (let i = 0; i < size; i += 1) {
+      let x = homeX + (i - (size - 1) / 2) * 14;
+      const y = homeY + (i % 2) * 6;
+      const tx = floorDiv(x, TILE_SIZE);
+      const ty = floorDiv(y, TILE_SIZE);
+
+      if (this.isSolid(tx, ty) || habitatAt(this.seed, tx, ty) !== proto.habitat) x = homeX;
+
+      const beast: Beast = {
+        kind: 'beast',
+        id: this.nextMobileId++,
+        proto: den.species,
+        x,
+        y,
+        prevX: x,
+        prevY: y,
+        facing: 'down',
+        moving: false,
+        hp: proto.hp,
+        denId: den.id,
+        homeX,
+        homeY,
+        state: 'roam',
+        dirX: 0,
+        dirY: 0,
+        wanderTicks: 0,
+        attackCooldown: 0,
+      };
+
+      this.mobiles.set(beast.id, beast);
+    }
+    this.dens.set(den.id, { members: size, readyTick: 0 });
+  }
+
+  /* ----------------------------------------------------------------- vagues */
 
   /** Une vague : `waveSize(n)` mutants autour de la mairie, puis la suivante est planifiée. */
   private spawnWave(): void {

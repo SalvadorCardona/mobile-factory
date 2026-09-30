@@ -1,9 +1,14 @@
 /**
  * Les arcs et leurs flèches.
  *
- * Toutes les armes du jeu sont automatiques : elles cherchent le mutant le
+ * Toutes les armes du jeu sont automatiques : elles cherchent l'ennemi le
  * plus proche à portée et tirent dès que leur délai est écoulé. Adam porte
- * la sienne en permanence ; la tour de guet en porte une plus longue.
+ * la sienne en permanence et vise tout ce qui l'attaque — mutants, crabes,
+ * loups ; la tour de guet en porte une plus longue et ne vise que les
+ * mutants, les seuls à s'en prendre au village.
+ *
+ * Pas de ligne de vue : la simulation n'en a pas, une flèche passe
+ * au-dessus des arbres, des rochers et des murs.
  *
  * Une flèche est une ligne droite tirée vers la position du mutant au
  * moment du tir : pas d'anticipation. Un mutant lent et une flèche rapide
@@ -13,30 +18,33 @@
  */
 
 import { TILE_SIZE, distanceSq } from '../core/grid.ts';
-import { ENEMIES } from '../data/enemies.ts';
+import { ENEMIES, WILDLIFE } from '../data/enemies.ts';
 import { WEAPONS, type WeaponId } from '../data/weapons.ts';
-import type { Arrow, Mutant } from './types.ts';
+import type { Arrow, Foe } from './types.ts';
 
-/** Le mutant le plus proche de (x, y) à moins de `range` tuiles, ou `null`. */
-export function nearestMutant(
-  mutants: Iterable<Mutant>,
-  x: number,
-  y: number,
-  range: number,
-): Mutant | null {
+/**
+ * L'ennemi le plus proche de (x, y) à moins de `range` tuiles, ou `null`.
+ * À égalité, le premier rencontré : l'ordre de la map, donc déterministe.
+ */
+export function nearestFoe<T extends Foe>(foes: Iterable<T>, x: number, y: number, range: number): T | null {
   const limit = range * TILE_SIZE;
-  let best: Mutant | null = null;
+  let best: T | null = null;
   let bestSq = limit * limit;
 
-  for (const mutant of mutants) {
-    const sq = distanceSq(x, y, mutant.x, mutant.y);
+  for (const foe of foes) {
+    const sq = distanceSq(x, y, foe.x, foe.y);
 
-    if (sq <= bestSq) {
+    if (sq < bestSq || (best === null && sq === bestSq)) {
       bestSq = sq;
-      best = mutant;
+      best = foe;
     }
   }
   return best;
+}
+
+/** Demi-boîte d'un ennemi, en pixels monde : ses pieds. */
+export function foeBox(foe: Foe): { halfW: number; halfH: number } {
+  return foe.kind === 'mutant' ? ENEMIES[foe.proto] : WILDLIFE[foe.proto];
 }
 
 /** Fabrique une flèche partant de (x, y) vers la cible. L'id est donné par le monde. */
@@ -66,10 +74,10 @@ export function shoot(id: number, weapon: WeaponId, x: number, y: number, target
 }
 
 /**
- * Un tick de flèche : avance, et renvoie le mutant touché s'il y en a un.
+ * Un tick de flèche : avance, et renvoie l'ennemi touché s'il y en a un.
  * `null` si elle vole encore ; `ttl` à zéro si elle s'est perdue.
  */
-export function stepArrow(arrow: Arrow, mutants: Iterable<Mutant>): Mutant | null {
+export function stepArrow<T extends Foe>(arrow: Arrow, foes: Iterable<T>): T | null {
   arrow.prevX = arrow.x;
   arrow.prevY = arrow.y;
   arrow.x += arrow.vx;
@@ -85,32 +93,28 @@ export function stepArrow(arrow: Arrow, mutants: Iterable<Mutant>): Mutant | nul
    */
   const length = Math.hypot(arrow.vx, arrow.vy);
   const samples = Math.max(1, Math.ceil(length / SWEEP_STEP));
-  const list = [...mutants];
+  const list = [...foes];
 
   for (let i = 1; i <= samples; i += 1) {
     const x = arrow.prevX + (arrow.vx * i) / samples;
     const y = arrow.prevY + (arrow.vy * i) / samples;
 
-    for (const mutant of list) {
-      if (touches(mutant, x, y)) return mutant;
+    for (const foe of list) {
+      if (touches(foe, x, y)) return foe;
     }
   }
   return null;
 }
 
-/** Pas d'échantillonnage du trajet d'une flèche, en pixels : moins que la plus petite dimension d'un mutant. */
+/** Pas d'échantillonnage du trajet d'une flèche, en pixels : moins que la plus petite dimension d'une cible. */
 const SWEEP_STEP = 6;
 
 /**
- * La boîte du mutant est basse (ses pieds) ; la flèche vise son corps,
+ * La boîte d'un ennemi est basse (ses pieds) ; la flèche vise son corps,
  * qu'on prend deux fois plus haut que la boîte.
  */
-function touches(mutant: Mutant, x: number, y: number): boolean {
-  const proto = ENEMIES[mutant.proto];
+function touches(foe: Foe, x: number, y: number): boolean {
+  const box = foeBox(foe);
 
-  return (
-    Math.abs(x - mutant.x) <= proto.halfW + 2 &&
-    y >= mutant.y - proto.halfH * 3 &&
-    y <= mutant.y + proto.halfH
-  );
+  return Math.abs(x - foe.x) <= box.halfW + 2 && y >= foe.y - box.halfH * 3 && y <= foe.y + box.halfH;
 }
