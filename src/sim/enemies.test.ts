@@ -422,6 +422,13 @@ describe('mise en scène des vagues', () => {
     world.events.on('lootPicked', ({ id }) => picked.push(id));
     world.player.x = dropped[0]!.x;
     world.player.y = dropped[0]!.y;
+
+    // La récolte de proximité ne doit pas se mêler au butin : pas d'arbre ni de rocher autour.
+    const spot = worldToTile(world.player.x, world.player.y);
+
+    for (let ty = spot.ty - 3; ty <= spot.ty + 3; ty += 1) {
+      for (let tx = spot.tx - 3; tx <= spot.tx + 3; tx += 1) world.resources.clear(tx, ty);
+    }
     for (let i = 0; i < 20; i += 1) world.tick();
 
     expect(picked.sort()).toEqual(dropped.map((loot) => loot.id).sort());
@@ -737,6 +744,13 @@ describe('nurserie', () => {
 
   it('prend la nourriture au contact d’Adam, et elle seule, dans la limite de son coffre', () => {
     const world = new World(7);
+    const home = worldToTile(world.player.x, world.player.y);
+
+    // La récolte de proximité remplirait le sac pendant le chantier : pas d'arbre ni de rocher autour.
+    for (let ty = home.ty - 10; ty <= home.ty + 10; ty += 1) {
+      for (let tx = home.tx - 10; tx <= home.tx + 10; tx += 1) world.resources.clear(tx, ty);
+    }
+
     const nursery = build(world, 'nursery');
     const rejected: string[] = [];
 

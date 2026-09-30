@@ -1,7 +1,7 @@
 /**
  * Où trouver une ressource : le gisement le plus proche d'un point.
  *
- * Le conseil dit « foncez dans un rocher rose » ; encore faut-il savoir où
+ * Le conseil dit « approchez-vous d'un rocher rose » ; encore faut-il savoir où
  * il y en a. Cette requête le lit dans la seed, comme la carte, en tenant
  * compte de ce qu'Adam a déjà vidé.
  *

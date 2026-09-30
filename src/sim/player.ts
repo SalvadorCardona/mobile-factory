@@ -7,16 +7,16 @@
  *
  * Adam est une boîte, pas un point : une AABB de 20 × 14 px centrée sur sa
  * position, qui correspond à ses pieds. Un point traverserait visuellement
- * les rochers avant d'être bloqué ; une boîte s'arrête au contact, et c'est
- * ce contact qui récolte.
+ * les rochers avant d'être bloqué ; une boîte s'arrête au contact. Sous un
+ * arbre, seul le tronc l'arrête : il passe sous le feuillage.
  */
 
 import { TILE_SIZE } from '../core/grid.ts';
-import { boxOverlaps, facingOf, moveBox, type SolidTest } from './motion.ts';
+import { boxOverlaps, facingOf, moveBoxAmong, type ObstacleTest } from './motion.ts';
 import { Store } from './store.ts';
 import type { Contact, Player } from './types.ts';
 
-export type { SolidTest } from './motion.ts';
+export type { ObstacleTest, SolidTest } from './motion.ts';
 
 /** Vitesse en tuiles par seconde à pleine amplitude du joystick. */
 export const PLAYER_SPEED_TILES = 4.5;
@@ -67,11 +67,11 @@ export function stepPlayer(
   player: Player,
   axisX: number,
   axisY: number,
-  isSolid: SolidTest,
+  obstacleAt: ObstacleTest,
   stepSeconds: number,
 ): Contact | null {
   const speed = PLAYER_SPEED_TILES * TILE_SIZE * stepSeconds;
-  const contact = moveBox(player, PLAYER_BOX, axisX * speed, axisY * speed, isSolid);
+  const contact = moveBoxAmong(player, PLAYER_BOX, axisX * speed, axisY * speed, obstacleAt);
 
   player.moving = player.x !== player.prevX || player.y !== player.prevY;
 

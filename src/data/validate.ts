@@ -177,8 +177,8 @@ export function validatePrototypes(): string[] {
     if (!(resource.item in ITEMS)) {
       errors.push(`RESOURCES.${id} : objet inconnu « ${resource.item} »`);
     }
-    if (resource.amount <= 0 || resource.harvestTicks <= 0) {
-      errors.push(`RESOURCES.${id} : quantité ou cadence nulle`);
+    if (resource.amount <= 0) {
+      errors.push(`RESOURCES.${id} : quantité nulle`);
     }
     if ((resource.sprites as readonly string[]).length === 0) {
       errors.push(`RESOURCES.${id} : aucun sprite`);

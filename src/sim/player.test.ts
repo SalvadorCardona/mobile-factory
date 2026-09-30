@@ -1,17 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_SIZE } from '../core/grid.ts';
+import { FULL_TILE } from './motion.ts';
 import { PLAYER_HALF_W, createPlayer, playerOverlaps, stepPlayer } from './player.ts';
 
 const STEP = 1 / 20;
 
 /** Un monde où seule la colonne de tuiles `tx = 2` est solide. */
-const wall = (tx: number): boolean => tx === 2;
+const wall = (tx: number): typeof FULL_TILE | null => (tx === 2 ? FULL_TILE : null);
 
 describe('stepPlayer', () => {
   it('avance librement quand rien ne bloque', () => {
     const player = createPlayer(16, 16);
 
-    expect(stepPlayer(player, 1, 0, () => false, STEP)).toBeNull();
+    expect(stepPlayer(player, 1, 0, () => null, STEP)).toBeNull();
     expect(player.x).toBeGreaterThan(16);
     expect(player.prevX).toBe(16);
     expect(player.moving).toBe(true);
@@ -40,13 +41,24 @@ describe('stepPlayer', () => {
     expect(player.moving).toBe(true);
   });
 
+  it('contourne un tronc au lieu de s’y arrêter', () => {
+    const trunk = { left: 11, top: 20, right: 21, bottom: 30, glide: true };
+    const tree = (tx: number, ty: number): typeof trunk | null => (tx === 1 && ty === 0 ? trunk : null);
+    // Pile en face du tronc, poussé vers l'est.
+    const player = createPlayer(TILE_SIZE - PLAYER_HALF_W, 25);
+
+    for (let i = 0; i < 20; i += 1) stepPlayer(player, 1, 0, tree, STEP);
+
+    expect(player.x).toBeGreaterThan(2 * TILE_SIZE);
+  });
+
   it('garde la direction du dernier mouvement à l’arrêt', () => {
     const player = createPlayer(16, 16);
 
-    stepPlayer(player, 0, -1, () => false, STEP);
+    stepPlayer(player, 0, -1, () => null, STEP);
     expect(player.facing).toBe('up');
 
-    stepPlayer(player, 0, 0, () => false, STEP);
+    stepPlayer(player, 0, 0, () => null, STEP);
     expect(player.facing).toBe('up');
     expect(player.moving).toBe(false);
   });

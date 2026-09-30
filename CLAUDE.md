@@ -14,14 +14,16 @@ survivants. Le héros est **Adam** ; **Ève** le rejoindra ; des **humains
 mutants radioactifs** rôdent. La partie commence sur le chantier de la
 **mairie**, qu'Adam doit remplir de bois et de pierre.
 
-**Mécanique centrale** — Adam n'a pas de bouton d'action. Il **heurte** les
-choses : un arbre ou un rocher heurté se récolte (bois, fer, charbon,
-pierre) ; un chantier heurté reçoit ce qu'il attend ; une foreuse ou une
-ferme heurtée vide son coffre dans le sac (bouton « Prendre » dans sa
-fenêtre), ce qui la relance si elle était bloquée. Les ressources et les
-bâtiments sont solides, on ne les traverse pas. Un tap sur un chantier ouvre
-sa fenêtre : « Transférer » y vide d'un coup ce qu'il attend — le sac
-d'abord, puis le stock de la ville.
+**Mécanique centrale** — Adam n'a pas de bouton d'action. Il récolte **de
+proximité** : toutes les 10 ticks, les arbres et rochers à portée (quatre au
+plus, du plus proche au plus loin) lâchent une unité (bois, fer, charbon,
+pierre), qu'il marche ou non. Il **heurte** le reste : un chantier heurté
+reçoit ce qu'il attend ; une foreuse ou une ferme heurtée vide son coffre
+dans le sac (bouton « Prendre » dans sa fenêtre), ce qui la relance si elle
+était bloquée. Rochers et bâtiments sont solides ; d'un arbre, seul le tronc
+l'arrête et il glisse autour — une forêt n'est jamais un mur. Un tap sur un
+chantier ouvre sa fenêtre : « Transférer » y vide d'un coup ce qu'il attend
+— le sac d'abord, puis le stock de la ville.
 **Le dernier objet livré achève le chantier**, sans bouton de validation
 (poussière, rebond, son, « Mairie bâtie ! » qui flotte).
 Une nurserie ou une forge heurtée (ou « Transférer le sac ») reçoit ce que
@@ -225,7 +227,8 @@ Rien ne joue avant un geste du joueur.
   du joueur (`sim/resources.ts`, entités) sont de l'état. Le départ aussi se
   tire de la seed, avec son foyer : bosquet, filon de pierre (≤ 12 tuiles) et
   de fer (≤ 20) à portée de pas d'Adam — `terrain.test.ts` le vérifie sur
-  1 000 seeds.
+  1 000 seeds — et une clairière qui ouvre sur au moins 400 tuiles (l'eau et
+  les rochers ferment, pas les arbres).
 - Sauvegarde automatique : `sim/save.ts` sérialise le monde (format versionné
   `{ version, savedAt, state }`, validé à la lecture) ; `storage/localSave.ts`
   est le seul à toucher au `localStorage` (clé `mobile-factory:save`), et tout

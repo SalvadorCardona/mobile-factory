@@ -91,6 +91,9 @@ function playedWorld(): World {
   const nursery = [...world.entities.values()].find((entity) => entity.kind === 'nursery');
 
   if (!nursery) throw new Error('pas de nurserie');
+
+  // Adam passe entre les arbres et se promène loin d'elle : elle doit tenir sans lui.
+  nursery.hp = 1_000_000;
   world.player.inventory.add('food', 4);
   world.push({ type: 'supplyBuilding', id: nursery.id });
   world.tick();

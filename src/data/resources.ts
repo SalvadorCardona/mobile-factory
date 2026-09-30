@@ -1,12 +1,13 @@
 /**
  * Ressources de surface — contenu pur.
  *
- * Une ressource est un obstacle : un arbre, un rocher. On ne la traverse pas,
- * on la **heurte**, et chaque contact prolongé en arrache une unité qui va
- * dans le sac du joueur. Du bois pour un arbre, du minerai pour un rocher.
+ * Une ressource se récolte **de proximité** : Adam passe à côté, et chaque
+ * passage de récolte en arrache une unité qui va dans son sac. Du bois pour
+ * un arbre, du minerai pour un rocher.
  *
- * `amount` est ce qu'une tuile contient avant de disparaître ; `harvestTicks`
- * le temps de contact entre deux unités (20 ticks = 1 s).
+ * `amount` est ce qu'une tuile contient avant de disparaître ; `hitbox` ce
+ * qui arrête Adam : toute la tuile pour un rocher, le seul tronc pour un
+ * arbre — il passe sous le feuillage, une forêt n'est jamais un mur.
  */
 
 import type { ItemId } from './items.ts';
@@ -17,8 +18,8 @@ export interface ResourceProto {
   item: ItemId;
   /** Unités par tuile. */
   amount: number;
-  /** Ticks de contact entre deux unités. */
-  harvestTicks: number;
+  /** Ce qui arrête Adam : la tuile entière, ou seulement le tronc. */
+  hitbox: 'tile' | 'trunk';
   /**
    * Sprites possibles, tirés par tuile depuis la seed : une forêt mêle les
    * essences. Répéter un sprite le rend plus fréquent.
@@ -32,13 +33,13 @@ export const RESOURCES = {
   tree: {
     item: 'wood',
     amount: 5,
-    harvestTicks: 8,
+    hitbox: 'trunk',
     sprites: ['tree', 'tree', 'tree', 'treePine', 'treePine', 'treeDead'],
     verb: 'Couper',
   },
-  ironRock: { item: 'ironOre', amount: 6, harvestTicks: 10, sprites: ['rockIron'], verb: 'Extraire' },
-  coalRock: { item: 'coal', amount: 6, harvestTicks: 10, sprites: ['rockCoal'], verb: 'Extraire' },
-  stoneRock: { item: 'stone', amount: 8, harvestTicks: 8, sprites: ['rockStone'], verb: 'Casser' },
+  ironRock: { item: 'ironOre', amount: 6, hitbox: 'tile', sprites: ['rockIron'], verb: 'Extraire' },
+  coalRock: { item: 'coal', amount: 6, hitbox: 'tile', sprites: ['rockCoal'], verb: 'Extraire' },
+  stoneRock: { item: 'stone', amount: 8, hitbox: 'tile', sprites: ['rockStone'], verb: 'Casser' },
 } as const satisfies Record<string, ResourceProto>;
 
 export type ResourceId = keyof typeof RESOURCES;
