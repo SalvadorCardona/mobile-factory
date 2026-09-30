@@ -8,7 +8,7 @@
  * Deux familles :
  * - les **entités** posées sur la grille — chantiers et bâtiments — qui
  *   dorment entre deux réveils du scheduler ;
- * - les **mobiles** — mutants, bêtes, flèches, enfants, Ève, ouvriers — qui bougent à chaque tick.
+ * - les **mobiles** — mutants, bêtes, flèches, enfants, Ève, ouvriers, butin — qui bougent à chaque tick.
  *   Ils sont peu nombreux, et c'est ce qui rend le tick par mobile acceptable.
  */
 
@@ -150,6 +150,8 @@ export interface Mutant extends Moving {
   hp: number;
   /** Ticks avant le prochain coup sur le bâtiment heurté. */
   attackCooldown: number;
+  /** Ticks restants à sortir de la flaque : immobile, et hors d'atteinte des arcs. */
+  emerge: number;
 }
 
 /**
@@ -269,4 +271,12 @@ export interface Worker extends Moving {
   searchTicks: number;
 }
 
-export type Mobile = Mutant | Beast | Arrow | Kid | Eve | Worker;
+/** Du butin lâché par un mutant : il attend au sol qu'Adam marche dessus. */
+export interface Pickup extends Moving {
+  kind: 'pickup';
+  item: ItemId;
+  /** Ticks avant qu'il ne disparaisse, oublié. */
+  ttl: number;
+}
+
+export type Mobile = Mutant | Beast | Arrow | Kid | Eve | Worker | Pickup;

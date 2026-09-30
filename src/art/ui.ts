@@ -143,6 +143,17 @@ export const UI_ICONS = {
     circle(15.5, 13.5, 1.6, paper.base),
     line(9, 17.5, 15, 17.5, ink.base),
   ),
+  /**
+   * La flèche de l'annonce d'une vague, pointée vers la droite : le HUD la
+   * tourne vers le point d'où surgissent les mutants. Blanche sur le corail
+   * de l'alerte, sa face avant dessous.
+   */
+  direction: svg(
+    S,
+    S,
+    polygon([4, 10.5, 13, 10.5, 13, 5.5, 21, 13, 13, 20.5, 13, 15.5, 4, 15.5], PALETTE.paper.shade),
+    polygon([4, 9, 13, 9, 13, 4, 21, 11.5, 13, 19, 13, 14, 4, 14], PALETTE.paper.base),
+  ),
   /** Le joystick : un disque et son bouton, pour « glissez le pouce ». */
   move: svg(S, S, circle(12, 12, 10, cyan.light), circle(12.8, 12.8, 5.5, cyan.shade), circle(12, 12, 5, cyan.base)),
   /** La flèche du bouton « Jouer ». */

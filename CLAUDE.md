@@ -37,7 +37,12 @@ rejouent depuis les jobs au chargement.
 
 **Menace** — dès que la mairie est debout, des **mutants** arrivent par
 vagues (`src/data/enemies.ts`) et marchent droit sur elle ; ils traversent
-tout sauf le bâti, qu'ils cassent. L'arc d'Adam et la tour de guet
+tout sauf le bâti, qu'ils cassent. Une vague s'annonce trois secondes avant
+(bandeau avec sa direction, cor grave, léger recul de caméra vers elle),
+surgit dans le champ d'une flaque vert fluo — un mutant qui émerge
+(`WAVES.emergeTicks`) n'est pas visable — et finit sur « Vague repoussée ! » ;
+chaque mutant abattu lâche un butin (`MUTANT_LOOT`) qu'Adam ramasse en
+marchant dessus. L'arc d'Adam et la tour de guet
 (`src/data/weapons.ts`) tirent seuls. La mairie à zéro = partie perdue.
 La **nurserie** fait naître un enfant toutes les dix minutes.
 

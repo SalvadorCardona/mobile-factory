@@ -21,6 +21,9 @@
  * - les boutons pause et son, et le **sac** d'Adam, à droite de la quête ;
  * - des **bulles** empilées pour les événements, et des gains qui flottent
  *   au-dessus de la tête d'Adam ;
+ * - le **bandeau** des vagues : « Vague 4 — 2 mutants arrivent par l'est ! »
+ *   trois secondes avant, avec une flèche tournée vers leur point
+ *   d'apparition, puis « Vague 4 repoussée ! » quand le dernier tombe ;
  * - l'écran de **défaite**, avec le bilan de la partie ;
  * - les statistiques de debug, seulement avec `?debug` (ou la touche `²`/`` ` ``).
  */
@@ -33,6 +36,7 @@ import { QUESTS, TOOLS, type QuestReward } from '../data/quests.ts';
 import type { AtlasStats } from '../render/spriteLibrary.ts';
 import type { WaterStats } from '../render/waterLayer.ts';
 import type { PlacementRejection } from '../sim/commands.ts';
+import type { Compass } from '../sim/enemies.ts';
 import type { EntityId } from '../sim/types.ts';
 import { currentQuest, questProgress } from '../sim/eve.ts';
 import { TICKS_PER_SECOND, siteMissing, type World } from '../sim/world.ts';
@@ -69,6 +73,22 @@ const HINT_FOLD_TICKS = 5 * TICKS_PER_SECOND;
 /** Sous ce seuil, le compte à rebours de la vague passe au rouge. */
 const WAVE_WARNING_SECONDS = 10;
 
+/** D'où vient une vague, dit comme on le dirait. */
+const FROM_LABELS: Record<Compass, string> = {
+  north: 'par le nord',
+  northEast: 'par le nord-est',
+  east: 'par l’est',
+  southEast: 'par le sud-est',
+  south: 'par le sud',
+  southWest: 'par le sud-ouest',
+  west: 'par l’ouest',
+  northWest: 'par le nord-ouest',
+};
+
+/** Le bandeau d'une vague reste le temps de l'annonce, et s'efface quand les flaques bouillonnent ; celui de la victoire, un peu moins. */
+const BANNER_WAVE_MS = 4200;
+const BANNER_CLEARED_MS = 3200;
+
 type ToastTone = 'info' | 'good' | 'bad';
 
 /** Projette un point monde en pixels écran — fourni par le renderer, via `main.ts`. */
@@ -90,6 +110,15 @@ export class Hud {
   private readonly stats: HTMLElement;
   private readonly toasts: HTMLElement;
   private readonly countdown: HTMLElement;
+  private readonly banner: HTMLElement;
+  private readonly bannerArrow: HTMLElement;
+  private readonly bannerTitle: HTMLElement;
+  private readonly bannerText: HTMLElement;
+  /** Le point monde que la flèche du bandeau montre ; `null` sans flèche. */
+  private bannerTarget: { x: number; y: number } | null = null;
+  private bannerTimer = 0;
+  /** Numéro de la vague déjà annoncée : le bandeau ne repart pas à chaque seconde du compte à rebours. */
+  private announced = 0;
   private readonly defeat: HTMLElement;
   private readonly defeatStats: HTMLElement;
   private readonly speech: HTMLElement;
@@ -167,6 +196,19 @@ export class Hud {
     this.speech.hidden = true;
     this.speech.setAttribute('aria-live', 'polite');
 
+    this.banner = element('div', 'hud-banner');
+    this.banner.hidden = true;
+    this.banner.setAttribute('role', 'status');
+    this.bannerArrow = element('div', 'hud-banner-arrow');
+    this.bannerArrow.append(uiIcon('direction', 26));
+
+    const bannerBody = element('div', 'hud-banner-body');
+
+    this.bannerTitle = element('div', 'hud-banner-title');
+    this.bannerText = element('div', 'hud-banner-text');
+    bannerBody.append(this.bannerTitle, this.bannerText);
+    this.banner.append(this.bannerArrow, bannerBody);
+
     const buttons = element('div', 'hud-buttons');
 
     this.buttons = buttons;
@@ -218,6 +260,7 @@ export class Hud {
       this.top,
       this.countdown,
       this.speech,
+      this.banner,
       this.toasts,
       this.floats,
       this.stats,
@@ -251,10 +294,16 @@ export class Hud {
 
       if (entity) this.notify(`${BUILDINGS[entity.proto].label} : construction terminée`, 'good');
     });
-    world.events.on('waveCountdown', ({ seconds }) => this.showCountdown(String(seconds)));
-    world.events.on('waveStarted', ({ wave, count }) =>
-      this.notify(`Vague ${wave} — ${count} mutant${count > 1 ? 's' : ''} en approche !`, 'bad'),
+    world.events.on('waveCountdown', ({ seconds, wave, count, from, x, y }) => {
+      this.showCountdown(String(seconds));
+      this.announce(wave, count, from, { x, y });
+    });
+    // Une vague qui n'a pas eu son compte à rebours (partie reprise pile avant) s'annonce quand même.
+    world.events.on('waveStarted', ({ wave, count, from, x, y }) => this.announce(wave, count, from, { x, y }));
+    world.events.on('waveCleared', ({ wave }) =>
+      this.showBanner('cleared', `Vague ${wave} repoussée !`, 'Ramassez ce que les mutants ont lâché', null, BANNER_CLEARED_MS),
     );
+    world.events.on('lootPicked', ({ item }) => this.float(item, 1));
     world.events.on('buildingDestroyed', ({ proto }) => this.notify(`${BUILDINGS[proto].label} détruite`, 'bad'));
     world.events.on('childBorn', () => this.notify('Un enfant est né à la nurserie !', 'good'));
     world.events.on('townHallDestroyed', () => this.showDefeat());
@@ -402,6 +451,55 @@ export class Hud {
     }, TOAST_MS);
   }
 
+  /** Le bandeau d'une vague, une seule fois par vague. */
+  private announce(wave: number, count: number, from: Compass, origin: { x: number; y: number }): void {
+    if (wave === this.announced) return;
+    this.announced = wave;
+
+    const plural = count > 1;
+
+    this.showBanner(
+      'wave',
+      `Vague ${wave}`,
+      `${count} mutant${plural ? 's' : ''} arrive${plural ? 'nt' : ''} ${FROM_LABELS[from]} !`,
+      origin,
+      BANNER_WAVE_MS,
+    );
+  }
+
+  /** Le bandeau, au-dessus du compte à rebours ; sa flèche suit `target` tant qu'il est là. */
+  private showBanner(tone: 'wave' | 'cleared', title: string, body: string, target: { x: number; y: number } | null, ms: number): void {
+    this.banner.dataset['tone'] = tone;
+    this.bannerTitle.textContent = title;
+    this.bannerText.textContent = body;
+    this.bannerTarget = target;
+    this.bannerArrow.hidden = target === null;
+    this.banner.hidden = false;
+    this.aimBanner();
+
+    // Relance l'animation d'entrée.
+    this.banner.style.animation = 'none';
+    void this.banner.offsetWidth;
+    this.banner.style.animation = '';
+
+    window.clearTimeout(this.bannerTimer);
+    this.bannerTimer = window.setTimeout(() => {
+      this.banner.hidden = true;
+      this.bannerTarget = null;
+    }, ms);
+  }
+
+  /** Tourne la flèche du bandeau d'Adam vers le point d'apparition, à l'écran. */
+  private aimBanner(): void {
+    if (!this.bannerTarget) return;
+
+    const { player } = this.world;
+    const from = this.project(player.x, player.y);
+    const to = this.project(this.bannerTarget.x, this.bannerTarget.y);
+
+    this.bannerArrow.style.transform = `rotate(${Math.atan2(to.y - from.y, to.x - from.x).toFixed(3)}rad)`;
+  }
+
   /** Un chiffre géant au centre, qui frappe et s'efface — le rythme de l'alarme. */
   private showCountdown(label: string): void {
     this.countdown.textContent = label;
@@ -431,6 +529,7 @@ export class Hud {
     this.updateBag();
     this.updateSpeech();
     this.root.dataset['danger'] = String(this.mutantCount() > 0 && !this.world.defeated);
+    if (!this.banner.hidden) this.aimBanner();
 
     if (this.debug) this.updateStats(fps, chunks, atlas, water);
   }

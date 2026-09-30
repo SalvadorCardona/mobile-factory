@@ -50,8 +50,9 @@ describe('sprites', () => {
   });
 
   it('réserve le vert fluo aux mutants', () => {
-    // Seuls ont le droit de le porter : le mutant, son pictogramme, et la bannière, où il en passe un.
-    const mutants = (name: string): boolean => name.startsWith('mutant.') || name === 'ui.mutant' || name === 'brand.banner';
+    // Seuls ont le droit de le porter : le mutant, la flaque d'où il sort, son pictogramme, et la bannière, où il en passe un.
+    const mutants = (name: string): boolean =>
+      name.startsWith('mutant.') || name.startsWith('puddle.') || name === 'ui.mutant' || name === 'brand.banner';
 
     for (const [name, svg] of everySvg()) {
       if (mutants(name)) continue;

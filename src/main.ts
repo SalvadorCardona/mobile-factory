@@ -78,6 +78,17 @@ const LOAD_NOTICES: Partial<Record<LoadResult['status'], string>> = {
   corrupt: 'Sauvegarde illisible : nouvelle partie.',
 };
 
+/** Le compte à rebours d'une vague commence à tant de secondes : c'est là qu'elle s'annonce. */
+const WAVE_ANNOUNCE_SECONDS = 3;
+
+/**
+ * Le recul de la caméra à l'annonce d'une vague : léger, et tenu le temps de
+ * l'annonce et de la sortie des flaques — assez pour voir d'où elle vient,
+ * pas assez pour gêner la récolte.
+ */
+const WAVE_ZOOM = 0.82;
+const WAVE_ZOOM_MS = 5200;
+
 /** Les gestes qui comptent comme une activation utilisateur pour l'audio. */
 const GESTURES = ['pointerdown', 'pointerup', 'keydown'] as const;
 
@@ -357,8 +368,16 @@ function wireAudio(world: World, audio: AudioEngine, hud: Hud): void {
     if (hp > 0) audio.play('thud');
   });
   world.events.on('buildingDestroyed', () => audio.play('collapse'));
-  world.events.on('waveCountdown', () => audio.play('countdown'));
-  world.events.on('waveStarted', () => audio.play('alarm'));
+  world.events.on('waveCountdown', ({ seconds }) => {
+    if (seconds === WAVE_ANNOUNCE_SECONDS) audio.play('horn');
+    audio.play('countdown');
+  });
+  world.events.on('waveStarted', () => {
+    audio.play('alarm');
+    audio.play('gloop');
+  });
+  world.events.on('waveCleared', () => audio.play('victory'));
+  world.events.on('lootPicked', () => audio.play('pickup'));
   world.events.on('childBorn', () => audio.play('baby'));
   world.events.on('eveArrived', () => audio.play('build'));
   world.events.on('questCompleted', () => audio.play('build'));
@@ -451,10 +470,32 @@ function wireParticles(world: World, renderer: GameRenderer): void {
   world.events.on('buildingDestroyed', ({ tx, ty }) =>
     particles.burst((tx + 1) * TILE_SIZE, (ty + 1) * TILE_SIZE, RUBBLE_COLORS, 16, 0.14),
   );
+  world.events.on('lootDropped', ({ x, y }) => particles.burst(x, y - 6, CELEBRATION_COLORS, 5, 0.08));
+  world.events.on('lootPicked', ({ item, x, y }) => particles.burst(x, y - 6, HARVEST_COLORS[item], 6, 0.1));
+  world.events.on('waveCleared', () => {
+    const hall = world.entities.get(world.townHallId);
+
+    if (!hall) return;
+
+    // Des confettis sur le toit de la mairie : elle a tenu.
+    for (let i = 0; i <= hall.width; i += 1) {
+      particles.burst((hall.tx + i) * TILE_SIZE, hall.ty * TILE_SIZE, CELEBRATION_COLORS, 8, 0.16);
+    }
+  });
 }
 
-/** La caméra encaisse les coups : un peu pour un mur, beaucoup pour la mairie. */
+/**
+ * La caméra encaisse les coups : un peu pour un mur, beaucoup pour la mairie.
+ * Et elle recule un peu quand une vague s'annonce, le temps qu'elle sorte de
+ * terre, pour qu'on la voie arriver — puis elle revient d'elle-même.
+ */
 function wireShake(world: World, renderer: GameRenderer): void {
+  world.events.on('waveCountdown', ({ seconds, x, y }) => {
+    if (seconds === WAVE_ANNOUNCE_SECONDS) renderer.zoomOut(WAVE_ZOOM, WAVE_ZOOM_MS, { x, y });
+  });
+  world.events.on('waveStarted', ({ x, y }) =>
+    renderer.zoomOut(WAVE_ZOOM, WAVE_ZOOM_MS - WAVE_ANNOUNCE_SECONDS * 1000, { x, y }),
+  );
   world.events.on('buildingDamaged', ({ id }) => renderer.shake(id === world.townHallId ? 0.28 : 0.14));
   world.events.on('buildingDestroyed', () => renderer.shake(0.6));
   world.events.on('waveStarted', () => renderer.shake(0.3));

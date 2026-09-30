@@ -31,7 +31,7 @@ export const ENEMIES = {
   mutant: {
     label: 'Mutant radioactif',
     hp: 3,
-    speed: 1.7,
+    speed: 1.2,
     damage: 4,
     attackTicks: 20,
     sprite: 'mutant',
@@ -49,6 +49,13 @@ export type EnemyId = keyof typeof ENEMIES;
  * récolter et à livrer en paix. Une fois le toit posé, la première vague part
  * après `firstDelay`, puis une toutes les `interval`. L'effectif grossit d'un
  * mutant toutes les `growEvery` vagues, jusqu'à `maxSize`.
+ *
+ * Une vague se voit : elle vient d'**une** direction, tirée dès qu'elle est
+ * planifiée pour que l'annonce la donne, et elle surgit **dans le champ**
+ * d'un téléphone tenu droit quand Adam est à la mairie — assez près pour que
+ * la flaque se voie, pas à vingt tuiles. Chaque mutant sort de sa flaque en
+ * `emergeTicks` : ni les arcs ni les tours ne le visent tant qu'il n'est pas
+ * debout, si bien qu'on le voit toujours avant de le voir tomber.
  */
 export const WAVES = {
   firstDelay: 20 * 60,
@@ -56,9 +63,30 @@ export const WAVES = {
   growEvery: 2,
   maxSize: 8,
   /** Distance d'apparition depuis le centre de la mairie, en tuiles. */
-  minDistance: 16,
-  maxDistance: 20,
+  minDistance: 6,
+  maxDistance: 7.5,
+  /** Écart maximal, en radians, entre un mutant et la direction de sa vague. */
+  spread: 0.45,
+  /** Ticks passés à sortir de la flaque, immobile et hors d'atteinte. */
+  emergeTicks: 40,
+  /** Retard de chaque mutant sur le précédent : une vague sort l'un après l'autre. */
+  emergeStagger: 6,
 } as const;
+
+/**
+ * Le butin des mutants : chacun lâche un objet là où il tombe, et Adam le
+ * ramasse en marchant dessus. Un seul objet, pioché dans des matériaux que
+ * la colonie connaît déjà — de quoi donner une raison de revenir à la mairie
+ * sans remplacer la récolte.
+ */
+export const MUTANT_LOOT = {
+  /** Ce qu'un mutant peut lâcher, à chances égales : ferraille, conserve, charbon. */
+  items: ['ironOre', 'food', 'coal'],
+  /** Ticks avant qu'un butin oublié ne disparaisse. */
+  lifetimeTicks: 20 * 180,
+  /** Distance, en tuiles, à laquelle Adam le ramasse. */
+  pickupRadius: 0.8,
+} as const satisfies { items: readonly ItemId[]; lifetimeTicks: number; pickupRadius: number };
 
 /** Effectif de la vague numéro `wave` (la première vaut 1). */
 export function waveSize(wave: number): number {

@@ -684,6 +684,79 @@ button {
   }
 }
 
+/* ------------------------------------------------------- bandeau de vague */
+
+/*
+ * L'annonce d'une vague : une carte blanche en capsule, sa face avant, et
+ * une pastille corail dont la flèche montre d'où viennent les mutants. La
+ * victoire reprend la même carte, en menthe, sans flèche.
+ */
+.hud-banner {
+  position: absolute;
+  /* Sous Adam, au-dessus des bulles : la quête, les boutons et le sac restent lisibles. */
+  top: 64%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: max-content;
+  max-width: calc(100% - 24px);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px 10px 10px;
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow: var(--face);
+  pointer-events: none;
+  animation: banner-in 420ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+.hud-banner[hidden] {
+  display: none;
+}
+
+.hud-banner-arrow {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--coral);
+  box-shadow: inset -3px -4px 0 var(--coral-shade);
+}
+
+.hud-banner-arrow[hidden] {
+  display: none;
+}
+
+.hud-banner-title {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--danger);
+}
+
+.hud-banner-text {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.hud-banner[data-tone='cleared'] {
+  padding-left: 20px;
+}
+
+.hud-banner[data-tone='cleared'] .hud-banner-title {
+  color: var(--good);
+}
+
+@keyframes banner-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.6);
+  }
+}
+
 /* -------------------------------------------------------- gains flottants */
 
 /* La bulle de récolte : une capsule blanche, l'icône et le gain. */

@@ -32,6 +32,8 @@ export function nearestFoe<T extends Foe>(foes: Iterable<T>, x: number, y: numbe
   let bestSq = limit * limit;
 
   for (const foe of foes) {
+    if (!isTargetable(foe)) continue;
+
     const sq = distanceSq(x, y, foe.x, foe.y);
 
     if (sq < bestSq || (best === null && sq === bestSq)) {
@@ -40,6 +42,11 @@ export function nearestFoe<T extends Foe>(foes: Iterable<T>, x: number, y: numbe
     }
   }
   return best;
+}
+
+/** Un mutant qui sort encore de sa flaque ne se vise pas, et les flèches le traversent. */
+export function isTargetable(foe: Foe): boolean {
+  return foe.kind !== 'mutant' || foe.emerge <= 0;
 }
 
 /** Demi-boîte d'un ennemi, en pixels monde : ses pieds. */
@@ -100,7 +107,7 @@ export function stepArrow<T extends Foe>(arrow: Arrow, foes: Iterable<T>): T | n
     const y = arrow.prevY + (arrow.vy * i) / samples;
 
     for (const foe of list) {
-      if (touches(foe, x, y)) return foe;
+      if (isTargetable(foe) && touches(foe, x, y)) return foe;
     }
   }
   return null;

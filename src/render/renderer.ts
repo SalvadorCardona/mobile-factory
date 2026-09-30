@@ -148,6 +148,11 @@ export class GameRenderer {
     this.camera.peek(x, y);
   }
 
+  /** Recule la caméra un instant : cf. `Camera.zoomOut`. */
+  public zoomOut(zoom: number, holdMs: number, focus: { x: number; y: number } | null = null): void {
+    this.camera.zoomOut(zoom, holdMs, focus);
+  }
+
   /** Secoue la caméra : 0.2 pour un coup, 0.6 pour un effondrement. */
   public shake(amount: number): void {
     this.camera.shake(amount);

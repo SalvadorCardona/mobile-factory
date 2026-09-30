@@ -28,7 +28,7 @@ import { Emitter } from '../core/events.ts';
 import { CHUNK_TILES, TILE_SIZE, coordKey, distanceSq, floorDiv, type TileCoord } from '../core/grid.ts';
 import { mulberry32, type StatefulRng } from '../core/rng.ts';
 import { BUILDINGS, NURSERY_BIRTH_TICKS, type BuildingId } from '../data/buildings.ts';
-import { ENEMIES, WAVES, WILDLIFE, WILDLIFE_SPAWN, waveSize } from '../data/enemies.ts';
+import { ENEMIES, MUTANT_LOOT, WAVES, WILDLIFE, WILDLIFE_SPAWN, waveSize } from '../data/enemies.ts';
 import { EVE } from '../data/eve.ts';
 import type { ItemId } from '../data/items.ts';
 import type { QuestId } from '../data/quests.ts';
@@ -40,7 +40,7 @@ import { ChunkIndex } from './chunk.ts';
 import { nearestFoe, shoot, stepArrow } from './combat.ts';
 import type { Command, CommandLogEntry, PlacementRejection, SiteRejection, TakeRejection } from './commands.ts';
 import type { WildlifeId } from '../data/enemies.ts';
-import { spawnPoint, stepMutant } from './enemies.ts';
+import { compassOf, spawnPoint, stepMutant, type Compass } from './enemies.ts';
 import { createEve, currentQuest, harvestTicksWithTools, isUnlocked, mostDamaged, questProgress, rideHome, walkTo } from './eve.ts';
 import { stepKid } from './kids.ts';
 import { denSize, densOfChunk, stepBeast, type Den } from './wildlife.ts';
@@ -78,6 +78,7 @@ import type {
   MobileId,
   Mutant,
   Nursery,
+  Pickup,
   Player,
   Site,
   Tower,
@@ -140,10 +141,20 @@ export type WorldEvents = {
   takeRejected: { id: EntityId; reason: TakeRejection };
   /** Le sac est plein : la récolte s'arrête, il faut aller livrer. */
   inventoryFull: Record<string, never>;
-  /** Plus que `seconds` secondes avant la prochaine vague (3, 2, puis 1). */
-  waveCountdown: { seconds: number };
-  /** Une vague de mutants vient d'apparaître autour de la mairie. */
-  waveStarted: { wave: number; count: number };
+  /**
+   * Plus que `seconds` secondes avant la prochaine vague (3, 2, puis 1) :
+   * son numéro, son effectif, d'où elle vient et le point, en pixels monde,
+   * où elle va surgir.
+   */
+  waveCountdown: { seconds: number; wave: number; count: number; from: Compass; x: number; y: number };
+  /** Une vague de mutants vient d'apparaître autour de la mairie, du côté `from`. */
+  waveStarted: { wave: number; count: number; from: Compass; x: number; y: number };
+  /** Le dernier mutant en vie vient de tomber : la vague `wave` est repoussée. */
+  waveCleared: { wave: number };
+  /** Un mutant abattu a lâché du butin en (x, y). */
+  lootDropped: { id: MobileId; item: ItemId; x: number; y: number };
+  /** Adam a ramassé du butin, qui est allé dans son sac. */
+  lootPicked: { id: MobileId; item: ItemId; x: number; y: number };
   /** Un arc a tiré, depuis (x, y). */
   arrowShot: { x: number; y: number };
   /** Une flèche a touché un mutant ; `hp` est ce qui lui reste. */
@@ -202,6 +213,9 @@ export class World {
 
   /** Tick d'apparition de la prochaine vague ; 0 tant qu'aucune n'est planifiée. */
   public nextWaveTick = 0;
+
+  /** Direction, en radians depuis la mairie, d'où viendra la prochaine vague : tirée dès qu'elle est planifiée. */
+  public nextWaveHeading = 0;
 
   /** Mutants abattus depuis le début de la partie — le score de l'écran de fin. */
   public kills = 0;
@@ -306,6 +320,7 @@ export class World {
       contactTicks: this.contactTicks,
       wave: this.wave,
       nextWaveTick: this.nextWaveTick,
+      nextWaveHeading: this.nextWaveHeading,
       kills: this.kills,
       defeated: this.defeated,
       defeatTick: this.defeatTick,
@@ -348,6 +363,7 @@ export class World {
     this.contactTicks = state.contactTicks;
     this.wave = state.wave;
     this.nextWaveTick = state.nextWaveTick;
+    this.nextWaveHeading = state.nextWaveHeading;
     this.kills = state.kills;
     this.defeated = state.defeated;
     this.defeatTick = state.defeatTick;
@@ -1072,6 +1088,10 @@ export class World {
         case 'worker':
           this.stepWorker(mobile, alarm);
           break;
+
+        case 'pickup':
+          this.stepPickup(mobile);
+          break;
       }
     }
   }
@@ -1122,6 +1142,47 @@ export class World {
     this.mobiles.delete(mutant.id);
     this.kills += 1;
     this.events.emit('mutantDied', { id: mutant.id, x: mutant.x, y: mutant.y });
+    this.dropLoot(mutant.x, mutant.y);
+
+    if (!this.defeated && !this.hasMutants()) this.events.emit('waveCleared', { wave: this.wave });
+  }
+
+  /* ------------------------------------------------------------------ butin */
+
+  /** Un objet du butin des mutants, posé au sol là où l'un d'eux est tombé. */
+  private dropLoot(x: number, y: number): void {
+    const { items } = MUTANT_LOOT;
+    const item = items[Math.floor(this.rng() * items.length)] ?? items[0];
+    const pickup: Pickup = {
+      kind: 'pickup',
+      id: this.nextMobileId++,
+      x,
+      y,
+      prevX: x,
+      prevY: y,
+      facing: 'down',
+      moving: false,
+      item,
+      ttl: MUTANT_LOOT.lifetimeTicks,
+    };
+
+    this.mobiles.set(pickup.id, pickup);
+    this.events.emit('lootDropped', { id: pickup.id, item, x, y });
+  }
+
+  /** Adam marche dessus : le butin va dans le sac, s'il y a la place. Oublié trop longtemps, il disparaît. */
+  private stepPickup(pickup: Pickup): void {
+    const { player } = this;
+    const reach = MUTANT_LOOT.pickupRadius * TILE_SIZE;
+
+    pickup.ttl -= 1;
+
+    if (distanceSq(player.x, player.y, pickup.x, pickup.y) <= reach * reach && player.inventory.add(pickup.item, 1) > 0) {
+      this.mobiles.delete(pickup.id);
+      this.events.emit('lootPicked', { id: pickup.id, item: pickup.item, x: pickup.x, y: pickup.y });
+      return;
+    }
+    if (pickup.ttl <= 0) this.mobiles.delete(pickup.id);
   }
 
   /* -------------------------------------------------------------------- Ève */
@@ -1409,17 +1470,21 @@ export class World {
 
   /* ----------------------------------------------------------------- vagues */
 
-  /** Une vague : `waveSize(n)` mutants autour de la mairie, puis la suivante est planifiée. */
+  /**
+   * Une vague : `waveSize(n)` mutants du côté annoncé, qui sortent de leur
+   * flaque l'un après l'autre, puis la suivante est planifiée.
+   */
   private spawnWave(): void {
     if (this.defeated) return;
 
     this.wave += 1;
 
     const count = waveSize(this.wave);
+    const origin = this.waveOrigin();
 
-    for (let i = 0; i < count; i += 1) this.spawnMutant();
+    for (let i = 0; i < count; i += 1) this.spawnMutant(WAVES.emergeTicks + i * WAVES.emergeStagger);
 
-    this.events.emit('waveStarted', { wave: this.wave, count });
+    this.events.emit('waveStarted', { wave: this.wave, count, from: compassOf(this.nextWaveHeading), ...origin });
 
     for (const entity of this.entities.values()) {
       if (entity.kind === 'tower') this.armTower(entity, 1);
@@ -1435,22 +1500,40 @@ export class World {
     const left = this.nextWaveTick - this.tickCount;
 
     if (left > 0 && left <= WAVE_COUNTDOWN_SECONDS * TICKS_PER_SECOND && left % TICKS_PER_SECOND === 0) {
-      this.events.emit('waveCountdown', { seconds: left / TICKS_PER_SECOND });
+      this.events.emit('waveCountdown', {
+        seconds: left / TICKS_PER_SECOND,
+        wave: this.wave + 1,
+        count: waveSize(this.wave + 1),
+        from: compassOf(this.nextWaveHeading),
+        ...this.waveOrigin(),
+      });
     }
   }
 
+  /** Planifie la prochaine vague, et tire dès maintenant le côté d'où elle viendra. */
   private scheduleWave(delay: number): void {
     this.nextWaveTick = this.tickCount + delay;
+    this.nextWaveHeading = this.rng() * Math.PI * 2;
     this.scheduler.schedule(WAVE_WAKE_ID, this.nextWaveTick, this.tickCount);
   }
 
-  private spawnMutant(): void {
-    let point = spawnPoint(this.rng, this.target);
+  /** Le point, en pixels monde, d'où surgira la prochaine vague : ce que l'annonce montre du doigt. */
+  public waveOrigin(): { x: number; y: number } {
+    const distance = ((WAVES.minDistance + WAVES.maxDistance) / 2) * TILE_SIZE;
+
+    return {
+      x: this.target.x + Math.cos(this.nextWaveHeading) * distance,
+      y: this.target.y + Math.sin(this.nextWaveHeading) * distance,
+    };
+  }
+
+  private spawnMutant(emerge: number): void {
+    let point = spawnPoint(this.rng, this.target, this.nextWaveHeading);
 
     // Pas dans un bâtiment : il y resterait coincé à le ronger de l'intérieur.
     for (let attempt = 0; attempt < 8; attempt += 1) {
       if (this.occupantAt(floorDiv(point.x, TILE_SIZE), floorDiv(point.y, TILE_SIZE)) === undefined) break;
-      point = spawnPoint(this.rng, this.target);
+      point = spawnPoint(this.rng, this.target, this.nextWaveHeading);
     }
 
     const mutant: Mutant = {
@@ -1465,6 +1548,7 @@ export class World {
       moving: false,
       hp: ENEMIES.mutant.hp,
       attackCooldown: 0,
+      emerge,
     };
 
     this.mobiles.set(mutant.id, mutant);

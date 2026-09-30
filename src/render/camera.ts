@@ -19,9 +19,14 @@
  * attarder, puis revenir sur le joueur — le tap sur le repère de la mairie.
  * Le suivi continue dessous ; le coup d'œil ne fait que déplacer le centre
  * affiché.
+ *
+ * Elle sait aussi **reculer** un instant (`zoomOut`) : un léger dézoom,
+ * tenu quelques secondes puis relâché en douceur, en glissant un peu vers
+ * un point à montrer — d'où arrive une vague. Court et discret : on peut
+ * être en train de récolter.
  */
 
-import { CHUNK_SIZE, floorDiv } from '../core/grid.ts';
+import { CHUNK_SIZE, TILE_SIZE, floorDiv } from '../core/grid.ts';
 
 /** Constante de temps du rattrapage, en ms : ~95 % du chemin en trois fois cette durée. */
 const FOLLOW_MS = 90;
@@ -38,6 +43,15 @@ const MAX_SHAKE_PX = 10;
 const PEEK_GO_MS = 450;
 const PEEK_HOLD_MS = 550;
 const PEEK_BACK_MS = 450;
+
+/** Constante de temps du zoom, en ms : il glisse, il ne saute pas. */
+const ZOOM_MS = 420;
+
+/** Pendant un recul, part du chemin entre le joueur et le point à montrer que la caméra parcourt. */
+const FOCUS_SHARE = 0.4;
+
+/** Au-delà de cette distance au point à montrer, en pixels monde, la caméra ne glisse pas : le joueur est ailleurs, occupé. */
+const FOCUS_RANGE = 14 * TILE_SIZE;
 
 export interface ChunkBounds {
   minCx: number;
@@ -66,6 +80,14 @@ export class Camera {
   /** Part du coup d'œil dans le centre affiché, dans [0, 1]. */
   private peekWeight = 0;
 
+  /** Zoom visé pendant un recul, et ms pendant lesquelles il est tenu. */
+  private zoomTarget = 1;
+  private zoomHold = 0;
+  /** Le point à montrer pendant un recul, et le décalage courant vers lui. */
+  private focus: { x: number; y: number } | null = null;
+  private focusShiftX = 0;
+  private focusShiftY = 0;
+
   public resize(width: number, height: number): void {
     this.viewWidth = width;
     this.viewHeight = height;
@@ -86,9 +108,24 @@ export class Camera {
     this.leadX += (vx * LEAD_DISTANCE_MS - this.leadX) * lead;
     this.leadY += (vy * LEAD_DISTANCE_MS - this.leadY) * lead;
 
+    this.zoomHold = Math.max(0, this.zoomHold - deltaMs);
+
+    const zooming = this.zoomHold > 0;
+    const zoomTo = zooming ? this.zoomTarget : 1;
+    const ease = 1 - Math.exp(-deltaMs / ZOOM_MS);
+
+    this.zoom += (zoomTo - this.zoom) * ease;
+    if (Math.abs(zoomTo - this.zoom) < 0.001) this.zoom = zoomTo;
+    const toFocusX = zooming && this.focus ? this.focus.x - x : 0;
+    const toFocusY = zooming && this.focus ? this.focus.y - y : 0;
+    const shifting = Math.hypot(toFocusX, toFocusY) <= FOCUS_RANGE;
+
+    this.focusShiftX += ((shifting ? toFocusX * FOCUS_SHARE : 0) - this.focusShiftX) * ease;
+    this.focusShiftY += ((shifting ? toFocusY * FOCUS_SHARE : 0) - this.focusShiftY) * ease;
+
     const catchUp = 1 - Math.exp(-deltaMs / FOLLOW_MS);
-    const targetX = x + this.leadX;
-    const targetY = y + this.leadY;
+    const targetX = x + this.leadX + this.focusShiftX;
+    const targetY = y + this.leadY + this.focusShiftY;
 
     this.x += (targetX - this.x) * catchUp;
     this.y += (targetY - this.y) * catchUp;
@@ -122,6 +159,16 @@ export class Camera {
 
   private get centerY(): number {
     return this.y + (this.peekY - this.y) * this.peekWeight;
+  }
+
+  /**
+   * Recule jusqu'à `zoom` (moins de 1) et y reste `holdMs`, en glissant un
+   * peu vers `focus` (pixels monde) s'il est donné, puis revient tout seul.
+   */
+  public zoomOut(zoom: number, holdMs: number, focus: { x: number; y: number } | null = null): void {
+    this.zoomTarget = zoom;
+    this.zoomHold = Math.max(this.zoomHold, holdMs);
+    this.focus = focus;
   }
 
   /** Ajoute du trauma : 0.2 pour un coup, 0.6 pour un effondrement. */

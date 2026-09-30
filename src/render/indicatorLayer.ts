@@ -10,6 +10,8 @@
  * pastille ronde en trois tons, sans contour, qui pointe vers sa cible —
  * - vert fluo, avec un gros œil, par mutant hors champ (la teinte des
  *   mutants), plus opaque quand il approche ;
+ * - vert fluo, plus gros et qui bat, vers le point d'où surgira la
+ *   prochaine vague, pendant les trois secondes de son annonce ;
  * - jaune, avec un petit toit, vers la mairie (ou son chantier) quand elle
  *   sort du champ, qui pulse tant que le chantier attend quelque chose ;
  * - dans la teinte de sa famille, avec l'icône de l'objet, vers le gisement
@@ -34,7 +36,7 @@ import { FAMILY_TONES, PALETTE, hex, type Tone } from '../data/artDirection.ts';
 import { ICON_SIZE, ITEM_ICONS } from '../data/icons.ts';
 import { ITEM_IDS, type ItemId } from '../data/items.ts';
 import { findDeposit, type Deposit } from '../sim/deposits.ts';
-import type { World } from '../sim/world.ts';
+import { TICKS_PER_SECOND, type World } from '../sim/world.ts';
 import type { Camera } from './camera.ts';
 import type { SpriteLibrary, SvgSource } from './spriteLibrary.ts';
 
@@ -116,6 +118,9 @@ interface Pin {
   y: number;
   down: boolean;
 }
+
+/** Secondes avant une vague pendant lesquelles le repère montre d'où elle vient : celles de l'annonce. */
+const ANNOUNCE_SECONDS = 3;
 
 export class IndicatorLayer {
   public readonly container = new Container();
@@ -222,6 +227,15 @@ export class IndicatorLayer {
         if (!this.deposit.known) this.tag(this.depositLabel, center, '?');
         else if (tiles >= LABEL_TILES) this.tag(this.depositLabel, center, meters(tiles));
       }
+    }
+
+    const { world } = this;
+    const left = world.nextWaveTick - world.tickCount;
+
+    if (world.nextWaveTick > 0 && !world.defeated && left > 0 && left <= ANNOUNCE_SECONDS * TICKS_PER_SECOND) {
+      const origin = world.waveOrigin();
+
+      this.arrow(camera, zone, origin.x, origin.y, 'toxic', 1, 1.25 + Math.sin(this.elapsed / 120) * 0.15, 'eye');
     }
 
     const hall = this.world.entities.get(this.world.townHallId);

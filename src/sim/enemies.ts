@@ -36,6 +36,15 @@ export function stepMutant(
 ): MutantStep {
   const proto = ENEMIES[mutant.proto];
 
+  // Il sort encore de sa flaque : il ne bouge ni ne frappe.
+  if (mutant.emerge > 0) {
+    mutant.emerge -= 1;
+    mutant.prevX = mutant.x;
+    mutant.prevY = mutant.y;
+    mutant.moving = false;
+    return { blockedBy: null, strikes: false };
+  }
+
   // Le délai court même en marchant : un mutant qui revient frappe tout de suite.
   if (mutant.attackCooldown > 0) mutant.attackCooldown -= 1;
 
@@ -71,13 +80,26 @@ export function stepMutant(
 }
 
 /**
- * Un point d'apparition autour de la mairie : un angle au hasard, une
- * distance entre `minDistance` et `maxDistance` tuiles. Le tirage vient du
- * PRNG du monde, donc d'une seed — une vague est rejouable comme le reste.
+ * Un point d'apparition autour de la mairie : dans la direction `heading` de
+ * la vague, à `spread` radians près, et entre `minDistance` et `maxDistance`
+ * tuiles. Le tirage vient du PRNG du monde, donc d'une seed — une vague est
+ * rejouable comme le reste.
  */
-export function spawnPoint(rng: Rng, center: { x: number; y: number }): { x: number; y: number } {
-  const angle = rng() * Math.PI * 2;
+export function spawnPoint(rng: Rng, center: { x: number; y: number }, heading: number): { x: number; y: number } {
+  const angle = heading + (rng() * 2 - 1) * WAVES.spread;
   const distance = (WAVES.minDistance + rng() * (WAVES.maxDistance - WAVES.minDistance)) * TILE_SIZE;
 
   return { x: center.x + Math.cos(angle) * distance, y: center.y + Math.sin(angle) * distance };
+}
+
+/** Les huit directions d'où une vague peut venir, dans le repère de l'écran (y vers le bas = sud). */
+export type Compass = 'east' | 'southEast' | 'south' | 'southWest' | 'west' | 'northWest' | 'north' | 'northEast';
+
+const COMPASS: readonly Compass[] = ['east', 'southEast', 'south', 'southWest', 'west', 'northWest', 'north', 'northEast'];
+
+/** La direction, parmi huit, d'un angle en radians (0 = est, sens horaire à l'écran). */
+export function compassOf(angle: number): Compass {
+  const sector = Math.round(angle / (Math.PI / 4));
+
+  return COMPASS[((sector % 8) + 8) % 8]!;
 }

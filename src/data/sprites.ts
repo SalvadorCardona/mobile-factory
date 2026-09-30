@@ -26,8 +26,10 @@ import { DRILL } from '../art/drill.ts';
 import { EVE_SPRITE } from '../art/eve.ts';
 import { FARM } from '../art/farm.ts';
 import { KID } from '../art/kid.ts';
+import { LOOT } from '../art/loot.ts';
 import { MUTANT } from '../art/mutant.ts';
 import { NURSERY } from '../art/nursery.ts';
+import { PUDDLE } from '../art/puddle.ts';
 import { ROCK_COAL, ROCK_IRON, ROCK_STONE } from '../art/rocks.ts';
 import { STORE_FULL } from '../art/storeFull.ts';
 import { TARGET } from '../art/target.ts';
@@ -66,6 +68,10 @@ export const SPRITES = {
   target: TARGET,
   /** Bulle « coffre plein » au-dessus d'une foreuse ou d'une ferme arrêtée. */
   storeFull: STORE_FULL,
+  /** La flaque d'où sortent les mutants d'une vague. */
+  puddle: PUDDLE,
+  /** Le butin qu'ils lâchent : un morceau par objet. */
+  loot: LOOT,
 
   tree: TREE,
   treePine: TREE_PINE,
