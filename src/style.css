@@ -1600,6 +1600,41 @@ button.hud-stock:active {
   display: none;
 }
 
+.building-panel-upgrade {
+  margin-top: 14px;
+}
+
+.building-panel-upgrade[hidden],
+.building-panel-upgrade [hidden] {
+  display: none;
+}
+
+.building-panel-upgrade-effect {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--violet);
+}
+
+.item-amount[data-missing='true'] {
+  color: var(--danger);
+}
+
+.item-missing {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.building-panel-actions button[data-tone='upgrade']:not([disabled]) {
+  background: var(--mint);
+  color: var(--paper);
+  box-shadow: 0 5px 0 var(--mint-shade);
+}
+
+.building-panel-actions button[data-tone='upgrade']:not([disabled]):active {
+  box-shadow: 0 2px 0 var(--mint-shade);
+}
+
 .building-panel-lines {
   margin: 8px 0 0;
   font: inherit;

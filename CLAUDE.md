@@ -28,7 +28,9 @@ chantier ouvre sa fenêtre : « Transférer » y vide d'un coup ce qu'il attend
 (poussière, rebond, son, « Mairie bâtie ! » qui flotte).
 Une nurserie ou une forge heurtée (ou « Transférer le sac ») reçoit ce que
 sa recette consomme ; la forge (débloquée à la nuit 1, `unlockNight`)
-fond fer + charbon en plaques de fer, qui bâtissent la tour renforcée.
+fond fer + charbon en plaques de fer, qui renforcent la tour de guet :
+sa fenêtre propose « Renforcer » (niveaux d'amélioration, `upgrades` de
+`data/buildings.ts`, commande `upgradeBuilding`, payée sac puis ville).
 
 **Ville et sac** — deux stocks. Le **sac** (`player.inventory`, plafonné)
 est ce qu'Adam porte ; la **ville** est le coffre de la mairie

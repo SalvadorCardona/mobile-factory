@@ -15,7 +15,7 @@
 
 import { TILE_SIZE } from '../core/grid.ts';
 import { auditSvg } from './artDirection.ts';
-import { BUILDINGS } from './buildings.ts';
+import { BUILDINGS, type BuildingProto } from './buildings.ts';
 import { DAWN_REWARD, DAY_CYCLE } from './dayNight.ts';
 import { ENEMIES, LOOT_DROPS, WAVES, WILDLIFE, WILDLIFE_SPAWN, type LootTable, type WildlifeProto } from './enemies.ts';
 import { EVE } from './eve.ts';
@@ -26,7 +26,7 @@ import { QUESTS, QUEST_IDS, TOOLS, type QuestProto } from './quests.ts';
 import { RECIPES, type RecipeProto } from './recipes.ts';
 import { RESEARCH, RESEARCH_STATS, type ResearchProto } from './research.ts';
 import { RESOURCES } from './resources.ts';
-import { BUILDING_PARTS, RESOURCE_PARTS, SPRITES, WALKER_PARTS, type SpriteProto } from './sprites.ts';
+import { BUILDING_PARTS, RESOURCE_PARTS, SPRITES, UPGRADE_PARTS, WALKER_PARTS, type SpriteProto } from './sprites.ts';
 import { WEAPONS } from './weapons.ts';
 
 export function validatePrototypes(): string[] {
@@ -120,6 +120,44 @@ export function validatePrototypes(): string[] {
     }
   }
 
+  // Un niveau d'amélioration change le bâtiment sur place : même cadre, ni chantier ni emprise nouvelle.
+  for (const [id, building] of Object.entries(BUILDINGS) as [string, BuildingProto][]) {
+    let previousHp = building.hp;
+
+    building.upgrades.forEach((upgrade, index) => {
+      const where = `BUILDINGS.${id}.upgrades[${index}]`;
+      const costs = Object.entries(upgrade.cost);
+
+      if (costs.length === 0) errors.push(`${where} : une amélioration gratuite`);
+      for (const [itemId, amount] of costs) {
+        if (!(itemId in ITEMS)) errors.push(`${where} : coût en objet inconnu « ${itemId} »`);
+        if (amount <= 0) errors.push(`${where} : coût nul ou négatif en « ${itemId} »`);
+      }
+      if (upgrade.hp < previousHp) errors.push(`${where} : moins de points de vie qu'au niveau d'avant`);
+      previousHp = upgrade.hp;
+      if (upgrade.label.trim() === '' || upgrade.action.trim() === '' || upgrade.description.trim() === '') {
+        errors.push(`${where} : nom, verbe ou description vide`);
+      }
+      if (upgrade.weapon !== null && !(upgrade.weapon in WEAPONS)) {
+        errors.push(`${where} : arme inconnue « ${String(upgrade.weapon)} »`);
+      }
+      if (building.kind === 'tower' && upgrade.weapon === null) errors.push(`${where} : une tour sans arme ne sert à rien`);
+      if (!(upgrade.sprite in SPRITES)) {
+        errors.push(`${where} : planche inconnue « ${upgrade.sprite} »`);
+      } else {
+        const sprite: SpriteProto = SPRITES[upgrade.sprite];
+        const base: SpriteProto | undefined = SPRITES[building.sprite];
+
+        if (base && (sprite.width !== base.width || sprite.height !== base.height || sprite.anchorX !== base.anchorX || sprite.anchorY !== base.anchorY)) {
+          errors.push(`${where} : le sprite « ${upgrade.sprite} » doit avoir le cadre et l'ancre de « ${building.sprite} »`);
+        }
+        for (const part of UPGRADE_PARTS) {
+          if (!(part in sprite.parts)) errors.push(`${where} : le sprite « ${upgrade.sprite} » n'a pas de morceau « ${part} »`);
+        }
+      }
+    });
+  }
+
   const buildingsWithRecipe = new Set<string>();
 
   for (const [id, recipe] of Object.entries(RECIPES) as [string, RecipeProto][]) {
@@ -154,11 +192,12 @@ export function validatePrototypes(): string[] {
     }
   }
 
-  // Un débouché par objet : un coût de bâtiment ou une entrée de recette.
+  // Un débouché par objet : un coût de bâtiment ou d'amélioration, une entrée de recette ou un coût de recherche.
   const consumed = new Set<string>();
 
-  for (const building of Object.values(BUILDINGS)) {
+  for (const building of Object.values(BUILDINGS) as BuildingProto[]) {
     for (const itemId of Object.keys(building.cost)) consumed.add(itemId);
+    for (const upgrade of building.upgrades) for (const itemId of Object.keys(upgrade.cost)) consumed.add(itemId);
   }
   for (const recipe of Object.values(RECIPES) as RecipeProto[]) {
     for (const itemId of Object.keys(recipe.inputs)) consumed.add(itemId);
@@ -168,7 +207,7 @@ export function validatePrototypes(): string[] {
   }
   for (const id of Object.keys(ITEMS)) {
     if (!consumed.has(id)) {
-      errors.push(`ITEMS.${id} : aucun débouché — ni coût de bâtiment, ni entrée de recette, ni coût de recherche`);
+      errors.push(`ITEMS.${id} : aucun débouché — ni coût de bâtiment ou d'amélioration, ni entrée de recette, ni coût de recherche`);
     }
   }
 

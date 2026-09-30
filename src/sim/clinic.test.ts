@@ -47,11 +47,11 @@ function colony(setup: Setup): { world: World; clinicId: number; siteId: number;
   const clinicId = state.nextId;
   const siteId = state.nextId + 1;
   const entities: SavedEntity[] = [
-    { kind: 'townHall', id: world.townHallId, proto: 'townHall', tx: hx, ty: hy, width: 3, height: 3, store: setup.hall ?? {}, hp: BUILDINGS.townHall.hp },
+    { kind: 'townHall', id: world.townHallId, proto: 'townHall', tx: hx, ty: hy, width: 3, height: 3, store: setup.hall ?? {}, hp: BUILDINGS.townHall.hp, level: 1 },
   ];
 
   if (setup.clinic) {
-    entities.push({ kind: 'clinic', id: clinicId, proto: 'clinic', tx: hx + 4, ty: hy + 6, width: 2, height: 2, store: {}, hp: BUILDINGS.clinic.hp });
+    entities.push({ kind: 'clinic', id: clinicId, proto: 'clinic', tx: hx + 4, ty: hy + 6, width: 2, height: 2, store: {}, hp: BUILDINGS.clinic.hp, level: 1 });
   }
   if (setup.site) {
     entities.push({ kind: 'site', id: siteId, proto: 'nursery', tx: hx - 4, ty: hy + 6, width: 2, height: 2, delivered: {} });

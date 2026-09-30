@@ -12,7 +12,7 @@
  */
 
 import { TILE_SIZE } from '../core/grid.ts';
-import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
+import { BUILDINGS, buildingLevel, type BuildingId } from '../data/buildings.ts';
 import { EVE } from '../data/eve.ts';
 import { QUESTS, QUEST_IDS, TOOLS, type QuestId } from '../data/quests.ts';
 import type { ResourceId } from '../data/resources.ts';
@@ -106,7 +106,7 @@ export function mostDamaged(entities: Iterable<Entity>): Building | null {
   for (const entity of entities) {
     if (entity.kind === 'site') continue;
 
-    const ratio = entity.hp / BUILDINGS[entity.proto].hp;
+    const ratio = entity.hp / buildingLevel(entity.proto, entity.level).hp;
 
     if (ratio < worstRatio) {
       worst = entity;

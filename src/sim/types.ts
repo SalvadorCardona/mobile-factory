@@ -47,8 +47,13 @@ export interface Site extends Placed {
 interface Built extends Placed {
   /** Coffre interne. */
   store: Store;
-  /** Points de vie restants ; le maximum est `BUILDINGS[proto].hp`. */
+  /** Points de vie restants ; le maximum est celui de son niveau (`buildingLevel(proto, level).hp`). */
   hp: number;
+  /**
+   * Niveau d'amélioration, 1 tel que bâti. Chaque niveau au-delà est une
+   * entrée de `BUILDINGS[proto].upgrades` : points de vie, arme, sprite.
+   */
+  level: number;
 }
 
 export interface Drill extends Built {

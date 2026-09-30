@@ -81,7 +81,7 @@ function tower(reinforced = false): string {
   );
 }
 
-function site(reinforced = false): string {
+function site(): string {
   return (
     siteGround(W, H, FOOTPRINT) +
     // Les pilotis sont plantés à leur hauteur finale ; la plateforme manque.
@@ -96,8 +96,7 @@ function site(reinforced = false): string {
     // Les planches de la plateforme attendent au pied.
     planks(20, 116, 26) +
     siteClutter(W, H) +
-    // Les plaques de fer de la tour renforcée attendent sur le panneau.
-    siteSign(22, 92, reinforced ? rect(24, 94, 10, 6, cyan.base, 2) : flag(26, 93, 8, 'cyan'))
+    siteSign(22, 92, flag(26, 93, 8, 'cyan'))
   );
 }
 
@@ -114,8 +113,9 @@ export const WATCHTOWER = {
 } satisfies SpriteProto;
 
 /**
- * La tour de guet renforcée : la même silhouette, la plateforme blindée de
- * plaques de fer cyan rivetées, le drapeau jaune. On la distingue de loin.
+ * La tour de guet renforcée — son niveau 2, sans chantier : la même
+ * silhouette, la plateforme blindée de plaques de fer cyan rivetées, le
+ * drapeau jaune. On la distingue de loin.
  */
 export const REINFORCED_TOWER = {
   width: W,
@@ -123,7 +123,6 @@ export const REINFORCED_TOWER = {
   anchorX: 0,
   anchorY: 1,
   parts: {
-    site: svg(W, H, site(true)),
     built: svg(W, H, tower(true)),
     damaged: svg(W, H, tower(true), damageMarks(3, 32, 58, 16)),
   },

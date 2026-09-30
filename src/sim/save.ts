@@ -15,7 +15,7 @@
  * est refusée proprement : `decodeSave` ne lève jamais.
  */
 
-import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
+import { BUILDINGS, maxLevel, type BuildingId } from '../data/buildings.ts';
 import { ENEMIES, WILDLIFE, type EnemyId, type WildlifeId } from '../data/enemies.ts';
 import { ITEMS, type ItemId } from '../data/items.ts';
 import { JOB_PRIORITY, type JobPriority } from '../data/workers.ts';
@@ -31,7 +31,7 @@ import { World } from './world.ts';
  * `WorldState` ; une migration de l'ancienne version se branche alors dans
  * `decodeSave`, sinon l'ancienne sauvegarde est ignorée.
  */
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 
 /** Une entité telle qu'elle est rangée : son coffre devient un simple stock. */
 export type SavedEntity = Stored<Entity>;
@@ -125,10 +125,11 @@ export function decodeSave(text: string): DecodedSave {
   }
 
   if (!isRecord(file) || typeof file['version'] !== 'number') return { ok: false, reason: 'corrupt' };
-  if (file['version'] !== SAVE_VERSION && file['version'] !== 4) return { ok: false, reason: 'version' };
+  if (file['version'] !== SAVE_VERSION && file['version'] !== 5 && file['version'] !== 4) return { ok: false, reason: 'version' };
 
   try {
-    const state = file['version'] === 4 ? migrateV4(file['state']) : file['state'];
+    const v5 = file['version'] === 4 ? migrateV4(file['state']) : file['state'];
+    const state = file['version'] === SAVE_VERSION ? v5 : migrateV5(v5);
 
     return { ok: true, world: deserialize(state), savedAt: finite(file['savedAt']) };
   } catch {
@@ -147,6 +148,59 @@ function migrateV4(raw: unknown): unknown {
   const { wave, nextWaveTick, ...rest } = raw;
 
   return { ...rest, night: wave, cycleStartTick: typeof nextWaveTick === 'number' && nextWaveTick > 0 ? raw['tick'] : 0 };
+}
+
+/**
+ * Version 5 : la tour de guet renforcée était un bâtiment à part. Elle
+ * devient une tour de guet au niveau 2, sous le même id, avec ses points de
+ * vie ; tout autre bâtiment fini est au niveau 1. Son chantier devient celui
+ * d'une tour de guet : ce qui y était livré au-delà de ce qu'elle attend
+ * (les plaques de fer…) passe dans le stock de la ville plutôt que de se perdre.
+ */
+function migrateV5(raw: unknown): unknown {
+  if (!isRecord(raw) || !Array.isArray(raw['entities'])) return raw;
+
+  const entities = raw['entities'].map((entity: unknown) => (isRecord(entity) ? { ...entity } : entity));
+  const hall = entities.find((entity) => isRecord(entity) && entity['kind'] === 'townHall' && isRecord(entity['store']));
+  const surplus: Record<string, number> = {};
+
+  for (const entity of entities) {
+    if (!isRecord(entity)) continue;
+
+    const reinforced = entity['proto'] === 'reinforcedTower';
+
+    if (reinforced) entity['proto'] = 'watchtower';
+
+    if (entity['kind'] !== 'site') {
+      entity['level'] = reinforced ? 2 : 1;
+    } else if (reinforced && isRecord(entity['delivered'])) {
+      const cost = BUILDINGS.watchtower.cost as Partial<Record<string, number>>;
+      const delivered: Record<string, unknown> = {};
+
+      for (const [item, amount] of Object.entries(entity['delivered'])) {
+        // Un stock illisible passe tel quel : la validation le refusera.
+        if (typeof amount !== 'number') {
+          delivered[item] = amount;
+          continue;
+        }
+
+        const kept = Math.min(amount, cost[item] ?? 0);
+
+        if (kept > 0) delivered[item] = kept;
+        if (amount > kept) surplus[item] = (surplus[item] ?? 0) + amount - kept;
+      }
+      entity['delivered'] = delivered;
+    }
+  }
+
+  if (isRecord(hall) && isRecord(hall['store'])) {
+    const store: Record<string, unknown> = { ...hall['store'] };
+
+    for (const [item, amount] of Object.entries(surplus)) store[item] = (typeof store[item] === 'number' ? store[item] : 0) + amount;
+    hall['store'] = store;
+  }
+
+  return { ...raw, entities };
 }
 
 /* ------------------------------------------------------------- validation */
@@ -246,9 +300,10 @@ function parseEntity(raw: unknown): SavedEntity {
 
   if (entity['kind'] !== kind) throw new SaveError(`${proto} n'est pas un ${String(entity['kind'])}`);
 
-  const built = { ...placed, store: stock(entity['store']), hp: int(entity['hp']) };
+  const built = { ...placed, store: stock(entity['store']), hp: int(entity['hp']), level: int(entity['level']) };
 
   if (built.hp <= 0) throw new SaveError(`${proto} sans points de vie`);
+  if (built.level < 1 || built.level > maxLevel(proto)) throw new SaveError(`${proto} au niveau ${built.level}`);
 
   switch (kind) {
     case 'drill':

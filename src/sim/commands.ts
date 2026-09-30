@@ -67,6 +67,13 @@ export type Command =
    */
   | { type: 'transferToLab'; id: EntityId }
   /**
+   * Passe un bâtiment fini au niveau suivant (`BUILDINGS[proto].upgrades`),
+   * tout de suite : le coût est payé comme un « Transférer », le sac d'abord,
+   * puis la ville si le bâtiment est dans son rayon. Tout ou rien — il faut
+   * le coût entier. Le bouton « Renforcer » de la fenêtre d'une tour.
+   */
+  | { type: 'upgradeBuilding'; id: EntityId }
+  /**
    * Les bonus plantés au jardin des souvenirs, au départ d'une nouvelle
    * colonie. Poussée avant le premier tick ; ignorée ensuite.
    */
@@ -124,6 +131,17 @@ export type DepositRejection =
   | 'outOfReach'
   /** Rien à déposer : le sac est vide, ou ne contient pas cet objet. */
   | 'empty';
+
+/** Motif de refus d'une amélioration. */
+export type UpgradeRejection =
+  /** Le bâtiment n'existe plus, ou n'est encore qu'un chantier. */
+  | 'missing'
+  /** Adam est trop loin de l'emprise. */
+  | 'outOfReach'
+  /** Le bâtiment est déjà à son niveau maximal. */
+  | 'maxLevel'
+  /** Ni le sac, ni la ville à portée n'ont tout le coût. */
+  | 'missingItems';
 
 /** Motif de refus d'un placement — remonté à l'UI par un événement. */
 export type PlacementRejection =

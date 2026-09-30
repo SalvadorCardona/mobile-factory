@@ -60,7 +60,7 @@ function colony(layout: Layout): World {
   const state = world.snapshot();
   const slots = [...SLOTS];
   const entities: SavedEntity[] = [
-    { kind: 'townHall', id: world.townHallId, proto: 'townHall', tx: hx, ty: hy, width: 3, height: 3, store: layout.hall, hp: BUILDINGS.townHall.hp },
+    { kind: 'townHall', id: world.townHallId, proto: 'townHall', tx: hx, ty: hy, width: 3, height: 3, store: layout.hall, hp: BUILDINGS.townHall.hp, level: 1 },
   ];
   let nextId = state.nextId;
 
@@ -72,11 +72,11 @@ function colony(layout: Layout): World {
   };
 
   for (let i = 0; i < layout.houses; i += 1) {
-    entities.push({ ...place('builderHouse'), kind: 'house', store: {}, hp: BUILDINGS.builderHouse.hp });
+    entities.push({ ...place('builderHouse'), kind: 'house', store: {}, hp: BUILDINGS.builderHouse.hp, level: 1 });
   }
   for (const proto of layout.sites ?? []) entities.push({ ...place(proto), kind: 'site', delivered: {} });
   for (const store of layout.drills ?? []) {
-    entities.push({ ...place('drill'), kind: 'drill', store, hp: BUILDINGS.drill.hp, output: 'ironOre', blocked: true });
+    entities.push({ ...place('drill'), kind: 'drill', store, hp: BUILDINGS.drill.hp, level: 1, output: 'ironOre', blocked: true });
   }
 
   // Adam à l'écart, immobile : ce sont les porteurs qu'on regarde.

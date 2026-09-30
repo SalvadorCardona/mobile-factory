@@ -37,7 +37,7 @@
  */
 
 import { TILE_SIZE } from '../core/grid.ts';
-import { BUILDINGS } from '../data/buildings.ts';
+import { BUILDINGS, buildingLevel } from '../data/buildings.ts';
 import { ITEMS, type ItemId } from '../data/items.ts';
 import { EVE_LINES } from '../data/eve.ts';
 import { LORE } from '../data/lore.ts';
@@ -334,7 +334,17 @@ export class Hud {
     world.events.on('buildingCompleted', ({ id }) => {
       const entity = world.entities.get(id);
 
-      if (entity) this.celebrate(entity);
+      if (entity) this.celebrate(entity, `${BUILDINGS[entity.proto].label} bâtie !`);
+    });
+    world.events.on('buildingUpgraded', ({ id, level, fromBag }) => {
+      const entity = world.entities.get(id);
+
+      for (const [item, amount] of fromBag) this.float(item, -amount);
+      if (entity) this.celebrate(entity, `${buildingLevel(entity.proto, level).label} !`);
+    });
+    world.events.on('upgradeRejected', ({ reason }) => {
+      if (reason === 'outOfReach') this.notify(REJECTION_LABELS.outOfReach, 'bad');
+      if (reason === 'missingItems') this.notify('Il manque de quoi payer — ni dans le sac, ni en ville', 'bad');
     });
     world.events.on('waveCountdown', ({ seconds, night, wave, count, from, x, y }) => {
       this.showCountdown(String(seconds));
@@ -601,13 +611,13 @@ export class Hud {
   }
 
   /** « Mairie bâtie ! » qui monte du toit d'un bâtiment achevé et s'efface. */
-  private celebrate(entity: Entity): void {
+  private celebrate(entity: Entity, message: string): void {
     const { x, y } = this.project((entity.tx + entity.width / 2) * TILE_SIZE, (entity.ty - 1) * TILE_SIZE);
     const floater = element('span', 'hud-built');
 
     floater.style.left = `${Math.round(x)}px`;
     floater.style.top = `${Math.round(y)}px`;
-    floater.textContent = `${BUILDINGS[entity.proto].label} bâtie !`;
+    floater.textContent = message;
     this.floats.append(floater);
     window.setTimeout(() => floater.remove(), BUILT_MS);
   }
