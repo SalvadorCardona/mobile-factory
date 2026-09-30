@@ -22,8 +22,9 @@
  * roues qui tournent et cadre qui cahote ; à pied, c'est son pantin, qui
  * frappe le mur qu'elle répare.
  *
- * Le butin qu'il lâche saute hors de lui, puis sautille au-dessus de son
- * ombre en attendant Adam ; il clignote quand il va disparaître.
+ * Le butin qu'un ennemi lâche saute hors de lui, puis sautille au-dessus de
+ * son ombre en attendant Adam, une étincelle éclosant de temps en temps à
+ * son coin pour qu'il se repère ; il clignote quand il va disparaître.
  *
  * Le marqueur de cible — un anneau jaune au sol et une pointe au-dessus de
  * la tête — suit ce que l'arc d'Adam vise (`player.target`).
@@ -35,7 +36,7 @@
 import { Container, Graphics, Sprite, type Texture, type Ticker } from 'pixi.js';
 import { TILE_SIZE, floorDiv } from '../core/grid.ts';
 import { PALETTE, hex } from '../data/artDirection.ts';
-import { ENEMIES, MUTANT_LOOT, WILDLIFE } from '../data/enemies.ts';
+import { ENEMIES, LOOT_DROPS, WILDLIFE } from '../data/enemies.ts';
 import { SPRITES } from '../data/sprites.ts';
 import type { Mobile, MobileId, Mutant, Pickup } from '../sim/types.ts';
 import { terrainAt } from '../sim/terrain.ts';
@@ -61,9 +62,16 @@ const PUDDLE_FADE_MS = 900;
 const BUBBLES = 4;
 const BUBBLE_MS = 620;
 
-/** Le saut du butin qui tombe d'un mutant, et son sautillement au sol. */
+/** Le saut du butin qui tombe d'un ennemi, et son sautillement au sol. */
 const LOOT_DROP_MS = 420;
 const LOOT_HOP_PX = 3;
+
+/** L'étincelle du butin : une éclosion de `LOOT_GLINT_MS` toutes les `LOOT_GLINT_PERIOD_MS`, au coin de l'icône. */
+const LOOT_GLINT_PERIOD_MS = 1700;
+const LOOT_GLINT_MS = 380;
+const LOOT_GLINT_X = 6;
+const LOOT_GLINT_Y = -16;
+const LOOT_GLINT_SCALE = 0.55;
 
 /** Sous ce nombre de ticks restants, le butin oublié clignote. */
 const LOOT_BLINK_TICKS = 20 * 10;
@@ -277,9 +285,13 @@ export class MobileLayer {
     view.root.scale.set(0.7 + t * 0.3, 0.25 + t * 0.75);
   }
 
-  /** Le butin : un saut hors du mutant, puis un sautillement sur place ; il clignote avant de disparaître. */
+  /**
+   * Le butin : un saut hors de l'ennemi, puis un sautillement sur place où
+   * une étincelle éclot de temps en temps ; il clignote avant de disparaître.
+   */
   private bob(view: MobileView, pickup: Pickup, y: number, deltaMs: number): void {
     const icon = view.root.getChildAt(1);
+    const glint = view.root.getChildAt(2);
 
     view.age += deltaMs;
     view.root.zIndex = y;
@@ -289,6 +301,15 @@ export class MobileLayer {
 
     icon.y = -hop;
     view.root.scale.set(0.4 + drop * 0.6);
+
+    // Chaque butin a sa phase : ils ne scintillent pas tous ensemble.
+    const phase = (view.age + pickup.id * 397) % LOOT_GLINT_PERIOD_MS;
+    const bloom = drop < 1 || phase >= LOOT_GLINT_MS ? 0 : Math.sin((phase / LOOT_GLINT_MS) * Math.PI);
+
+    glint.visible = bloom > 0;
+    glint.y = LOOT_GLINT_Y - hop;
+    glint.scale.set(bloom * LOOT_GLINT_SCALE);
+    glint.rotation = (phase / LOOT_GLINT_MS) * 0.8;
     view.root.alpha = pickup.ttl < LOOT_BLINK_TICKS && Math.floor(view.age / 180) % 2 === 0 ? 0.35 : 1;
   }
 
@@ -399,14 +420,18 @@ export class MobileLayer {
       const ty = floorDiv(mobile.y, TILE_SIZE);
       const shadow = new Sprite(this.tiles.shadow(terrainAt(this.world.seed, tx, ty)));
       const icon = new Sprite(this.library.part('loot', mobile.item));
+      const glint = new Sprite(this.library.part('loot', 'glint'));
 
       shadow.anchor.set(0.5);
       shadow.width = 16;
       shadow.height = 6;
       icon.anchor.set(SPRITES.loot.anchorX, SPRITES.loot.anchorY);
-      root.addChild(shadow, icon);
+      glint.anchor.set(0.5);
+      glint.x = LOOT_GLINT_X;
+      glint.visible = false;
+      root.addChild(shadow, icon, glint);
       // Butin rechargé d'une sauvegarde : déjà posé, pas de saut.
-      const fresh = MUTANT_LOOT.lifetimeTicks - mobile.ttl < 20;
+      const fresh = LOOT_DROPS.lifetimeTicks - mobile.ttl < 20;
 
       view = { root, puppet: null, hp: null, lastHp: 0, age: fresh ? 0 : LOOT_DROP_MS, tile: '', bike: null };
     } else {

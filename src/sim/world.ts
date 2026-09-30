@@ -29,7 +29,7 @@ import { Emitter } from '../core/events.ts';
 import { CHUNK_TILES, TILE_SIZE, coordKey, distanceSq, floorDiv, type TileCoord } from '../core/grid.ts';
 import { mulberry32, type StatefulRng } from '../core/rng.ts';
 import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
-import { ENEMIES, MUTANT_LOOT, WAVES, WILDLIFE, WILDLIFE_SPAWN, waveSize } from '../data/enemies.ts';
+import { ENEMIES, LOOT_DROPS, WAVES, WILDLIFE, WILDLIFE_SPAWN, waveSize, type LootTable } from '../data/enemies.ts';
 import { EVE } from '../data/eve.ts';
 import type { ItemId } from '../data/items.ts';
 import type { QuestId } from '../data/quests.ts';
@@ -51,6 +51,7 @@ import type { WildlifeId } from '../data/enemies.ts';
 import { compassOf, spawnPoint, stepMutant, type Compass } from './enemies.ts';
 import { createEve, currentQuest, harvestTicksWithTools, isUnlocked, mostDamaged, questProgress, rideHome, walkTo } from './eve.ts';
 import { stepKid } from './kids.ts';
+import { rollLoot, stepPickup } from './loot.ts';
 import { denSize, densOfChunk, stepBeast, type Den } from './wildlife.ts';
 import { facingOf } from './motion.ts';
 import {
@@ -116,6 +117,9 @@ export const DELIVER_TICKS = 2;
 
 /** Secondes annoncées avant chaque vague. */
 const WAVE_COUNTDOWN_SECONDS = 3;
+
+/** Adam piétine du butin avec le sac plein : « sac plein » au plus une fois par seconde. */
+const LOOT_FULL_TICKS = TICKS_PER_SECOND;
 
 /** Le bâtiment que la partie ouvre en chantier au démarrage. */
 export const STARTING_BUILDING: BuildingId = 'townHall';
@@ -191,8 +195,8 @@ export type WorldEvents = {
   townHallDestroyed: Record<string, never>;
   /** Une flèche a touché une bête ; `hp` est ce qui lui reste. */
   beastHit: { id: MobileId; proto: WildlifeId; hp: number; x: number; y: number };
-  /** Une bête est tombée ; `loot` est ce qui est allé dans le sac, s'il y avait la place. */
-  beastDied: { id: MobileId; proto: WildlifeId; x: number; y: number; loot: ItemId | null };
+  /** Une bête est tombée ; son butin suit, en `lootDropped`. */
+  beastDied: { id: MobileId; proto: WildlifeId; x: number; y: number };
   /** Une bête a frappé Adam ; `hp` est ce qui lui reste. */
   playerHurt: { by: MobileId; hp: number };
   /** Adam est tombé : il se réveille à la mairie, remis sur pied. */
@@ -1231,6 +1235,7 @@ export class World {
   private stepMobiles(): void {
     // Une fois par tick, pas une fois par ouvrier.
     const alarm = this.hasMutants();
+    let lootBlocked = false;
 
     for (const mobile of this.mobiles.values()) {
       switch (mobile.kind) {
@@ -1277,10 +1282,13 @@ export class World {
           break;
 
         case 'pickup':
-          this.stepPickup(mobile);
+          lootBlocked = this.stepPickup(mobile) || lootBlocked;
           break;
       }
     }
+
+    // Adam sur du butin, sac plein : le HUD le dit, au rythme de la récolte.
+    if (lootBlocked && this.tickCount % LOOT_FULL_TICKS === 0) this.events.emit('inventoryFull', {});
   }
 
   private readonly occupantAt = (tx: number, ty: number): EntityId | undefined => this.chunks.occupantAt(tx, ty);
@@ -1329,47 +1337,75 @@ export class World {
     this.mobiles.delete(mutant.id);
     this.kills += 1;
     this.events.emit('mutantDied', { id: mutant.id, x: mutant.x, y: mutant.y });
-    this.dropLoot(mutant.x, mutant.y);
+    this.dropLoot(ENEMIES[mutant.proto].loot, mutant.x, mutant.y);
 
     if (!this.defeated && !this.hasMutants()) this.events.emit('waveCleared', { wave: this.wave });
   }
 
   /* ------------------------------------------------------------------ butin */
 
-  /** Un objet du butin des mutants, posé au sol là où l'un d'eux est tombé. */
-  private dropLoot(x: number, y: number): void {
-    const { items } = MUTANT_LOOT;
-    const item = items[Math.floor(this.rng() * items.length)] ?? items[0];
-    const pickup: Pickup = {
-      kind: 'pickup',
-      id: this.nextMobileId++,
-      x,
-      y,
-      prevX: x,
-      prevY: y,
-      facing: 'down',
-      moving: false,
-      item,
-      ttl: MUTANT_LOOT.lifetimeTicks,
-    };
+  /**
+   * Le butin d'un ennemi abattu, tiré de sa table et posé au sol là où il est
+   * tombé : un objet par exemplaire, un peu éparpillés. Au-delà du plafond,
+   * le plus ancien au sol s'efface.
+   */
+  private dropLoot(table: LootTable, x: number, y: number): void {
+    const spread = LOOT_DROPS.scatter * TILE_SIZE;
 
-    this.mobiles.set(pickup.id, pickup);
-    this.events.emit('lootDropped', { id: pickup.id, item, x, y });
+    for (const item of rollLoot(table, this.rng)) {
+      const px = x + (this.rng() - 0.5) * 2 * spread;
+      const py = y + (this.rng() - 0.5) * 2 * spread;
+      const pickup: Pickup = {
+        kind: 'pickup',
+        id: this.nextMobileId++,
+        x: px,
+        y: py,
+        prevX: px,
+        prevY: py,
+        facing: 'down',
+        moving: false,
+        item,
+        ttl: LOOT_DROPS.lifetimeTicks,
+      };
+
+      this.trimLoot();
+      this.mobiles.set(pickup.id, pickup);
+      this.events.emit('lootDropped', { id: pickup.id, item, x: px, y: py });
+    }
   }
 
-  /** Adam marche dessus : le butin va dans le sac, s'il y a la place. Oublié trop longtemps, il disparaît. */
-  private stepPickup(pickup: Pickup): void {
-    const { player } = this;
-    const reach = MUTANT_LOOT.pickupRadius * TILE_SIZE;
+  /** Plafond atteint : le butin le plus ancien — le moins de ticks restants — disparaît. */
+  private trimLoot(): void {
+    let count = 0;
+    let oldest: Pickup | null = null;
 
-    pickup.ttl -= 1;
+    for (const mobile of this.mobiles.values()) {
+      if (mobile.kind !== 'pickup') continue;
+      count += 1;
+      if (!oldest || mobile.ttl < oldest.ttl) oldest = mobile;
+    }
+    if (oldest && count >= LOOT_DROPS.cap) this.mobiles.delete(oldest.id);
+  }
 
-    if (distanceSq(player.x, player.y, pickup.x, pickup.y) <= reach * reach && player.inventory.add(pickup.item, 1) > 0) {
-      this.mobiles.delete(pickup.id);
-      this.events.emit('lootPicked', { id: pickup.id, item: pickup.item, x: pickup.x, y: pickup.y });
-      return;
+  /**
+   * Adam passe dessus : le butin va dans le sac, s'il y a la place — sinon il
+   * reste au sol, et la valeur rendue le signale. Oublié trop longtemps, il
+   * disparaît.
+   */
+  private stepPickup(pickup: Pickup): boolean {
+    const { inventory } = this.player;
+    const step = stepPickup(pickup, this.player, inventory.freeSpace() > 0, STEP_SECONDS);
+
+    if (step === 'reached') {
+      if (inventory.add(pickup.item, 1) > 0) {
+        this.mobiles.delete(pickup.id);
+        this.events.emit('lootPicked', { id: pickup.id, item: pickup.item, x: pickup.x, y: pickup.y });
+        return false;
+      }
+      if (pickup.ttl > 0) return true;
     }
     if (pickup.ttl <= 0) this.mobiles.delete(pickup.id);
+    return false;
   }
 
   /* -------------------------------------------------------------------- Ève */
@@ -1496,9 +1532,8 @@ export class World {
       if (den.members <= 0) den.readyTick = this.tickCount + proto.respawnTicks;
     }
 
-    const loot = proto.loot !== null && this.player.inventory.add(proto.loot, 1) > 0 ? proto.loot : null;
-
-    this.events.emit('beastDied', { id: beast.id, proto: beast.proto, x: beast.x, y: beast.y, loot });
+    this.events.emit('beastDied', { id: beast.id, proto: beast.proto, x: beast.x, y: beast.y });
+    this.dropLoot(proto.loot, beast.x, beast.y);
   }
 
   /** Un coup de pince ou de croc. À zéro, Adam tombe et se réveille à la mairie. */

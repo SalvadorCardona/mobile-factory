@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_SIZE, worldToTile } from '../core/grid.ts';
 import { BUILDINGS } from '../data/buildings.ts';
-import { ENEMIES, MUTANT_LOOT, WAVES, waveSize } from '../data/enemies.ts';
+import { ENEMIES, LOOT_DROPS, WAVES, waveSize } from '../data/enemies.ts';
 import type { ItemId } from '../data/items.ts';
 import { RECIPES } from '../data/recipes.ts';
 import { WEAPONS } from '../data/weapons.ts';
@@ -313,24 +313,26 @@ describe('mise en scène des vagues', () => {
     }
 
     expect(cleared).toEqual([1]);
-    expect(dropped).toHaveLength(1);
+    expect(dropped.length).toBeGreaterThanOrEqual(1);
 
-    const loot = dropped[0]!;
+    const table = ENEMIES.mutant.loot.map((entry) => entry.item as ItemId);
 
-    expect(MUTANT_LOOT.items).toContain(loot.item);
-    expect(world.mobiles.get(loot.id)).toBe(loot);
+    for (const loot of dropped) {
+      expect(table).toContain(loot.item);
+      expect(world.mobiles.get(loot.id)).toBe(loot);
+    }
 
-    const before = world.player.inventory.count(loot.item);
+    const before = world.player.inventory.total();
     const picked: number[] = [];
 
     world.events.on('lootPicked', ({ id }) => picked.push(id));
-    world.player.x = loot.x;
-    world.player.y = loot.y;
-    world.tick();
+    world.player.x = dropped[0]!.x;
+    world.player.y = dropped[0]!.y;
+    for (let i = 0; i < 20; i += 1) world.tick();
 
-    expect(picked).toEqual([loot.id]);
-    expect(world.player.inventory.count(loot.item)).toBe(before + 1);
-    expect(world.mobiles.has(loot.id)).toBe(false);
+    expect(picked.sort()).toEqual(dropped.map((loot) => loot.id).sort());
+    expect(world.player.inventory.total()).toBe(before + dropped.length);
+    for (const loot of dropped) expect(world.mobiles.has(loot.id)).toBe(false);
   });
 
   it('laisse le butin au sol quand le sac est plein, puis le fait disparaître s’il est oublié', () => {
@@ -357,7 +359,7 @@ describe('mise en scène des vagues', () => {
     expect(world.mobiles.has(loot!.id)).toBe(true);
 
     world.player.x += 10 * TILE_SIZE;
-    for (let i = 0; i < MUTANT_LOOT.lifetimeTicks; i += 1) world.tick();
+    for (let i = 0; i < LOOT_DROPS.lifetimeTicks; i += 1) world.tick();
     expect(world.mobiles.has(loot!.id)).toBe(false);
   });
 
