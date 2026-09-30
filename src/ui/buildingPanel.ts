@@ -120,7 +120,6 @@ export class BuildingPanel {
     this.lastText = '';
     this.lastItems = '';
     this.title.textContent = BUILDINGS[entity.proto].label;
-    this.description.textContent = BUILDINGS[entity.proto].description;
     this.refresh(entity);
     this.onOpen();
   }
@@ -150,6 +149,9 @@ export class BuildingPanel {
     let barClass: string;
 
     const inReach = this.world.inReach(entity);
+
+    // Le chantier devient le bâtiment sous le même id : le texte suit.
+    this.description.textContent = panelDescription(entity);
 
     if (entity.kind === 'site') {
       const total = Object.values(proto.cost).reduce((sum, amount) => sum + amount, 0);
@@ -229,7 +231,9 @@ export class BuildingPanel {
           break;
       }
 
-      if (proto.storage > 0) {
+      // La mairie a un coffre, mais rien n'y dépose encore : pas de ligne
+      // « Coffre » tant qu'elle ne sert pas d'entrepôt.
+      if (proto.storage > 0 && entity.kind !== 'townHall') {
         const capacity = Number.isFinite(proto.storage) ? `/${proto.storage}` : '';
         const entries = entity.store.entries();
 
@@ -263,6 +267,13 @@ export class BuildingPanel {
   public destroy(): void {
     this.root.remove();
   }
+}
+
+/** Texte d'inspection : celui du chantier tant qu'il en est un, celui du bâtiment ensuite. */
+export function panelDescription(entity: Entity): string {
+  const proto = BUILDINGS[entity.proto];
+
+  return entity.kind === 'site' ? proto.siteDescription : proto.description;
 }
 
 /** « 9 min 32 s » à partir d'un nombre de ticks. */

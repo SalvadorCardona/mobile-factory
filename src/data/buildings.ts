@@ -22,7 +22,9 @@ export type BuildingKind = 'drill' | 'townHall' | 'nursery' | 'tower' | 'house' 
 
 export interface BuildingProto {
   label: string;
-  /** Texte de la fenêtre d'inspection. */
+  /** Texte de la fenêtre d'inspection du chantier. */
+  siteDescription: string;
+  /** Texte de la fenêtre d'inspection du bâtiment fini. */
   description: string;
   kind: BuildingKind;
   /** Emprise en tuiles. */
@@ -50,6 +52,7 @@ export interface BuildingProto {
 export const BUILDINGS = {
   townHall: {
     label: LORE.buildings.townHall.name,
+    siteDescription: LORE.buildings.townHall.site,
     description: LORE.buildings.townHall.description,
     kind: 'townHall',
     width: 3,
@@ -64,6 +67,7 @@ export const BUILDINGS = {
   },
   drill: {
     label: LORE.buildings.drill.name,
+    siteDescription: LORE.buildings.drill.site,
     description: LORE.buildings.drill.description,
     kind: 'drill',
     width: 2,
@@ -78,6 +82,7 @@ export const BUILDINGS = {
   },
   nursery: {
     label: LORE.buildings.nursery.name,
+    siteDescription: LORE.buildings.nursery.site,
     description: LORE.buildings.nursery.description,
     kind: 'nursery',
     width: 2,
@@ -92,6 +97,7 @@ export const BUILDINGS = {
   },
   builderHouse: {
     label: LORE.buildings.builderHouse.name,
+    siteDescription: LORE.buildings.builderHouse.site,
     description: LORE.buildings.builderHouse.description,
     kind: 'house',
     width: 2,
@@ -106,6 +112,7 @@ export const BUILDINGS = {
   },
   farm: {
     label: LORE.buildings.farm.name,
+    siteDescription: LORE.buildings.farm.site,
     description: LORE.buildings.farm.description,
     kind: 'farm',
     width: 2,
@@ -120,6 +127,7 @@ export const BUILDINGS = {
   },
   watchtower: {
     label: LORE.buildings.watchtower.name,
+    siteDescription: LORE.buildings.watchtower.site,
     description: LORE.buildings.watchtower.description,
     kind: 'tower',
     width: 2,

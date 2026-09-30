@@ -76,37 +76,47 @@ export const LORE = {
     },
   },
 
+  /**
+   * Chaque bâtiment a deux textes : `site` pour son chantier, `description`
+   * pour le bâtiment fini. Un bâtiment debout ne parle jamais de son chantier.
+   */
   buildings: {
     townHall: {
       name: 'Mairie',
-      description:
+      site:
         'Le premier bâtiment de la colonie. Le jeu commence sur son chantier : ' +
         'il faut y apporter du bois et de la pierre pour l’achever.',
+      description: 'Le cœur de la colonie : si elle tombe, tout est perdu.',
     },
     drill: {
       name: 'Foreuse',
+      site: 'Un bâti de pierre qui attend son fer. Posée sur un filon, elle l’extraira seule.',
       description: 'Machine de récupération qui extrait le filon sous elle.',
     },
     nursery: {
       name: 'Nurserie',
+      site: 'Des murs à monter avant d’y installer le berceau. Il lui faut du bois et de la pierre.',
       description:
         'Un abri chauffé, des couvertures, un berceau. Toutes les dix minutes, ' +
         'un enfant y naît et la colonie grandit d’un survivant.',
     },
     builderHouse: {
       name: 'Maison des constructeurs',
+      site: 'Le dortoir de quatre ouvriers, encore à l’état de planches et de tôle empilées.',
       description:
         'Un dortoir de planches et de tôle pour quatre ouvriers. Ce sont eux ' +
         'qui, bientôt, porteront les ressources à la place d’Adam.',
     },
     farm: {
       name: 'Ferme',
+      site: 'Une cabane à outils à monter avant de retourner la terre. Quatre ouvriers y travailleront.',
       description:
         'Quelques sillons dans la terre irradiée et une cabane à outils. Quatre ' +
         'ouvriers y font pousser de quoi nourrir la colonie.',
     },
     watchtower: {
       name: 'Tour de guet',
+      site: 'Quatre poteaux plantés, une plateforme à clouer dessus. L’arc viendra ensuite.',
       description:
         'Une plateforme de planches sur quatre poteaux, avec un arc et un carquois. ' +
         'Elle tire seule sur tout mutant qui passe à sa portée.',
