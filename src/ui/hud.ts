@@ -29,6 +29,7 @@ import type { EntityId } from '../sim/types.ts';
 import { TICKS_PER_SECOND, siteMissing, type World } from '../sim/world.ts';
 import { tutorialHint } from './hint.ts';
 import { itemAmount, itemIcon, uiIcon } from './icons.ts';
+import { mapUrl, seedLine } from './seed.ts';
 
 const REJECTION_LABELS: Record<PlacementRejection, string> = {
   occupied: 'Emplacement déjà occupé',
@@ -127,15 +128,20 @@ export class Hud {
     const defeatPanel = element('div', 'panel overlay-panel');
     const defeatTitle = element('h2', 'overlay-title');
     const defeatText = element('p', 'overlay-text');
-    const retry = element('button', 'button-primary');
+    const replay = element('button', 'button-primary');
+    const fresh = element('button', 'button-secondary');
 
     this.defeatStats = element('dl', 'overlay-stats');
     defeatTitle.textContent = `La ${LORE.buildings.townHall.name.toLowerCase()} est tombée`;
     defeatText.textContent = 'Les mutants ont eu raison du premier toit de la colonie.';
-    retry.type = 'button';
-    retry.textContent = 'Recommencer';
-    retry.addEventListener('click', () => window.location.reload());
-    defeatPanel.append(defeatTitle, defeatText, this.defeatStats, retry);
+    // La sauvegarde est déjà effacée : l'adresse seule décide de la carte.
+    replay.type = 'button';
+    replay.textContent = 'Rejouer cette carte';
+    replay.addEventListener('click', () => window.location.assign(mapUrl(window.location.href, world.seed)));
+    fresh.type = 'button';
+    fresh.textContent = 'Nouvelle carte';
+    fresh.addEventListener('click', () => window.location.assign(mapUrl(window.location.href, null)));
+    defeatPanel.append(defeatTitle, defeatText, this.defeatStats, replay, fresh, seedLine(world.seed));
     this.defeat.append(defeatPanel);
 
     // Le haut de l'écran se met en page tout seul : la quête, son conseil

@@ -1166,6 +1166,33 @@ button {
   background: rgb(217 42 91 / 0.5);
 }
 
+/* La carte jouée, en petit sous les boutons : à noter ou à partager, pas à lire d'abord. */
+.seed-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.seed-share {
+  padding: 4px 12px;
+  border: none;
+  border-radius: 999px;
+  background: var(--paper-shade);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--violet);
+}
+
+.seed-share:active {
+  transform: translateY(1px);
+}
+
 /* ------------------------------------------------------------- écran titre */
 
 /* La carte reste visible derrière un voile léger : on voit le monde où l'on va entrer. */
