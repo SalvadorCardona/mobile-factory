@@ -984,6 +984,40 @@ button.hud-stock:active {
   color: var(--coral-shade);
 }
 
+/* L'objet refusé : il tressaute sur place, en corail, et s'efface — Adam n'en prend plus. */
+.hud-float[data-refused='true'] {
+  gap: 5px;
+  padding: 1px 9px 1px 6px;
+  font-size: 14px;
+  color: var(--danger);
+  animation: hud-float-refuse 800ms ease-out forwards;
+}
+
+@keyframes hud-float-refuse {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 0);
+  }
+  15% {
+    opacity: 1;
+    transform: translate(-58%, -6px);
+  }
+  30% {
+    transform: translate(-42%, -6px);
+  }
+  45% {
+    transform: translate(-55%, -6px);
+  }
+  60% {
+    opacity: 1;
+    transform: translate(-50%, -6px);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -10px);
+  }
+}
+
 @keyframes hud-float-up {
   0% {
     opacity: 0;

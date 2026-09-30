@@ -13,7 +13,7 @@
 
 import { BUILDINGS } from '../data/buildings.ts';
 import { EVE, EVE_LINES } from '../data/eve.ts';
-import type { ItemId } from '../data/items.ts';
+import { ITEMS, type ItemId } from '../data/items.ts';
 import type { World } from '../sim/world.ts';
 
 /** Ce que le joueur a déjà fait : un conseil compris ne revient pas. */
@@ -27,6 +27,26 @@ export interface HintProgress {
 export interface Advice {
   text: string;
   wants: ItemId | null;
+}
+
+/** Le sac contient-il au moins un objet qu'on attend quelque part — chantier, recette ou ville ? */
+export function carriesWanted(world: World): boolean {
+  return world.player.inventory.entries().some(([item]) => world.wanted(item) > 0);
+}
+
+/**
+ * Le conseil d'un sac plein dont personne ne veut rien : il ne sert à rien
+ * d'aller livrer, il faut poser un chantier ou jeter. On nomme l'objet qui
+ * prend le plus de place. `null` si le sac n'est pas dans ce cas.
+ */
+export function uselessBagHint(world: World): string | null {
+  const { inventory } = world.player;
+
+  if (inventory.freeSpace() > 0 || carriesWanted(world)) return null;
+
+  const [bulk] = inventory.entries().sort((a, b) => b[1] - a[1])[0] ?? [];
+
+  return bulk ? EVE_LINES.hints.bagUseless.replace('{item}', ITEMS[bulk].label.toLowerCase()) : null;
 }
 
 export function tutorialHint(world: World, progress: HintProgress, towers: boolean, mutants: number): string | null {
@@ -47,6 +67,10 @@ export function tutorialAdvice(world: World, progress: HintProgress, towers: boo
     const needs = (item: ItemId): boolean => (hall.delivered[item] ?? 0) < (cost[item] ?? 0);
     const carries = (Object.keys(cost) as ItemId[]).some((item) => needs(item) && inventory.count(item) > 0);
 
+    const useless = uselessBagHint(world);
+
+    if (useless) return say(useless);
+    // Sac plein, mais de quoi livrer : le chantier le prendra.
     if (inventory.freeSpace() <= 0) return say(lines.bagFull);
     if (!progress.harvestedWood && needs('wood')) return say(lines.wood, 'wood');
     if (!progress.harvestedStone && needs('stone')) return say(lines.stone, 'stone');

@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { BUILDINGS } from '../data/buildings.ts';
 import { EVE, EVE_LINES } from '../data/eve.ts';
 import { World } from '../sim/world.ts';
-import { tutorialAdvice, tutorialHint, type HintProgress } from './hint.ts';
+import { INVENTORY_CAPACITY } from '../sim/player.ts';
+import { tutorialAdvice, tutorialHint, uselessBagHint, type HintProgress } from './hint.ts';
 
 const FRESH: HintProgress = { harvestedWood: false, harvestedStone: false, delivered: false };
 
@@ -67,5 +68,64 @@ describe('tutorialHint', () => {
     expect(tutorialAdvice(world, FRESH, true, 0)?.wants).toBe('coal');
     // Pendant une vague, l'arc d'abord.
     expect(tutorialAdvice(world, FRESH, true, 3)?.wants).not.toBe('coal');
+  });
+});
+
+describe('conseil du sac plein', () => {
+  const USELESS = /^Ton sac est plein de bois, Adam : pose un chantier qui en a besoin/;
+  const DELIVER = EVE_LINES.hints.bagFull;
+
+  /** Une partie dont la mairie a déjà reçu tout son bois. */
+  function woodDelivered(): World {
+    const world = new World(1);
+    const hall = world.entities.get(world.townHallId);
+
+    if (hall?.kind !== 'site') throw new Error('la partie ne commence plus sur le chantier de la mairie');
+    hall.delivered = { wood: BUILDINGS.townHall.cost.wood };
+    return world;
+  }
+
+  it('dit que le sac plein de bois ne sert à aucun chantier', () => {
+    const world = woodDelivered();
+
+    world.player.inventory.add('wood', INVENTORY_CAPACITY);
+
+    expect(tutorialHint(world, FRESH, false, 0)).toMatch(USELESS);
+    expect(tutorialHint(world, FRESH, false, 0)).not.toMatch(/chantier !/);
+  });
+
+  it('nomme l’objet qui prend le plus de place', () => {
+    const world = woodDelivered();
+
+    world.player.inventory.add('coal', 20);
+    world.player.inventory.add('wood', INVENTORY_CAPACITY - 20);
+
+    expect(uselessBagHint(world)).toMatch(USELESS);
+  });
+
+  it('envoie livrer quand le sac plein contient ce que le chantier attend', () => {
+    const world = woodDelivered();
+
+    world.player.inventory.add('wood', INVENTORY_CAPACITY - 1);
+    world.player.inventory.add('stone', 1);
+
+    expect(uselessBagHint(world)).toBeNull();
+    expect(tutorialHint(world, FRESH, false, 0)).toBe(DELIVER);
+  });
+
+  it('se tait tant que le sac n’est pas plein', () => {
+    const world = woodDelivered();
+
+    world.player.inventory.add('wood', INVENTORY_CAPACITY - 1);
+
+    expect(uselessBagHint(world)).toBeNull();
+  });
+
+  it('se tait une fois la mairie debout : tout se dépose en ville', () => {
+    const world = builtWorld();
+
+    world.player.inventory.add('coal', INVENTORY_CAPACITY);
+
+    expect(uselessBagHint(world)).toBeNull();
   });
 });

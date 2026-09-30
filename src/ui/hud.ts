@@ -51,7 +51,7 @@ import type { Entity } from '../sim/types.ts';
 import { ticksToNight } from '../sim/dayNight.ts';
 import { currentQuest, questProgress } from '../sim/eve.ts';
 import { TICKS_PER_SECOND, type Workforce, type World } from '../sim/world.ts';
-import { tutorialAdvice, type Advice } from './hint.ts';
+import { carriesWanted, tutorialAdvice, type Advice } from './hint.ts';
 import { buildingIcon, itemAmount, itemIcon, uiIcon } from './icons.ts';
 import { mapUrl, seedLine } from './seed.ts';
 
@@ -323,7 +323,11 @@ export class Hud {
       if (reason === 'empty') this.notify('Le coffre est vide', 'bad');
       if (reason === 'bagFull') this.notify('Sac plein — rien à prendre de plus', 'bad');
     });
-    world.events.on('inventoryFull', () => this.notify('Sac plein — allez livrer le chantier', 'bad'));
+    world.events.on('inventoryFull', () => this.notify(this.bagFullMessage(), 'bad'));
+    world.events.on('harvestRefused', ({ item }) => {
+      this.refused(item);
+      this.notify(`Assez de ${ITEMS[item].label.toLowerCase()} : aucun chantier n’en attend plus`, 'info');
+    });
     world.events.on('buildingCompleted', ({ id }) => {
       const entity = world.entities.get(id);
 
@@ -558,6 +562,26 @@ export class Hud {
     floater.append(`${delta > 0 ? '+' : '−'}${Math.abs(delta)}`, itemIcon(item, 18));
     this.floats.append(floater);
     window.setTimeout(() => floater.remove(), FLOAT_MS);
+  }
+
+  /** L'icône de l'objet refusé, qui tressaute au-dessus d'Adam : il n'en prend plus. */
+  private refused(item: ItemId): void {
+    const { player } = this.world;
+    const { x, y } = this.project(player.x, player.y - 44);
+    const floater = element('span', 'hud-float');
+
+    floater.dataset['refused'] = 'true';
+    floater.style.left = `${Math.round(x)}px`;
+    floater.style.top = `${Math.round(y)}px`;
+    floater.append(itemIcon(item, 18), 'assez');
+    this.floats.append(floater);
+    window.setTimeout(() => floater.remove(), FLOAT_MS);
+  }
+
+  /** « Sac plein » dit où vider : la ville, le chantier qui attend ce qu'Adam porte, ou le sol. */
+  private bagFullMessage(): string {
+    if (this.world.townStock()) return 'Sac plein — allez déposer en ville';
+    return carriesWanted(this.world) ? 'Sac plein — allez livrer le chantier' : 'Sac plein — tapez le sac, puis « Jeter »';
   }
 
   /** « Mairie bâtie ! » qui monte du toit d'un bâtiment achevé et s'efface. */
