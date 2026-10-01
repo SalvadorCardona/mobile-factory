@@ -176,6 +176,16 @@ export class GameRenderer {
     this.ghostLayer.refuse();
   }
 
+  /**
+   * La mairie vient d'être frappée. Si elle est hors de l'écran, son repère
+   * clignote ; renvoie vrai dans ce cas, pour que le HUD sonne l'alarme.
+   */
+  public alarmTownHall(): boolean {
+    if (!this.indicators.hallOffScreen) return false;
+    this.indicators.alarm();
+    return true;
+  }
+
   /** Secoue la caméra : 0.2 pour un coup, 0.6 pour un effondrement. */
   public shake(amount: number): void {
     this.camera.shake(amount);

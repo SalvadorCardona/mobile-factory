@@ -450,3 +450,14 @@ export function nextUpgrade(id: BuildingId, level: number): BuildingUpgrade | nu
 export function isBuildingId(value: string): value is BuildingId {
   return value in BUILDINGS;
 }
+
+/**
+ * Réparer : Adam heurte un bâtiment abîmé avec du bois dans le sac, ou
+ * appuie sur « Réparer » dans sa fenêtre (le sac, puis la ville dans son
+ * rayon). Chaque objet `item` rend `hp` points de vie. Ève, une fois là,
+ * répare gratis : Adam, lui, tient la mairie jusqu'à son arrivée.
+ */
+export const REPAIR = {
+  item: 'wood',
+  hp: 10,
+} as const satisfies { item: ItemId; hp: number };

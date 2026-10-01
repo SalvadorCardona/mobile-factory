@@ -133,6 +133,36 @@ button {
   }
 }
 
+/*
+ * La mairie frappée hors de l'écran : une bande corail foncé cerne l'écran
+ * et clignote, plus franche que la vignette d'alerte — le joueur est loin,
+ * il doit le voir du coin de l'œil.
+ */
+.hud::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 0 7px var(--coral-shade),
+    inset 0 0 36px 10px rgb(255 77 109 / 0.55);
+  opacity: 0;
+  transition: opacity 400ms ease-out;
+}
+
+.hud[data-alarm='true']::before {
+  animation: alarm-blink 0.5s steps(2, jump-none) infinite;
+}
+
+@keyframes alarm-blink {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.25;
+  }
+}
+
 /* Le HUD flotte au-dessus du canvas et ne capte le doigt que sur ses boutons. */
 .hud {
   position: absolute;

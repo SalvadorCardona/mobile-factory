@@ -159,6 +159,8 @@ interface Puddle {
 interface Corpse {
   puppet: Puppet;
   left: number;
+  /** Taille du vivant : le gros mutant s'écrase en gros. */
+  scale: number;
 }
 
 export class MobileLayer {
@@ -201,7 +203,7 @@ export class MobileLayer {
         view.puppet.root.position.set(x, y);
         view.puppet.root.zIndex = y;
         this.container.addChild(view.puppet.root);
-        this.corpses.push({ puppet: view.puppet, left: DEATH_MS });
+        this.corpses.push({ puppet: view.puppet, left: DEATH_MS, scale: view.puppet.root.scale.x });
       }
     };
 
@@ -494,8 +496,11 @@ export class MobileLayer {
       const foe = mobile.kind === 'mutant' || mobile.kind === 'beast';
       const { id, ...options } = puppetOf(mobile);
       const puppet = new Puppet(this.library, id, this.tiles.shadow('grass'), options);
+      // Le gros mutant est un mutant en plus grand, ombre comprise.
+      const scale = mobile.kind === 'mutant' ? ENEMIES[mobile.proto].scale : 1;
       let hp: Graphics | null = null;
 
+      puppet.root.scale.set(scale);
       root.addChild(puppet.root);
 
       const bike = mobile.kind === 'eve' ? this.bike(this.tiles.shadow('grass')) : null;
@@ -506,7 +511,7 @@ export class MobileLayer {
         const proto = SPRITES[id];
 
         hp = new Graphics();
-        hp.position.set(-9, -proto.height * proto.anchorY - 2);
+        hp.position.set(-9, -proto.height * proto.anchorY * scale - 2);
         hp.visible = false;
         root.addChild(hp);
         root.alpha = 0;
@@ -585,7 +590,7 @@ export class MobileLayer {
       const t = 1 - corpse.left / DEATH_MS;
       const root = corpse.puppet.root;
 
-      root.scale.set(1 + t * 0.5, Math.max(0.12, 1 - t * 1.2));
+      root.scale.set(corpse.scale * (1 + t * 0.5), corpse.scale * Math.max(0.12, 1 - t * 1.2));
       root.alpha = t < 0.5 ? 1 : 1 - (t - 0.5) * 2;
 
       if (corpse.left === 0) {

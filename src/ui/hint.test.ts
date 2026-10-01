@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { BUILDINGS } from '../data/buildings.ts';
+import { BUILDINGS, REPAIR } from '../data/buildings.ts';
 import { EVE, EVE_LINES } from '../data/eve.ts';
 import { World } from '../sim/world.ts';
 import { INVENTORY_CAPACITY } from '../sim/player.ts';
 import { harvestRefusedText, tutorialAdvice, tutorialHint, uselessBagHint, type HintProgress } from './hint.ts';
 
-const FRESH: HintProgress = { harvestedWood: false, harvestedStone: false, delivered: false };
+const FRESH: HintProgress = { harvestedWood: false, harvestedStone: false, delivered: false, repaired: false };
 
 /** Un monde dont la mairie est bâtie : le sac livré, le dernier objet l'achève. */
 function builtWorld(): World {
@@ -68,6 +68,26 @@ describe('tutorialHint', () => {
 
     world.townStock()!.add('stone', 1);
     expect(tutorialHint(world, FRESH, true, 0)).toBeNull();
+  });
+
+  it('apprend à réparer la mairie abîmée entre deux vagues, tant qu’Ève n’est pas là', () => {
+    const world = builtWorld();
+    const hall = world.entities.get(world.townHallId);
+
+    if (hall?.kind !== 'townHall') throw new Error('la mairie devrait être bâtie');
+    world.townStock()!.add('stone', 1);
+    hall.hp -= REPAIR.hp;
+
+    // Pas de bois sous la main : Ève envoie en chercher.
+    world.player.inventory.remove('wood', world.player.inventory.count('wood'));
+    world.townStock()!.remove('wood', world.townStock()!.available('wood'));
+    expect(tutorialAdvice(world, FRESH, true, 0)).toEqual({ text: EVE_LINES.hints.repairFetch, wants: REPAIR.item });
+
+    world.player.inventory.add(REPAIR.item, 1);
+    expect(tutorialHint(world, FRESH, true, 0)).toBe(EVE_LINES.hints.repair);
+    // Pendant la vague, l'arc d'abord ; une fois qu'Adam sait réparer, elle se tait.
+    expect(tutorialHint(world, FRESH, true, 1)).not.toBe(EVE_LINES.hints.repair);
+    expect(tutorialHint(world, { ...FRESH, repaired: true }, true, 0)).toBeNull();
   });
 
   it('annonce la forge une fois débloquée, et envoie chercher du charbon', () => {

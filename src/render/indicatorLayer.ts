@@ -14,7 +14,8 @@
  * - vert fluo, plus gros et qui bat, vers le point d'où surgira la
  *   prochaine vague, pendant les trois secondes de son annonce ;
  * - jaune, avec un petit toit, vers la mairie (ou son chantier) quand elle
- *   sort du champ, qui pulse tant que le chantier attend quelque chose ;
+ *   sort du champ, qui pulse tant que le chantier attend quelque chose, et
+ *   qui grossit et clignote en corail quand la mairie est frappée (`alarm`) ;
  * - dans la teinte de sa famille, avec l'icône de l'objet, vers le gisement
  *   le plus proche de la ressource que réclame le conseil. Un gisement que le
  *   joueur n'a encore jamais eu à l'écran est une piste : un « ? » l'annonce.
@@ -60,6 +61,10 @@ const CLEARANCE = 30;
 
 /** Place réservée sous la zone utile pour l'étiquette de distance. */
 const LABEL_ROOM = 20;
+
+/** Durée du clignotement du repère de la mairie après un coup, en ms, et sa cadence. */
+const ALARM_MS = 2500;
+const ALARM_BLINK_MS = 180;
 
 /** Au-delà de cette distance en tuiles, un mutant hors champ est dessiné au minimum d'opacité. */
 const FAR_TILES = 24;
@@ -142,6 +147,7 @@ export class IndicatorLayer {
   private insetTop = MARGIN_TOP;
   private insetBottom = MARGIN_BOTTOM;
   private obstacles: readonly ScreenRect[] = [];
+  private alarmMs = 0;
 
   /** Centre de la pastille de la mairie au dernier cadre, pour le tap. */
   private home: Pin | null = null;
@@ -183,10 +189,21 @@ export class IndicatorLayer {
     return this.home !== null && Math.hypot(x - this.home.x, y - this.home.y) <= HIT_RADIUS;
   }
 
+  /** Vrai si la mairie était hors de l'écran au dernier cadre : son repère était dessiné. */
+  public get hallOffScreen(): boolean {
+    return this.home !== null;
+  }
+
+  /** La mairie vient d'être frappée : son repère clignote quelques secondes. */
+  public alarm(): void {
+    this.alarmMs = ALARM_MS;
+  }
+
   public update(camera: Camera, deltaMs: number, alpha: number): void {
     const g = this.graphics;
 
     this.elapsed += deltaMs;
+    this.alarmMs = Math.max(0, this.alarmMs - deltaMs);
     g.clear();
     this.icon.visible = false;
     this.homeLabel.visible = false;
@@ -253,7 +270,9 @@ export class IndicatorLayer {
       const x = (hall.tx + hall.width / 2) * TILE_SIZE;
       const y = (hall.ty + hall.height / 2) * TILE_SIZE;
       const pulse = hall.kind === 'site' ? 1 + Math.sin(this.elapsed / 180) * 0.12 : 1;
-      const center = this.arrow(camera, zone, x, y, 'yellow', 1, pulse, 'home');
+      const blink = this.alarmMs > 0 && Math.floor(this.alarmMs / ALARM_BLINK_MS) % 2 === 0;
+      const scale = this.alarmMs > 0 ? 1.3 + Math.sin(this.elapsed / 90) * 0.1 : pulse;
+      const center = this.arrow(camera, zone, x, y, blink ? 'coral' : 'yellow', 1, scale, 'home');
       const tiles = Math.hypot(x - px, y - py) / TILE_SIZE;
 
       this.home = center;
@@ -343,8 +362,10 @@ export class IndicatorLayer {
     });
 
     if (glyph === 'home') {
-      // Un petit toit corail et sa porte : c'est la maison, pas un ennemi.
-      g.poly([cx0 - 6.5, cy0, cx0, cy0 - 6.5, cx0 + 6.5, cy0]).fill({ color: hex(PALETTE.coral.base), alpha: opacity });
+      // Un petit toit corail et sa porte : c'est la maison, pas un ennemi. Jaune sur la pastille d'alarme.
+      const roof = tone === 'coral' ? PALETTE.yellow.base : PALETTE.coral.base;
+
+      g.poly([cx0 - 6.5, cy0, cx0, cy0 - 6.5, cx0 + 6.5, cy0]).fill({ color: hex(roof), alpha: opacity });
       g.roundRect(cx0 - 4.5, cy0, 9, 6, 2).fill({ color: hex(PALETTE.yellow.light), alpha: opacity });
       g.roundRect(cx0 - 1.5, cy0 + 1.5, 3, 4.5, 1.5).fill({ color: hex(PALETTE.violet.shade), alpha: opacity });
     } else if (glyph === 'item') {

@@ -15,6 +15,7 @@ export type SoundName =
   | 'deny'
   | 'rock'
   | 'deliver'
+  | 'repair'
   | 'build'
   | 'upgrade'
   | 'arrow'
@@ -142,6 +143,12 @@ export const SOUNDS: Record<SoundName, (ctx: AudioContext, out: AudioNode, at: n
   /** Un objet posé sur le chantier. */
   deliver(ctx, out, at) {
     tone(ctx, out, at, 'square', 660, 880, { decay: 0.06, peak: 0.18 });
+  },
+
+  /** Un bois cloué sur un bâtiment abîmé : un petit coup de marteau, puis une note qui monte. */
+  repair(ctx, out, at) {
+    burst(ctx, out, at, 'bandpass', 1800 * vary(0.1), 900, { decay: 0.04, peak: 0.5 });
+    tone(ctx, out, at + 0.04, 'triangle', 523, 784, { decay: 0.12, peak: 0.25 });
   },
 
   /** Chantier achevé : trois notes qui montent. */

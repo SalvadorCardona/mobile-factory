@@ -312,6 +312,7 @@ async function main(): Promise<void> {
 
   wireAudio(world, audio, hud);
   wireParticles(world, renderer);
+  wireAlarm(world, renderer, hud);
   // Le joueur vise ou lit : un bâtiment armé, le menu, une fenêtre ou le sac ouverts.
   wireShake(
     world,
@@ -448,6 +449,7 @@ function wireAudio(world: World, audio: AudioEngine, hud: Hud): void {
   world.events.on('buildingDamaged', ({ hp }) => {
     if (hp > 0) audio.play('thud');
   });
+  world.events.on('playerRepaired', () => audio.play('repair'));
   world.events.on('buildingDestroyed', () => audio.play('collapse'));
   world.events.on('siteCancelled', () => audio.play('deliver'));
   world.events.on('waveCountdown', ({ seconds }) => {
@@ -633,6 +635,16 @@ function wireParticles(world: World, renderer: GameRenderer): void {
     for (let i = 0; i <= hall.width; i += 1) {
       particles.burst((hall.tx + i) * TILE_SIZE, hall.ty * TILE_SIZE, CELEBRATION_COLORS, 8, 0.16);
     }
+  });
+}
+
+/**
+ * La mairie frappée hors de l'écran : son repère clignote, le bord de l'écran
+ * vire au rouge et le téléphone vibre. Sous les yeux du joueur, la secousse suffit.
+ */
+function wireAlarm(world: World, renderer: GameRenderer, hud: Hud): void {
+  world.events.on('buildingDamaged', ({ id, hp }) => {
+    if (id === world.townHallId && hp > 0 && renderer.alarmTownHall()) hud.alarm();
   });
 }
 
