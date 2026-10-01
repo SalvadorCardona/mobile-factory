@@ -9,8 +9,10 @@
  * jamais — c'est le rôle des commandes.
  *
  * Ce qu'il montre :
- * - la **quête** en haut : le chantier de la mairie avec une barre par
- *   ressource, puis la santé de la mairie, la nuit et son compte à rebours ;
+ * - la **quête** en haut : l'objectif en cours (`data/objectives.ts`) — le
+ *   chantier de la mairie avec une barre par ressource, puis une jauge par
+ *   condition — sous lequel restent la santé de la mairie, la nuit et son
+ *   compte à rebours ;
  * - la **météo** dessous, en capsule : ce qui arrive et dans combien de
  *   temps, puis ce qui tombe et pour combien de temps encore ;
  * - un **conseil** sous la quête, qui suit ce que fait le joueur (couper,
@@ -39,8 +41,9 @@
  *   vague repoussée ! » quand le dernier tombe ; un gros mutant s'annonce à part ;
  * - l'**alarme** quand la mairie est frappée hors de l'écran : bord rouge
  *   qui clignote, et vibration du téléphone s'il en a une ;
- * - l'écran de **défaite**, avec le bilan de la partie et les graines qu'elle
- *   laisse au jardin des souvenirs ;
+ * - la **célébration** d'un objectif réussi : un bandeau, une pluie de feuilles ;
+ * - l'écran de **victoire**, avec le bilan de la partie, et celui de
+ *   **défaite**, avec en plus les graines qu'elle laisse au jardin des souvenirs ;
  * - les statistiques de debug, seulement avec `?debug` (ou la touche `²`/`` ` ``).
  */
 
@@ -49,10 +52,12 @@ import { BUILDINGS, buildingLevel } from '../data/buildings.ts';
 import { ITEMS, type ItemId } from '../data/items.ts';
 import { EVE_LINES } from '../data/eve.ts';
 import { LORE } from '../data/lore.ts';
+import { OBJECTIVES, type Goal } from '../data/objectives.ts';
 import { seedsFor } from '../data/perks.ts';
 import { QUESTS, TOOLS, type QuestReward } from '../data/quests.ts';
 import { RESEARCH } from '../data/research.ts';
 import { WEATHER, WEATHER_CALENDAR } from '../data/weather.ts';
+import type { UiIcon } from '../art/ui.ts';
 import type { AtlasStats } from '../render/spriteLibrary.ts';
 import type { WaterStats } from '../render/waterLayer.ts';
 import type { PlacementRejection, RepairRejection } from '../sim/commands.ts';
@@ -60,6 +65,7 @@ import type { Compass } from '../sim/enemies.ts';
 import type { Entity } from '../sim/types.ts';
 import { ticksToNight } from '../sim/dayNight.ts';
 import { currentQuest, questProgress } from '../sim/eve.ts';
+import { currentObjective, goalProgress } from '../sim/objectives.ts';
 import { TICKS_PER_SECOND, type Workforce, type World } from '../sim/world.ts';
 import { carriesWanted, harvestRefusedText, tutorialAdvice, type Advice } from './hint.ts';
 import { buildingIcon, itemAmount, itemIcon, uiIcon } from './icons.ts';
@@ -113,6 +119,14 @@ const HINT_FOLD_TICKS = 5 * TICKS_PER_SECOND;
 
 /** Le détail des ouvriers se replie seul au bout de ce délai, compté en ticks comme le conseil. */
 const CREW_FOLD_TICKS = 5 * TICKS_PER_SECOND;
+
+/** Durée du bandeau d'objectif réussi, en ms (cf. `celebration-in` dans le CSS). */
+const CELEBRATION_MS = 4200;
+
+/** Feuilles de la pluie de confettis, et combien il en tombe. */
+const CONFETTI: readonly UiIcon[] = ['leafMint', 'leafMint', 'leafYellow', 'petal'];
+const CONFETTI_COUNT = 36;
+const CONFETTI_MS = 3200;
 
 /** Sous ce seuil, le compte à rebours de la nuit passe au rouge — le crépuscule y est déjà. */
 const WAVE_WARNING_SECONDS = 10;
@@ -169,6 +183,12 @@ export class Hud {
   private readonly weather: HTMLElement;
   private readonly defeat: HTMLElement;
   private readonly defeatStats: HTMLElement;
+  private readonly victory: HTMLElement;
+  private readonly victoryStats: HTMLElement;
+  private readonly celebration: HTMLElement;
+  private readonly confetti: HTMLElement;
+  private celebrationTimer = 0;
+  private onContinue: () => void = () => {};
   private readonly speech: HTMLElement;
   private readonly defeatSeeds: HTMLElement;
   public readonly audioButton: HTMLButtonElement;
@@ -315,6 +335,31 @@ export class Hud {
     defeatPanel.append(defeatTitle, defeatText, this.defeatStats, this.defeatSeeds, replay, fresh, seedLine(world.seed));
     this.defeat.append(defeatPanel);
 
+    this.victory = element('div', 'overlay hud-victory');
+    this.victory.hidden = true;
+
+    const victoryPanel = element('div', 'panel overlay-panel');
+    const victoryTitle = element('h2', 'overlay-title');
+    const victoryText = element('p', 'overlay-text');
+    const endless = element('button', 'button-primary');
+
+    this.victoryStats = element('dl', 'overlay-stats');
+    victoryTitle.textContent = 'La colonie vivra';
+    victoryText.textContent = 'Les mutants n’ont pas eu raison de la colonie : la vie a repris ses droits.';
+    endless.type = 'button';
+    endless.textContent = 'Continuer en mode infini';
+    endless.addEventListener('click', () => {
+      this.victory.hidden = true;
+      this.onContinue();
+    });
+    victoryPanel.append(uiIcon('goal', 56), victoryTitle, victoryText, this.victoryStats, endless);
+    this.victory.append(victoryPanel);
+
+    this.celebration = element('div', 'hud-celebration');
+    this.celebration.hidden = true;
+    this.celebration.setAttribute('role', 'status');
+    this.confetti = element('div', 'hud-confetti');
+
     // Le haut de l'écran se met en page tout seul : la quête et son conseil,
     // et à côté une colonne avec les boutons sur une ligne, le sac dessous.
     // Rien ne se chevauche, et rien ne bouge quand le conseil change.
@@ -334,6 +379,9 @@ export class Hud {
       this.toasts,
       this.floats,
       this.stats,
+      this.confetti,
+      this.celebration,
+      this.victory,
       this.defeat,
     );
 
@@ -461,6 +509,22 @@ export class Hud {
       if (reason === 'outOfReach') this.notify(REJECTION_LABELS.outOfReach, 'bad');
       if (reason === 'nothingToGive') this.notify('Rien dans le sac ni en ville que cette recherche attende', 'bad');
     });
+    world.events.on('objectiveCompleted', ({ index, stored }) => {
+      // Le dernier objectif, c'est l'écran de victoire qui le fête.
+      if (index < OBJECTIVES.length - 1) this.celebrateObjective(index);
+
+      const kept = (Object.entries(stored) as [ItemId, number][]).filter(([, amount]) => amount > 0);
+
+      if (kept.length > 0) {
+        this.notify(`Sac plein : ${kept.map(([item, amount]) => `${amount} ${ITEMS[item].label.toLowerCase()}`).join(', ')} attend à la mairie`, 'info');
+      }
+    });
+    world.events.on('victory', () => this.showVictory());
+  }
+
+  /** Ce que fait « Continuer en mode infini » : `main.ts` relance l'horloge. */
+  public setOnContinue(onContinue: () => void): void {
+    this.onContinue = onContinue;
   }
 
   /* -------------------------------------------------------------------- Ève */
@@ -757,7 +821,7 @@ export class Hud {
       const cost = Object.entries(BUILDINGS[hall.proto].cost) as [ItemId, number][];
 
       this.quest.dataset['mode'] = 'build';
-      this.questTitle.textContent = 'Objectif';
+      this.questTitle.textContent = objectiveLabel(world.objective);
       this.questBody.replaceChildren(
         text('hud-quest-goal', `Bâtir la ${name}`),
         ...cost.map(([item, needed]) => meter(item, hall.delivered[item] ?? 0, needed)),
@@ -797,12 +861,20 @@ export class Hud {
     const quest = world.eve()?.state === 'idle' || world.eve()?.state === 'repair' ? currentQuest(world.questsDone) : null;
     const progress = quest ? questProgress(quest, world.entities.values()) : null;
 
-    key = `hall:${hall.hp}:${status}:${people}:${workers}:${world.kills}:${quest}:${progress?.have}:${this.crewOpen && JSON.stringify(crew)}`;
+    const objective = currentObjective(world);
+    const goals = objective?.goals ?? [];
+    const reached = goals.map((goal) => goalProgress(world, goal));
+
+    key = `hall:${world.objective}:${reached.map(({ have }) => have).join(',')}:${hall.hp}:${status}:${people}:${workers}:${world.kills}:${quest}:${progress?.have}:${this.crewOpen && JSON.stringify(crew)}`;
     if (key === this.lastQuest) return;
     this.lastQuest = key;
 
+    // L'objectif reste affiché pendant l'attaque : seul le titre crie.
     this.quest.dataset['mode'] = mutants > 0 ? 'wave' : 'defend';
-    this.questTitle.textContent = mutants > 0 ? 'Attaque !' : 'Défendre la colonie';
+    this.questTitle.textContent = mutants > 0 ? 'Attaque !' : objectiveLabel(world.objective);
+
+    const goal = text('hud-quest-goal', objective?.title ?? 'Tenir le plus longtemps possible');
+    const meters = goals.map((condition, i) => goalMeter(condition, reached[i]!.have, reached[i]!.need));
 
     const hp = element('div', 'hud-meter hud-meter-hp');
     const hpLabel = text('hud-meter-label', name);
@@ -822,7 +894,7 @@ export class Hud {
 
     chips.append(chip('people', people + workers, 'Habitants'), this.crewChip(crew.total), chip('mutant', world.kills, 'Mutants abattus'));
     line.append(wave, chips);
-    this.questBody.replaceChildren(hp, line);
+    this.questBody.replaceChildren(goal, ...meters, hp, line);
     if (this.crewOpen) this.questBody.append(crewDetail(crew));
 
     if (quest && progress) {
@@ -1007,6 +1079,74 @@ export class Hud {
     this.town.replaceChildren(title, items);
   }
 
+  /* ------------------------------------------------------------ célébration */
+
+  /** Un objectif réussi : un bandeau qui dit ce qu'il rapporte, et des feuilles qui pleuvent. */
+  private celebrateObjective(index: number): void {
+    const objective = OBJECTIVES[index];
+
+    if (!objective) return;
+
+    const title = text('hud-celebration-title', 'Objectif réussi !');
+
+    title.prepend(uiIcon('goal', 28));
+    this.celebration.replaceChildren(
+      title,
+      text('hud-celebration-goal', objective.title),
+      text('hud-celebration-text', objective.celebration),
+    );
+    this.celebration.hidden = false;
+    this.celebration.style.animation = 'none';
+    void this.celebration.offsetWidth;
+    this.celebration.style.animation = '';
+
+    window.clearTimeout(this.celebrationTimer);
+    this.celebrationTimer = window.setTimeout(() => {
+      this.celebration.hidden = true;
+    }, CELEBRATION_MS);
+
+    this.rainLeaves();
+  }
+
+  /** Des feuilles, des pétales : la pluie de confettis, en CSS. Chacune part au bout de sa chute. */
+  private rainLeaves(): void {
+    for (let i = 0; i < CONFETTI_COUNT; i += 1) {
+      const leaf = uiIcon(CONFETTI[i % CONFETTI.length]!, 18 + Math.round(Math.random() * 12));
+
+      leaf.classList.add('hud-leaf');
+      leaf.style.left = `${Math.round(Math.random() * 100)}%`;
+      leaf.style.setProperty('--delay', `${Math.round(Math.random() * 900)}ms`);
+      leaf.style.setProperty('--drift', `${Math.round((Math.random() - 0.5) * 120)}px`);
+      leaf.style.setProperty('--spin', `${Math.round((Math.random() - 0.5) * 900)}deg`);
+      this.confetti.append(leaf);
+      window.setTimeout(() => leaf.remove(), CONFETTI_MS + 1000);
+    }
+  }
+
+  /* ---------------------------------------------------------------- victoire */
+
+  private showVictory(): void {
+    const { world } = this;
+    const { adults, children, workers } = world.population();
+    let buildings = 0;
+
+    for (const entity of world.entities.values()) if (entity.kind !== 'site') buildings += 1;
+
+    const rows: [string, string][] = [
+      ['Nuits survécues', String(world.stats.nightsSurvived)],
+      ['Mutants abattus', String(world.kills)],
+      ['Habitants', String(adults + children + workers)],
+      ['Bâtiments', String(buildings)],
+      ['Temps de jeu', clock(Math.floor(world.victoryTick / TICKS_PER_SECOND))],
+    ];
+
+    this.victoryStats.replaceChildren(
+      ...rows.flatMap(([label, value]) => [text('', label, 'dt'), text('', value, 'dd')]),
+    );
+    this.victory.hidden = false;
+    this.rainLeaves();
+  }
+
   /* ---------------------------------------------------------------- défaite */
 
   private showDefeat(): void {
@@ -1122,6 +1262,26 @@ function crewDetail({ byBuilding, porters, assigned, free, missing }: Workforce)
     );
   }
   return detail;
+}
+
+/** « Objectif 3/6 », ou « Mode infini » une fois la chaîne bouclée. */
+function objectiveLabel(index: number): string {
+  return index < OBJECTIVES.length ? `Objectif ${index + 1}/${OBJECTIVES.length}` : 'Mode infini';
+}
+
+/** La jauge d'une condition d'objectif : ce qu'elle compte en icône, barre, « 1/3 ». */
+function goalMeter(goal: Goal, have: number, need: number): HTMLElement {
+  const row = element('div', 'hud-meter');
+  const icon =
+    goal.type === 'build'
+      ? buildingIcon(goal.building, 22)
+      : goal.type === 'produce'
+        ? itemIcon(goal.item, 18)
+        : uiIcon(goal.type === 'nights' ? 'mutant' : goal.type === 'quests' ? 'eve' : 'people', 18);
+
+  row.dataset['done'] = String(have >= need);
+  row.append(icon, bar(have / need), text('hud-meter-value', `${have}/${need}`));
+  return row;
 }
 
 /** Une ligne de quête : icône, barre, « 7/20 ». */

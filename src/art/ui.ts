@@ -77,6 +77,22 @@ function restartArrow(cx: number, cy: number, color: (typeof PALETTE)[keyof type
   );
 }
 
+/**
+ * Une feuille de confetti : une capsule en trois tons, penchée, et sa
+ * nervure au trait. Les objectifs réussis en font pleuvoir.
+ */
+function confettiLeaf(tone: 'mint' | 'yellow' | 'coral'): string {
+  const { base, shade, light } = PALETTE[tone];
+
+  return group(
+    'rotate(-35 12 12)',
+    pill(3, 7.5, 18, 10, shade),
+    pill(3, 7, 18, 9, base),
+    pill(6, 8.5, 7, 2.6, light),
+    line(6, 12, 18, 12, shade),
+  );
+}
+
 function round(value: number): number {
   return Math.round(value * 100) / 100;
 }
@@ -216,6 +232,20 @@ export const UI_ICONS = {
   ),
   /** La même, blanche, sur le bouton corail de la confirmation. */
   restartLight: svg(S, S, restartArrow(12.6, 13.6, orange.shade), restartArrow(12, 13, paper.base)),
+  /** Les confettis d'un objectif réussi : des feuilles — la vie reprend. */
+  leafMint: svg(S, S, confettiLeaf('mint')),
+  leafYellow: svg(S, S, confettiLeaf('yellow')),
+  petal: svg(S, S, confettiLeaf('coral')),
+  /** Un drapeau planté : l'objectif en cours. */
+  goal: svg(
+    S,
+    S,
+    line(7, 4, 7, 20, ink.base),
+    shape('M8 4.5h10.5a1.5 1.5 0 0 1 1.1 2.5L17 10l2.6 3a1.5 1.5 0 0 1-1.1 2.5H8Z', coral.shade),
+    shape('M8 4.5h10a1.5 1.5 0 0 1 1.1 2.5L16.5 9.5l2.6 3a1.5 1.5 0 0 1-1.1 2.5H8Z', coral.base),
+    pill(9, 6, 5, 2, coral.light),
+    pill(3.5, 18.5, 9, 3, mint.base),
+  ),
 } as const;
 
 export type UiIcon = keyof typeof UI_ICONS;

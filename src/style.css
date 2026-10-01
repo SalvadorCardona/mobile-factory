@@ -2335,6 +2335,116 @@ button.hud-stock:active {
   transform: translateY(1px);
 }
 
+/* La victoire : un voile menthe, le drapeau de l'objectif au-dessus du titre. */
+.hud-victory {
+  background: rgb(21 168 102 / 0.45);
+}
+
+.hud-victory .overlay-panel > .icon-ui {
+  align-self: center;
+  margin-bottom: -6px;
+}
+
+.hud-victory .overlay-title {
+  color: var(--good);
+}
+
+/* ------------------------------------------------------------ célébration */
+
+/*
+ * Un objectif réussi : une carte menthe qui tombe du haut, rebondit, et
+ * repart. Elle informe, elle ne bloque pas : le doigt passe au travers.
+ */
+.hud-celebration {
+  position: absolute;
+  top: 34%;
+  left: 50%;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: min(340px, calc(100% - 32px));
+  padding: 14px 18px 16px;
+  border-radius: 24px;
+  background: var(--paper);
+  box-shadow: 0 6px 0 var(--mint-shade);
+  text-align: center;
+  pointer-events: none;
+  transform: translateX(-50%);
+  animation: celebration-in 4200ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+.hud-celebration[hidden] {
+  display: none;
+}
+
+.hud-celebration-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--good);
+}
+
+.hud-celebration-goal {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.hud-celebration-text {
+  font-weight: 500;
+  color: var(--muted);
+}
+
+@keyframes celebration-in {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -30px) scale(0.8);
+  }
+  10%,
+  88% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -12px) scale(0.96);
+  }
+}
+
+/* La pluie de feuilles : chacune tombe en tournoyant, avec son propre retard et sa dérive. */
+.hud-confetti {
+  position: absolute;
+  inset: 0;
+  z-index: 11;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.hud-leaf {
+  position: absolute;
+  top: -40px;
+  animation: leaf-fall 3200ms cubic-bezier(0.3, 0.4, 0.6, 1) var(--delay) both;
+}
+
+@keyframes leaf-fall {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0deg);
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--drift), 105vh) rotate(var(--spin));
+  }
+}
+
 /* ------------------------------------------------------------- écran titre */
 
 /* La carte reste visible derrière un voile léger : on voit le monde où l'on va entrer. */

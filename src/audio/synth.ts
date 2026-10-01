@@ -35,7 +35,9 @@ export type SoundName =
   | 'gloop'
   | 'victory'
   | 'pickup'
-  | 'eureka';
+  | 'eureka'
+  | 'objective'
+  | 'colony';
 
 /** Une seconde de bruit blanc, partagée par tous les sons qui en ont besoin. */
 let noiseBuffer: AudioBuffer | null = null;
@@ -277,6 +279,24 @@ export const SOUNDS: Record<SoundName, (ctx: AudioContext, out: AudioNode, at: n
     tone(ctx, out, at, 'sine', 420, 1260, { attack: 0.01, decay: 0.16, peak: 0.22 });
     for (const [i, f] of [784, 988, 1175].entries()) {
       tone(ctx, out, at + 0.16 + i * 0.09, 'triangle', f, f, { attack: 0.01, decay: 0.28, peak: 0.26 });
+    }
+  },
+
+  /** Un objectif réussi : un arpège joyeux qui monte, et une cloche au bout. */
+  objective(ctx, out, at) {
+    for (const [i, f] of [523, 659, 784, 1047, 1319].entries()) {
+      tone(ctx, out, at + i * 0.07, 'triangle', f, f, { decay: 0.2, peak: 0.3 });
+    }
+    tone(ctx, out, at + 0.36, 'sine', 2093, 2093, { attack: 0.01, decay: 0.6, peak: 0.18 });
+  },
+
+  /** La colonie vivra : une petite fanfare, deux accords et une tenue. */
+  colony(ctx, out, at) {
+    for (const [i, chord] of [[392, 494, 587], [440, 554, 659], [523, 659, 784, 1047]].entries()) {
+      const start = at + i * 0.26;
+      const decay = i === 2 ? 1.1 : 0.22;
+
+      for (const f of chord) tone(ctx, out, start, 'triangle', f, f, { attack: 0.01, decay, peak: 0.22 });
     }
   },
 

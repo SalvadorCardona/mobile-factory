@@ -6,7 +6,9 @@
  * déjà jouer ne la voit presque pas.
  *
  * C'est Ève qui parle (`EVE_LINES.hints`) : par radio tant qu'elle n'est pas
- * arrivée, de vive voix ensuite. Elle tutoie Adam.
+ * arrivée, de vive voix ensuite. Elle tutoie Adam. Quand elle n'a rien de
+ * plus pressé à dire, c'est le conseil de l'objectif en cours
+ * (`data/objectives.ts`) : le joueur sait toujours quoi faire ensuite.
  *
  * Fonction pure, sans DOM : `hud.ts` l'affiche, les tests la lisent.
  */
@@ -14,6 +16,7 @@
 import { BUILDINGS, REPAIR, buildingLevel } from '../data/buildings.ts';
 import { EVE, EVE_LINES } from '../data/eve.ts';
 import { ITEMS, type ItemId } from '../data/items.ts';
+import { currentObjective } from '../sim/objectives.ts';
 import type { World } from '../sim/world.ts';
 
 /** Ce que le joueur a déjà fait : un conseil compris ne revient pas. */
@@ -119,5 +122,8 @@ export function tutorialAdvice(world: World, progress: HintProgress, towers: boo
   const forged = [...world.entities.values()].some((entity) => BUILDINGS[entity.proto].kind === 'forge');
 
   if (mutants === 0 && world.isUnlocked('forge') && !forged) return say(lines.forge, 'coal');
-  return null;
+
+  const objective = currentObjective(world);
+
+  return objective ? say(objective.hint) : null;
 }

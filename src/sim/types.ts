@@ -493,3 +493,16 @@ export interface Patient extends Moving {
 }
 
 export type Mobile = Mutant | Beast | Arrow | Kid | Eve | Worker | Lumberjack | Pickup | Patient;
+
+/**
+ * Les compteurs de la partie, que les objectifs lisent. Ils ne font que
+ * monter : un bâtiment détruit ne défait pas une nuit survécue.
+ */
+export interface WorldStats {
+  /** Nuits survécues : l'aube venue, la mairie debout. */
+  nightsSurvived: number;
+  /** Enfants nés, toutes nurseries confondues. */
+  births: number;
+  /** Objets sortis des machines — foreuses, fermes et forges. */
+  produced: Partial<Record<ItemId, number>>;
+}

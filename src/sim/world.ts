@@ -33,6 +33,11 @@
  * ex-mutants — des porteurs de plus (`data/clinic.ts`).
  * Et le temps change : pluie acide, coup de vent, brouillard, arc-en-ciel,
  * lus dans la seed (`sim/weather.ts`) ; le monde n'en garde rien.
+ *
+ * La partie suit une chaîne d'objectifs (`data/objectives.ts`) : la mairie
+ * d'abord, puis des nuits à tenir, les demandes d'Ève, une foreuse, un
+ * enfant. Chacun réussi rapporte sa récompense ; le dernier, c'est la
+ * victoire — et la partie continue, en mode infini.
  */
 
 import { Emitter } from '../core/events.ts';
@@ -65,6 +70,7 @@ import {
   type ColonyScore,
   type PerkId,
 } from '../data/perks.ts';
+import { OBJECTIVES, objectiveBagBonus, type Reward } from '../data/objectives.ts';
 import type { QuestId } from '../data/quests.ts';
 import { RECIPES, type RecipeId, type RecipeProto } from '../data/recipes.ts';
 import { RESEARCH, type ResearchId, type ResearchStat } from '../data/research.ts';
@@ -93,6 +99,7 @@ import { compassOf, spawnPoint, stepMutant, type Compass } from './enemies.ts';
 import { createEve, currentQuest, harvestYieldWithTools, isUnlocked, mostDamaged, questProgress, rideHome, walkTo } from './eve.ts';
 import { stepKid } from './kids.ts';
 import { rollLoot, stepPickup } from './loot.ts';
+import { copyStats, emptyStats, objectiveDone } from './objectives.ts';
 import { denSize, densOfChunk, stepBeast, type Den } from './wildlife.ts';
 import { FULL_TILE, facingOf, type TileBox } from './motion.ts';
 import {
@@ -172,6 +179,7 @@ import type {
   TownHall,
   Worker,
   Yard,
+  WorldStats,
 } from './types.ts';
 
 /** Ce qui remplit un coffre qu'Adam vient vider : foreuse, ferme, forge, cabane de bûcheron. */
@@ -415,6 +423,13 @@ export type WorldEvents = {
   weatherEnded: { id: WeatherId };
   /** La pluie acide a rongé un bâtiment abîmé ; `hp` est ce qui lui reste. */
   buildingCorroded: { id: EntityId; hp: number };
+  /**
+   * L'objectif `index` est réussi et sa récompense est tombée. `stored` : ce
+   * qui n'a pas tenu dans le sac et attend à la mairie.
+   */
+  objectiveCompleted: { index: number; stored: Partial<Record<ItemId, number>> };
+  /** Le dernier objectif est réussi : la colonie vivra. La partie continue. */
+  victory: Record<string, never>;
 };
 
 export class World {
@@ -468,6 +483,21 @@ export class World {
 
   /** Chantiers offerts par les bonus et pas encore ouverts : le prochain de ce bâtiment arrive livré. */
   private giftedSites: BuildingId[] = [];
+
+  /** Index de l'objectif en cours dans `OBJECTIVES` ; leur nombre une fois la chaîne bouclée. */
+  public objective = 0;
+
+  /** Vrai une fois le dernier objectif réussi : la partie continue en mode infini. */
+  public victory = false;
+
+  /** Tick de la victoire ; 0 tant qu'elle n'est pas acquise. */
+  public victoryTick = 0;
+
+  /** Les compteurs que les objectifs lisent. */
+  public stats: WorldStats = emptyStats();
+
+  /** Les compteurs au début de l'objectif en cours : « tenir 5 nuits », c'est à partir de là. */
+  public objectiveBase: WorldStats = emptyStats();
 
   private readonly scheduler = new Scheduler();
   private readonly queue: Command[] = [];
@@ -583,6 +613,11 @@ export class World {
       perks: [...this.perks],
       giftedSites: [...this.giftedSites],
       researchDone: [...this.researchDone],
+      objective: this.objective,
+      victory: this.victory,
+      victoryTick: this.victoryTick,
+      stats: copyStats(this.stats),
+      objectiveBase: copyStats(this.objectiveBase),
       player: { ...player, inventory: inventory.toJSON() },
       resources: this.resources.toJSON(),
       entities: [...this.entities.values()].map(saveEntity),
@@ -629,9 +664,16 @@ export class World {
     this.perks = [...state.perks];
     this.giftedSites = [...state.giftedSites];
     this.researchDone = [...state.researchDone];
+    this.objective = state.objective;
+    this.victory = state.victory;
+    this.victoryTick = state.victoryTick;
+    this.stats = copyStats(state.stats);
+    this.objectiveBase = copyStats(state.objectiveBase);
 
     const { inventory, ...player } = state.player;
-    const capacity = INVENTORY_CAPACITY + bagBonus(this.perks) + this.bonus('bagCapacity');
+    // La taille du sac se relit dans les bonus, les recherches et les récompenses déjà tombées.
+    const capacity =
+      INVENTORY_CAPACITY + bagBonus(this.perks) + this.bonus('bagCapacity') + objectiveBagBonus(state.objective);
 
     Object.assign(this.player, player, { inventory: Store.fromJSON(capacity, inventory) });
     this.resources.restore(state.resources);
@@ -700,6 +742,8 @@ export class World {
 
       if (entity) this.wake(entity);
     }
+
+    this.checkObjectives();
   }
 
   private drainCommands(): void {
@@ -2040,6 +2084,7 @@ export class World {
     }
 
     drill.blocked = false;
+    this.tally(item, amount);
     this.events.emit('drillProduced', { id: drill.id, item });
     this.scheduleDrill(drill);
   }
@@ -2076,6 +2121,7 @@ export class World {
     }
 
     farm.blocked = false;
+    this.tally(item, amount);
     if (farm.kind === 'farm') this.events.emit('farmProduced', { id: farm.id, item });
     this.scheduleFarm(farm);
   }
@@ -2102,6 +2148,7 @@ export class World {
       for (const [item, amount] of amountsOf(recipe.inputs)) forge.store.remove(item, amount);
       for (const [item, amount] of amountsOf(recipe.outputs)) {
         forge.store.add(item, amount);
+        this.tally(item, amount);
         this.events.emit('forgeProduced', { id: forge.id, item });
       }
     }
@@ -2165,6 +2212,7 @@ export class World {
 
     this.mobiles.set(kid.id, kid);
     nursery.born += 1;
+    this.stats.births += 1;
     nursery.nextBirthTick = this.tickCount + recipe.duration;
     this.scheduler.schedule(nursery.id, nursery.nextBirthTick, this.tickCount);
     this.events.emit('childBorn', { nurseryId: nursery.id, kidId: kid.id, x, y });
@@ -2717,6 +2765,63 @@ export class World {
     }
   }
 
+  /* -------------------------------------------------------------- objectifs */
+
+  /** Ce que produisent les machines, pour les objectifs. */
+  private tally(item: ItemId, amount: number): void {
+    this.stats.produced[item] = (this.stats.produced[item] ?? 0) + amount;
+  }
+
+  /**
+   * L'objectif courant est-il réussi ? Alors sa récompense tombe et le
+   * suivant commence — dans le même tick s'il est déjà rempli : une tour
+   * posée avant qu'on la demande compte.
+   */
+  private checkObjectives(): void {
+    if (this.defeated || this.victory) return;
+
+    while (this.objective < OBJECTIVES.length) {
+      const index = this.objective;
+      const objective = OBJECTIVES[index]!;
+
+      if (!objectiveDone(this, objective)) return;
+
+      this.objective += 1;
+      this.objectiveBase = copyStats(this.stats);
+
+      const stored = this.grant(objective.reward);
+
+      this.events.emit('objectiveCompleted', { index, stored });
+    }
+
+    this.victory = true;
+    this.victoryTick = this.tickCount;
+    this.events.emit('victory', {});
+  }
+
+  /** La récompense : le sac d'abord agrandi, puis rempli ; le surplus à la mairie. Renvoie ce surplus. */
+  private grant(reward: Reward): Partial<Record<ItemId, number>> {
+    const hall = this.entities.get(this.townHallId);
+    const stored: Partial<Record<ItemId, number>> = {};
+
+    if (reward.bag) {
+      const { inventory } = this.player;
+
+      this.player.inventory = Store.fromJSON(inventory.capacity + reward.bag, inventory.toJSON());
+    }
+
+    for (const [item, amount] of Object.entries(reward.items ?? {}) as [ItemId, number][]) {
+      const rest = amount - this.player.inventory.add(item, amount);
+
+      // Rien n'est jeté : ce qui ne tient pas dans le sac attend dans l'entrepôt de la mairie.
+      if (rest > 0 && hall && hall.kind !== 'site') stored[item] = hall.store.add(item, rest);
+    }
+
+    if (reward.repair && hall && hall.kind !== 'site') hall.hp = buildingLevel(hall.proto, hall.level).hp;
+
+    return stored;
+  }
+
   /** Ève part du bord de la carte, vers la tuile libre devant la mairie. */
   private sendEve(): void {
     const hall = this.entities.get(this.townHallId);
@@ -3045,6 +3150,8 @@ export class World {
 
       if (added > 0) reward.push([item, added]);
     }
+    // La nuit est survécue : la mairie tient encore (`stepClock` s'arrête à la défaite).
+    this.stats.nightsSurvived += 1;
     this.events.emit('dawnBroke', { night: this.night, reward });
   }
 
