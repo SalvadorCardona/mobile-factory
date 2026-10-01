@@ -54,7 +54,7 @@
  */
 
 import { TILE_SIZE } from '../core/grid.ts';
-import { BUILDINGS, buildingLevel } from '../data/buildings.ts';
+import { BUILDINGS, buildingLevel, type BuildingId } from '../data/buildings.ts';
 import { ITEMS, type ItemId } from '../data/items.ts';
 import { EVE_LINES } from '../data/eve.ts';
 import { LORE } from '../data/lore.ts';
@@ -504,14 +504,14 @@ export class Hud {
 
       if (label) this.notify(label, 'bad');
     });
-    world.events.on('waveCountdown', ({ seconds, night, wave, count, boss, from, x, y }) => {
+    world.events.on('waveCountdown', ({ seconds, night, wave, count, boss, from, targetProto, x, y }) => {
       this.showCountdown(String(seconds));
-      this.announce(night, wave, count, boss, from, { x, y });
+      this.announce(night, wave, count, boss, from, targetProto, { x, y });
     });
     world.events.on('duskFell', () => this.notify('La nuit tombe — rentrez !', 'bad'));
     // Une vague qui n'a pas eu son compte à rebours (partie reprise pile avant) s'annonce quand même.
-    world.events.on('waveStarted', ({ night, wave, count, boss, from, x, y }) => {
-      this.announce(night, wave, count, boss, from, { x, y });
+    world.events.on('waveStarted', ({ night, wave, count, boss, from, targetProto, x, y }) => {
+      this.announce(night, wave, count, boss, from, targetProto, { x, y });
       this.unfoldQuest(QUEST_ALERT_TICKS);
     });
     world.events.on('buildingDamaged', ({ id, hp }) => {
@@ -735,21 +735,34 @@ export class Hud {
     }, TOAST_MS);
   }
 
-  /** Le bandeau d'une vague, une seule fois par vague ; `boss` : un gros mutant mène la charge. */
-  private announce(night: number, wave: number, count: number, boss: boolean, from: Compass, origin: { x: number; y: number }): void {
+  /**
+   * Le bandeau d'une vague, une seule fois par vague ; `boss` : un gros
+   * mutant mène la charge. Il dit ce qu'elle vise : la mairie, ou l'usine.
+   */
+  private announce(
+    night: number,
+    wave: number,
+    count: number,
+    boss: boolean,
+    from: Compass,
+    target: BuildingId,
+    origin: { x: number; y: number },
+  ): void {
     const key = `${night}:${wave}`;
 
     if (key === this.announced) return;
     this.announced = key;
 
-    const plural = count > 1;
+    const plural = count > 1 && !boss;
+    // Tous les bâtiments que vise une vague sont féminins : la mairie, la foreuse, la ferme…
+    const aim = `${plural ? 'ils visent' : 'il vise'} la ${BUILDINGS[target].label.toLowerCase()} !`;
 
     this.showBanner(
       'wave',
       wave === 1 ? `Nuit ${night}` : 'Renforts',
       boss
-        ? `Un gros mutant mène la charge ${FROM_LABELS[from]} !`
-        : `${count} mutant${plural ? 's' : ''} arrive${plural ? 'nt' : ''} ${FROM_LABELS[from]} !`,
+        ? `Un gros mutant mène la charge ${FROM_LABELS[from]} : ${aim}`
+        : `${count} mutant${plural ? 's' : ''} arrive${plural ? 'nt' : ''} ${FROM_LABELS[from]} : ${aim}`,
       origin,
       BANNER_WAVE_MS,
     );

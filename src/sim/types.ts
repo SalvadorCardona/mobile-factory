@@ -279,6 +279,11 @@ export interface Mutant extends Moving {
   attackCooldown: number;
   /** Ticks restants à sortir de la flaque : immobile, et hors d'atteinte des arcs. */
   emerge: number;
+  /**
+   * Le bâtiment que vise sa vague (`WAVES.targets`). Absent — ou tombé
+   * entre-temps — : la mairie.
+   */
+  target?: EntityId;
 }
 
 /**

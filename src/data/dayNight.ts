@@ -22,7 +22,7 @@ export const DAY_CYCLE = {
   /** Crépuscule : la teinte monte, les lampions s'allument, « La nuit tombe — rentrez ». */
   dusk: 20 * 15,
   /** Nuit : les vagues arrivent. */
-  night: 20 * 60,
+  night: 20 * 100,
   /** Aube : la teinte redescend, les mutants fuient, le butin tombe. */
   dawn: 20 * 10,
 } as const;

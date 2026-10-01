@@ -2,13 +2,15 @@
  * Ennemis — contenu pur.
  *
  * Un mutant est un mobile : il se déplace à chaque tick, contrairement aux
- * bâtiments qui dorment entre deux réveils. Il n'a qu'une idée, la mairie,
- * et qu'un comportement : marcher droit dessus, et casser ce qui le bloque.
+ * bâtiments qui dorment entre deux réveils. Il n'a qu'une idée, la cible de
+ * sa vague — la mairie, ou un bâtiment de l'usine (`WAVES.targets`) — et
+ * qu'un comportement : marcher droit dessus, et casser ce qui le bloque.
  *
  * Les vitesses sont en tuiles par seconde, les durées en ticks (20 par
  * seconde), les dégâts en points de vie de bâtiment.
  */
 
+import type { BuildingId } from './buildings.ts';
 import type { ItemId } from './items.ts';
 import type { SpriteId } from './sprites.ts';
 
@@ -90,8 +92,8 @@ export type WaveSpec = Partial<Record<EnemyId, number>>;
  * Rien n'attaque tant que la mairie est en chantier : le joueur apprend à
  * récolter et à livrer en paix. Une fois le toit posé, le cycle jour / nuit
  * démarre (`data/dayNight.ts`) : les mutants ne sortent que la nuit, en
- * `perNight` vagues espacées de `interval`, la première à la tombée de la
- * nuit. Leur effectif suit `NIGHT_PLAN` ; au-delà, ses `cycle` dernières
+ * `perNight` vagues espacées de `interval`, la première `firstAt` après la
+ * tombée de la nuit. Leur effectif suit `NIGHT_PLAN` ; au-delà, ses `cycle` dernières
  * nuits se répètent, avec `growPerCycle` mutants de plus par vague à chaque
  * tour.
  *
@@ -101,9 +103,16 @@ export type WaveSpec = Partial<Record<EnemyId, number>>;
  * la flaque se voie, pas à vingt tuiles. Chaque mutant sort de sa flaque en
  * `emergeTicks` : ni les arcs ni les tours ne le visent tant qu'il n'est pas
  * debout, si bien qu'on le voit toujours avant de le voir tomber.
+ *
+ * Une vague a **une** cible, tirée à son annonce : avec `targetChance`, le
+ * bâtiment de `targets` fini le plus proche de son point d'apparition — la
+ * foreuse isolée, la ferme au bout du champ —, sinon la mairie. L'usine se
+ * défend donc aussi : c'est là que le placement des tours compte.
  */
 export const WAVES = {
-  perNight: 2,
+  perNight: 3,
+  /** Ticks entre la tombée de la nuit et la première vague. */
+  firstAt: 20 * 15,
   interval: 20 * 30,
   cycle: 5,
   growPerCycle: 2,
@@ -116,6 +125,10 @@ export const WAVES = {
   emergeTicks: 40,
   /** Retard de chaque mutant sur le précédent : une vague sort l'un après l'autre. */
   emergeStagger: 6,
+  /** Chance qu'une vague vise l'usine plutôt que la mairie. */
+  targetChance: 0.5,
+  /** Ce qu'une vague peut viser hors de la mairie : les bâtiments qui produisent. */
+  targets: ['drill', 'farm', 'quarry', 'lumberCamp', 'forge'] as const satisfies readonly BuildingId[],
 } as const;
 
 /* ------------------------------------------------------------------ butin */
@@ -168,24 +181,23 @@ export const LOOT_DROPS = {
  *
  * Des dents de scie plutôt qu'une rampe : un premier pic dès la nuit 3,
  * la dernière avant qu'Ève n'arrive réparer ; un répit net après chaque
- * grosse nuit ; un gros mutant toutes les cinq nuits. Entre deux, Adam
- * répare au bois (`REPAIR`, `data/buildings.ts`), puis Ève.
+ * grosse nuit ; un gros mutant à la nuit 5, puis au moins toutes les cinq
+ * nuits. Entre deux, Adam répare au bois (`REPAIR`, `data/buildings.ts`),
+ * puis Ève.
  */
 export const NIGHT_PLAN = [
-  [{ mutant: 1 }, { mutant: 2 }],
-  [{ mutant: 2 }, { mutant: 2 }],
+  [{ mutant: 1 }, { mutant: 1 }, { mutant: 2 }],
+  [{ mutant: 2 }, { mutant: 2 }, { mutant: 2 }],
   /** Premier pic. */
-  [{ mutant: 2 }, { mutant: 4 }],
+  [{ mutant: 2 }, { mutant: 3 }, { mutant: 4 }],
   /** Répit : Ève arrive, la mairie se refait. */
-  [{ mutant: 2 }, { mutant: 3 }],
+  [{ mutant: 2 }, { mutant: 3 }, { mutant: 3 }],
   /** Premier gros mutant. */
-  [{ mutant: 3 }, { mutant: 2, brute: 1 }],
-  [{ mutant: 3 }, { mutant: 3 }],
-  [{ mutant: 4 }, { mutant: 5 }],
-  [{ mutant: 3 }, { mutant: 3 }],
-  [{ mutant: 5 }, { mutant: 5 }],
-  /** Deux gros mutants : sans tour, la mairie ne passe pas cette nuit-là. */
-  [{ mutant: 3 }, { mutant: 3, brute: 2 }],
+  [{ mutant: 3 }, { mutant: 3 }, { mutant: 2, brute: 1 }],
+  [{ mutant: 3 }, { mutant: 4 }, { mutant: 5 }],
+  [{ mutant: 4 }, { mutant: 4 }, { mutant: 4 }],
+  /** Un gros mutant de plus : le cycle de cinq qui se répète au-delà commence à la nuit 4. */
+  [{ mutant: 3 }, { mutant: 5 }, { mutant: 3, brute: 1 }],
 ] as const satisfies readonly (readonly WaveSpec[])[];
 
 /** La vague numéro `wave` (la première vaut 1) de la nuit numéro `night` (la première vaut 1). */

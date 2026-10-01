@@ -45,7 +45,7 @@
 import { Emitter } from '../core/events.ts';
 import { CHUNK_TILES, TILE_SIZE, coordKey, distanceSq, floorDiv, type TileCoord } from '../core/grid.ts';
 import { mulberry32, type StatefulRng } from '../core/rng.ts';
-import { BUILDINGS, REPAIR, buildingLevel, nextUpgrade, type BuildingId } from '../data/buildings.ts';
+import { BUILDINGS, REPAIR, RUIN, buildingLevel, nextUpgrade, type BuildingId } from '../data/buildings.ts';
 import { CARAVAN, RARE_OFFERS, type RareOfferId } from '../data/caravan.ts';
 import { CLINIC } from '../data/clinic.ts';
 import { DAWN_REWARD } from '../data/dayNight.ts';
@@ -85,7 +85,7 @@ import { WEATHER, WEATHER_CALENDAR, type WeatherId } from '../data/weather.ts';
 import { ChunkIndex } from './chunk.ts';
 import { consumerRecipe, consumerRoom, consumerWants, forgeRecipe, isConsumer } from './consumers.ts';
 import { NO_WIND, nearestFoe, shoot, stepArrow, type Wind } from './combat.ts';
-import { clockAt, isWaveTick, ticksToNextWave, type DayClock } from './dayNight.ts';
+import { clockAt, nextWave, waveAt, type DayClock } from './dayNight.ts';
 import type {
   Command,
   CommandLogEntry,
@@ -350,13 +350,18 @@ export type WorldEvents = {
     count: number;
     boss: boolean;
     from: Compass;
+    /** Le bâtiment qu'elle vise : la mairie, ou un bâtiment de l'usine (`WAVES.targets`). */
+    targetProto: BuildingId;
     x: number;
     y: number;
   };
   /** Le crépuscule commence : la nuit `night` tombe dans `DAY_CYCLE.dusk` ticks. */
   duskFell: { night: number };
-  /** Une vague de mutants vient d'apparaître autour de la mairie, du côté `from` ; `wave` compte à partir de 1 dans la nuit. */
-  waveStarted: { night: number; wave: number; count: number; boss: boolean; from: Compass; x: number; y: number };
+  /**
+   * Une vague de mutants vient d'apparaître autour de la mairie, du côté
+   * `from`, et marche sur `targetProto` ; `wave` compte à partir de 1 dans la nuit.
+   */
+  waveStarted: { night: number; wave: number; count: number; boss: boolean; from: Compass; targetProto: BuildingId; x: number; y: number };
   /** Le dernier mutant en vie vient de tomber : la vague de la nuit `night` est repoussée. */
   waveCleared: { night: number };
   /** Un mutant abattu a lâché du butin en (x, y). */
@@ -500,6 +505,13 @@ export class World {
 
   /** Direction, en radians depuis la mairie, d'où viendra la prochaine vague : tirée dès qu'elle est planifiée. */
   public nextWaveHeading = 0;
+
+  /**
+   * Le bâtiment que vise la prochaine vague : tiré à son annonce, pour que
+   * le bandeau le dise, et gardé jusqu'à son départ. `null` tant qu'elle
+   * n'est pas annoncée.
+   */
+  private nextWaveTarget: EntityId | null = null;
 
   /** Mutants abattus depuis le début de la partie — le score de l'écran de fin. */
   public kills = 0;
@@ -654,6 +666,7 @@ export class World {
       night: this.night,
       cycleStartTick: this.cycleStartTick,
       nextWaveHeading: this.nextWaveHeading,
+      ...(this.nextWaveTarget !== null && { nextWaveTarget: this.nextWaveTarget }),
       kills: this.kills,
       defeated: this.defeated,
       defeatTick: this.defeatTick,
@@ -707,6 +720,7 @@ export class World {
     this.night = state.night;
     this.cycleStartTick = state.cycleStartTick;
     this.nextWaveHeading = state.nextWaveHeading;
+    this.nextWaveTarget = state.nextWaveTarget ?? null;
     this.kills = state.kills;
     this.defeated = state.defeated;
     this.defeatTick = state.defeatTick;
@@ -2689,7 +2703,7 @@ export class World {
         case 'mutant': {
           const spell = this.spell;
           const wind = spell && { windX: spell.windX, windY: spell.windY, downwind: WEATHER[spell.id].mutantDownwind };
-          const step = stepMutant(mobile, this.target, this.occupantAt, STEP_SECONDS, wind);
+          const step = stepMutant(mobile, this.mutantGoal(mobile), this.occupantAt, STEP_SECONDS, wind);
 
           if (step.strikes && step.blockedBy !== null) {
             this.damageBuilding(step.blockedBy, ENEMIES[mobile.proto].damage);
@@ -3412,12 +3426,9 @@ export class World {
     // Un jour sur deux, une caravane de troc, une fois le matin bien levé.
     if (clock.phase === 'day' && clock.elapsed === CARAVAN.arriveAfter && isCaravanDay(clock.cycle)) this.sendCaravan(clock.cycle);
 
-    const left = ticksToNextWave(clock);
+    const { wave, ticks: left } = nextWave(clock);
 
     if (left > 0 && left <= WAVE_COUNTDOWN_SECONDS * TICKS_PER_SECOND && left % TICKS_PER_SECOND === 0) {
-      // Trois secondes avant, on est au crépuscule pour la première vague, dans la nuit pour les suivantes.
-      const wave = clock.phase === 'night' ? Math.floor(clock.elapsed / WAVES.interval) + 2 : 1;
-
       this.events.emit('waveCountdown', {
         seconds: left / TICKS_PER_SECOND,
         night: clock.cycle,
@@ -3425,11 +3436,66 @@ export class World {
         count: waveSize(clock.cycle, wave),
         boss: isBossWave(clock.cycle, wave),
         from: compassOf(this.nextWaveHeading),
+        targetProto: this.waveTarget().proto,
         ...this.waveOrigin(),
       });
     }
 
-    if (isWaveTick(clock)) this.spawnWave(Math.floor(clock.elapsed / WAVES.interval) + 1);
+    const starting = waveAt(clock);
+
+    if (starting > 0) this.spawnWave(starting);
+  }
+
+  /**
+   * La cible de la prochaine vague, tirée la première fois qu'on la demande :
+   * avec `WAVES.targetChance`, le bâtiment de l'usine fini le plus proche de
+   * son point d'apparition, sinon la mairie. Tombée avant le départ de la
+   * vague, c'est la mairie.
+   */
+  private waveTarget(): Building {
+    if (this.nextWaveTarget === null) {
+      const aimed = this.rng() < WAVES.targetChance ? this.nearestWaveTarget(this.waveOrigin()) : null;
+
+      this.nextWaveTarget = aimed?.id ?? this.townHallId;
+    }
+
+    const target = this.entities.get(this.nextWaveTarget);
+
+    return target && target.kind !== 'site' ? target : this.hallBuilding();
+  }
+
+  /** La mairie debout — les vagues ne partent pas sans elle. */
+  private hallBuilding(): Building {
+    const hall = this.entities.get(this.townHallId);
+
+    if (!hall || hall.kind === 'site') throw new Error('une vague sans mairie debout');
+    return hall;
+  }
+
+  /** Le bâtiment de `WAVES.targets` fini le plus proche du point (x, y), ou `null` s'il n'y en a pas. */
+  private nearestWaveTarget({ x, y }: { x: number; y: number }): Building | null {
+    let best: Building | null = null;
+    let bestDistance = Infinity;
+
+    for (const entity of this.entities.values()) {
+      if (entity.kind === 'site' || !isWaveTarget(entity.proto)) continue;
+
+      const distance = distanceSq(x, y, (entity.tx + entity.width / 2) * TILE_SIZE, (entity.ty + entity.height / 2) * TILE_SIZE);
+
+      if (distance < bestDistance) {
+        best = entity;
+        bestDistance = distance;
+      }
+    }
+    return best;
+  }
+
+  /** Où marche un mutant : le milieu du bâtiment que vise sa vague, ou la mairie s'il est tombé. */
+  private mutantGoal(mutant: Mutant): { x: number; y: number } {
+    const target = mutant.target === undefined ? undefined : this.entities.get(mutant.target);
+
+    if (!target || target.kind === 'site') return this.target;
+    return { x: (target.tx + target.width / 2) * TILE_SIZE, y: (target.ty + target.height / 2) * TILE_SIZE };
   }
 
   /**
@@ -3442,23 +3508,33 @@ export class World {
     const spec = waveSpec(this.night, wave);
     const origin = this.waveOrigin();
     const from = compassOf(this.nextWaveHeading);
+    const target = this.waveTarget();
     let count = 0;
 
     // Dans l'ordre des espèces : le tirage des points d'apparition reste rejouable.
     for (const proto of ENEMY_IDS) {
       for (let i = 0; i < (spec[proto] ?? 0); i += 1) {
-        this.spawnMutant(proto, WAVES.emergeTicks + count * WAVES.emergeStagger);
+        this.spawnMutant(proto, WAVES.emergeTicks + count * WAVES.emergeStagger, target.id);
         count += 1;
       }
     }
 
-    this.events.emit('waveStarted', { night: this.night, wave, count, boss: isBossWave(this.night, wave), from, ...origin });
+    this.events.emit('waveStarted', {
+      night: this.night,
+      wave,
+      count,
+      boss: isBossWave(this.night, wave),
+      from,
+      targetProto: target.proto,
+      ...origin,
+    });
 
     for (const entity of this.entities.values()) {
       if (entity.kind === 'tower') this.armTower(entity, 1);
     }
 
     this.nextWaveHeading = this.rng() * Math.PI * 2;
+    this.nextWaveTarget = null;
   }
 
   /**
@@ -3505,7 +3581,7 @@ export class World {
     };
   }
 
-  private spawnMutant(proto: EnemyId, emerge: number): void {
+  private spawnMutant(proto: EnemyId, emerge: number, target: EntityId): void {
     let point = spawnPoint(this.rng, this.target, this.nextWaveHeading);
 
     // Pas dans un bâtiment : il y resterait coincé à le ronger de l'intérieur.
@@ -3527,6 +3603,8 @@ export class World {
       hp: ENEMIES[proto].hp,
       attackCooldown: 0,
       emerge,
+      // La mairie se lit par défaut : seul un autre bâtiment s'écrit.
+      ...(target !== this.townHallId && { target }),
     };
 
     this.mobiles.set(mutant.id, mutant);
@@ -4334,10 +4412,26 @@ export class World {
       ty: building.ty,
     });
 
+    // Un bâtiment de l'usine redevient son chantier, à moitié livré.
+    if (isWaveTarget(building.proto)) this.ruin(building);
+
     if (building.id === this.townHallId && !this.defeated) {
       this.defeated = true;
       this.defeatTick = this.tickCount;
       this.events.emit('townHallDestroyed', {});
+    }
+  }
+
+  /** Le chantier qui remplace un bâtiment de l'usine abattu : `RUIN.delivered` de son coût, déjà livré. */
+  private ruin(building: Building): void {
+    const id = this.openSite(building.proto, building.tx, building.ty);
+    const site = this.entities.get(id);
+
+    if (site?.kind !== 'site') return;
+    for (const [item, amount] of Object.entries(BUILDINGS[building.proto].cost) as [ItemId, number][]) {
+      const delivered = Math.floor(amount * RUIN.delivered);
+
+      if (delivered > 0) site.delivered[item] = delivered;
     }
   }
 
@@ -4611,6 +4705,11 @@ function copyMobile(mobile: Mobile): Mobile {
     return { ...mobile, offers: mobile.offers.map((trade) => ({ ...trade, cost: { ...trade.cost }, items: { ...trade.items } })) };
   }
   return { ...mobile };
+}
+
+/** Vrai pour un bâtiment de l'usine : une vague peut le viser, et il tombe en chantier (`RUIN`). */
+function isWaveTarget(proto: BuildingId): boolean {
+  return (WAVES.targets as readonly BuildingId[]).includes(proto);
 }
 
 /** Objets `REPAIR.item` qu'il faut pour remettre un bâtiment à neuf. */

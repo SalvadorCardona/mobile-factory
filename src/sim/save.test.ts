@@ -127,7 +127,12 @@ function playedWorld(): World {
   build(world, 'watchtower');
   // Une foreuse ne se pose que sur un filon : on casse les rochers qui le couvrent.
   clearNearestOre(world);
+  // Les vagues visent aussi l'usine : la foreuse doit tenir pour voyager dans la sauvegarde.
   build(world, 'drill');
+  const drill = [...world.entities.values()].find((entity) => entity.kind === 'drill');
+
+  if (!drill) throw new Error('pas de foreuse');
+  drill.hp = 1_000_000;
 
   const hasKid = (): boolean => [...world.mobiles.values()].some((mobile) => mobile.kind === 'kid');
   const hasMutant = (): boolean => [...world.mobiles.values()].some((mobile) => mobile.kind === 'mutant');

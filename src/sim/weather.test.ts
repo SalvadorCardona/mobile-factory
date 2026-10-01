@@ -14,12 +14,15 @@ import { World } from './world.ts';
 
 const { slotTicks, announceTicks, calmSlots } = WEATHER_CALENDAR;
 
-/** Le premier créneau de la seed qui tire la météo `id`. */
-function slotWith(seed: number, id: WeatherId): WeatherSpell {
+/**
+ * Le premier créneau de la seed qui tire la météo `id`, et qui ne gâche
+ * aucune nuit d'un cycle levé à `cycleStart` : le monde l'effacerait.
+ */
+function slotWith(seed: number, id: WeatherId, cycleStart = 0): WeatherSpell {
   for (let slot = calmSlots; slot < 400; slot += 1) {
     const spell = weatherOfSlot(seed, slot);
 
-    if (spell?.id === id) return spell;
+    if (spell?.id === id && !spoilsNight(spell, cycleStart, WEATHER_CALENDAR.waveMarginTicks)) return spell;
   }
   throw new Error(`pas de ${id} dans la seed ${seed}`);
 }
@@ -207,7 +210,6 @@ describe('météo dans le monde', () => {
 
   it('ralentit Adam sous la pluie acide, sauf à l’abri près de la mairie', () => {
     const seed = 7;
-    const rain = slotWith(seed, 'acidRain');
     const stride = (world: World): number => {
       const before = world.player.x;
 
@@ -221,6 +223,8 @@ describe('météo dans le monde', () => {
     const wet = new World(seed);
 
     completeSite(wet, wet.townHallId);
+    const rain = slotWith(seed, 'acidRain', wet.cycleStartTick);
+
     wet.tickCount = rain.start + 10;
 
     // Loin de la mairie, au milieu d'une plaine : on n'y teste que la vitesse.
@@ -244,10 +248,10 @@ describe('météo dans le monde', () => {
 
   it('ronge les bâtiments abîmés hors de l’abri, un PV toutes les cinq secondes, sans les achever', () => {
     const seed = 7;
-    const rain = slotWith(seed, 'acidRain');
     const world = new World(seed);
 
     completeSite(world, world.townHallId);
+    const rain = slotWith(seed, 'acidRain', world.cycleStartTick);
     world.player.x += 12 * TILE_SIZE;
     const nursery = buildNursery(world);
     const hall = world.entities.get(world.townHallId)!;
@@ -272,11 +276,11 @@ describe('météo dans le monde', () => {
 
   it('épargne les bâtiments intacts', () => {
     const seed = 7;
-    const rain = slotWith(seed, 'acidRain');
     const world = new World(seed);
     let corroded = 0;
 
     completeSite(world, world.townHallId);
+    const rain = slotWith(seed, 'acidRain', world.cycleStartTick);
     world.player.x += 12 * TILE_SIZE;
     buildNursery(world);
     world.events.on('buildingCorroded', () => (corroded += 1));
@@ -352,7 +356,8 @@ describe('météo dans le monde', () => {
   });
 
   it('ne fait jamais tomber la pluie acide sur une nuit de vagues, ni juste avant', () => {
-    const seed = 7;
+    // Une seed où la pluie tombe dans les douze premiers créneaux, entre deux nuits.
+    const seed = 42;
     const world = new World(seed);
     const rainy: number[] = [];
     const starts: number[] = [];
@@ -381,7 +386,7 @@ describe('météo dans le monde', () => {
     // Les vagues gardent l'heure de la nuit ; la pluie tombe quand même, le jour.
     expect(starts.length).toBeGreaterThan(5);
     expect(rainy.length).toBeGreaterThan(0);
-  });
+  }, 30_000);
 });
 
 describe('vent', () => {

@@ -8,6 +8,7 @@ import { RECIPES } from '../data/recipes.ts';
 import { WEAPONS } from '../data/weapons.ts';
 import { CYCLE_TICKS } from './dayNight.ts';
 import { compassOf } from './enemies.ts';
+import { oreAt } from './terrain.ts';
 import { BUILD_REACH_TILES } from './player.ts';
 import { deserialize, serialize } from './save.ts';
 import type { Entity, EntityId, Mutant, Pickup } from './types.ts';
@@ -91,6 +92,30 @@ function build(world: World, building: 'nursery' | 'watchtower' | 'drill'): Enti
   throw new Error('aucune case posable à portée');
 }
 
+/** Mène Adam près du filon le plus proche, rochers ôtés : une foreuse pourra s'y poser. */
+function nearOre(world: World): void {
+  const origin = worldToTile(world.player.x, world.player.y);
+
+  for (let r = 0; r <= 24; r += 1) {
+    for (let dy = -r; dy <= r; dy += 1) {
+      for (let dx = -r; dx <= r; dx += 1) {
+        const tx = origin.tx + dx;
+        const ty = origin.ty + dy;
+
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r || !oreAt(world.seed, tx, ty)) continue;
+
+        for (let y = ty - 2; y <= ty + 2; y += 1) {
+          for (let x = tx - 2; x <= tx + 2; x += 1) world.resources.clear(x, y);
+        }
+        world.player.x = (tx + 0.5) * TILE_SIZE;
+        world.player.y = (ty + 3.5) * TILE_SIZE;
+        return;
+      }
+    }
+  }
+  throw new Error('aucun filon près d’Adam');
+}
+
 function mutants(world: World): Mutant[] {
   return [...world.mobiles.values()].filter((mobile): mobile is Mutant => mobile.kind === 'mutant');
 }
@@ -144,6 +169,9 @@ function standInFrontOf(world: World, mutant: Mutant, tiles: number): void {
 /** Ticks entre le lever du premier jour et la tombée de la première nuit. */
 const NIGHTFALL = DAY_CYCLE.day + DAY_CYCLE.dusk;
 
+/** Ticks entre le lever du premier jour et la première vague. */
+const FIRST_WAVE = NIGHTFALL + WAVES.firstAt;
+
 function townHallCenter(world: World): { x: number; y: number } {
   const hall = world.entities.get(world.townHallId)!;
 
@@ -181,18 +209,21 @@ describe('vagues', () => {
     expect(dusk).toEqual([1]);
     expect(mutants(world)).toHaveLength(0);
 
-    for (let i = world.tickCount; i < started + NIGHTFALL - 1; i += 1) world.tick();
+    for (let i = world.tickCount; i < started + NIGHTFALL; i += 1) world.tick();
+    expect(world.clock()?.phase).toBe('night');
+    expect(world.night).toBe(1);
+
+    // La nuit tombe, la première vague se fait attendre : le temps de rentrer.
+    for (let i = world.tickCount; i < started + FIRST_WAVE - 1; i += 1) world.tick();
     expect(mutants(world)).toHaveLength(0);
     expect(countdown).toEqual([3, 2, 1]);
 
     world.tick();
-    expect(world.clock()?.phase).toBe('night');
-    expect(world.night).toBe(1);
     expect(mutants(world)).toHaveLength(waveSize(1, 1));
 
     for (let i = 0; i < WAVES.interval; i += 1) world.tick();
     expect(waves).toEqual(
-      Array.from({ length: Math.min(2, WAVES.perNight) }, (_, k) => `${NIGHTFALL + k * WAVES.interval}:1.${k + 1}:${waveSize(1, k + 1)}`),
+      Array.from({ length: Math.min(2, WAVES.perNight) }, (_, k) => `${FIRST_WAVE + k * WAVES.interval}:1.${k + 1}:${waveSize(1, k + 1)}`),
     );
   });
 
@@ -235,6 +266,7 @@ describe('vagues', () => {
 
     world.tick();
     expect(world.night).toBe(2);
+    for (let i = 0; i < WAVES.firstAt; i += 1) world.tick();
     expect(mutants(world)).toHaveLength(waveSize(2, 1));
   });
 
@@ -295,8 +327,9 @@ describe('vagues', () => {
     const world = worldWithTownHall();
     const center = townHallCenter(world);
 
-    for (let i = 0; i < NIGHTFALL; i += 1) world.tick();
+    for (let i = 0; i < FIRST_WAVE; i += 1) world.tick();
 
+    expect(mutants(world).length).toBeGreaterThan(0);
     for (const mutant of mutants(world)) {
       const distance = Math.hypot(mutant.x - center.x, mutant.y - center.y) / TILE_SIZE;
 
@@ -305,16 +338,22 @@ describe('vagues', () => {
     }
   });
 
-  it('suit la courbe en dents de scie : pic à la nuit 3, répit ensuite, un gros mutant toutes les cinq nuits', () => {
-    const total = (night: number): number => waveSize(night, 1) + waveSize(night, 2);
+  it('suit la courbe en dents de scie : pic à la nuit 3, répit ensuite, un gros mutant à la nuit 5 puis au moins toutes les cinq', () => {
+    const waves = Array.from({ length: WAVES.perNight }, (_, k) => k + 1);
+    const total = (night: number): number => waves.reduce((sum, wave) => sum + waveSize(night, wave), 0);
 
     expect(total(3)).toBeGreaterThan(total(2));
     expect(total(4)).toBeLessThan(total(3));
-    for (let night = 1; night <= 30; night += 1) {
-      const boss = isBossWave(night, 1) || isBossWave(night, 2);
+    const bosses = Array.from({ length: 30 }, (_, k) => k + 1).filter((night) => waves.some((wave) => isBossWave(night, wave)));
 
-      expect(boss, `nuit ${night}`).toBe(night % 5 === 0);
-    }
+    expect(bosses[0]).toBe(5);
+    bosses.slice(1).forEach((night, k) => expect(night - bosses[k]!, `nuit ${night}`).toBeLessThanOrEqual(5));
+    expect(bosses.at(-1)).toBeGreaterThan(25);
+  });
+
+  it('envoie trois vagues par nuit, et un gros mutant dans la dernière de la nuit 5', () => {
+    expect(WAVES.perNight).toBe(3);
+    expect(waveSpec(5, 3).brute).toBe(1);
   });
 
   it('au-delà de la table, répète ses dernières nuits avec des mutants en plus', () => {
@@ -350,7 +389,7 @@ describe('vagues', () => {
 
     expect(brutes.length).toBe(waveSpec(night, wave).brute);
     expect(brutes[0]!.hp).toBe(ENEMIES.brute.hp);
-  });
+  }, 30_000);
 });
 
 describe('mise en scène des vagues', () => {
@@ -364,7 +403,7 @@ describe('mise en scène des vagues', () => {
     world.events.on('waveCountdown', (event) => announces.push(event));
     world.player.x += 60 * TILE_SIZE;
 
-    for (let i = 0; i < NIGHTFALL; i += 1) world.tick();
+    for (let i = 0; i < FIRST_WAVE; i += 1) world.tick();
 
     expect(announces.map(({ seconds }) => seconds)).toEqual([3, 2, 1]);
     for (const announce of announces) {
@@ -396,6 +435,7 @@ describe('mise en scène des vagues', () => {
     sturdy(world);
     world.player.x += 60 * TILE_SIZE;
     for (let i = 0; i < night * CYCLE_TICKS && world.night < night; i += 1) world.tick();
+    for (let i = 0; i < WAVES.firstAt; i += 1) world.tick();
     withoutWildlife(world);
     world.events.on('arrowShot', () => (shots += 1));
 
@@ -454,7 +494,7 @@ describe('mise en scène des vagues', () => {
     });
     world.events.on('mutantDied', ({ id }) => lifetimes.push(world.tickCount - born.get(id)!));
 
-    for (let i = 0; i < 2 * CYCLE_TICKS + NIGHTFALL + WAVES.interval && !world.defeated; i += 1) {
+    for (let i = 0; i < 2 * CYCLE_TICKS + FIRST_WAVE + WAVES.interval && !world.defeated; i += 1) {
       world.player.x = post.x;
       world.player.y = post.y;
       world.tick();
@@ -473,7 +513,7 @@ describe('mise en scène des vagues', () => {
     world.events.on('waveCleared', ({ night }) => cleared.push(night));
     world.events.on('lootDropped', ({ id }) => dropped.push(world.mobiles.get(id) as Pickup));
 
-    for (let i = 0; i < NIGHTFALL; i += 1) world.tick();
+    for (let i = 0; i < FIRST_WAVE; i += 1) world.tick();
     withoutWildlife(world);
     waitEmergence(world);
 
@@ -517,7 +557,7 @@ describe('mise en scène des vagues', () => {
   it('laisse le butin au sol quand le sac est plein, puis le fait disparaître s’il est oublié', () => {
     const world = worldWithTownHall();
 
-    for (let i = 0; i < NIGHTFALL; i += 1) world.tick();
+    for (let i = 0; i < FIRST_WAVE; i += 1) world.tick();
     withoutWildlife(world);
     waitEmergence(world);
 
@@ -547,7 +587,7 @@ describe('mise en scène des vagues', () => {
     const world = worldWithTownHall();
 
     world.player.x += 60 * TILE_SIZE;
-    for (let i = 0; i < NIGHTFALL + 5; i += 1) world.tick();
+    for (let i = 0; i < FIRST_WAVE + 5; i += 1) world.tick();
 
     const [mutant] = mutants(world);
 
@@ -575,7 +615,7 @@ describe('mutants', () => {
     // Adam loin : son arc ne doit pas fausser la mesure.
     world.player.x += 40 * TILE_SIZE;
 
-    for (let i = 0; i < NIGHTFALL; i += 1) world.tick();
+    for (let i = 0; i < FIRST_WAVE; i += 1) world.tick();
     for (let i = 0; i < WAVES.emergeTicks; i += 1) world.tick();
 
     const [mutant] = mutants(world);
@@ -600,7 +640,7 @@ describe('mutants', () => {
     world.events.on('buildingDamaged', ({ hp }) => damaged.push(hp));
     world.events.on('townHallDestroyed', () => (destroyed += 1));
 
-    for (let i = 0; i < NIGHTFALL; i += 1) world.tick();
+    for (let i = 0; i < FIRST_WAVE; i += 1) world.tick();
 
     // La sortie de flaque, le trajet — au plus 8 tuiles à 1,2 tuile/s — puis les coups.
     for (let i = 0; i < 20 * 15 && damaged.length === 0; i += 1) world.tick();
@@ -632,7 +672,7 @@ describe('arc d’Adam', () => {
     world.events.on('mutantHit', ({ hp }) => hits.push(hp));
     world.events.on('mutantDied', () => (deaths += 1));
 
-    for (let i = 0; i < NIGHTFALL; i += 1) world.tick();
+    for (let i = 0; i < FIRST_WAVE; i += 1) world.tick();
     withoutWildlife(world);
     waitEmergence(world);
 
@@ -662,7 +702,7 @@ describe('arc d’Adam', () => {
 
     world.events.on('arrowShot', () => (shots += 1));
 
-    for (let i = 0; i < NIGHTFALL; i += 1) world.tick();
+    for (let i = 0; i < FIRST_WAVE; i += 1) world.tick();
     withoutWildlife(world);
     waitEmergence(world);
 
@@ -686,7 +726,7 @@ describe('arc d’Adam', () => {
     world.events.on('arrowShot', () => (shots += 1));
     world.player.x += 60 * TILE_SIZE;
 
-    for (let i = 0; i < NIGHTFALL + 40; i += 1) world.tick();
+    for (let i = 0; i < FIRST_WAVE + 40; i += 1) world.tick();
 
     expect(mutants(world).length).toBeGreaterThan(0);
     expect(shots).toBe(0);
@@ -707,7 +747,7 @@ describe('tour de guet', () => {
     world.player.x += 60 * TILE_SIZE;
     expect(tower.armed).toBe(false);
 
-    for (let i = 0; i < NIGHTFALL; i += 1) world.tick();
+    for (let i = 0; i < FIRST_WAVE; i += 1) world.tick();
     expect(tower.armed).toBe(true);
 
     // On amène le mutant sous la tour.
@@ -885,7 +925,7 @@ describe('déterminisme des vagues', () => {
     const scenario = (): World => {
       const world = worldWithTownHall(11);
 
-      for (let i = 0; i < NIGHTFALL + 200; i += 1) world.tick();
+      for (let i = 0; i < FIRST_WAVE + 200; i += 1) world.tick();
       return world;
     };
     const first = scenario();
@@ -896,4 +936,109 @@ describe('déterminisme des vagues', () => {
     expect([...second.mobiles.values()]).toEqual([...first.mobiles.values()]);
     expect(second.commandLog()).toEqual(first.commandLog());
   });
+});
+
+describe('cibles des vagues', () => {
+  function centerOf(entity: Entity): { x: number; y: number } {
+    return { x: (entity.tx + entity.width / 2) * TILE_SIZE, y: (entity.ty + entity.height / 2) * TILE_SIZE };
+  }
+
+  /**
+   * Une mairie et une foreuse, toutes deux solides, Adam loin : on joue
+   * jusqu'à la première vague qui vise la foreuse, et on la renvoie.
+   */
+  function waveOnDrill(): { world: World; drill: Entity; announced: string[]; count: number } {
+    const world = worldWithTownHall();
+
+    nearOre(world);
+    const drill = build(world, 'drill');
+
+    if (drill.kind === 'site') throw new Error('foreuse inachevée');
+    drill.hp = 1_000_000;
+    sturdy(world);
+    world.player.x += 60 * TILE_SIZE;
+
+    const announced: string[] = [];
+    let count = 0;
+
+    world.events.on('waveCountdown', ({ night, wave, targetProto }) => announced.push(`${night}.${wave}:${targetProto}`));
+    world.events.on('waveStarted', (event) => {
+      if (event.targetProto === 'drill' && count === 0) count = event.count;
+    });
+    for (let i = 0; i < 4 * CYCLE_TICKS && count === 0; i += 1) world.tick();
+    if (count === 0) throw new Error('aucune vague n’a visé la foreuse');
+    withoutWildlife(world);
+    return { world, drill, announced, count };
+  }
+
+  it('annonce sa cible, et une vague qui vise la foreuse fait marcher ses mutants vers elle', () => {
+    const { world, drill, announced, count } = waveOnDrill();
+    const aimed = mutants(world).filter((mutant) => mutant.target === drill.id);
+
+    // Le bandeau l'a dit trois secondes avant.
+    expect(announced.slice(-3).every((line) => line.endsWith(':drill'))).toBe(true);
+    expect(aimed).toHaveLength(count);
+
+    waitEmergence(world);
+
+    const goal = centerOf(drill);
+    const before = aimed.map((mutant) => Math.hypot(mutant.x - goal.x, mutant.y - goal.y));
+
+    for (let i = 0; i < 20; i += 1) world.tick();
+    aimed.forEach((mutant, k) => {
+      if (world.mobiles.has(mutant.id)) expect(Math.hypot(mutant.x - goal.x, mutant.y - goal.y)).toBeLessThan(before[k]!);
+    });
+  }, 30_000);
+
+  it('vise la mairie si le hasard ou l’usine manquent : sans usine, toutes les vagues vont à la mairie', () => {
+    const world = worldWithTownHall();
+    const targets = new Set<string>();
+
+    sturdy(world);
+    world.player.x += 60 * TILE_SIZE;
+    world.events.on('waveStarted', ({ targetProto }) => targets.add(targetProto));
+    for (let i = 0; i < CYCLE_TICKS; i += 1) world.tick();
+
+    expect([...targets]).toEqual(['townHall']);
+    expect(mutants(world).every((mutant) => mutant.target === undefined)).toBe(true);
+  });
+
+  it('se recharge en pleine vague : les mutants gardent leur cible, et la suite est identique', () => {
+    const { world, drill } = waveOnDrill();
+    const restored = deserialize(JSON.parse(JSON.stringify(serialize(world))));
+
+    for (const mutant of mutants(world)) expect((restored.mobiles.get(mutant.id) as Mutant).target).toBe(mutant.target);
+    expect(mutants(restored).some((mutant) => mutant.target === drill.id)).toBe(true);
+
+    for (let i = 0; i < 60; i += 1) {
+      world.tick();
+      restored.tick();
+    }
+    expect(mutants(restored)).toEqual(mutants(world));
+  }, 30_000);
+
+  it('fait d’une foreuse abattue un chantier à moitié livré, et ses mutants repartent sur la mairie', () => {
+    const { world, drill } = waveOnDrill();
+    const destroyed: number[] = [];
+
+    world.events.on('buildingDestroyed', ({ id }) => destroyed.push(id));
+    if (drill.kind !== 'site') drill.hp = 1;
+    for (let i = 0; i < 20 * 60 && destroyed.length === 0; i += 1) world.tick();
+
+    expect(destroyed).toEqual([drill.id]);
+    const ruin = [...world.entities.values()].find((entity) => entity.tx === drill.tx && entity.ty === drill.ty);
+
+    // La moitié de six pierres et quatre minerais de fer.
+    expect(ruin).toMatchObject({ kind: 'site', proto: 'drill', delivered: { stone: 3, ironOre: 2 } });
+
+    // Leur cible tombée, ils marchent sur la mairie.
+    const hall = townHallCenter(world);
+    const [mutant] = mutants(world).filter((other) => other.target === drill.id && other.emerge === 0);
+
+    expect(mutant).toBeDefined();
+    const before = Math.hypot(mutant!.x - hall.x, mutant!.y - hall.y);
+
+    for (let i = 0; i < 20; i += 1) world.tick();
+    expect(Math.hypot(mutant!.x - hall.x, mutant!.y - hall.y)).toBeLessThan(before);
+  }, 30_000);
 });
