@@ -1151,12 +1151,7 @@ export class Hud {
 
   private showDefeat(): void {
     const { world } = this;
-    const survived = Math.floor((world.defeatTick || world.tickCount) / TICKS_PER_SECOND);
-    const rows: [string, string][] = [
-      ['Nuits survécues', String(Math.max(0, world.night - 1))],
-      ['Mutants abattus', String(world.kills)],
-      ['Temps tenu', clock(survived)],
-    ];
+    const rows = defeatRows(world);
 
     this.defeatStats.replaceChildren(
       ...rows.flatMap(([label, value]) => [text('', label, 'dt'), text('', value, 'dd')]),
@@ -1298,6 +1293,20 @@ function rewardLabel(reward: QuestReward): string {
   return reward.type === 'plan'
     ? `Plan reçu : ${BUILDINGS[reward.building].label}`
     : `Outil reçu : ${TOOLS[reward.tool].label}`;
+}
+
+/**
+ * Le bilan de l'écran de défaite. Les nuits survécues sont les aubes
+ * atteintes, comme à la victoire : la mairie peut tomber de jour.
+ */
+export function defeatRows(world: World): [string, string][] {
+  const survived = Math.floor((world.defeatTick || world.tickCount) / TICKS_PER_SECOND);
+
+  return [
+    ['Nuits survécues', String(world.stats.nightsSurvived)],
+    ['Mutants abattus', String(world.kills)],
+    ['Temps tenu', clock(survived)],
+  ];
 }
 
 /** « 1:05 » ou « 0:09 » à partir d'un nombre de secondes. */
