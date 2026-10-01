@@ -309,7 +309,13 @@ function parseEntity(raw: unknown): SavedEntity {
     height: BUILDINGS[proto].height,
   };
 
-  if (entity['kind'] === 'site') return { ...placed, kind: 'site', delivered: stock(entity['delivered']) };
+  if (entity['kind'] === 'site') {
+    // Absent des sauvegardes d'avant le poste de construction : aucun coup de marteau.
+    const work = entity['work'] === undefined ? 0 : int(entity['work']);
+
+    if (work < 0) throw new SaveError(`chantier ${placed.id} au travail négatif`);
+    return { ...placed, kind: 'site', delivered: stock(entity['delivered']), work };
+  }
 
   const kind = BUILDINGS[proto].kind;
 
@@ -356,6 +362,7 @@ function parseEntity(raw: unknown): SavedEntity {
     case 'clinic':
     case 'lumberCamp':
     case 'depot':
+    case 'yard':
       return { ...built, kind };
     case 'lab': {
       const research = entity['research'] === null ? null : (oneOf(entity['research'], RESEARCH) as ResearchId);
@@ -448,6 +455,9 @@ function parseMobile(raw: unknown): Mobile {
         exMutant: mobile['exMutant'] === undefined ? false : bool(mobile['exMutant']),
         // Absent des sauvegardes d'avant le poste de logistique : aucun logisticien.
         logistician: mobile['logistician'] === undefined ? false : bool(mobile['logistician']),
+        // Absents des sauvegardes d'avant le poste de construction : aucun bâtisseur.
+        builder: mobile['builder'] === undefined ? false : bool(mobile['builder']),
+        build: mobile['build'] === undefined || mobile['build'] === null ? null : int(mobile['build']),
         inside: bool(mobile['inside']),
         job: mobile['job'] === null ? null : parseJob(mobile['job']),
         searchTicks: int(mobile['searchTicks']),

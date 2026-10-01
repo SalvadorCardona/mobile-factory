@@ -18,9 +18,11 @@
 
 import { ADAM } from '../art/adam.ts';
 import { ARROW } from '../art/arrow.ts';
+import { BUILDER } from '../art/builder.ts';
 import { BUILDER_HOUSE } from '../art/builderHouse.ts';
 import { CARGO_BIKE } from '../art/cargoBike.ts';
 import { CLINIC_SPRITE } from '../art/clinic.ts';
+import { CONSTRUCTION_POST } from '../art/constructionPost.ts';
 import { CRAB } from '../art/crab.ts';
 import { DECOR_ART } from '../art/decor.ts';
 import { DRILL } from '../art/drill.ts';
@@ -78,6 +80,8 @@ export const SPRITES = {
   lumberjack: LUMBERJACK,
   /** Un logisticien : caisse sur le dos, casquette cyan ; la charge dépasse de la caisse. */
   logistician: LOGISTICIAN,
+  /** Un bâtisseur : casque jaune, ceinture à outils, et son marteau, qui s'abat à chaque coup. */
+  builder: BUILDER,
   /** Un mutant assommé, puis qui suit Adam jusqu'à la clinique. */
   patient: PATIENT,
   /** Un mutant guéri : un habitant, porteur, avec sa touffe fluo. */
@@ -115,6 +119,7 @@ export const SPRITES = {
   lumberCamp: LUMBER_CAMP,
   quarry: QUARRY,
   logisticsPost: LOGISTICS_POST,
+  constructionPost: CONSTRUCTION_POST,
 
   /** Décor de surface : un morceau par élément, cf. `data/decor.ts`. */
   decor: DECOR_ART,
@@ -131,7 +136,7 @@ export const SPRITE_IDS = Object.keys(SPRITES) as SpriteId[];
 /** Noms de morceaux valides pour un sprite donné. */
 export type PartOf<S extends SpriteId> = keyof (typeof SPRITES)[S]['parts'] & string;
 
-/** Les morceaux qu'un marcheur (Adam, Ève, mutant, enfant, ouvrier, logisticien, bûcheron, patient, ex-mutant) doit fournir. */
+/** Les morceaux qu'un marcheur (Adam, Ève, mutant, enfant, ouvrier, logisticien, bâtisseur, bûcheron, patient, ex-mutant) doit fournir. */
 export const WALKER_PARTS = ['down', 'up', 'side', 'foot'] as const;
 
 /** Les morceaux qu'un bâtiment doit fournir. */

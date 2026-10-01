@@ -389,6 +389,9 @@ export class Hud {
       for (const [item, amount] of reward) this.float(item, amount);
     });
     world.events.on('buildingDestroyed', ({ proto }) => this.notify(`${BUILDINGS[proto].label} détruite`, 'bad'));
+    world.events.on('siteCancelled', ({ proto, toTown }) =>
+      this.notify(`Chantier annulé : ${BUILDINGS[proto].label} — ${toTown ? 'le livré retourne en ville' : 'le livré reste au sol'}`, 'info'),
+    );
     world.events.on('childBorn', () => this.notify('Un enfant est né à la nurserie !', 'good'));
     world.events.on('mutantStunned', () => this.notify('Un mutant assommé ! Touchez-le pour l’emmener à la clinique', 'good'));
     world.events.on('patientFollowing', () => this.notify('Il vous suit en boitillant — direction la clinique', 'good'));

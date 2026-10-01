@@ -41,6 +41,13 @@ export interface Site extends Placed {
   kind: 'site';
   /** Ce qui a déjà été livré, par objet. */
   delivered: Partial<Record<ItemId, number>>;
+  /**
+   * Le travail des bâtisseurs, en ticks de bâtisseur : un chantier dans le
+   * rayon d'un poste de construction ne s'achève pas au dernier objet livré,
+   * il se bâtit ensuite au marteau jusqu'à `siteWork()` (`sim/jobs.ts`).
+   * Reste à 0 partout ailleurs.
+   */
+  work: number;
 }
 
 /** Ce que tout bâtiment fini partage : un coffre et des points de vie. */
@@ -181,6 +188,15 @@ export interface Depot extends Built {
   kind: 'depot';
 }
 
+/**
+ * Le poste de construction : il loge ses bâtisseurs, qui livrent les
+ * chantiers de son rayon (`BUILDERS.radius`) depuis la mairie, puis les
+ * bâtissent. Comme le poste de logistique, il n'a rien à lui.
+ */
+export interface Yard extends Built {
+  kind: 'yard';
+}
+
 export type Entity =
   | Site
   | Drill
@@ -194,7 +210,8 @@ export type Entity =
   | Clinic
   | Lab
   | LumberCamp
-  | Depot;
+  | Depot
+  | Yard;
 
 export type Building = Exclude<Entity, Site>;
 
@@ -384,6 +401,9 @@ export interface Wandering {
  * Un logisticien est un ouvrier logé au poste de logistique : même vie, mais
  * il ne fait qu'un travail — vider les producteurs du rayon de son poste
  * dans la mairie — et porte un peu plus (`LOGISTICIANS`).
+ *
+ * Un bâtisseur est un ouvrier logé au poste de construction : il livre les
+ * chantiers du rayon de son poste depuis la mairie, puis les bâtit (`build`).
  */
 export interface Worker extends Moving, Wandering {
   kind: 'worker';
@@ -393,6 +413,10 @@ export interface Worker extends Moving, Wandering {
   exMutant: boolean;
   /** Vrai pour un logisticien du poste de logistique. */
   logistician: boolean;
+  /** Vrai pour un bâtisseur du poste de construction. */
+  builder: boolean;
+  /** Le chantier qu'un bâtisseur est allé bâtir, `null` sinon. Jamais en même temps qu'un job. */
+  build: EntityId | null;
   /** Vrai s'il est chez lui : invisible, immobile. */
   inside: boolean;
   job: Job | null;

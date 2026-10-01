@@ -66,7 +66,9 @@ export class Puppet {
   private readonly halo: Sprite | null;
   private readonly claws: Sprite | null;
   private readonly load: Sprite | null;
-  private readonly axe: Sprite | null;
+  /** L'outil qui s'abat à chaque coup : la hache du bûcheron, le marteau du bâtisseur. */
+  private readonly tool: Sprite | null;
+  private readonly toolName: string;
   private loadItem: ItemId | null = null;
 
   private readonly library: SpriteLibrary;
@@ -105,14 +107,17 @@ export class Puppet {
     this.bow = id === 'adam' ? this.part('bow') : null;
     this.claws = 'claws' in this.proto.parts ? this.part('claws') : null;
     this.load =
-      id === 'worker' || id === 'exMutant' || id === 'lumberjack' || id === 'logistician' ? this.part('load.wood') : null;
-    this.axe = 'axe' in this.proto.parts ? this.part('axe') : null;
+      id === 'worker' || id === 'exMutant' || id === 'lumberjack' || id === 'logistician' || id === 'builder'
+        ? this.part('load.wood')
+        : null;
+    this.toolName = 'hammer' in this.proto.parts ? 'hammer' : 'axe';
+    this.tool = this.toolName in this.proto.parts ? this.part(this.toolName) : null;
 
     if (this.halo) this.halo.alpha = 0.35;
     if (this.load) this.load.visible = false;
 
     this.figure.addChild(
-      ...[this.halo, ...this.feet, this.body, this.bow, this.axe, this.claws, this.load].filter((sprite) => sprite !== null),
+      ...[this.halo, ...this.feet, this.body, this.bow, this.tool, this.claws, this.load].filter((sprite) => sprite !== null),
     );
     this.root.addChild(this.shadow, this.figure);
   }
@@ -286,12 +291,12 @@ export class Puppet {
       this.claws.scale.set(1 + snap * 0.18, 1 - snap * 0.12);
     }
 
-    if (this.axe) {
-      // Elle suit la main, et s'abat vers l'avant au coup.
-      const [px, py] = this.proto.pivots?.['axe'] ?? [0, 0];
+    if (this.tool) {
+      // Il suit la main, et s'abat vers l'avant au coup.
+      const [px, py] = this.proto.pivots?.[this.toolName] ?? [0, 0];
 
-      this.axe.position.set(bodyX + px - this.proto.anchorX * this.proto.width, bodyY + py - this.proto.anchorY * this.proto.height);
-      this.axe.rotation = chop * 1.3;
+      this.tool.position.set(bodyX + px - this.proto.anchorX * this.proto.width, bodyY + py - this.proto.anchorY * this.proto.height);
+      this.tool.rotation = chop * 1.3;
     }
 
     if (this.bow) {
@@ -331,5 +336,16 @@ export class Puppet {
 /** Sprites qui s'animent en pantin. */
 export type PuppetId = Extract<
   SpriteId,
-  'adam' | 'eve' | 'mutant' | 'kid' | 'worker' | 'logistician' | 'lumberjack' | 'exMutant' | 'patient' | 'crab' | 'wolf'
+  | 'adam'
+  | 'eve'
+  | 'mutant'
+  | 'kid'
+  | 'worker'
+  | 'logistician'
+  | 'builder'
+  | 'lumberjack'
+  | 'exMutant'
+  | 'patient'
+  | 'crab'
+  | 'wolf'
 >;

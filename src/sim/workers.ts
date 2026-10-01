@@ -1,6 +1,6 @@
 /**
  * Les ouvriers : les porteurs de la maison des constructeurs, les
- * logisticiens du poste, les bûcherons de la cabane — et, entre deux
+ * logisticiens et les bâtisseurs des postes, les bûcherons de la cabane — et, entre deux
  * tâches, leur flânerie.
  *
  * Pas d'A* par porteur — cent porteurs qui recalculent un chemin, c'est fini.
@@ -17,7 +17,7 @@
 import { TILE_SIZE, distanceSq, floorDiv } from '../core/grid.ts';
 import { hash3 } from '../core/rng.ts';
 import { CLINIC } from '../data/clinic.ts';
-import { EX_MUTANT, LOGISTICIANS, LUMBERJACKS, PORTERS, WANDER } from '../data/workers.ts';
+import { BUILDERS, EX_MUTANT, LOGISTICIANS, LUMBERJACKS, PORTERS, WANDER } from '../data/workers.ts';
 import { facingOf } from './motion.ts';
 import { isWalkable, terrainAt } from './terrain.ts';
 import type { Lumberjack, Patient, Wandering, Worker } from './types.ts';
@@ -33,12 +33,14 @@ function speedOf(walker: Walker): number {
   if (walker.kind === 'patient') return CLINIC.limpSpeed;
   if (walker.kind === 'lumberjack') return LUMBERJACKS.speed;
   if (walker.logistician) return LOGISTICIANS.speed;
+  if (walker.builder) return BUILDERS.speed;
   return walker.exMutant ? EX_MUTANT.speed : PORTERS.speed;
 }
 
 /** Ce qu'un ouvrier porte en un voyage : un ex-mutant, plus fort, ou un logisticien, du métier, en prend davantage. */
 export function carryOf(worker: Worker): number {
   if (worker.logistician) return LOGISTICIANS.carry;
+  if (worker.builder) return BUILDERS.carry;
   return worker.exMutant ? EX_MUTANT.carry : PORTERS.carry;
 }
 

@@ -89,6 +89,13 @@ export type Command =
    */
   | { type: 'setWorkers'; id: EntityId; count: number }
   /**
+   * Annule un chantier : l'emprise se libère, et ce qui y avait été livré
+   * retourne au stock de la ville — en tas au sol s'il n'y a plus de mairie.
+   * Ce que des ouvriers y portaient repart à la mairie. Le chantier de la
+   * mairie ne s'annule pas. Le bouton « Annuler le chantier » de sa fenêtre.
+   */
+  | { type: 'cancelSite'; id: EntityId }
+  /**
    * Les bonus plantés au jardin des souvenirs, au départ d'une nouvelle
    * colonie. Poussée avant le premier tick ; ignorée ensuite.
    */

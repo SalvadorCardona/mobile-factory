@@ -1,14 +1,16 @@
 /**
  * Le rayon de travail d'un bâtiment : un cercle discret au sol.
  *
- * Deux bâtiments en ont un : la cabane de bûcheron (les arbres que ses
- * bûcherons coupent, cercle menthe) et le poste de logistique (les
- * producteurs que ses logisticiens vident, cercle cyan). Il se montre quand
+ * Trois bâtiments en ont un : la cabane de bûcheron (les arbres que ses
+ * bûcherons coupent, cercle menthe), le poste de logistique (les
+ * producteurs que ses logisticiens vident, cercle cyan) et le poste de
+ * construction (les chantiers que ses bâtisseurs livrent et bâtissent,
+ * cercle violet). Il se montre quand
  * on en place un — autour du fantôme, pour voir ce qu'il atteindra — et
  * quand on en sélectionne un. Ailleurs, il n'encombre pas la carte. Même
  * centre, même rayon que la simulation (`sim/lumberjacks.ts`,
- * `sim/jobs.ts`) : le centre de l'emprise, `LUMBERJACKS.radius` ou
- * `LOGISTICIANS.radius`.
+ * `sim/jobs.ts`) : le centre de l'emprise, `LUMBERJACKS.radius`,
+ * `LOGISTICIANS.radius` ou `BUILDERS.radius`.
  *
  * Le `Graphics` n'est redessiné que si le cercle change de place.
  */
@@ -17,7 +19,7 @@ import { Graphics } from 'pixi.js';
 import { TILE_SIZE } from '../core/grid.ts';
 import { PALETTE, STROKE, hex } from '../data/artDirection.ts';
 import { BUILDINGS, type BuildingId, type BuildingKind } from '../data/buildings.ts';
-import { LOGISTICIANS, LUMBERJACKS } from '../data/workers.ts';
+import { BUILDERS, LOGISTICIANS, LUMBERJACKS } from '../data/workers.ts';
 import type { GhostState } from '../input/placement.ts';
 import type { EntityId } from '../sim/types.ts';
 import type { World } from '../sim/world.ts';
@@ -26,6 +28,7 @@ import type { World } from '../sim/world.ts';
 const REACHES: Partial<Record<BuildingKind, { radius: number; color: number }>> = {
   lumberCamp: { radius: LUMBERJACKS.radius, color: hex(PALETTE.mint.shade) },
   depot: { radius: LOGISTICIANS.radius, color: hex(PALETTE.cyan.shade) },
+  yard: { radius: BUILDERS.radius, color: hex(PALETTE.violet.shade) },
 };
 
 export class WorkReachLayer {

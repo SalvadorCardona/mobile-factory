@@ -100,3 +100,26 @@ export const WANDER = {
   pauseTicks: 30,
   pauseJitter: 90,
 } as const;
+
+/**
+ * Bâtisseurs — les ouvriers du poste de construction (`BUILDINGS.constructionPost`).
+ *
+ * En boucle : prendre, dans le rayon du poste, le chantier le plus ancien
+ * qui attend encore quelque chose que la mairie a, aller le chercher à la
+ * mairie, le livrer ; puis, quand un chantier a tout reçu, venir le bâtir au
+ * marteau. Les chantiers qu'un poste couvre sont à lui : les porteurs de la
+ * maison des constructeurs ne les livrent plus. Hors de portée de tout poste,
+ * rien ne change — le dernier objet livré achève le chantier.
+ */
+export const BUILDERS = {
+  /** Rayon d'action, en tuiles, du centre du poste au centre du chantier : c'est le cercle affiché. */
+  radius: 9,
+  /** Vitesse de marche, en tuiles par seconde : celle d'un porteur. */
+  speed: 2.4,
+  /** Objets portés en un voyage : ceux d'un porteur. */
+  carry: 5,
+  /** Travail d'un chantier, en ticks de bâtisseur par objet de son coût : 20 objets, 10 s pour un seul bâtisseur. */
+  workPerItem: 10,
+  /** Bâtisseurs qui travaillent ensemble sur un chantier, au plus : au-delà, ils se gênent. */
+  perSite: 3,
+} as const;

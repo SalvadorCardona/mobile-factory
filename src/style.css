@@ -1823,6 +1823,15 @@ button.hud-stock:active {
   background: var(--coral-light);
 }
 
+/* La construction au marteau : la teinte du cercle du poste de construction. */
+.building-panel-bar[data-kind='build'] div {
+  background: var(--violet);
+}
+
+.building-panel-bar[data-kind='build'] div::after {
+  background: var(--violet-light);
+}
+
 .building-panel-items {
   display: flex;
   flex-wrap: wrap;
@@ -1888,6 +1897,13 @@ button.hud-stock:active {
 
 .building-panel-actions button[data-tone='upgrade']:not([disabled]):active {
   box-shadow: 0 2px 0 var(--mint-shade);
+}
+
+/* Annuler un chantier : corail, comme « Jeter ». */
+.building-panel-actions button[data-tone='cancel'] {
+  background: var(--coral);
+  color: var(--paper);
+  box-shadow: 0 5px 0 var(--coral-shade);
 }
 
 /* Pause : le bouton passe au vert quand il relance. */

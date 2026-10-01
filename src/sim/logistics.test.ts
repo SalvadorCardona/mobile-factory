@@ -64,7 +64,7 @@ function colony(hall: Stock, placements: Placement[]): World {
     const placed = { id: nextId++, proto, tx: hx + dx, ty: hy + dy, width, height, store, hp, level: 1, paused: false, staff: BUILDINGS[proto].workers };
 
     if (site) {
-      entities.push({ id: placed.id, proto, tx: placed.tx, ty: placed.ty, width, height, kind: 'site', delivered: {} });
+      entities.push({ id: placed.id, proto, tx: placed.tx, ty: placed.ty, width, height, kind: 'site', delivered: {}, work: 0 });
       continue;
     }
 

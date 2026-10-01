@@ -121,6 +121,15 @@ export const LORE = {
         'et en rapportent tout à la mairie.',
       effect: '4 logisticiens vident les producteurs alentour dans la mairie.',
     },
+    constructionPost: {
+      name: 'Poste de construction',
+      site: 'Un établi à moitié monté et un tas de planches : le poste attend son échafaudage.',
+      description:
+        'Un atelier sous un échafaudage, un établi, un tas de planches et des barrières rayées. ' +
+        'Quatre bâtisseurs, casque jaune et marteau à la ceinture, y prennent à la mairie ' +
+        'ce qui manque aux chantiers alentour, le livrent, puis les bâtissent.',
+      effect: '4 bâtisseurs livrent et bâtissent les chantiers alentour.',
+    },
     drill: {
       name: 'Foreuse',
       site: 'Un bâti de pierre qui attend son fer. Posée sur un filon, elle l’extraira seule.',
