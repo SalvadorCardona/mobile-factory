@@ -114,7 +114,7 @@ export class Puppet {
     this.shadow.height = options.shadowWidth * 0.3;
     this.shadow.position.set(LIGHT.shadowOffset.x * 0.6, 1);
 
-    this.halo = id === 'mutant' ? this.part('halo') : null;
+    this.halo = id === 'mutant' || id === 'queen' ? this.part('halo') : null;
     this.feet = [this.part('foot'), this.part('foot')];
     this.body = this.part('down');
     this.bow = id === 'adam' ? this.part('bow') : null;
@@ -363,6 +363,7 @@ export type PuppetId = Extract<
   | 'adam'
   | 'eve'
   | 'mutant'
+  | 'queen'
   | 'kid'
   | 'worker'
   | 'logistician'

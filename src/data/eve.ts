@@ -93,6 +93,8 @@ export const EVE_LINES = {
   ],
   /** Une caravane de troc arrive au bord de la clairière (`data/caravan.ts`). */
   caravan: 'Une caravane ! Va voir ce qu’il propose.',
+  /** Au crépuscule, la veille d'une nuit de Reine (`QUEEN`, `data/enemies.ts`). */
+  queen: 'Demain soir, la Reine sort. Des tours, Adam !',
   /** Tapée pendant une attaque. */
   busy: 'Pas maintenant, Adam, ils arrivent !',
   /** Toutes les quêtes finies. */

@@ -284,6 +284,21 @@ export interface Mutant extends Moving {
    * entre-temps — : la mairie.
    */
   target?: EntityId;
+  /** Ce que seule la Reine des flaques retient (`QUEEN`) ; absent pour tout autre mutant. */
+  queen?: QueenState;
+}
+
+/**
+ * La Reine, phase par phase. Sous terre, elle est un mutant qui « émerge »
+ * (`emerge`) : immobile, invisible, hors d'atteinte des arcs.
+ */
+export interface QueenState {
+  /** 1 : elle marche sur la mairie et pond ; 2 : sous la moitié de ses points de vie, elle chasse les tours. */
+  phase: 1 | 2;
+  /** Ticks avant la prochaine ponte, en phase 1. */
+  layTicks: number;
+  /** La tour qu'elle chasse, en phase 2 ; `null` : plus aucune tour, elle marche sur la mairie. */
+  prey: EntityId | null;
 }
 
 /**

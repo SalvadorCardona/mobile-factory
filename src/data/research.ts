@@ -3,7 +3,8 @@
  *
  * Une recherche = un coût, une durée, des prérequis et un effet. Le coût
  * mêle objets communs (bois, pierre, minerai…) et butin d'ennemis (gelée de
- * mutant, croc de loup, pince de crabe) : le combat nourrit la progression.
+ * mutant, croc de loup, pince de crabe, cœur de la Reine) : le combat nourrit
+ * la progression.
  *
  * Le labo n'en mène qu'une à la fois. On la choisit, le labo attend son coût
  * — apporté par Adam (heurt, « Transférer » : le sac puis la ville dans son
@@ -109,6 +110,15 @@ export const RESEARCH = {
     duration: 20 * 60,
     requires: ['sharpArrows'],
     effect: { stat: 'bowCooldown', amount: -4 },
+  },
+  irradiatedArrows: {
+    label: 'Flèches irradiées',
+    description: 'Un éclat du cœur de la Reine dans chaque pointe : ça brûle.',
+    theme: 'combat',
+    cost: { ironPlate: 4, radCore: 1 },
+    duration: 20 * 90,
+    requires: ['sharpArrows'],
+    effect: { stat: 'bowDamage', amount: 1 },
   },
   bigBag: {
     label: 'Sac renforcé',

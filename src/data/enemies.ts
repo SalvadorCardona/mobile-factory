@@ -31,6 +31,8 @@ export interface EnemyProto {
   halfH: number;
   /** Ce qu'il lâche au sol en tombant (`LOOT_DROPS`). */
   loot: LootTable;
+  /** Vrai s'il peut tomber assommé plutôt que s'évaporer, une clinique ayant une place (`data/clinic.ts`). */
+  stunnable: boolean;
 }
 
 export const ENEMIES = {
@@ -52,6 +54,7 @@ export const ENEMIES = {
       // Une noix de gelée fluo : le labo en fait des merveilles.
       { item: 'mutantGoo', min: 1, max: 1, chance: 0.5 },
     ],
+    stunnable: true,
   },
   /**
    * Le « boss » des nuits spéciales : un mutant qui a trop poussé. Lent,
@@ -75,12 +78,58 @@ export const ENEMIES = {
       { item: 'ironPlate', min: 1, max: 1, chance: 0.3 },
       { item: 'mutantGoo', min: 1, max: 2, chance: 1 },
     ],
+    stunnable: true,
+  },
+  /**
+   * La Reine des flaques : le rendez-vous des grosses nuits (`QUEEN`). Les
+   * points de vie de vingt mutants — assez pour qu'une tour seule ne l'use
+   * pas avant qu'elle l'atteigne (`defense.test.ts`) —, plus lente qu'eux,
+   * elle cogne de quoi raser une tour en cinq coups. Jamais assommée.
+   */
+  queen: {
+    label: 'Reine des flaques',
+    hp: 60,
+    speed: 0.72,
+    damage: 12,
+    attackTicks: 20,
+    sprite: 'queen',
+    scale: 1,
+    // Ses pieds : une tuile de large au plus, comme tout ennemi (`validatePrototypes`).
+    halfW: 15,
+    halfH: 12,
+    // Son cœur, qu'on ne trouve nulle part ailleurs, et les plaques qu'elle a avalées.
+    loot: [
+      { item: 'radCore', min: 1, max: 1, chance: 1 },
+      { item: 'ironPlate', min: 1, max: 3, chance: 1 },
+    ],
+    stunnable: false,
+  },
+  /**
+   * La larve que pond la Reine : un petit mutant rapide et fragile, qui
+   * occupe les arcs pendant que sa mère avance. Trop jeune pour la clinique.
+   */
+  larva: {
+    label: 'Larve de flaque',
+    hp: 1,
+    speed: 2.2,
+    damage: 2,
+    attackTicks: 16,
+    sprite: 'mutant',
+    scale: 0.6,
+    halfW: 6,
+    halfH: 4,
+    // Un bout de ferraille avalé, parfois une noix de gelée.
+    loot: [
+      { item: 'ironOre', min: 1, max: 1, chance: 1 },
+      { item: 'mutantGoo', min: 1, max: 1, chance: 0.25 },
+    ],
+    stunnable: false,
   },
 } as const satisfies Record<string, EnemyProto>;
 
 export type EnemyId = keyof typeof ENEMIES;
 
-/** Les espèces, dans l'ordre où une vague les fait sortir. */
+/** Les espèces, dans l'ordre où une vague les fait sortir (la larve n'y est jamais : la Reine la pond). */
 export const ENEMY_IDS = Object.keys(ENEMIES) as EnemyId[];
 
 /** Une vague : son effectif par espèce de mutant. */
@@ -129,6 +178,45 @@ export const WAVES = {
   targetChance: 0.5,
   /** Ce qu'une vague peut viser hors de la mairie : les bâtiments qui produisent. */
   targets: ['drill', 'farm', 'quarry', 'lumberCamp', 'forge'] as const satisfies readonly BuildingId[],
+} as const;
+
+/**
+ * La Reine des flaques, nuit par nuit et phase par phase.
+ *
+ * Elle mène la dernière vague d'une nuit sur cinq à partir de la dixième —
+ * c'est `NIGHT_PLAN` qui la place, et son cycle qui la ramène aux nuits 15,
+ * 20… La nuit 5 garde son gros mutant d'initiation. Ève l'annonce la veille,
+ * au crépuscule ; le soir venu, le bandeau compte jusqu'à sa sortie.
+ *
+ * - Phase 1, jusqu'à la moitié de ses points de vie : elle marche sur la
+ *   mairie et pond `brood` larves toutes les `layTicks`.
+ * - Phase 2, sous `enrageRatio` : elle s'enfouit `burrowTicks`, ressort à
+ *   `surfaceDistance` tuiles de la tour la plus proche et la charge, à
+ *   `chargePace` fois son pas, pour la frapper ; la tour tombée, elle
+ *   replonge vers la suivante. Une tour seule ne se défend pas : il faut des
+ *   tours qui se couvrent entre elles.
+ *
+ * À l'aube, vivante, elle repart avec les autres.
+ */
+export const QUEEN = {
+  /** Ticks entre deux pontes, en phase 1. */
+  layTicks: 20 * 8,
+  /** Larves par ponte. */
+  brood: 2,
+  /** Ticks qu'une larve met à sortir de terre, à côté de sa mère. */
+  larvaEmergeTicks: 12,
+  /** Sous cette part de ses points de vie, la phase 2 commence. */
+  enrageRatio: 0.5,
+  /** Ticks passés sous terre avant de ressortir près d'une tour : ni visible ni visable. */
+  burrowTicks: 20 * 3,
+  /** Distance, en tuiles, entre le centre de la tour visée et le point où elle ressort. */
+  surfaceDistance: 4,
+  /**
+   * En phase 2, elle charge la tour à ce multiple de son pas. La dernière
+   * vague sort 25 s avant l'aube (`WAVES`) : à son pas de marche, elle
+   * n'atteindrait la tour qu'avec le jour.
+   */
+  chargePace: 2,
 } as const;
 
 /* ------------------------------------------------------------------ butin */
@@ -196,8 +284,11 @@ export const NIGHT_PLAN = [
   [{ mutant: 3 }, { mutant: 3 }, { mutant: 2, brute: 1 }],
   [{ mutant: 3 }, { mutant: 4 }, { mutant: 5 }],
   [{ mutant: 4 }, { mutant: 4 }, { mutant: 4 }],
-  /** Un gros mutant de plus : le cycle de cinq qui se répète au-delà commence à la nuit 4. */
+  /** Un gros mutant de plus. */
   [{ mutant: 3 }, { mutant: 5 }, { mutant: 3, brute: 1 }],
+  [{ mutant: 4 }, { mutant: 5 }, { mutant: 5 }],
+  /** La Reine des flaques : sans tours qui se couvrent, elle en rase une. Le cycle de cinq qui se répète au-delà commence à la nuit 6 : il la ramène toutes les cinq nuits. */
+  [{ mutant: 5 }, { mutant: 5 }, { mutant: 4, queen: 1 }],
 ] as const satisfies readonly (readonly WaveSpec[])[];
 
 /** La vague numéro `wave` (la première vaut 1) de la nuit numéro `night` (la première vaut 1). */
@@ -219,9 +310,24 @@ export function waveSize(night: number, wave: number): number {
   return Object.values(waveSpec(night, wave)).reduce((sum, count) => sum + count, 0);
 }
 
-/** Vrai si la vague amène un gros mutant : le bandeau l'annonce autrement. */
+/** Vrai si la vague amène un gros mutant ou la Reine : le bandeau l'annonce autrement. */
 export function isBossWave(night: number, wave: number): boolean {
-  return (waveSpec(night, wave).brute ?? 0) > 0;
+  const spec = waveSpec(night, wave);
+
+  return (spec.brute ?? 0) > 0 || (spec.queen ?? 0) > 0;
+}
+
+/** Vrai si la Reine des flaques mène cette vague. */
+export function isQueenWave(night: number, wave: number): boolean {
+  return (waveSpec(night, wave).queen ?? 0) > 0;
+}
+
+/** La vague de la nuit `night` que mène la Reine, ou `null` si elle ne sort pas cette nuit-là. */
+export function queenWave(night: number): number | null {
+  for (let wave = 1; wave <= WAVES.perNight; wave += 1) {
+    if (isQueenWave(night, wave)) return wave;
+  }
+  return null;
 }
 
 /* ------------------------------------------------------------------ faune */

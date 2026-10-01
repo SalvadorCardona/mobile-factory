@@ -53,16 +53,19 @@ describe('sprites', () => {
   });
 
   it('réserve le vert fluo aux mutants', () => {
-    // Seuls ont le droit de le porter : le mutant, le patient (un mutant assommé), la flaque d'où il sort, son
-    // pictogramme, la bannière, où il en passe un, la gelée qu'il lâche en butin (un bout de lui : son icône,
-    // le tas au sol, la charge d'un porteur) — et l'ex-mutant, pour un seul détail (test suivant).
+    // Seuls ont le droit de le porter : le mutant, la Reine des flaques, le patient (un mutant assommé), la flaque
+    // d'où il sort, son pictogramme, la bannière, où il en passe un, la gelée et le cœur de la Reine qu'ils lâchent en
+    // butin (des bouts d'eux : leur icône, le tas au sol, la charge d'un porteur) — et l'ex-mutant, pour un seul
+    // détail (test suivant).
     const mutants = (name: string): boolean =>
       name.startsWith('mutant.') ||
+      name.startsWith('queen.') ||
       name.startsWith('patient.') ||
       name.startsWith('exMutant.') ||
       name.startsWith('puddle.') ||
       name === 'ui.mutant' ||
       name.endsWith('.mutantGoo') ||
+      name.endsWith('.radCore') ||
       name === 'brand.banner';
 
     for (const [name, svg] of everySvg()) {
@@ -86,13 +89,13 @@ describe('sprites', () => {
     }
     // Sa charge et ses pieds sont ceux d'un humain.
     for (const [part, svg] of Object.entries(SPRITES.exMutant.parts)) {
-      // Sauf quand il porte de la gelée de mutant : c'est elle qui est verte, pas lui.
-      if ((part.startsWith('load.') && part !== 'load.mutantGoo') || part === 'foot') expect(count(svg, TOXIC), `exMutant.${part}`).toBe(0);
+      // Sauf quand il porte de la gelée de mutant ou le cœur de la Reine : c'est elle qui est verte, pas lui.
+      if ((part.startsWith('load.') && part !== 'load.mutantGoo' && part !== 'load.radCore') || part === 'foot') expect(count(svg, TOXIC), `exMutant.${part}`).toBe(0);
     }
   });
 
   it('donne à chaque marcheur un corps par direction et un pied', () => {
-    for (const id of ['adam', 'mutant', 'kid', 'worker', 'patient', 'exMutant'] as const) {
+    for (const id of ['adam', 'mutant', 'queen', 'kid', 'worker', 'patient', 'exMutant'] as const) {
       for (const part of WALKER_PARTS) expect(SPRITES[id].parts).toHaveProperty(part);
     }
   });

@@ -53,10 +53,13 @@ import {
   ENEMIES,
   ENEMY_IDS,
   LOOT_DROPS,
+  QUEEN,
   WAVES,
   WILDLIFE,
   WILDLIFE_SPAWN,
   isBossWave,
+  isQueenWave,
+  queenWave,
   waveSize,
   waveSpec,
   type EnemyId,
@@ -85,7 +88,7 @@ import { WEATHER, WEATHER_CALENDAR, type WeatherId } from '../data/weather.ts';
 import { ChunkIndex } from './chunk.ts';
 import { consumerRecipe, consumerRoom, consumerWants, forgeRecipe, isConsumer } from './consumers.ts';
 import { NO_WIND, nearestFoe, shoot, stepArrow, type Wind } from './combat.ts';
-import { clockAt, nextWave, waveAt, type DayClock } from './dayNight.ts';
+import { clockAt, nextWave, ticksToWave, waveAt, type DayClock } from './dayNight.ts';
 import type {
   Command,
   CommandLogEntry,
@@ -102,13 +105,13 @@ import type {
 } from './commands.ts';
 import { caravanBagBonus, caravanRoute, createCaravan, drawOffers, isCaravanDay, rideTo, tradeCost } from './caravan.ts';
 import type { WildlifeId } from '../data/enemies.ts';
-import { compassOf, spawnPoint, stepMutant, type Compass } from './enemies.ts';
+import { compassOf, spawnPoint, stepMutant, stepQueen, surfacePoint, type Compass, type MutantStep } from './enemies.ts';
 import { createEve, currentQuest, harvestYieldWithTools, isUnlocked, mostDamaged, questProgress, rideHome, walkTo } from './eve.ts';
 import { stepKid } from './kids.ts';
 import { rollLoot, stepPickup } from './loot.ts';
 import { copyStats, emptyStats, objectiveDone } from './objectives.ts';
 import { denSize, densOfChunk, stepBeast, type Den } from './wildlife.ts';
-import { FULL_TILE, facingOf, type TileBox } from './motion.ts';
+import { FULL_TILE, blockingTile, facingOf, type TileBox } from './motion.ts';
 import {
   BUILD_REACH_TILES,
   INVENTORY_CAPACITY,
@@ -341,8 +344,9 @@ export type WorldEvents = {
   harvestRefused: { tx: number; ty: number; item: ItemId; wanted: number; plenty: boolean };
   /**
    * Plus que `seconds` secondes avant la prochaine vague (3, 2, puis 1) : sa
-   * nuit, son rang dans la nuit, son effectif, si un gros mutant la mène
-   * (`boss`), d'où elle vient et le point, en pixels monde, où elle va surgir.
+   * nuit, son rang dans la nuit, son effectif, si un gros mutant ou la Reine
+   * la mène (`boss`), si c'est la Reine (`queen`), d'où elle vient et le
+   * point, en pixels monde, où elle va surgir.
    */
   waveCountdown: {
     seconds: number;
@@ -350,6 +354,7 @@ export type WorldEvents = {
     wave: number;
     count: number;
     boss: boolean;
+    queen: boolean;
     from: Compass;
     /** Le bâtiment qu'elle vise : la mairie, ou un bâtiment de l'usine (`WAVES.targets`). */
     targetProto: BuildingId;
@@ -360,9 +365,18 @@ export type WorldEvents = {
   duskFell: { night: number };
   /**
    * Une vague de mutants vient d'apparaître autour de la mairie, du côté
-   * `from`, et marche sur `targetProto` ; `wave` compte à partir de 1 dans la nuit.
+   * `from`, et marche sur `targetProto` ; `wave` compte à partir de 1 dans la
+   * nuit ; `queen` : la Reine des flaques la mène.
    */
-  waveStarted: { night: number; wave: number; count: number; boss: boolean; from: Compass; targetProto: BuildingId; x: number; y: number };
+  waveStarted: { night: number; wave: number; count: number; boss: boolean; queen: boolean; from: Compass; targetProto: BuildingId; x: number; y: number };
+  /** Au crépuscule, la veille : la Reine des flaques sortira la nuit `night`. */
+  queenAnnounced: { night: number };
+  /** La Reine pond : `count` larves sortent de terre autour de (x, y). */
+  queenLaid: { id: MobileId; count: number; x: number; y: number };
+  /** La Reine plonge en (x, y) et ressortira en (toX, toY), près de la tour `prey`. */
+  queenDived: { id: MobileId; prey: EntityId; x: number; y: number; toX: number; toY: number };
+  /** La Reine est abattue en (x, y) : son cœur est au sol. */
+  queenSlain: { id: MobileId; night: number; x: number; y: number };
   /** Le dernier mutant en vie vient de tomber : la vague de la nuit `night` est repoussée. */
   waveCleared: { night: number };
   /** Un mutant abattu a lâché du butin en (x, y). */
@@ -2708,7 +2722,7 @@ export class World {
         case 'mutant': {
           const spell = this.spell;
           const wind = spell && { windX: spell.windX, windY: spell.windY, downwind: WEATHER[spell.id].mutantDownwind };
-          const step = stepMutant(mobile, this.mutantGoal(mobile), this.occupantAt, STEP_SECONDS, wind);
+          const step = mobile.queen ? this.stepQueen(mobile, wind) : stepMutant(mobile, this.mutantGoal(mobile), this.occupantAt, STEP_SECONDS, wind);
 
           if (step.strikes && step.blockedBy !== null) {
             this.damageBuilding(step.blockedBy, ENEMIES[mobile.proto].damage);
@@ -2773,6 +2787,93 @@ export class World {
 
   private readonly occupantAt = (tx: number, ty: number): EntityId | undefined => this.chunks.occupantAt(tx, ty);
 
+  /* ------------------------------------------------------------------ Reine */
+
+  /**
+   * Un tick de la Reine des flaques : elle marche sur la mairie et pond
+   * (phase 1), ou chasse sa tour (phase 2). Quand elle plonge, c'est ici
+   * qu'on choisit la tour et le point où elle ressort.
+   */
+  private stepQueen(queen: Mutant, wind: { windX: number; windY: number; downwind: number } | null): MutantStep {
+    const preyId = queen.queen?.prey ?? null;
+    const prey = preyId === null ? undefined : this.entities.get(preyId);
+    const target = prey ? footprintCenter(prey) : this.target;
+    const step = stepQueen(queen, target, prey !== undefined, this.occupantAt, STEP_SECONDS, wind);
+
+    if (step.lays) this.layLarvae(queen);
+    if (step.dives) this.dive(queen);
+    return step;
+  }
+
+  /** La ponte : `QUEEN.brood` larves sortent de terre à ses pieds, de part et d'autre. */
+  private layLarvae(queen: Mutant): void {
+    for (let i = 0; i < QUEEN.brood; i += 1) {
+      const side = i % 2 === 0 ? -1 : 1;
+      const x = queen.x + side * (ENEMIES.queen.halfW + ENEMIES.larva.halfW + 2);
+      const free = this.occupantAt(floorDiv(x, TILE_SIZE), floorDiv(queen.y, TILE_SIZE)) === undefined;
+
+      this.spawnMutant('larva', QUEEN.larvaEmergeTicks, this.townHallId, free ? { x, y: queen.y } : { x: queen.x, y: queen.y });
+    }
+    this.events.emit('queenLaid', { id: queen.id, count: QUEEN.brood, x: queen.x, y: queen.y });
+  }
+
+  /**
+   * Elle plonge : ressort `QUEEN.burrowTicks` plus tard à `QUEEN.surfaceDistance`
+   * tuiles de la tour la plus proche, qu'elle chasse désormais. Plus de
+   * tour, ou aucune place libre autour : elle reste en surface et marche
+   * sur la mairie.
+   */
+  private dive(queen: Mutant): void {
+    const state = queen.queen!;
+    let best: Tower | null = null;
+    let bestSq = Infinity;
+
+    for (const entity of this.entities.values()) {
+      if (entity.kind !== 'tower') continue;
+
+      const center = footprintCenter(entity);
+      const sq = distanceSq(queen.x, queen.y, center.x, center.y);
+
+      if (sq < bestSq) {
+        bestSq = sq;
+        best = entity;
+      }
+    }
+    if (!best) return;
+
+    const box = { halfW: ENEMIES.queen.halfW, halfH: ENEMIES.queen.halfH };
+    const point = surfacePoint(
+      footprintCenter(best),
+      queen,
+      (x, y) => blockingTile(x, y, box, (tx, ty) => this.occupantAt(tx, ty) !== undefined) === null,
+    );
+
+    if (!point) return;
+
+    this.events.emit('queenDived', { id: queen.id, prey: best.id, x: queen.x, y: queen.y, toX: point.x, toY: point.y });
+    state.prey = best.id;
+    queen.x = queen.prevX = point.x;
+    queen.y = queen.prevY = point.y;
+    queen.moving = false;
+    queen.emerge = QUEEN.burrowTicks;
+    // Ressortie, elle frappe aussitôt.
+    queen.attackCooldown = 0;
+  }
+
+  /**
+   * Ticks avant que la Reine ne sorte cette nuit, du crépuscule à sa vague ;
+   * `null` si elle ne sort pas ce soir, ou si elle est déjà dehors.
+   */
+  public queenCountdown(): number | null {
+    const clock = this.clock();
+
+    if (!clock || this.defeated) return null;
+
+    const wave = queenWave(clock.cycle);
+
+    return wave === null ? null : ticksToWave(clock, wave);
+  }
+
   /**
    * L'arc d'Adam : automatique. À chaque tick, il vise l'ennemi le plus
    * proche à portée — mutant, crabe ou loup — et tire dès que le délai est
@@ -2828,13 +2929,15 @@ export class World {
     this.mobiles.delete(mutant.id);
     this.kills += 1;
 
-    const clinic = this.freeClinic(mutant.x, mutant.y);
+    // La Reine et ses larves ne tombent jamais assommées : pas de tirage, le PRNG ne bouge pas.
+    const clinic = ENEMIES[mutant.proto].stunnable ? this.freeClinic(mutant.x, mutant.y) : null;
 
     if (clinic && this.rng() < CLINIC.stunChance) {
       this.stun(mutant, clinic);
     } else {
       this.events.emit('mutantDied', { id: mutant.id, x: mutant.x, y: mutant.y });
       this.dropLoot(ENEMIES[mutant.proto].loot, mutant.x, mutant.y);
+      if (mutant.queen) this.events.emit('queenSlain', { id: mutant.id, night: this.night, x: mutant.x, y: mutant.y });
     }
 
     if (!this.defeated && !this.hasMutants()) this.events.emit('waveCleared', { night: this.night });
@@ -3424,6 +3527,8 @@ export class World {
 
     if (clock.elapsed === 0) {
       if (clock.phase === 'dusk') this.events.emit('duskFell', { night: clock.cycle });
+      // La veille au soir, Ève prévient : la Reine sort demain.
+      if (clock.phase === 'dusk' && queenWave(clock.cycle + 1) !== null) this.events.emit('queenAnnounced', { night: clock.cycle + 1 });
       if (clock.phase === 'night') this.night = clock.cycle;
       if (clock.phase === 'dawn') this.dawn();
     }
@@ -3440,6 +3545,7 @@ export class World {
         wave,
         count: waveSize(clock.cycle, wave),
         boss: isBossWave(clock.cycle, wave),
+        queen: isQueenWave(clock.cycle, wave),
         from: compassOf(this.nextWaveHeading),
         targetProto: this.waveTarget().proto,
         ...this.waveOrigin(),
@@ -3519,7 +3625,8 @@ export class World {
     // Dans l'ordre des espèces : le tirage des points d'apparition reste rejouable.
     for (const proto of ENEMY_IDS) {
       for (let i = 0; i < (spec[proto] ?? 0); i += 1) {
-        this.spawnMutant(proto, WAVES.emergeTicks + count * WAVES.emergeStagger, target.id);
+        // La Reine marche sur la mairie, quoi que vise sa vague.
+        this.spawnMutant(proto, WAVES.emergeTicks + count * WAVES.emergeStagger, proto === 'queen' ? this.townHallId : target.id);
         count += 1;
       }
     }
@@ -3529,6 +3636,7 @@ export class World {
       wave,
       count,
       boss: isBossWave(this.night, wave),
+      queen: isQueenWave(this.night, wave),
       from,
       targetProto: target.proto,
       ...origin,
@@ -3586,11 +3694,12 @@ export class World {
     };
   }
 
-  private spawnMutant(proto: EnemyId, emerge: number, target: EntityId): void {
-    let point = spawnPoint(this.rng, this.target, this.nextWaveHeading);
+  /** Un mutant de la vague, autour de la mairie ; une larve, à `at`, aux pieds de sa mère. */
+  private spawnMutant(proto: EnemyId, emerge: number, target: EntityId, at: { x: number; y: number } | null = null): void {
+    let point = at ?? spawnPoint(this.rng, this.target, this.nextWaveHeading);
 
     // Pas dans un bâtiment : il y resterait coincé à le ronger de l'intérieur.
-    for (let attempt = 0; attempt < 8; attempt += 1) {
+    for (let attempt = 0; attempt < 8 && !at; attempt += 1) {
       if (this.occupantAt(floorDiv(point.x, TILE_SIZE), floorDiv(point.y, TILE_SIZE)) === undefined) break;
       point = spawnPoint(this.rng, this.target, this.nextWaveHeading);
     }
@@ -3612,6 +3721,7 @@ export class World {
       ...(target !== this.townHallId && { target }),
     };
 
+    if (proto === 'queen') mutant.queen = { phase: 1, layTicks: QUEEN.layTicks, prey: null };
     this.mobiles.set(mutant.id, mutant);
   }
 
@@ -4709,6 +4819,7 @@ function copyMobile(mobile: Mobile): Mobile {
   if (mobile.kind === 'caravan') {
     return { ...mobile, offers: mobile.offers.map((trade) => ({ ...trade, cost: { ...trade.cost }, items: { ...trade.items } })) };
   }
+  if (mobile.kind === 'mutant' && mobile.queen) return { ...mobile, queen: { ...mobile.queen } };
   return { ...mobile };
 }
 
@@ -4756,4 +4867,9 @@ function canCraft(store: Store, recipe: RecipeProto): boolean {
 
 function clamp(value: number, min: number, max: number): number {
   return value < min ? min : value > max ? max : value;
+}
+
+/** Le centre de l'emprise d'un bâtiment, en pixels monde : ce que vise la Reine qui le chasse. */
+function footprintCenter(entity: { tx: number; ty: number; width: number; height: number }): { x: number; y: number } {
+  return { x: (entity.tx + entity.width / 2) * TILE_SIZE, y: (entity.ty + entity.height / 2) * TILE_SIZE };
 }
