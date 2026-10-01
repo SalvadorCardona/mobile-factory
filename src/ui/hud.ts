@@ -66,7 +66,7 @@ import { WEATHER, WEATHER_CALENDAR } from '../data/weather.ts';
 import type { UiIcon } from '../art/ui.ts';
 import type { AtlasStats } from '../render/spriteLibrary.ts';
 import type { WaterStats } from '../render/waterLayer.ts';
-import type { PlacementRejection, RepairRejection } from '../sim/commands.ts';
+import type { PlacementRejection, RepairRejection, RoadRejection } from '../sim/commands.ts';
 import type { Compass } from '../sim/enemies.ts';
 import type { Entity } from '../sim/types.ts';
 import { ticksToNight } from '../sim/dayNight.ts';
@@ -80,6 +80,7 @@ import { mapUrl, seedLine } from './seed.ts';
 
 const REJECTION_LABELS: Record<PlacementRejection, string> = {
   occupied: 'Emplacement déjà occupé',
+  road: 'Une route passe ici — retirez-la d’abord',
   terrain: 'Terrain non constructible',
   outOfReach: 'Trop loin — rapprochez-vous',
   resource: 'Dégagez d’abord les arbres et rochers',
@@ -87,6 +88,14 @@ const REJECTION_LABELS: Record<PlacementRejection, string> = {
   noOre: 'Aucun filon ici — une foreuse se pose sur un filon',
   locked: 'Pas encore débloqué — il faut son plan, ou tenir encore une nuit',
   unique: 'Un seul par colonie — il y en a déjà un',
+};
+
+/** Ce que dit la bulle quand un tracé de route n'a pas été pavé en entier ; `paved` tuiles l'ont été. */
+const ROAD_LABELS: Record<RoadRejection, (paved: number) => string> = {
+  noStone: (paved) => (paved > 0 ? `Plus de pierre : route arrêtée après ${paved} tuile${paved > 1 ? 's' : ''}` : 'Pas de pierre pour paver — ni dans le sac, ni en ville à portée'),
+  terrain: () => 'Pas de route sur l’eau',
+  occupied: () => 'Une route ne passe pas sous un bâtiment',
+  resource: () => 'Arbres et rochers sautés : dégagez-les pour paver',
 };
 
 const REPAIR_LABELS: Record<RepairRejection, string | null> = {
@@ -424,6 +433,13 @@ export class Hud {
     document.addEventListener('pointerdown', this.foldCrewOnTouch, { capture: true });
 
     world.events.on('placementRejected', ({ reason }) => this.notify(REJECTION_LABELS[reason], 'bad'));
+    world.events.on('roadPaved', ({ fromBag }) => {
+      if (fromBag > 0) this.float('stone', -fromBag);
+    });
+    world.events.on('roadRemoved', ({ toBag }) => {
+      if (toBag > 0) this.float('stone', toBag);
+    });
+    world.events.on('roadRejected', ({ reason, paved }) => this.notify(ROAD_LABELS[reason](paved), 'bad'));
     world.events.on('resourceHarvested', ({ item, amount }) => {
       if (item === 'wood') this.harvestedWood = true;
       if (item === 'stone') this.harvestedStone = true;

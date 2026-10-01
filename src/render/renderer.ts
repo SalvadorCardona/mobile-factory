@@ -19,10 +19,11 @@
  */
 
 import { Application, Container } from 'pixi.js';
+import type { TileCoord } from '../core/grid.ts';
 import { GROUND, hex } from '../data/artDirection.ts';
 import type { BuildingId } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
-import type { GhostState } from '../input/placement.ts';
+import type { GhostState, RoadTool, RoadTrail } from '../input/placement.ts';
 import type { EntityId } from '../sim/types.ts';
 import { STEP_MS, type World } from '../sim/world.ts';
 import { Camera } from './camera.ts';
@@ -69,7 +70,14 @@ export class GameRenderer {
     this.world = world;
     this.library = library;
     this.tiles = new TerrainTiles(library);
-    this.chunkLayer = new ChunkLayer(app.renderer, library, this.tiles, world.seed);
+    this.chunkLayer = new ChunkLayer(app.renderer, library, this.tiles, world.seed, world.roads);
+    // Une route posée ou retirée rebake le sol sous elle : c'est le seul changement que le sol connaisse.
+    const repave = ({ tiles }: { tiles: readonly TileCoord[] }): void => {
+      for (const { tx, ty } of tiles) this.chunkLayer.invalidate(tx, ty);
+    };
+
+    world.events.on('roadPaved', repave);
+    world.events.on('roadRemoved', repave);
     this.waterLayer = new WaterLayer(this.tiles, world.seed);
     this.entityLayer = new EntityLayer(world, library, this.tiles, this.shadows);
     this.resourceLayer = new ResourceLayer(world, library, this.tiles, this.entityLayer.container, this.shadows);
@@ -193,8 +201,16 @@ export class GameRenderer {
     this.camera.shake(amount);
   }
 
-  /** `armed` : le bâtiment armé au menu de construction, ou `null` hors du mode construction. */
-  public draw(alpha: number, armed: BuildingId | null, ghost: GhostState | null): void {
+  /**
+   * `armed` : le bâtiment armé au menu de construction, ou `null` hors du mode construction.
+   * `road` : l'outil route armé à sa place, et son tracé.
+   */
+  public draw(
+    alpha: number,
+    armed: BuildingId | null,
+    ghost: GhostState | null,
+    road: { tool: RoadTool; trail: RoadTrail | null } | null = null,
+  ): void {
     const building = armed !== null;
     const { player } = this.world;
 
@@ -228,7 +244,8 @@ export class GameRenderer {
     this.entityLayer.update(alpha, this.app.ticker);
     this.particles.update(this.app.ticker.deltaMS);
     this.nightLayer.update(alpha);
-    this.ghostLayer.update(armed, ghost, block, this.app.ticker.deltaMS);
+    if (road) this.ghostLayer.updateRoad(road.tool, road.trail, this.app.ticker.deltaMS);
+    else this.ghostLayer.update(armed, ghost, block, this.app.ticker.deltaMS);
     this.workReach.update(building ? ghost : null, this.selected);
     this.weather.update(this.camera, this.app.ticker.deltaMS, alpha);
     this.indicators.update(this.camera, this.app.ticker.deltaMS, alpha);

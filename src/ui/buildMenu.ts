@@ -45,6 +45,11 @@
  * carte pour une ligne au pied du tiroir, qu'un appui long (ou le focus
  * clavier) remplit ; la ligne est toujours là, la liste ne bouge pas.
  *
+ * La dernière carte n'est pas un bâtiment : la **route**, une pierre par
+ * tuile. Choisie, elle arme le tracé (`Placement.selectRoad`) ; la barre dit
+ * combien de tuiles et de pierres, « Poser » pave, et « Retirer » change
+ * l'outil pour le marteau, qui retire les dalles et rend leur pierre.
+ *
  * Au clavier (`handleKey`) : Espace ouvre le tiroir sur la première carte
  * (ou sur le bâtiment déjà armé), les flèches ou ZQSD/WASD passent d'une
  * carte à l'autre dans la grille, Entrée choisit, Espace ou Échap referment.
@@ -57,11 +62,12 @@
 import { gridStep, type GridMove } from '../core/gridNav.ts';
 import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
+import { ROADS } from '../data/roads.ts';
 import type { Placement } from '../input/placement.ts';
 import type { World } from '../sim/world.ts';
 import { buildOrder } from './buildOrder.ts';
-import { buildingIcon, itemAmount, uiIcon } from './icons.ts';
-import { placementOutput, placementReason } from './placementReason.ts';
+import { buildingIcon, itemAmount, roadIcon, uiIcon } from './icons.ts';
+import { placementOutput, placementReason, roadReason } from './placementReason.ts';
 
 /** Position physique → mouvement dans la grille : flèches, et ZQSD/WASD comme pour marcher. */
 const MOVES: Readonly<Record<string, GridMove>> = {
@@ -77,6 +83,9 @@ const MOVES: Readonly<Record<string, GridMove>> = {
 
 /** Un doigt posé plus longtemps que ça sur une carte lit son effet au lieu de la choisir. */
 const LONG_PRESS_MS = 450;
+
+/** La carte de la route : ce qu'elle fait, en une ligne. */
+const ROAD_EFFECT = `Adam et les ouvriers y vont ${String(ROADS.speed).replace('.', ',')} fois plus vite. Glissez de tuile en tuile`;
 
 /** Ce que dit la ligne d'effet tant qu'aucune carte n'a été lue. */
 const EFFECT_PROMPT = 'Appui long sur une carte : à quoi sert le bâtiment';
@@ -96,7 +105,11 @@ export class BuildMenu {
   private readonly confirmButton: HTMLButtonElement;
   private readonly repeatButton: HTMLButtonElement;
   private readonly cancelButton: HTMLButtonElement;
+  /** Paver ou retirer : l'outil de la route, en mode route seulement. */
+  private readonly toolButton: HTMLButtonElement;
   private readonly cards = new Map<BuildingId, HTMLButtonElement>();
+  private readonly roadCard: HTMLButtonElement;
+  private readonly roadLock: HTMLElement;
   private readonly locks = new Map<BuildingId, HTMLElement>();
   private readonly costs: { item: ItemId; amount: number; element: HTMLElement }[] = [];
   private opened = false;
@@ -162,6 +175,10 @@ export class BuildMenu {
       this.list.append(card);
     }
 
+    this.roadLock = document.createElement('div');
+    this.roadCard = this.road();
+    this.list.append(this.roadCard);
+
     // Masquée sur grand écran, où chaque carte porte son effet.
     this.effectLine = document.createElement('div');
     this.effectLine.className = 'build-drawer-effect';
@@ -190,7 +207,18 @@ export class BuildMenu {
     this.confirmButton.dataset['confirm'] = 'true';
     this.repeatButton = button('Poser encore', () => this.placement.confirm(true));
     this.cancelButton = button('Annuler', () => this.placement.cancel());
-    this.armedBar.append(this.armedLabel, this.reason, this.cancelButton, this.repeatButton, this.confirmButton);
+    this.toolButton = button('Retirer', () => {
+      this.placement.selectRoad(this.placement.roadTool() === 'remove' ? 'pave' : 'remove');
+    });
+    this.toolButton.hidden = true;
+    this.armedBar.append(
+      this.armedLabel,
+      this.reason,
+      this.cancelButton,
+      this.toolButton,
+      this.repeatButton,
+      this.confirmButton,
+    );
 
     this.root.append(this.drawer, this.armedBar, this.toggleButton);
     this.refresh();
@@ -210,7 +238,7 @@ export class BuildMenu {
     });
 
     card.className = 'build-card';
-    this.longPress(card, id);
+    this.longPress(card, () => this.showEffect(id));
     card.addEventListener('focus', () => this.showEffect(id));
     card.append(buildingIcon(id));
 
@@ -266,8 +294,55 @@ export class BuildMenu {
     return card;
   }
 
+  /**
+   * La carte de la route : comme celle d'un bâtiment, mais son coût est par
+   * tuile, et elle arme le tracé au lieu d'un fantôme.
+   */
+  private road(): HTMLButtonElement {
+    const show = (): void => setText(this.effectLine, `Route : ${ROAD_EFFECT}`);
+    const card = button('', () => {
+      if (this.swallowClick) {
+        this.swallowClick = false;
+        return;
+      }
+      if (!this.unlocked()) return;
+      this.close();
+      this.placement.selectRoad('pave');
+    });
+
+    card.className = 'build-card';
+    this.longPress(card, show);
+    card.addEventListener('focus', show);
+    card.append(roadIcon());
+
+    const body = document.createElement('div');
+    const name = document.createElement('div');
+    const effect = document.createElement('div');
+    const cost = document.createElement('div');
+    const meta = document.createElement('div');
+    const footer = document.createElement('div');
+    const price = itemAmount(ROADS.item, 1);
+
+    body.className = 'build-card-body';
+    name.className = 'build-card-name';
+    name.textContent = 'Route';
+    effect.className = 'build-card-effect';
+    effect.textContent = ROAD_EFFECT;
+    cost.className = 'build-card-cost';
+    cost.append(price);
+    this.costs.push({ item: ROADS.item, amount: 1, element: price });
+    meta.className = 'build-card-meta';
+    meta.textContent = 'par tuile · sans chantier';
+    footer.className = 'build-card-footer';
+    footer.append(cost, meta);
+    this.roadLock.className = 'build-card-lock';
+    body.append(name, effect, footer, this.roadLock);
+    card.append(body);
+    return card;
+  }
+
   /** Appui long : l'effet s'écrit au pied du tiroir, la carte n'est pas choisie. */
-  private longPress(card: HTMLButtonElement, id: BuildingId): void {
+  private longPress(card: HTMLButtonElement, show: () => void): void {
     let timer: number | undefined;
     const cancel = (): void => {
       window.clearTimeout(timer);
@@ -280,7 +355,7 @@ export class BuildMenu {
       timer = window.setTimeout(() => {
         timer = undefined;
         this.swallowClick = true;
-        this.showEffect(id);
+        show();
       }, LONG_PRESS_MS);
     });
     card.addEventListener('pointerup', cancel);
@@ -308,6 +383,8 @@ export class BuildMenu {
 
       if (card) this.list.append(card);
     }
+    // La route ferme la liste : ce n'est pas un bâtiment, elle ne se range pas avec eux.
+    this.list.append(this.roadCard);
     this.list.scrollTop = 0;
   }
 
@@ -341,8 +418,9 @@ export class BuildMenu {
 
     if (focusCard) {
       const armed = this.placement.armedBuilding();
+      const road = this.placement.roadTool() !== null ? this.roadCard : undefined;
 
-      this.focus((armed && this.cards.get(armed)) || this.firstCard());
+      this.focus((armed && this.cards.get(armed)) || road || this.firstCard());
     }
   }
 
@@ -408,8 +486,11 @@ export class BuildMenu {
     return this.visibleCards()[0];
   }
 
+  /** Dans l'ordre de la liste : la route en dernier. */
   private visibleCards(): HTMLButtonElement[] {
-    return [...this.cards.values()].filter((card) => !card.hidden);
+    return [...this.list.children].filter(
+      (card): card is HTMLButtonElement => card instanceof HTMLButtonElement && !card.hidden,
+    );
   }
 
   private focus(card: HTMLButtonElement | undefined): void {
@@ -455,6 +536,13 @@ export class BuildMenu {
       if (lock && reason !== null && lock.textContent !== reason) lock.textContent = reason;
     }
 
+    const roadTool = this.placement.roadTool();
+    const roadLocked = String(!this.unlocked());
+
+    this.roadCard.dataset['active'] = String(roadTool !== null);
+    if (this.roadCard.getAttribute('aria-disabled') !== roadLocked) this.roadCard.setAttribute('aria-disabled', roadLocked);
+    setText(this.roadLock, this.unlocked() ? '' : 'Débloqué après la mairie');
+
     // Le sac et la ville ne comptent que tiroir ouvert : fermé, personne ne voit les coûts.
     if (this.opened) {
       const { inventory } = this.world.player;
@@ -479,6 +567,13 @@ export class BuildMenu {
 
       if (this.armedLabel.textContent !== label) this.armedLabel.textContent = label;
     }
+    this.toolButton.hidden = roadTool === null;
+    if (roadTool) {
+      this.refreshRoad(roadTool, placing);
+      return;
+    }
+    setText(this.confirmButton, 'Poser');
+
     const block = this.placement.block();
     const confirmable = this.placement.isConfirmable();
     const ghost = this.placement.ghost;
@@ -500,9 +595,52 @@ export class BuildMenu {
     this.repeatButton.disabled = !confirmable;
   }
 
+  /** La barre du tracé : combien de tuiles, combien de pierres, et ce qui ne sera pas pavé. */
+  private refreshRoad(tool: 'pave' | 'remove', placing: boolean): void {
+    const trail = this.placement.roadTrail();
+    const tiles = trail?.tiles ?? [];
+    const confirmable = this.placement.isConfirmable();
+    let label: string;
+    let reason: { text: string; remedy: string | null } | null = null;
+
+    if (tool === 'remove') {
+      const slabs = tiles.filter(({ tx, ty }) => this.world.roads.has(tx, ty)).length;
+
+      label = placing ? `Retirer ${plural(slabs, 'dalle')} — rend ${plural(slabs, 'pierre')}` : 'Retirer : glissez sur les dalles';
+    } else {
+      const plan = this.world.roadPlan(tiles);
+      const paid = plan.filter((step) => step.state === 'pave').length;
+
+      label = placing ? `Route : ${plural(paid, 'tuile')} — ${plural(paid, 'pierre')}` : 'Route : glissez de tuile en tuile';
+      reason = roadReason(plan);
+    }
+
+    setText(this.armedLabel, label);
+    setText(this.toolButton, tool === 'pave' ? 'Retirer' : 'Paver');
+    setText(this.confirmButton, tool === 'pave' ? 'Poser' : 'Retirer');
+
+    this.reason.hidden = !placing || !reason;
+    this.reason.dataset['ok'] = 'false';
+    if (reason) {
+      setText(this.reasonText, reason.text);
+      setText(this.reasonRemedy, reason.remedy ?? '');
+      this.reasonRemedy.hidden = !reason.remedy;
+    }
+
+    this.confirmButton.hidden = !placing;
+    this.confirmButton.disabled = !confirmable;
+    this.repeatButton.hidden = !placing;
+    this.repeatButton.disabled = !confirmable;
+  }
+
   public destroy(): void {
     this.root.remove();
   }
+}
+
+/** « 1 pierre », « 3 pierres ». */
+function plural(count: number, word: string): string {
+  return `${count} ${word}${count > 1 ? 's' : ''}`;
 }
 
 /** Ne touche au DOM que si le texte change : `refresh()` tourne à chaque frame. */

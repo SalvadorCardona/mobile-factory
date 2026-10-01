@@ -18,11 +18,13 @@
  */
 
 import { writeFileSync } from 'node:fs';
+import { ROAD_TILES } from '../art/road.ts';
 import { GROUND_TILES, WATER_SPRITES, WATER_TILES, cornerTile, edgeTile, shadowTile } from '../art/terrain.ts';
 import { UI_ICONS } from '../art/ui.ts';
-import { GROUND, PALETTE, type Ground } from '../data/artDirection.ts';
+import { GROUND, PALETTE, rect, svg, type Ground } from '../data/artDirection.ts';
 import { BUILDINGS, BUILDING_IDS } from '../data/buildings.ts';
 import { ITEM_ICONS } from '../data/icons.ts';
+import { ROAD_LINK } from '../data/roads.ts';
 import { BUILDING_PARTS, SPRITES, SPRITE_IDS, type SpriteProto } from '../data/sprites.ts';
 
 interface Cell {
@@ -105,6 +107,10 @@ const allSections: [string, Cell[][]][] = [
     ),
   ],
   [
+    'Routes',
+    rows(ROAD_TILES.map((tile, links) => cell(`road.${links}`, tile))).concat([[cell('road.réseau', roadSample())]]),
+  ],
+  [
     'Icônes',
     rows([
       ...Object.entries(ITEM_ICONS).map(([item, svg]) => cell(`objet.${item}`, svg)),
@@ -112,6 +118,30 @@ const allSections: [string, Cell[][]][] = [
     ]),
   ],
 ];
+
+/** Un petit réseau sur l'herbe : droit, coins, T, croix et bouts, pour voir les dalles se recoller. */
+function roadSample(): string {
+  const map = ['.#....', '.#####', '.#..#.', '####..', '.#....'];
+  const paved = (x: number, y: number): boolean => map[y]?.[x] === '#';
+  const tiles: string[] = [];
+
+  for (const [y, line] of map.entries()) {
+    for (let x = 0; x < line.length; x += 1) {
+      tiles.push(rect(x * 32, y * 32, 32, 32, (x + y) % 2 === 0 ? GROUND.grass.base : GROUND.grass.alt, 0));
+      if (!paved(x, y)) continue;
+
+      const links =
+        (paved(x, y - 1) ? ROAD_LINK.top : 0) |
+        (paved(x + 1, y) ? ROAD_LINK.right : 0) |
+        (paved(x, y + 1) ? ROAD_LINK.bottom : 0) |
+        (paved(x - 1, y) ? ROAD_LINK.left : 0);
+
+      // Un `<svg>` imbriqué coupe à son cadre, comme la rastérisation d'une tuile seule.
+      tiles.push(ROAD_TILES[links]!.replace('<svg ', `<svg x="${x * 32}" y="${y * 32}" `));
+    }
+  }
+  return svg(map[0]!.length * 32, map.length * 32, ...tiles);
+}
 
 const sections = only ? allSections.filter(([title]) => title === only) : allSections;
 

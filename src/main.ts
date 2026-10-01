@@ -358,7 +358,14 @@ async function main(): Promise<void> {
     }
     if (started && !paused) autosave.update(ticker.deltaMS);
 
-    renderer.draw(accumulator / STEP_MS, placement.armedBuilding(), placement.ghost);
+    const roadTool = placement.roadTool();
+
+    renderer.draw(
+      accumulator / STEP_MS,
+      placement.armedBuilding(),
+      placement.ghost,
+      roadTool && { tool: roadTool, trail: placement.roadTrail() },
+    );
     hud.update(ticker.FPS, renderer.bakedChunks, renderer.atlasStats, renderer.waterStats, renderer.weatherParticles);
 
     // Lire la mise en page force un reflow : une fois tous les dix cadres suffit.
@@ -482,6 +489,8 @@ function wireAudio(world: World, audio: AudioEngine, hud: Hud): void {
   world.events.on('playerRepaired', () => audio.play('repair'));
   world.events.on('buildingDestroyed', () => audio.play('collapse'));
   world.events.on('siteCancelled', () => audio.play('deliver'));
+  world.events.on('roadPaved', () => audio.play('deliver'));
+  world.events.on('roadRemoved', () => audio.play('pickup'));
   world.events.on('waveCountdown', ({ seconds }) => {
     if (seconds === WAVE_ANNOUNCE_SECONDS) audio.play('horn');
     audio.play('countdown');
@@ -674,6 +683,13 @@ function wireParticles(world: World, renderer: GameRenderer): void {
     particles.burst((tx + 1) * TILE_SIZE, (ty + 1) * TILE_SIZE, PARTICLES.rubble, 16, 0.14),
   );
   world.events.on('siteCancelled', ({ tx, ty }) => particles.burst((tx + 1) * TILE_SIZE, (ty + 1) * TILE_SIZE, PARTICLES.rubble, 8, 0.08));
+  // Une poussière de pierre sur chaque dalle posée ou retirée.
+  const roadDust = ({ tiles }: { tiles: readonly { tx: number; ty: number }[] }): void => {
+    for (const { tx, ty } of tiles) particles.burst((tx + 0.5) * TILE_SIZE, (ty + 0.5) * TILE_SIZE, PARTICLES.stone, 3, 0.06);
+  };
+
+  world.events.on('roadPaved', roadDust);
+  world.events.on('roadRemoved', roadDust);
   world.events.on('lootDropped', ({ x, y }) => particles.burst(x, y - 6, PARTICLES.confetti, 5, 0.08));
   world.events.on('mutantStunned', ({ x, y }) => particles.burst(x, y - 16, PARTICLES.star, 6, 0.1));
   world.events.on('mutantHealed', ({ x, y }) => particles.burst(x, y - 12, PARTICLES.confetti, 10, 0.14));

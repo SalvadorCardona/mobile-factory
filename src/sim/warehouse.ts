@@ -17,7 +17,7 @@ import { BUILDINGS } from '../data/buildings.ts';
 import type { Entity } from './types.ts';
 
 /** L'entité est-elle dans le rayon logistique de `hub` ? Mesuré de centre d'emprise à centre d'emprise. */
-export function inLogisticRange(hub: Entity, entity: Entity): boolean {
+export function inLogisticRange(hub: Entity, entity: Pick<Entity, 'tx' | 'ty' | 'width' | 'height'>): boolean {
   const radius = BUILDINGS[hub.proto].logisticRadius * TILE_SIZE;
   const hubX = (hub.tx + hub.width / 2) * TILE_SIZE;
   const hubY = (hub.ty + hub.height / 2) * TILE_SIZE;

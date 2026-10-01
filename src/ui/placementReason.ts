@@ -6,7 +6,8 @@
  * simulation connaît le motif et les cases (`World.placementBlock`) ; ici on
  * le dit, et quand c'est un arbre ou un rocher on dit aussi le remède : Adam
  * n'a qu'à le heurter. Une foreuse hors filon : on dit où la poser, et le
- * posable dit ce qu'elle extraira (`placementOutput`).
+ * posable dit ce qu'elle extraira (`placementOutput`). Un tracé de route dit
+ * pourquoi une partie ne sera pas pavée (`roadReason`).
  *
  * Fonction pure, sans DOM : `buildMenu.ts` l'affiche, les tests la lisent.
  */
@@ -14,8 +15,8 @@
 import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
 import { ITEMS } from '../data/items.ts';
 import type { ResourceId } from '../data/resources.ts';
-import type { PlacementRejection } from '../sim/commands.ts';
-import type { PlacementBlock, World } from '../sim/world.ts';
+import type { PlacementRejection, RoadRejection } from '../sim/commands.ts';
+import type { PlacementBlock, RoadStep, World } from '../sim/world.ts';
 
 export interface PlacementReason {
   /** Le motif : « Un arbre gêne ». */
@@ -24,7 +25,7 @@ export interface PlacementReason {
   remedy: string | null;
 }
 
-const LABELS: Readonly<Record<Exclude<PlacementRejection, 'resource' | 'noOre'>, string>> = {
+const LABELS: Readonly<Record<Exclude<PlacementRejection, 'resource' | 'noOre' | 'road'>, string>> = {
   locked: 'Il vous manque le plan',
   terrain: 'Pas sur l’eau',
   occupied: 'Case occupée',
@@ -39,8 +40,15 @@ const NO_ORE: PlacementReason = {
   remedy: 'Cassez un rocher, puis posez la foreuse à sa place',
 };
 
+/** Une route ne se recouvre pas : le marteau la retire, et rend sa pierre. */
+const ROAD: PlacementReason = {
+  text: 'Une route passe ici',
+  remedy: 'Retirez-la d’abord : Bâtir › Route › Retirer',
+};
+
 export function placementReason(block: PlacementBlock, world: World): PlacementReason {
   if (block.reason === 'noOre') return NO_ORE;
+  if (block.reason === 'road') return ROAD;
   if (block.reason !== 'resource') return { text: LABELS[block.reason], remedy: null };
 
   const found = block.tiles
@@ -74,4 +82,25 @@ export function placementOutput(building: BuildingId, tx: number, ty: number, wo
   const item = world.oreUnder(building, tx, ty);
 
   return item ? `Extraira : ${ITEMS[item].label}` : null;
+}
+
+const ROAD_REASONS: Readonly<Record<RoadRejection, PlacementReason>> = {
+  noStone: { text: 'Plus de pierre pour la suite', remedy: 'Cassez des rochers, ou tracez dans le rayon de la mairie' },
+  terrain: { text: 'Pas sur l’eau', remedy: null },
+  occupied: { text: 'Un bâtiment est sur le tracé', remedy: null },
+  resource: { text: 'Un arbre ou un rocher gêne', remedy: 'Adam peut le récolter' },
+};
+
+/**
+ * Pourquoi une partie du tracé ne sera pas pavée — le manque de pierre
+ * d'abord, c'est lui qui arrête le tracé —, ou `null` s'il passe en entier.
+ */
+export function roadReason(plan: readonly RoadStep[]): PlacementReason | null {
+  const states = plan.map((step) => step.state);
+
+  if (states.includes('noStone')) return ROAD_REASONS.noStone;
+
+  const refused = states.find((state): state is Exclude<RoadRejection, 'noStone'> => state !== 'pave' && state !== 'paved');
+
+  return refused ? ROAD_REASONS[refused] : null;
 }

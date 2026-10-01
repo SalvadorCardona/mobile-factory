@@ -15,6 +15,7 @@
  * est refusée proprement : `decodeSave` ne lève jamais.
  */
 
+import { CHUNK_TILES } from '../core/grid.ts';
 import { BUILDINGS, maxLevel, type BuildingId } from '../data/buildings.ts';
 import { RARE_OFFERS, type RareOfferId } from '../data/caravan.ts';
 import { ENEMIES, WILDLIFE, type EnemyId, type WildlifeId } from '../data/enemies.ts';
@@ -106,6 +107,8 @@ export interface WorldState {
   player: SavedPlayer;
   /** Tuiles entamées : `"tx,ty"` → unités déjà prises. */
   resources: Record<string, number>;
+  /** Tuiles pavées : `"cx,cy"` → index des tuiles dans le chunk. */
+  roads: Record<string, number[]>;
   entities: SavedEntity[];
   mobiles: Mobile[];
   /** Tanières habitées ou vidées ; les autres se relisent dans la seed. */
@@ -285,6 +288,8 @@ function parseState(raw: unknown): WorldState {
     ...parseObjectives(state),
     player: parsePlayer(state['player']),
     resources: parseResources(state['resources']),
+    // Absentes d'une sauvegarde d'avant les routes : rien n'était pavé.
+    roads: parseRoads(state['roads'] ?? {}),
     entities: unique(array(state['entities']).map(parseEntity)),
     mobiles: unique(array(state['mobiles']).map(parseMobile)),
     dens: unique(array(state['dens']).map(parseDen)),
@@ -346,6 +351,21 @@ function parseResources(raw: unknown): Record<string, number> {
     taken[key] = int(amount);
   }
   return taken;
+}
+
+function parseRoads(raw: unknown): Record<string, number[]> {
+  const roads: Record<string, number[]> = {};
+
+  for (const [key, tiles] of Object.entries(record(raw))) {
+    if (!/^-?\d+,-?\d+$/.test(key)) throw new SaveError(`chunk illisible : ${key}`);
+    roads[key] = array(tiles).map((tile) => {
+      const index = int(tile);
+
+      if (index < 0 || index >= CHUNK_TILES * CHUNK_TILES) throw new SaveError(`dalle hors du chunk : ${index}`);
+      return index;
+    });
+  }
+  return roads;
 }
 
 function parseEntity(raw: unknown): SavedEntity {

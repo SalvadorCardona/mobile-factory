@@ -5,8 +5,10 @@
  * dessinées **une fois** dans une RenderTexture, puis affichées comme un seul
  * Sprite. Sans ça, ce sont des milliers de quads par frame.
  *
- * Le sol et le décor sont régénérés depuis la seed et ne changent jamais :
- * un bloc baké n'est jamais rebaké. Les arbres et les rochers, qui changent
+ * Le sol et le décor sont régénérés depuis la seed et ne changent jamais.
+ * Seules les routes pavées s'y ajoutent, au-dessus du sol : un pavage ou un
+ * coup de marteau rebake le bloc touché (`invalidate`) — et son voisin si
+ * la dalle est au bord, puisque la voisine change de raccord. Les arbres et les rochers, qui changent
  * et qui montent au-dessus de leur tuile, sont des sprites à part
  * (`resourceLayer.ts`).
  *
@@ -24,6 +26,7 @@
 
 import { Container, RenderTexture, Sprite, type Renderer, type Texture } from 'pixi.js';
 import { TILE_SIZE, coordKey } from '../core/grid.ts';
+import type { RoadNetwork } from '../sim/roads.ts';
 import { decorAt } from '../sim/terrain.ts';
 import type { Camera } from './camera.ts';
 import type { SpriteLibrary } from './spriteLibrary.ts';
@@ -41,6 +44,8 @@ export const KEEP_MARGIN = 1;
 const MAX_BLOCK_RESOLUTION = 2;
 
 interface BakedBlock {
+  bx: number;
+  by: number;
   sprite: Sprite;
   texture: RenderTexture;
 }
@@ -49,18 +54,22 @@ export class ChunkLayer {
   public readonly container = new Container();
 
   private readonly baked = new Map<string, BakedBlock>();
+  /** Blocs bakés dont une route a changé : rebakés au prochain `update`. */
+  private readonly stale = new Set<string>();
 
   private readonly renderer: Renderer;
   private readonly library: SpriteLibrary;
   private readonly tiles: TerrainTiles;
   private readonly seed: number;
+  private readonly roads: RoadNetwork;
   private readonly resolution: number;
 
-  public constructor(renderer: Renderer, library: SpriteLibrary, tiles: TerrainTiles, seed: number) {
+  public constructor(renderer: Renderer, library: SpriteLibrary, tiles: TerrainTiles, seed: number, roads: RoadNetwork) {
     this.renderer = renderer;
     this.library = library;
     this.tiles = tiles;
     this.seed = seed;
+    this.roads = roads;
     this.resolution = Math.min(MAX_BLOCK_RESOLUTION, library.stats.resolution);
   }
 
@@ -80,6 +89,13 @@ export class ChunkLayer {
       }
     }
 
+    for (const key of this.stale) {
+      const entry = this.baked.get(key);
+
+      if (entry) this.renderInto(entry.bx, entry.by, entry.texture);
+    }
+    this.stale.clear();
+
     this.evict(camera.visibleCells(BLOCK_SIZE, KEEP_MARGIN));
   }
 
@@ -98,15 +114,16 @@ export class ChunkLayer {
     sprite.position.set(bx * BLOCK_SIZE, by * BLOCK_SIZE);
     this.container.addChild(sprite);
 
-    return { sprite, texture };
+    return { bx, by, sprite, texture };
   }
 
   /**
    * Dessine le bloc dans sa RenderTexture, puis jette la scène.
    *
-   * Quatre passes, dans l'ordre du peintre : le sol (l'eau selon sa
+   * Cinq passes, dans l'ordre du peintre : le sol (l'eau selon sa
    * profondeur), les transitions (faces avant, liserés), les coins arrondis
-   * — entre sols et entre profondeurs d'eau —, puis le décor. Les sprites sont
+   * — entre sols et entre profondeurs d'eau —, les routes, puis le décor,
+   * qu'une dalle recouvre : pas de fleur sur un pavé. Les sprites sont
    * temporaires : seule la texture survit. Celles du tileset, partagées, restent.
    */
   private renderInto(bx: number, by: number, target: RenderTexture): void {
@@ -114,6 +131,7 @@ export class ChunkLayer {
     const edges = new Container();
     const corners = new Container();
     const props = new Container();
+    const paving = new Container();
     const baseTx = bx * BLOCK_TILES;
     const baseTy = by * BLOCK_TILES;
     const { seed } = this;
@@ -167,15 +185,33 @@ export class ChunkLayer {
           );
         }
 
+        if (this.roads.has(tx, ty)) {
+          paving.addChild(tileSprite(this.tiles.road(this.roads.links(tx, ty)), lx, ly));
+          continue;
+        }
+
         const decor = decorAt(seed, tx, ty);
 
         if (decor) props.addChild(tileSprite(this.library.part('decor', decor), lx, ly));
       }
     }
 
-    scene.addChild(edges, corners, props);
+    scene.addChild(edges, corners, paving, props);
     this.renderer.render({ target, container: scene, clear: true });
     scene.destroy({ children: true });
+  }
+
+  /**
+   * Une dalle a été posée ou retirée en (tx, ty) : son bloc se rebake, et
+   * celui de chaque voisine, dont le raccord change. Un bloc pas encore baké
+   * le sera de toute façon à jour.
+   */
+  public invalidate(tx: number, ty: number): void {
+    for (const [dx, dy] of [[0, 0], ...Object.values(SIDE_OFFSET)]) {
+      const key = coordKey(Math.floor((tx + dx) / BLOCK_TILES), Math.floor((ty + dy) / BLOCK_TILES));
+
+      if (this.baked.has(key)) this.stale.add(key);
+    }
   }
 
   private evict(bounds: { minCx: number; minCy: number; maxCx: number; maxCy: number }): void {
@@ -191,6 +227,7 @@ export class ChunkLayer {
       entry.sprite.destroy();
       entry.texture.destroy(true);
       this.baked.delete(key);
+      this.stale.delete(key);
     }
   }
 

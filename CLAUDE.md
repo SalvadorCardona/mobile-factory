@@ -59,6 +59,17 @@ signalé). Ensuite la ville prend tout, sauf ce dont elle a déjà assez
 (`TOWN_PLENTY`, `data/items.ts`) : cet objet-là, il n'en ramasse plus en
 passant que pour un chantier ou une recette. Le conseil ne dit de livrer que si le sac contient ce qu'on attend.
 
+**Routes** — la pierre en trop devient des chemins (`data/roads.ts`,
+`sim/roads.ts` : un ensemble de tuiles par chunk, sauvegardé). Carte
+« Route » au bas du tiroir : on glisse le doigt de tuile en tuile (40 au
+plus), « Poser » pave, une pierre par tuile, sac puis ville dans son rayon,
+sans chantier (`paveRoad`, jugé par `World.roadPlan`). Adam, porteurs,
+bûcherons et bâtisseurs y vont 1,6 fois plus vite (`onRoad`, lu par
+`walkToward` et le pas d'Adam) ; mutants et bêtes, non. « Retirer » (le
+marteau, `removeRoad`) rend la pierre ; une route bloque la pose d'un
+bâtiment (refus `road`). Dalles raccordées (`art/road.ts`, seize masques)
+bakées avec le sol : un pavage rebake le bloc.
+
 **Débouchés** — tout objet entre dans un coût de bâtiment ou une entrée de
 recette (`src/data/recipes.ts`) ; `validatePrototypes()` refuse une
 ressource qu'on récolterait pour rien.
