@@ -329,10 +329,13 @@ describe('poste de construction', () => {
     });
 
     for (const id of sites) expect(world.entities.get(id)?.kind).not.toBe('site');
-    // 10 + 12 de bois, 4 + 4 + 6 de pierre, 4 de fer : le reste est en ville.
-    expect(hallOf(world).store.count('wood')).toBe(18);
-    expect(hallOf(world).store.count('stone')).toBe(6);
-    expect(hallOf(world).store.count('ironOre')).toBe(0);
+    // Ferme, tour de guet et foreuse payées sur la ville : le reste y est.
+    const spent = (item: ItemId): number =>
+      (['farm', 'watchtower', 'drill'] as const).reduce((sum, proto) => sum + ((BUILDINGS[proto].cost as Stock)[item] ?? 0), 0);
+
+    expect(hallOf(world).store.count('wood')).toBe(40 - spent('wood'));
+    expect(hallOf(world).store.count('stone')).toBe(20 - spent('stone'));
+    expect(hallOf(world).store.count('ironOre')).toBe(4 - spent('ironOre'));
   });
 
   it('le plus ancien chantier d’abord ; la mairie à court, ils passent à ce qu’elle a, puis attendent', () => {
