@@ -524,6 +524,90 @@ button {
   }
 }
 
+/* ------------------------------------------------------- quête repliée */
+
+/* La ligne repliée ne sert que sur un téléphone. */
+.hud-quest-strip {
+  display: none;
+}
+
+/*
+ * Sur un téléphone, la quête mangeait un tiers de l'écran : repliée, elle
+ * n'est plus qu'une ligne de 44 px — l'icône et le titre de l'objectif, sa
+ * progression, les PV de la mairie, l'horloge. Un tap sur la ligne la
+ * déplie ; le conseil s'ouvre dessous, l'ampoule reste au bout.
+ */
+@media (max-width: 600px) {
+  .hud .hud-quest-head {
+    pointer-events: auto;
+    cursor: pointer;
+  }
+
+  .hud-quest[data-folded='true'] {
+    padding: 10px 12px;
+  }
+
+  .hud-quest[data-folded='true'] .hud-quest-title,
+  .hud-quest[data-folded='true'] .hud-quest-body {
+    display: none;
+  }
+
+  .hud-quest[data-folded='true'] .hud-quest-strip {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    font-size: 15px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .hud-quest[data-folded='true'] .hud-hint {
+    margin-top: 8px;
+  }
+}
+
+.hud-quest-strip .icon {
+  flex: none;
+}
+
+.hud-strip-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 700;
+}
+
+.hud-quest-strip[data-urgent='true'] .hud-strip-title,
+.hud-strip-clock[data-urgent='true'] {
+  color: var(--danger);
+}
+
+.hud-strip-hp {
+  flex: none;
+  width: 40px;
+}
+
+.hud-strip-hp .hud-bar {
+  height: 10px;
+}
+
+.hud-strip-hp .hud-bar-fill {
+  background: var(--coral);
+}
+
+.hud-strip-hp .hud-bar-fill::after {
+  width: 8px;
+  height: 2px;
+  background: var(--coral-light);
+}
+
+.hud-strip-hp[data-low='true'] {
+  animation: blink 0.8s steps(2) infinite;
+}
+
 /* La quête d'Ève, sous la santé de la mairie. */
 .hud-quest-eve {
   display: flex;

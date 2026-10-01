@@ -19,6 +19,12 @@
  *   casser, livrer, construire, se défendre) et se tait quand il a compris —
  *   c'est Ève qui le dit, son portrait devant ; au bout de cinq secondes, il
  *   se replie en ampoule à côté du titre ;
+ * - sur un téléphone, la quête se **replie** en une ligne : l'icône et le
+ *   titre de l'objectif, sa progression, une mini-barre des PV de la mairie
+ *   et l'horloge de la nuit. Un tap sur la ligne la déplie six secondes ;
+ *   elle se déplie d'elle-même quatre secondes quand un objectif est
+ *   atteint, quand une vague commence ou quand la mairie passe sous la
+ *   moitié de ses PV. Le conseil s'ouvre sous la ligne, l'ampoule y reste ;
  * - dans la ligne de la mairie, le **compteur d'ouvriers** : un tap déplie
  *   leur détail par bâtiment, et ce que font les porteurs ; il se replie
  *   seul au bout de cinq secondes, ou dès qu'on touche ailleurs ;
@@ -122,6 +128,17 @@ const HINT_FOLD_TICKS = 5 * TICKS_PER_SECOND;
 /** Le détail des ouvriers se replie seul au bout de ce délai, compté en ticks comme le conseil. */
 const CREW_FOLD_TICKS = 5 * TICKS_PER_SECOND;
 
+/**
+ * Sur un téléphone, la quête dépliée d'un tap se replie au bout de ce délai
+ * sans qu'on la touche ; dépliée d'elle-même (objectif, vague, mairie
+ * abîmée), au bout du second. Comptés en ticks comme le conseil.
+ */
+const QUEST_TAP_TICKS = 6 * TICKS_PER_SECOND;
+const QUEST_ALERT_TICKS = 4 * TICKS_PER_SECOND;
+
+/** Sous cette part de ses PV, la mairie déplie la quête repliée. */
+const QUEST_ALERT_HP = 0.5;
+
 /** Durée du bandeau d'objectif réussi, en ms (cf. `celebration-in` dans le CSS). */
 const CELEBRATION_MS = 4200;
 /** Rangé sous la quête quand une fenêtre est ouverte, le bandeau en garde ce jeu. */
@@ -163,6 +180,12 @@ export class Hud {
   private readonly quest: HTMLElement;
   private readonly questTitle: HTMLElement;
   private readonly questBody: HTMLElement;
+  /** La quête repliée en une ligne, sur un téléphone : icône, titre, progression, PV de la mairie, horloge. */
+  private readonly questStrip: HTMLElement;
+  /** Tick jusqu'auquel la quête reste dépliée sur un téléphone ; repliée au-delà. */
+  private questOpenUntil = 0;
+  /** La mairie est déjà sous `QUEST_ALERT_HP` : elle ne déplie la quête qu'en y passant. */
+  private hallLow = false;
   private readonly hint: HTMLElement;
   private readonly hintText: HTMLElement;
   private readonly hintBulb: HTMLButtonElement;
@@ -256,9 +279,17 @@ export class Hud {
     this.hintBulb.append(uiIcon('hint', 20));
     this.hintBulb.addEventListener('click', () => this.unfoldHint());
 
+    this.questStrip = element('div', 'hud-quest-strip');
+
+    // Sur un téléphone, la tête de la quête se tape : elle déplie la carte, ou la replie.
     const head = element('div', 'hud-quest-head');
 
-    head.append(this.questTitle, this.hintBulb);
+    head.append(this.questTitle, this.questStrip, this.hintBulb);
+    head.addEventListener('click', (event) => {
+      if (event.target instanceof Element && event.target.closest('.hud-hint-bulb')) return;
+      this.questOpenUntil = this.quest.dataset['folded'] === 'false' ? 0 : this.world.tickCount + QUEST_TAP_TICKS;
+      this.updateFold();
+    });
     this.quest.append(head, this.questBody);
     this.quest.dataset['hint'] = 'none';
 
@@ -463,9 +494,20 @@ export class Hud {
     });
     world.events.on('duskFell', () => this.notify('La nuit tombe — rentrez !', 'bad'));
     // Une vague qui n'a pas eu son compte à rebours (partie reprise pile avant) s'annonce quand même.
-    world.events.on('waveStarted', ({ night, wave, count, boss, from, x, y }) =>
-      this.announce(night, wave, count, boss, from, { x, y }),
-    );
+    world.events.on('waveStarted', ({ night, wave, count, boss, from, x, y }) => {
+      this.announce(night, wave, count, boss, from, { x, y });
+      this.unfoldQuest(QUEST_ALERT_TICKS);
+    });
+    world.events.on('buildingDamaged', ({ id, hp }) => {
+      const hall = world.entities.get(id);
+
+      if (id !== world.townHallId || !hall) return;
+
+      const low = hp / BUILDINGS[hall.proto].hp < QUEST_ALERT_HP;
+
+      if (low && !this.hallLow) this.unfoldQuest(QUEST_ALERT_TICKS);
+      this.hallLow = low;
+    });
     world.events.on('waveCleared', ({ night }) =>
       this.showBanner('cleared', `Nuit ${night} — vague repoussée !`, 'Ramassez ce que les mutants ont lâché', null, BANNER_CLEARED_MS),
     );
@@ -517,6 +559,7 @@ export class Hud {
     world.events.on('objectiveCompleted', ({ index, stored }) => {
       // Le dernier objectif, c'est l'écran de victoire qui le fête.
       if (index < OBJECTIVES.length - 1) this.celebrateObjective(index);
+      this.unfoldQuest(QUEST_ALERT_TICKS);
 
       const kept = (Object.entries(stored) as [ItemId, number][]).filter(([, amount]) => amount > 0);
 
@@ -607,7 +650,7 @@ export class Hud {
     this.project = project;
   }
 
-  /** Bas de la quête, en pixels écran : les repères de bord du renderer restent dessous. */
+  /** Bas de la quête — de sa ligne, repliée sur un téléphone —, en pixels écran : les repères de bord du renderer restent dessous. */
   public topInset(): number {
     return this.quest.getBoundingClientRect().bottom;
   }
@@ -791,6 +834,7 @@ export class Hud {
   /** `fps`, `chunks`, `atlas` et `water` viennent du renderer : le monde ne les connaît pas. */
   public update(fps: number, chunks: number, atlas: AtlasStats, water: WaterStats, weatherParticles = 0): void {
     this.updateQuest();
+    this.updateFold();
     this.updateHint();
     this.updateBag();
     this.updateTown();
@@ -836,6 +880,11 @@ export class Hud {
         text('hud-quest-goal', `Bâtir la ${name}`),
         ...cost.map(([item, needed]) => meter(item, hall.delivered[item] ?? 0, needed)),
       );
+
+      const have = cost.reduce((sum, [item, needed]) => sum + Math.min(hall.delivered[item] ?? 0, needed), 0);
+      const need = cost.reduce((sum, [, needed]) => sum + needed, 0);
+
+      this.questStrip.replaceChildren(buildingIcon(hall.proto, 22), text('hud-strip-title', `Bâtir la ${name}`), text('hud-strip-value', `${have}/${need}`));
       return;
     }
 
@@ -846,10 +895,14 @@ export class Hud {
       this.quest.dataset['mode'] = 'fallen';
       this.questTitle.textContent = 'Défaite';
       this.questBody.replaceChildren(text('hud-quest-goal', `La ${name.toLowerCase()} est tombée.`));
+      this.questStrip.replaceChildren(uiIcon('heart', 18), text('hud-strip-title', `La ${name.toLowerCase()} est tombée.`));
       return;
     }
 
     const max = BUILDINGS[hall.proto].hp;
+
+    this.hallLow = hall.hp / max < QUEST_ALERT_HP;
+
     const mutants = this.mutantCount();
     const time = world.clock();
     const dark = time?.phase === 'night';
@@ -899,7 +952,9 @@ export class Hud {
     const line = element('div', 'hud-quest-line');
     const wave = text('hud-quest-wave', status);
 
-    wave.dataset['urgent'] = String(mutants > 0 || dark || seconds <= WAVE_WARNING_SECONDS);
+    const urgent = String(mutants > 0 || dark || seconds <= WAVE_WARNING_SECONDS);
+
+    wave.dataset['urgent'] = urgent;
     const chips = element('div', 'hud-quest-chips');
 
     chips.append(chip('people', people + workers, 'Habitants'), this.crewChip(crew.total), chip('mutant', world.kills, 'Mutants abattus'));
@@ -913,6 +968,38 @@ export class Hud {
       row.append(uiIcon('eve', 18), text('hud-quest-eve-label', QUESTS[quest].label), text('hud-meter-value', `${progress.have}/${progress.need}`));
       this.questBody.append(row);
     }
+
+    // La ligne repliée : la première condition qui reste à remplir, l'attaque si elle crie.
+    const shown = Math.max(0, reached.findIndex(({ have, need }) => have < need));
+    const condition = goals[shown];
+    const stripHp = element('div', 'hud-strip-hp');
+    const stripClock = text('hud-strip-clock', time ? clock(seconds) : '');
+
+    stripHp.append(bar(hall.hp / max));
+    stripHp.title = `${name} ${hall.hp}/${max}`;
+    stripHp.dataset['low'] = hp.dataset['low'];
+    stripClock.dataset['urgent'] = urgent;
+    this.questStrip.dataset['urgent'] = String(mutants > 0);
+    this.questStrip.replaceChildren(
+      mutants > 0 ? uiIcon('mutant', 20) : condition ? goalIcon(condition) : uiIcon('goal', 20),
+      text('hud-strip-title', mutants > 0 ? 'Attaque !' : (objective?.title ?? 'Tenir le plus longtemps possible')),
+      ...(condition && mutants === 0 ? [text('hud-strip-value', `${reached[shown]!.have}/${reached[shown]!.need}`)] : []),
+      stripHp,
+      stripClock,
+    );
+  }
+
+  /** Déplie la quête repliée pour `ticks`, sans raccourcir un dépliage plus long. */
+  private unfoldQuest(ticks: number): void {
+    this.questOpenUntil = Math.max(this.questOpenUntil, this.world.tickCount + ticks);
+    this.updateFold();
+  }
+
+  /** Repliée ou non : seul un téléphone en tient compte (cf. `style.css`). */
+  private updateFold(): void {
+    const folded = String(this.world.tickCount >= this.questOpenUntil);
+
+    if (this.quest.dataset['folded'] !== folded) this.quest.dataset['folded'] = folded;
   }
 
   /** Le compteur d'ouvriers : un tap déplie leur détail sous la ligne, un autre le replie — le temps s'en charge sinon. */
@@ -926,6 +1013,7 @@ export class Hud {
     node.addEventListener('click', () => {
       this.crewOpen = !this.crewOpen;
       this.crewSince = this.world.tickCount;
+      this.unfoldQuest(QUEST_TAP_TICKS);
       this.updateQuest();
     });
     return node;
@@ -1307,16 +1395,19 @@ function objectiveLabel(index: number): string {
 /** La jauge d'une condition d'objectif : ce qu'elle compte en icône, barre, « 1/3 ». */
 function goalMeter(goal: Goal, have: number, need: number): HTMLElement {
   const row = element('div', 'hud-meter');
-  const icon =
-    goal.type === 'build'
-      ? buildingIcon(goal.building, 22)
-      : goal.type === 'produce'
-        ? itemIcon(goal.item, 18)
-        : uiIcon(goal.type === 'nights' ? 'mutant' : goal.type === 'quests' ? 'eve' : 'people', 18);
 
   row.dataset['done'] = String(have >= need);
-  row.append(icon, bar(have / need), text('hud-meter-value', `${have}/${need}`));
+  row.append(goalIcon(goal), bar(have / need), text('hud-meter-value', `${have}/${need}`));
   return row;
+}
+
+/** Ce que compte une condition d'objectif, en icône. */
+function goalIcon(goal: Goal): HTMLElement {
+  return goal.type === 'build'
+    ? buildingIcon(goal.building, 22)
+    : goal.type === 'produce'
+      ? itemIcon(goal.item, 18)
+      : uiIcon(goal.type === 'nights' ? 'mutant' : goal.type === 'quests' ? 'eve' : 'people', 18);
 }
 
 /** Une ligne de quête : icône, barre, « 7/20 ». */
