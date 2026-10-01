@@ -71,7 +71,7 @@ import type { Compass } from '../sim/enemies.ts';
 import type { Entity } from '../sim/types.ts';
 import { ticksToNight } from '../sim/dayNight.ts';
 import { currentQuest, questProgress } from '../sim/eve.ts';
-import { currentObjective, goalProgress } from '../sim/objectives.ts';
+import { currentObjective, goalProgress, goalWait, type GoalWait } from '../sim/objectives.ts';
 import { TICKS_PER_SECOND, type Workforce, type World } from '../sim/world.ts';
 import { carriesWanted, harvestRefusedText, tutorialAdvice, type Advice } from './hint.ts';
 import { buildingIcon, itemAmount, itemIcon, uiIcon } from './icons.ts';
@@ -944,8 +944,10 @@ export class Hud {
     const objective = currentObjective(world);
     const goals = objective?.goals ?? [];
     const reached = goals.map((goal) => goalProgress(world, goal));
+    const waits = goals.map((goal) => goalWait(world, goal));
+    const waiting = goals.map((goal, i) => waitLabel(goal, waits[i]!));
 
-    key = `hall:${world.objective}:${reached.map(({ have }) => have).join(',')}:${hall.hp}:${status}:${people}:${workers}:${world.kills}:${quest}:${progress?.have}:${this.crewOpen && JSON.stringify(crew)}`;
+    key = `hall:${world.objective}:${reached.map(({ have }) => have).join(',')}:${waiting.join(',')}:${hall.hp}:${status}:${people}:${workers}:${world.kills}:${quest}:${progress?.have}:${this.crewOpen && JSON.stringify(crew)}`;
     if (key === this.lastQuest) return;
     this.lastQuest = key;
 
@@ -954,7 +956,7 @@ export class Hud {
     this.questTitle.textContent = mutants > 0 ? 'Attaque !' : objectiveLabel(world.objective);
 
     const goal = text('hud-quest-goal', objective?.title ?? 'Tenir le plus longtemps possible');
-    const meters = goals.map((condition, i) => goalMeter(condition, reached[i]!.have, reached[i]!.need));
+    const meters = goals.map((condition, i) => goalMeter(condition, reached[i]!.have, reached[i]!.need, waits[i]!));
 
     const hp = element('div', 'hud-meter hud-meter-hp');
     const hpLabel = text('hud-meter-label', name);
@@ -989,6 +991,8 @@ export class Hud {
     // La ligne repliée : la première condition qui reste à remplir, l'attaque si elle crie.
     const shown = Math.max(0, reached.findIndex(({ have, need }) => have < need));
     const condition = goals[shown];
+    // Une naissance qui se fait attendre prend la place du titre et du « 0/1 » : la ligne n'a pas la place des deux.
+    const stripWait = condition?.type === 'births' && mutants === 0 ? stripTitle(condition, waits[shown]!, waiting[shown]!) : null;
     const stripHp = element('div', 'hud-strip-hp');
     const stripClock = text('hud-strip-clock', time ? clock(seconds) : '');
 
@@ -999,8 +1003,12 @@ export class Hud {
     this.questStrip.dataset['urgent'] = String(mutants > 0);
     this.questStrip.replaceChildren(
       mutants > 0 ? uiIcon('mutant', 20) : condition ? goalIcon(condition) : uiIcon('goal', 20),
-      text('hud-strip-title', mutants > 0 ? 'Attaque !' : (objective?.title ?? 'Tenir le plus longtemps possible')),
-      ...(condition && mutants === 0 ? [text('hud-strip-value', `${reached[shown]!.have}/${reached[shown]!.need}`)] : []),
+      ...(stripWait
+        ? [stripWait]
+        : [
+            text('hud-strip-title', mutants > 0 ? 'Attaque !' : (objective?.title ?? 'Tenir le plus longtemps possible')),
+            ...(condition && mutants === 0 ? [text('hud-strip-value', `${reached[shown]!.have}/${reached[shown]!.need}`)] : []),
+          ]),
       stripHp,
       stripClock,
     );
@@ -1409,13 +1417,56 @@ function objectiveLabel(index: number): string {
   return index < OBJECTIVES.length ? `Objectif ${index + 1}/${OBJECTIVES.length}` : 'Mode infini';
 }
 
-/** La jauge d'une condition d'objectif : ce qu'elle compte en icône, barre, « 1/3 ». */
-function goalMeter(goal: Goal, have: number, need: number): HTMLElement {
+/**
+ * La jauge d'une condition d'objectif : ce qu'elle compte en icône, barre,
+ * « 1/3 ». Une condition qui attend une horloge (`goalWait`) dit sous la
+ * barre le temps qu'il reste, et sa barre avance avec l'horloge ; retenue
+ * (la nurserie sans nourriture), la ligne passe en corail et dit pourquoi.
+ */
+function goalMeter(goal: Goal, have: number, need: number, wait: GoalWait | null): HTMLElement {
   const row = element('div', 'hud-meter');
+  const running = wait && wait.blockedBy === null ? 1 - wait.remainingTicks / wait.durationTicks : 0;
 
   row.dataset['done'] = String(have >= need);
-  row.append(goalIcon(goal), bar(have / need), text('hud-meter-value', `${have}/${need}`));
+  row.dataset['blocked'] = String(wait?.blockedBy != null);
+  row.append(goalIcon(goal), bar((have + running) / need), text('hud-meter-value', `${have}/${need}`));
+  if (wait) row.append(text('hud-meter-wait', waitLabel(goal, wait)));
   return row;
+}
+
+/** L'attente en version courte, pour la ligne repliée : « bébé 2:41 », « 2 nourritures » ; `null` sans attente. */
+function stripTitle(goal: Goal, wait: GoalWait | null, label: string): HTMLElement | null {
+  if (!wait) return null;
+
+  const short =
+    wait.blockedBy === 'paused'
+      ? 'en pause'
+      : wait.blockedBy
+        ? `${wait.missing} ${ITEMS[wait.blockedBy].label.toLowerCase()}${wait.missing > 1 ? 's' : ''}`
+        : `${goal.type === 'births' ? 'bébé' : 'nuit'} ${clock(Math.ceil(wait.remainingTicks / TICKS_PER_SECOND))}`;
+  const node = text('hud-strip-title', short);
+
+  node.title = label;
+  node.dataset['blocked'] = String(wait.blockedBy !== null);
+  return node;
+}
+
+/** « bébé dans 2:41 », « prochaine dans 1:12 », « la nurserie attend 2 nourritures » — vide sans attente. */
+function waitLabel(goal: Goal, wait: GoalWait | null): string {
+  if (!wait) return '';
+
+  const nursery = LORE.buildings.nursery.name.toLowerCase();
+
+  if (wait.blockedBy === 'paused') return `la ${nursery} est en pause`;
+  if (wait.blockedBy) {
+    const label = ITEMS[wait.blockedBy].label.toLowerCase();
+
+    return `la ${nursery} attend ${wait.missing} ${label}${wait.missing > 1 ? 's' : ''}`;
+  }
+
+  const left = clock(Math.ceil(wait.remainingTicks / TICKS_PER_SECOND));
+
+  return goal.type === 'births' ? `bébé dans ${left}` : `prochaine dans ${left}`;
 }
 
 /** Ce que compte une condition d'objectif, en icône. */

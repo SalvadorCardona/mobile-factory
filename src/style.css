@@ -424,6 +424,28 @@ button {
   color: var(--good);
 }
 
+/* L'attente d'une condition : le temps qu'il reste, sous la barre. Retenue, la ligne passe en corail. */
+.hud-meter-wait {
+  grid-column: 2 / -1;
+  margin-top: -6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.hud-meter[data-blocked='true'] .hud-meter-wait,
+.hud-meter[data-blocked='true'] .hud-meter-value,
+.hud-strip-title[data-blocked='true'] {
+  color: var(--danger);
+}
+
+.hud-meter[data-blocked='true'] .hud-bar-fill {
+  background: var(--coral);
+}
+
+.hud-meter[data-blocked='true'] .hud-bar-fill::after {
+  background: var(--coral-light);
+}
+
 .hud-meter-hp .hud-bar-fill {
   background: var(--coral);
 }

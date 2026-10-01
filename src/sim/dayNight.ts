@@ -93,3 +93,12 @@ export function ticksToNight(clock: DayClock): number {
   if (clock.offset < NIGHT_OFFSET) return NIGHT_OFFSET - clock.offset;
   return CYCLE_TICKS - clock.offset + NIGHT_OFFSET;
 }
+
+/** Début de l'aube dans le cycle, en ticks : c'est là qu'une nuit compte pour survécue. */
+const DAWN_OFFSET = NIGHT_OFFSET + DAY_CYCLE.night;
+
+/** Ticks avant la prochaine aube ; un cycle entier au premier tick de l'aube, qui vient de passer. */
+export function ticksToDawn(clock: DayClock): number {
+  if (clock.offset < DAWN_OFFSET) return DAWN_OFFSET - clock.offset;
+  return CYCLE_TICKS - clock.offset + DAWN_OFFSET;
+}

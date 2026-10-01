@@ -7,8 +7,11 @@
  * l'objectif réussi ne peuvent pas diverger.
  */
 
+import type { ItemId } from '../data/items.ts';
 import { OBJECTIVES, type Goal, type ObjectiveProto } from '../data/objectives.ts';
-import type { WorldStats } from './types.ts';
+import { RECIPES } from '../data/recipes.ts';
+import { CYCLE_TICKS, ticksToDawn } from './dayNight.ts';
+import type { Nursery, WorldStats } from './types.ts';
 import type { World } from './world.ts';
 
 export interface GoalProgress {
@@ -44,6 +47,84 @@ function count(world: World, goal: Goal): number {
     case 'quests':
       return world.questsDone;
   }
+}
+
+/**
+ * Une condition qui avance toute seule — une naissance, une nuit à tenir —
+ * et où elle en est. Sans elle, une attente normale ressemble à un bug.
+ * - `remainingTicks` : avant que le compteur bouge de lui-même ;
+ * - `durationTicks` : l'attente entière, lue dans les données ;
+ * - `blockedBy` : ce qui la retient — l'entrée de recette qui manque, ou la
+ *   pause — et `null` si elle court ;
+ * - `missing` : combien il manque de cette entrée.
+ */
+export interface GoalWait {
+  remainingTicks: number;
+  durationTicks: number;
+  blockedBy: ItemId | 'paused' | null;
+  missing: number;
+}
+
+/** L'attente d'une condition pas encore remplie, ou `null` si c'est une action qu'elle demande. */
+export function goalWait(world: World, goal: Goal): GoalWait | null {
+  if (count(world, goal) >= goal.count) return null;
+
+  switch (goal.type) {
+    case 'nights': {
+      const clock = world.clock();
+
+      // Une nuit compte à l'aube : on attend la prochaine.
+      return clock ? { remainingTicks: ticksToDawn(clock), durationTicks: CYCLE_TICKS, blockedBy: null, missing: 0 } : null;
+    }
+
+    case 'births': {
+      let best: GoalWait | null = null;
+
+      // La nurserie la plus proche de faire naître : une qui court passe avant une qui attend.
+      for (const entity of world.entities.values()) {
+        if (entity.kind !== 'nursery') continue;
+
+        const wait = nurseryWait(world, entity);
+
+        if (!best || rank(wait) < rank(best)) best = wait;
+      }
+      return best;
+    }
+
+    default:
+      return null;
+  }
+}
+
+function nurseryWait(world: World, nursery: Nursery): GoalWait {
+  const recipe = RECIPES.raiseChild;
+  const wait = {
+    remainingTicks: Math.max(0, nursery.nextBirthTick - world.tickCount),
+    durationTicks: recipe.duration,
+  };
+
+  if (nursery.paused) return { ...wait, blockedBy: 'paused', missing: 0 };
+
+  for (const [item, amount] of Object.entries(recipe.inputs) as [ItemId, number][]) {
+    const missing = amount - nursery.store.count(item);
+
+    if (missing > 0) return { ...wait, blockedBy: item, missing };
+  }
+  return { ...wait, blockedBy: null, missing: 0 };
+}
+
+/** Plus petit = plus près d'aboutir : d'abord ce qui court, puis ce à quoi il manque le moins. */
+function rank(wait: GoalWait): number {
+  return wait.blockedBy === null ? wait.remainingTicks : wait.blockedBy === 'paused' ? Infinity : 1e9 + wait.missing;
+}
+
+/** L'attente de la condition qui retient l'objectif courant — la première pas remplie —, s'il en est une. */
+export function objectiveWait(world: World): (GoalWait & { goal: Goal }) | null {
+  const objective = currentObjective(world);
+  const goal = objective?.goals.find((condition) => count(world, condition) < condition.count);
+  const wait = goal ? goalWait(world, goal) : null;
+
+  return goal && wait ? { ...wait, goal } : null;
 }
 
 /** Toutes les conditions tiennent-elles en même temps ? */

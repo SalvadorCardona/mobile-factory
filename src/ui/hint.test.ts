@@ -1,12 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { BUILDINGS, REPAIR } from '../data/buildings.ts';
+import { worldToTile } from '../core/grid.ts';
+import { DAY_CYCLE } from '../data/dayNight.ts';
 import { EVE, EVE_LINES } from '../data/eve.ts';
+import { TOWN_PLENTY, type ItemId } from '../data/items.ts';
 import { OBJECTIVES } from '../data/objectives.ts';
+import type { EntityId } from '../sim/types.ts';
 import { World } from '../sim/world.ts';
 import { INVENTORY_CAPACITY } from '../sim/player.ts';
 import { harvestRefusedText, tutorialAdvice, tutorialHint, uselessBagHint, type HintProgress } from './hint.ts';
 
 const FRESH: HintProgress = { harvestedWood: false, harvestedStone: false, delivered: false, repaired: false };
+
+/** Le conseil d'une nuit à tenir, de jour : le temps qu'il reste avant l'aube. */
+const WAITING_DAWN = /^Prochaine aube dans \d+ minutes?\./;
 
 /** Un monde dont la mairie est bâtie : le sac livré, le dernier objet l'achève. */
 function builtWorld(): World {
@@ -68,7 +75,7 @@ describe('tutorialHint', () => {
     expect(tutorialHint(world, FRESH, true, 1)).not.toBe(EVE_LINES.hints.quarry);
 
     world.townStock()!.add('stone', 1);
-    expect(tutorialHint(world, FRESH, true, 0)).toBe(OBJECTIVES[1].hint);
+    expect(tutorialHint(world, FRESH, true, 0)).toMatch(WAITING_DAWN);
   });
 
   it('apprend à réparer la mairie abîmée entre deux vagues, tant qu’Ève n’est pas là', () => {
@@ -89,16 +96,16 @@ describe('tutorialHint', () => {
     // Pendant la vague, l'arc d'abord ; une fois qu'Adam sait réparer, elle se tait
     // et c'est l'objectif en cours qui parle.
     expect(tutorialHint(world, FRESH, true, 1)).not.toBe(EVE_LINES.hints.repair);
-    expect(tutorialHint(world, { ...FRESH, repaired: true }, true, 0)).toBe(OBJECTIVES[world.objective]?.hint);
+    expect(tutorialHint(world, { ...FRESH, repaired: true }, true, 0)).toMatch(WAITING_DAWN);
   });
 
   it('annonce la forge une fois débloquée, et envoie chercher du charbon', () => {
     const world = builtWorld();
 
-    // De la pierre en ville : Ève ne parle pas de carrière, c'est l'objectif en cours qui parle.
+    // De la pierre en ville : Ève ne parle pas de carrière, c'est l'attente de l'objectif en cours qui parle.
     world.townStock()!.add('stone', 1);
     expect(world.objective).toBe(1);
-    expect(tutorialAdvice(world, FRESH, true, 0)).toEqual({ text: OBJECTIVES[1].hint, wants: null });
+    expect(tutorialHint(world, FRESH, true, 0)).toMatch(WAITING_DAWN);
 
     // Tant qu'Ève annonce son arrivée par radio, c'est elle qui parle d'abord.
     world.night = Math.max(BUILDINGS.forge.unlockNight, EVE.arrivalNight);
@@ -188,5 +195,87 @@ describe('conseil du sac plein', () => {
 
     expect(world.wanted('coal')).toBe(0);
     expect(harvestRefusedText('coal', world.wanted('coal'))).toBe('Assez de charbon : aucun chantier n’en attend plus');
+  });
+});
+
+describe('conseil d’attente', () => {
+  /** Pose une tour de guet à portée d'Adam et l'achève, sac rempli de son coût. */
+  function buildTower(world: World): EntityId {
+    const origin = worldToTile(world.player.x, world.player.y);
+    const before = new Set(world.entities.keys());
+
+    for (let dy = -4; dy <= 4 && world.entities.size === before.size; dy += 1) {
+      for (let dx = -4; dx <= 4 && world.entities.size === before.size; dx += 1) {
+        if (world.canPlace('watchtower', origin.tx + dx, origin.ty + dy) !== null) continue;
+        world.push({ type: 'placeBuilding', building: 'watchtower', tx: origin.tx + dx, ty: origin.ty + dy });
+        world.tick();
+      }
+    }
+
+    const id = [...world.entities.keys()].find((key) => !before.has(key));
+
+    if (id === undefined) throw new Error('aucune case pour la tour');
+    for (const [item, amount] of Object.entries(BUILDINGS.watchtower.cost) as [ItemId, number][]) {
+      world.player.inventory.add(item, amount);
+    }
+    world.push({ type: 'transferToSite', id });
+    world.tick();
+    if (world.entities.get(id)?.kind !== 'tower') throw new Error('la tour ne s’est pas achevée');
+    return id;
+  }
+
+  /** La mairie bâtie, une tour debout, de la pierre en ville : rien ne presse avant l'objectif. */
+  function waitingWorld(): World {
+    const world = builtWorld();
+
+    world.townStock()!.add('stone', 1);
+    buildTower(world);
+    expect(world.objective).toBe(1);
+    expect(world.clock()?.phase).toBe('day');
+    return world;
+  }
+
+  it('dit le temps qu’il reste avant l’aube, puis de quoi s’occuper', () => {
+    const world = waitingWorld();
+    const advice = tutorialAdvice(world, FRESH, true, 0)!;
+
+    expect(advice.text).toMatch(/^Prochaine aube dans \d+ minutes?\. En attendant : /);
+    // Une seule tour : la deuxième passe avant le reste.
+    expect(advice.text).toContain(EVE_LINES.hints.meanwhileSecondTower);
+  });
+
+  it('envoie réparer une tour endommagée avant tout le reste', () => {
+    const world = waitingWorld();
+    const tower = [...world.entities.values()].find((entity) => entity.kind === 'tower')!;
+
+    if (tower.kind !== 'tower') throw new Error('pas de tour');
+    tower.hp -= 1;
+
+    const advice = tutorialAdvice(world, FRESH, true, 0)!;
+
+    expect(advice.text).toContain(
+      EVE_LINES.hints.meanwhileRepair.replace('{building}', BUILDINGS.watchtower.label.toLowerCase()),
+    );
+  });
+
+  it('envoie chercher l’objet le plus bas en ville, deux tours debout', () => {
+    const world = waitingWorld();
+
+    buildTower(world);
+
+    const town = world.townStock()!;
+
+    for (const item of ['wood', 'stone', 'coal', 'ironOre'] as const) town.add(item, TOWN_PLENTY - town.available(item));
+    town.remove('coal', TOWN_PLENTY - 3);
+
+    expect(tutorialAdvice(world, FRESH, true, 0)?.wants).toBe('coal');
+  });
+
+  it('laisse parler l’objectif le soir : une nuit se tient, elle ne s’attend pas', () => {
+    const world = waitingWorld();
+
+    world.cycleStartTick -= DAY_CYCLE.day;
+    expect(world.clock()?.phase).toBe('dusk');
+    expect(tutorialHint(world, FRESH, true, 0)).toBe(OBJECTIVES[1].hint);
   });
 });

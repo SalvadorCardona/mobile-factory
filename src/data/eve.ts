@@ -59,6 +59,23 @@ export const EVE_LINES = {
     forge: 'La forge est débloquée ! Fer et charbon dedans, plaques de fer dehors.',
     /** La forge bâtie, plus de charbon en ville et pas de four à charbon : le bois en trop s'y change en charbon. */
     kiln: 'Ta forge a faim de charbon ? Un four à charbon cuit ton bois en trop : trois bûches, un charbon.',
+    /**
+     * L'objectif n'attend plus qu'une horloge (`objectiveWait`) : le temps
+     * qu'il reste, puis de quoi s'occuper. `{time}` : « 3 minutes ».
+     */
+    waitBirth: 'Le bébé arrive dans {time}.',
+    waitDawn: 'Prochaine aube dans {time}.',
+    /** `{wait}` : une des deux lignes ci-dessus ; `{todo}` : une des activités qui suivent. */
+    meanwhile: '{wait} En attendant : {todo}',
+    /** `{building}` : le bâtiment abîmé, sans article. */
+    meanwhileRepair: 'répare ce qui est abîmé ({building}) en fonçant dedans avec du bois ?',
+    meanwhileTower: 'une tour de guet de plus autour de la mairie ?',
+    meanwhileSecondTower: 'une deuxième tour de guet, de l’autre côté de la mairie ?',
+    /** `{item}` : l'objet le plus bas en ville. */
+    meanwhileStock: 'la ville manque de {item}, va en récolter ?',
+    meanwhileResearch: 'le labo est libre, choisis-lui une recherche ?',
+    /** Rien de mieux à proposer. */
+    meanwhileIdle: '{wait} Profites-en pour explorer un peu !',
   },
   /** Le petit dialogue d'arrivée, bulle après bulle. */
   arrival: [
