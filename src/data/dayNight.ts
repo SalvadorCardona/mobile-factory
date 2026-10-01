@@ -29,19 +29,25 @@ export const DAY_CYCLE = {
 
 /**
  * Les couleurs de la nuit, toutes tirées de la palette : la carte est
- * **multipliée** par ces teintes, jamais assombrie vers le noir. Les ombres
- * glissent vers le violet, comme le veut la direction artistique.
+ * **multipliée** par un voile indigo, jamais assombrie vers le noir — la nuit
+ * est bleu nuit saturé, comme le veut la direction artistique.
  *
- * - `sky` : la teinte de la carte hors des lumières, à la nuit noire ;
+ * Les lumières éclaircissent ce voile au lieu de s'ajouter à la carte : elles
+ * sont dessinées ensemble en `max`, si bien que dix lampes qui se recouvrent
+ * n'éclairent pas plus qu'une seule. Une ville dense reste lisible.
+ *
+ * - `veil` : la teinte du voile hors des lumières, à `veilStrength` à la nuit noire ;
  * - `vision` : la teinte autour d'Adam, plus claire — il voit à `visionRadius` ;
  * - `lamp` : la lueur des fenêtres et des lampions de la colonie ;
- * - `halo` : le halo des mutants, vert fluo — famille réservée.
+ * - `halo` : le halo des mutants, vert fluo — famille réservée, signal de danger.
  */
 export const NIGHT_TINT = {
-  sky: PALETTE.violet.light,
+  veil: PALETTE.ink.base,
   vision: PALETTE.paper.shade,
   lamp: PALETTE.yellow.light,
   halo: PALETTE.toxic.base,
+  /** Force du voile au cœur de la nuit (0 à 1) : la part d'indigo mêlée au blanc. */
+  veilStrength: 0.55,
   /** Rayon de la vision d'Adam, en tuiles. */
   visionRadius: 5,
   /** Rayon de la lueur d'un bâtiment, en tuiles, au-delà de son emprise. */
@@ -49,11 +55,11 @@ export const NIGHT_TINT = {
   /** Rayon du halo d'un mutant, en tuiles. */
   haloRadius: 1.2,
   /**
-   * Intensité des lueurs ajoutées par-dessus la teinte (0 à 1). Fortes :
-   * la nuit doit rester lisible sur un téléphone en plein soleil.
+   * Plafond des lueurs (0 à 1) : au cœur d'une lampe, le voile glisse d'autant
+   * vers sa couleur. Deux lueurs qui se recouvrent ne dépassent jamais ce plafond.
    */
-  lampStrength: 0.45,
-  haloStrength: 0.6,
+  lampCeiling: 0.45,
+  haloCeiling: 0.6,
 } as const;
 
 /** Le butin de l'aube quand la mairie a tenu la nuit : en ville, sinon dans le sac, le surplus au sol. */

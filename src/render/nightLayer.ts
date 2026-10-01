@@ -1,43 +1,53 @@
 /**
- * La nuit : une seule passe de teinte, et quelques lueurs par-dessus.
+ * La nuit : un seul voile, éclairci par les lumières, appliqué une fois.
  *
  * L'heure se lit dans la simulation (`world.clock()`, `sim/dayNight.ts`) ;
  * ici, on ne fait qu'appliquer sa part de nuit (`darkness`, de 0 à 1).
  *
- * - **Le ciel** : un seul grand sprite en fusion `multiply`, centré sur
- *   Adam. Il multiplie la carte par l'indigo-violet de `NIGHT_TINT.sky` —
- *   les couleurs glissent vers le violet sans jamais tomber au noir — et par
- *   une lavande claire dans un disque autour d'Adam : sa vision. Son alpha
- *   suit la part de nuit, ce qui fond la teinte au crépuscule et à l'aube.
- * - **Les lueurs** : des disques en fusion `add`. Jaunes sur chaque bâtiment
- *   fini — les fenêtres et les lampions de la colonie s'allument — et vert
- *   fluo autour de chaque mutant, famille réservée : dans le noir bleuté, ils
- *   se voient de loin.
+ * - **Le voile** : une texture de lumière, rendue à chaque image de nuit,
+ *   puis posée en un seul sprite en fusion `multiply`, centré sur Adam. Elle
+ *   est remplie de l'indigo de `NIGHT_TINT.veil` — la carte vire au bleu nuit
+ *   sans jamais tomber au noir. Son alpha suit la part de nuit, ce qui fond
+ *   la teinte au crépuscule et à l'aube.
+ * - **Les lumières** : dessinées dans cette même texture, en fusion `max`.
+ *   La vision d'Adam (un disque lavande), une lampe jaune sur chaque
+ *   bâtiment fini — les fenêtres et les lampions de la colonie — et un halo
+ *   vert fluo autour de chaque mutant, famille réservée : c'est un signal de
+ *   danger. Chaque lumière éclaircit le voile jusqu'à son plafond, jamais
+ *   au-delà : deux lampes qui se recouvrent n'éclairent pas plus qu'une, et
+ *   la carte multipliée ne dépasse jamais sa couleur de jour. Une ville de
+ *   vingt bâtiments n'est pas plus blanche qu'une maison seule.
  *
- * Pas de filtre, pas de texture de lumière rendue à chaque image : un quad
- * multiplié et une poignée de sprites additifs. Les textures sont bakées une
- * fois, en basse définition, et agrandies : le filtrage linéaire adoucit
- * les bords pour rien. De jour, le conteneur est invisible et ne coûte rien.
+ * Pas de filtre : une texture en basse définition (un texel pour `TEXEL`
+ * pixels monde), quelques dizaines de sprites dedans, un quad multiplié.
+ * Les lumières sont des coussins de trois anneaux bakés une fois, à bord
+ * net. De jour, le conteneur est invisible et ne coûte rien.
  */
 
-import { Container, Graphics, Sprite, type Renderer, type Texture } from 'pixi.js';
+import { Container, Graphics, RenderTexture, Sprite, Texture, type Renderer } from 'pixi.js';
 import { TILE_SIZE } from '../core/grid.ts';
 import { PALETTE, hex } from '../data/artDirection.ts';
 import { NIGHT_TINT } from '../data/dayNight.ts';
 import { darkness } from '../sim/dayNight.ts';
 import type { World } from '../sim/world.ts';
 
-/** Pixels monde par texel des textures de nuit : elles sont agrandies d'autant. */
-const TEXEL = 16;
+/** Pixels monde par texel de la texture de lumière : elle est agrandie d'autant. */
+const TEXEL = 8;
 
-/** Demi-côté du ciel, en pixels monde : de quoi couvrir un grand écran, même caméra en avance. */
-const SKY_HALF = 2560;
+/** Demi-côté du voile, en pixels monde : de quoi couvrir un grand écran, même caméra en avance. */
+const VEIL_HALF = 2560;
 
-/** Anneaux du bord de la vision, du ciel à la lavande : un fondu en aplats, pas un dégradé. */
+/** Côté de la texture de lumière, en texels. */
+const VEIL_TEXELS = (VEIL_HALF * 2) / TEXEL;
+
+/** Anneaux du bord de la vision, du voile à la lavande : un fondu en aplats, pas un dégradé. */
 const VISION_RINGS = 4;
 
-/** Rayon, en texels, du disque de lueur baké. */
-const GLOW_TEXELS = 8;
+/** Anneaux d'une lampe ou d'un halo : des coussins de lumière, comme les arbres en coussins. */
+const LIGHT_RINGS = 3;
+
+/** Rayon, en pixels de texture, d'une lumière bakée : assez pour garder ses anneaux nets. */
+const LIGHT_PIXELS = 32;
 
 /** Le halo d'un mutant est centré sur son corps, pas sur ses pieds. */
 const HALO_RISE = 12;
@@ -45,25 +55,46 @@ const HALO_RISE = 12;
 export class NightLayer {
   public readonly container = new Container();
 
-  private readonly sky: Sprite;
-  private readonly glow: Texture;
+  private readonly renderer: Renderer;
+  private readonly target: RenderTexture;
+  private readonly veil: Sprite;
+  /** Ce qu'on rend dans la texture de lumière : le fond indigo, puis les lumières en `max`. */
+  private readonly scene = new Container();
+  private readonly lights = new Container();
+  private readonly vision: Sprite;
+  private readonly lampTexture: Texture;
+  private readonly haloTexture: Texture;
   private readonly lamps = new Container();
   private readonly halos = new Container();
   private readonly world: World;
 
   public constructor(renderer: Renderer, world: World) {
+    this.renderer = renderer;
     this.world = world;
 
-    this.sky = new Sprite(bakeSky(renderer));
-    this.sky.anchor.set(0.5);
-    this.sky.scale.set(TEXEL);
-    this.sky.blendMode = 'multiply';
+    const veil = mix(hex(PALETTE.paper.base), hex(NIGHT_TINT.veil), NIGHT_TINT.veilStrength);
 
-    this.glow = bakeGlow(renderer);
-    this.lamps.blendMode = 'add';
-    this.halos.blendMode = 'add';
+    this.target = RenderTexture.create({ width: VEIL_TEXELS, height: VEIL_TEXELS, resolution: 1 });
+    this.veil = new Sprite(this.target);
+    this.veil.scale.set(TEXEL);
+    this.veil.blendMode = 'multiply';
 
-    this.container.addChild(this.sky, this.lamps, this.halos);
+    const ground = new Sprite(Texture.WHITE);
+
+    ground.width = VEIL_TEXELS;
+    ground.height = VEIL_TEXELS;
+    ground.tint = veil;
+
+    this.vision = new Sprite(bakeVision(renderer, veil));
+    this.vision.anchor.set(0.5);
+    this.lampTexture = bakeLight(renderer, veil, hex(NIGHT_TINT.lamp), NIGHT_TINT.lampCeiling);
+    this.haloTexture = bakeLight(renderer, veil, hex(NIGHT_TINT.halo), NIGHT_TINT.haloCeiling);
+
+    this.lights.blendMode = 'max';
+    this.lights.addChild(this.vision, this.lamps, this.halos);
+    this.scene.addChild(ground, this.lights);
+
+    this.container.addChild(this.veil);
     this.container.visible = false;
   }
 
@@ -75,12 +106,15 @@ export class NightLayer {
     if (dark <= 0) return;
 
     const { player } = this.world;
+    const x = player.prevX + (player.x - player.prevX) * alpha;
+    const y = player.prevY + (player.y - player.prevY) * alpha;
+    // L'origine du voile tombe sur un texel entier : les lampes ne scintillent pas quand Adam marche.
+    const left = Math.round((x - VEIL_HALF) / TEXEL) * TEXEL;
+    const top = Math.round((y - VEIL_HALF) / TEXEL) * TEXEL;
 
-    this.sky.alpha = dark;
-    this.sky.position.set(
-      player.prevX + (player.x - player.prevX) * alpha,
-      player.prevY + (player.y - player.prevY) * alpha,
-    );
+    this.veil.alpha = dark;
+    this.veil.position.set(left, top);
+    this.vision.position.set((x - left) / TEXEL, (y - top) / TEXEL);
 
     let lamps = 0;
 
@@ -89,14 +123,13 @@ export class NightLayer {
 
       const radius = (Math.max(entity.width, entity.height) / 2 + NIGHT_TINT.lampRadius) * TILE_SIZE;
 
-      this.place(
+      place(
         this.lamps,
+        this.lampTexture,
         lamps++,
-        (entity.tx + entity.width / 2) * TILE_SIZE,
-        (entity.ty + entity.height / 2) * TILE_SIZE,
-        radius,
-        hex(NIGHT_TINT.lamp),
-        dark * NIGHT_TINT.lampStrength,
+        ((entity.tx + entity.width / 2) * TILE_SIZE - left) / TEXEL,
+        ((entity.ty + entity.height / 2) * TILE_SIZE - top) / TEXEL,
+        radius / TEXEL,
       );
     }
 
@@ -105,43 +138,45 @@ export class NightLayer {
     for (const mobile of this.world.mobiles.values()) {
       if (mobile.kind !== 'mutant') continue;
 
-      this.place(
+      place(
         this.halos,
+        this.haloTexture,
         halos++,
-        mobile.prevX + (mobile.x - mobile.prevX) * alpha,
-        mobile.prevY + (mobile.y - mobile.prevY) * alpha - HALO_RISE,
-        NIGHT_TINT.haloRadius * TILE_SIZE,
-        hex(NIGHT_TINT.halo),
-        dark * NIGHT_TINT.haloStrength,
+        (mobile.prevX + (mobile.x - mobile.prevX) * alpha - left) / TEXEL,
+        (mobile.prevY + (mobile.y - mobile.prevY) * alpha - HALO_RISE - top) / TEXEL,
+        (NIGHT_TINT.haloRadius * TILE_SIZE) / TEXEL,
       );
     }
 
     hideFrom(this.lamps, lamps);
     hideFrom(this.halos, halos);
-  }
 
-  /** Pose la lueur numéro `index` du groupe, en la créant au besoin : les sprites sont recyclés. */
-  private place(group: Container, index: number, x: number, y: number, radius: number, tint: number, strength: number): void {
-    let sprite = group.children[index] as Sprite | undefined;
-
-    if (!sprite) {
-      sprite = new Sprite(this.glow);
-      sprite.anchor.set(0.5);
-      group.addChild(sprite);
-    }
-
-    sprite.visible = true;
-    sprite.position.set(x, y);
-    sprite.scale.set(radius / GLOW_TEXELS);
-    sprite.tint = tint;
-    sprite.alpha = strength;
+    this.renderer.render({ container: this.scene, target: this.target, clear: true });
   }
 
   public destroy(): void {
-    this.sky.texture.destroy(true);
-    this.glow.destroy(true);
+    this.target.destroy(true);
+    this.vision.texture.destroy(true);
+    this.lampTexture.destroy(true);
+    this.haloTexture.destroy(true);
+    this.scene.destroy({ children: true });
     this.container.destroy({ children: true });
   }
+}
+
+/** Pose la lumière numéro `index` du groupe, en la créant au besoin : les sprites sont recyclés. */
+function place(group: Container, texture: Texture, index: number, x: number, y: number, radius: number): void {
+  let sprite = group.children[index] as Sprite | undefined;
+
+  if (!sprite) {
+    sprite = new Sprite(texture);
+    sprite.anchor.set(0.5);
+    group.addChild(sprite);
+  }
+
+  sprite.visible = true;
+  sprite.position.set(x, y);
+  sprite.scale.set(radius / LIGHT_PIXELS);
 }
 
 function hideFrom(group: Container, count: number): void {
@@ -149,31 +184,34 @@ function hideFrom(group: Container, count: number): void {
 }
 
 /**
- * Le ciel de nuit, en texels : un grand carré `sky`, et au centre la vision
- * d'Adam, `vision`, bordée de quelques anneaux qui passent de l'un à l'autre.
+ * La vision d'Adam, en texels : quelques anneaux qui passent du voile à la
+ * lavande de `vision`, du bord vers le centre.
  */
-function bakeSky(renderer: Renderer): Texture {
-  const half = SKY_HALF / TEXEL;
+function bakeVision(renderer: Renderer, veil: number): Texture {
   const radius = (NIGHT_TINT.visionRadius * TILE_SIZE) / TEXEL;
-  const sky = hex(NIGHT_TINT.sky);
+  const outer = radius * 1.5;
   const vision = hex(NIGHT_TINT.vision);
-  const graphics = new Graphics().rect(0, 0, half * 2, half * 2).fill(sky);
+  const graphics = new Graphics();
 
   for (let ring = 1; ring <= VISION_RINGS; ring += 1) {
     const t = ring / VISION_RINGS;
 
-    graphics.circle(half, half, radius * (1.5 - 0.5 * t)).fill(mix(sky, vision, t));
+    graphics.circle(outer, outer, radius * (1.5 - 0.5 * t)).fill(mix(veil, vision, t));
   }
   return bake(renderer, graphics);
 }
 
-/** Une lueur : des disques blancs empilés, plus denses au centre. Teinte et force viennent du sprite. */
-function bakeGlow(renderer: Renderer): Texture {
+/**
+ * Une lumière : trois anneaux pleins, à bord net, qui glissent du voile vers
+ * `color` — le cœur atteint `ceiling`, le plafond de la lumière.
+ */
+function bakeLight(renderer: Renderer, veil: number, color: number, ceiling: number): Texture {
   const graphics = new Graphics();
-  const steps = 5;
 
-  for (let step = 0; step < steps; step += 1) {
-    graphics.circle(GLOW_TEXELS, GLOW_TEXELS, GLOW_TEXELS * (1 - step / steps)).fill({ color: hex(PALETTE.paper.base), alpha: 0.25 });
+  for (let ring = 1; ring <= LIGHT_RINGS; ring += 1) {
+    const t = ring / LIGHT_RINGS;
+
+    graphics.circle(LIGHT_PIXELS, LIGHT_PIXELS, LIGHT_PIXELS * (1 - (ring - 1) / LIGHT_RINGS)).fill(mix(veil, color, ceiling * t));
   }
   return bake(renderer, graphics);
 }
