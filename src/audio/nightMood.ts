@@ -9,14 +9,17 @@
  * peut le vérifier sans attendre.
  */
 
-/** Le tempo de la boucle lofi : la pulsation bat avec elle. */
+/** Le tempo de la pulsation de nuit. */
 export const NIGHT_BPM = 78;
 
-/** La musique de jour, puis « de l'autre côté du mur » : passe-bas fermé, volume baissé. */
-export const MUSIC_DAY = { cutoff: 18000, volume: 0.35 } as const;
-export const MUSIC_NIGHT = { cutoff: 900, volume: 0.22 } as const;
+/**
+ * La musique de jour, à mi-volume pour laisser la place aux bruitages, puis
+ * « de l'autre côté du mur » : passe-bas fermé, volume baissé.
+ */
+export const MUSIC_DAY = { cutoff: 18000, volume: 0.5 } as const;
+export const MUSIC_NIGHT = { cutoff: 900, volume: 0.3 } as const;
 
-/** Le bourdon (la 55 Hz, mi 82,4 Hz : la quinte de la boucle en la mineur) et la grosse caisse. */
+/** Le bourdon (la 55 Hz, mi 82,4 Hz : une quinte en la) et la grosse caisse. */
 export const DRONE = { notes: [55, 82.4], gain: 0.06 } as const;
 export const PULSE_GAIN = 0.05;
 

@@ -172,6 +172,8 @@ export class TitleScreen {
 
 export class PauseScreen {
   public readonly root: HTMLElement;
+  /** L'interrupteur de la musique de fond ; le câblage l'abonne au moteur audio. */
+  public readonly musicButton: HTMLButtonElement;
 
   private readonly panel: HTMLElement;
   private readonly confirm: HTMLElement;
@@ -208,8 +210,12 @@ export class PauseScreen {
     restart.append(uiIcon('restart', 22), 'Recommencer');
     restart.addEventListener('click', () => this.asking(true));
 
+    this.musicButton = document.createElement('button');
+    this.musicButton.type = 'button';
+    this.musicButton.className = 'button-secondary pause-music';
+
     this.confirm = confirmRestart(onRestart, () => this.asking(false));
-    this.panel.append(title, text, resume, restart, seedLine(seed));
+    this.panel.append(title, text, resume, this.musicButton, restart, seedLine(seed));
     this.root.append(this.panel, this.confirm);
     this.asking(false);
   }
@@ -218,6 +224,12 @@ export class PauseScreen {
     this.root.hidden = !visible;
     // Rouvrir la pause, c'est retrouver la pause, pas une question laissée en plan.
     if (visible) this.asking(false);
+  }
+
+  /** Le libellé et l'icône suivent le réglage du moteur audio. */
+  public setMusic(on: boolean): void {
+    this.musicButton.replaceChildren(uiIcon(on ? 'musicOn' : 'musicOff', 22), on ? 'Musique : oui' : 'Musique : non');
+    this.musicButton.setAttribute('aria-pressed', String(on));
   }
 
   private asking(asking: boolean): void {

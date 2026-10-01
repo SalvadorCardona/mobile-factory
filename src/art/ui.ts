@@ -117,6 +117,28 @@ export const UI_ICONS = {
     line(15, 9, 21, 15, coral.shade),
     line(21, 9, 15, 15, coral.shade),
   ),
+  /** Deux croches liées : la musique de fond. */
+  musicOn: svg(
+    S,
+    S,
+    polygon([8, 4.5, 19, 2.5, 19, 6, 8, 8], ink.base),
+    line(9, 6, 9, 16.5, ink.base),
+    line(18, 4, 18, 14.5, ink.base),
+    circle(6.5, 17, 3.2, ink.base),
+    circle(15.5, 15, 3.2, ink.base),
+    circle(5.6, 16.1, 1, ink.light),
+    circle(14.6, 14.1, 1, ink.light),
+  ),
+  musicOff: svg(
+    S,
+    S,
+    polygon([8, 4.5, 19, 2.5, 19, 6, 8, 8], ink.base),
+    line(9, 6, 9, 16.5, ink.base),
+    line(18, 4, 18, 14.5, ink.base),
+    circle(6.5, 17, 3.2, ink.base),
+    circle(15.5, 15, 3.2, ink.base),
+    line(3.5, 3.5, 20.5, 20.5, coral.shade),
+  ),
   /** Le marteau blanc du bouton de construction, comme sur la maquette. */
   hammer: svg(
     S,
