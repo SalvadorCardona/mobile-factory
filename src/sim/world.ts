@@ -105,6 +105,7 @@ import type {
   SupplyRejection,
   TakeRejection,
   TradeRejection,
+  TransferRejection,
   UpgradeRejection,
 } from './commands.ts';
 import { caravanBagBonus, caravanRoute, createCaravan, drawOffers, isCaravanDay, rideTo, tradeCost } from './caravan.ts';
@@ -158,6 +159,7 @@ import { RoadNetwork } from './roads.ts';
 import type { SavedEntity, WorldState } from './save.ts';
 import { Scheduler } from './scheduler.ts';
 import { Store } from './store.ts';
+import { transferAllPlan, transferAmount, type TransferDirection, type TransferQuantity, type TransferRules } from './transfer.ts';
 import { findSpawn, habitatAt, isBuildable, isWalkable, oreAt, terrainAt } from './terrain.ts';
 import { inLogisticRange, pointInLogisticRange } from './warehouse.ts';
 import { chopSpot, isTree, pickTree, treesInRange } from './lumberjacks.ts';
@@ -360,6 +362,10 @@ export type WorldEvents = {
   storeTaken: { id: EntityId; item: ItemId; amount: number };
   /** Un « Prendre » a été refusé. */
   takeRejected: { id: EntityId; reason: TakeRejection };
+  /** Un échange sac ⇄ coffre a fait passer `moved` dans le sens `direction`. */
+  itemsTransferred: { id: EntityId; direction: TransferDirection; moved: [ItemId, number][] };
+  /** Un échange sac ⇄ coffre a été refusé. */
+  transferRejected: { id: EntityId; reason: TransferRejection };
   /** Le sac est plein : la récolte s'arrête, il faut aller livrer. */
   inventoryFull: Record<string, never>;
   /**
@@ -939,6 +945,10 @@ export class World {
 
       case 'depositToTown':
         this.depositToTown(command.item);
+        break;
+
+      case 'transferItems':
+        this.transferItems(command.id, command.direction, command.quantity, command.item);
         break;
 
       case 'dropItem':
@@ -5104,6 +5114,102 @@ export class World {
     // Une machine bloquée ne se replanifiait plus : c'est ce retrait qui la réveille.
     this.restart(entity);
     return removed;
+  }
+
+  /**
+   * Les règles d'échange du coffre d'un bâtiment (`sim/transfer.ts`), ou
+   * `null` s'il n'a pas de coffre où Adam échange. La mairie donne son
+   * disponible — ce que porteurs et bâtisseurs ont réservé pour un chantier
+   * reste — et prend tout ; une foreuse, une ferme, une carrière ou une
+   * cabane donne sa production et ne prend rien ; une forge donne ses
+   * sorties et prend ses entrées ; une nurserie prend sa nourriture et ne la
+   * rend pas. Le labo a son panneau, l'antenne ses étages.
+   */
+  public transferRules(entity: Entity): TransferRules | null {
+    if (entity.kind === 'site') return null;
+
+    const { store } = entity;
+    const none = (): number => 0;
+
+    switch (entity.kind) {
+      case 'townHall':
+        return { takeable: (item) => store.available(item), accepts: () => Infinity };
+
+      case 'drill':
+      case 'farm':
+      case 'quarry':
+      case 'lumberCamp':
+        return { takeable: (item) => store.available(item), accepts: none };
+
+      case 'forge': {
+        const outputs: RecipeProto['outputs'] = forgeRecipe(entity).outputs;
+
+        return {
+          takeable: (item) => ((outputs[item] ?? 0) > 0 ? store.available(item) : 0),
+          accepts: (item) => consumerRoom(entity, item),
+        };
+      }
+
+      case 'nursery':
+        return { takeable: none, accepts: (item) => consumerRoom(entity, item) };
+
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * La zone d'échange : un objet, ou tout ce qui peut passer, entre le sac et
+   * le coffre. Prendre vide le coffre comme un « Prendre » (la machine
+   * bloquée repart) ; déposer remplit la ville comme « Déposer le sac », une
+   * forge ou une nurserie comme son « Transférer ».
+   */
+  private transferItems(id: EntityId, direction: TransferDirection, quantity: TransferQuantity, only?: ItemId): void {
+    const entity = this.entities.get(id);
+    const rules = entity ? this.transferRules(entity) : null;
+
+    if (!entity || entity.kind === 'site' || !rules) {
+      this.events.emit('transferRejected', { id, reason: 'missing' });
+      return;
+    }
+    if (!this.inReach(entity)) {
+      this.events.emit('transferRejected', { id, reason: 'outOfReach' });
+      return;
+    }
+
+    const { inventory } = this.player;
+    const plan: [ItemId, number][] =
+      only === undefined
+        ? transferAllPlan(direction, entity.store, rules, inventory)
+        : [[only, transferAmount(direction, only, quantity, rules, inventory)]];
+    const moved: [ItemId, number][] = [];
+
+    for (const [item, amount] of plan) {
+      if (amount <= 0) continue;
+
+      let passed = 0;
+
+      if (direction === 'take') {
+        passed = this.withdraw(entity.id, item, amount);
+        inventory.add(item, passed);
+        if (passed > 0) this.events.emit('storeTaken', { id: entity.id, item, amount: passed });
+      } else if (entity.kind === 'townHall') {
+        passed = entity.store.add(item, inventory.remove(item, amount));
+        if (passed > 0) this.events.emit('townDeposited', { item, amount: passed });
+      } else if (isConsumer(entity)) {
+        passed = this.supplyFrom(entity, item, amount, inventory, 'bag');
+      }
+      if (passed > 0) moved.push([item, passed]);
+    }
+
+    if (moved.length === 0) {
+      const full = direction === 'take' && inventory.freeSpace() <= 0;
+
+      this.events.emit('transferRejected', { id, reason: full ? 'bagFull' : 'nothing' });
+      return;
+    }
+    if (direction === 'deposit' && isConsumer(entity)) this.afterSupply(entity);
+    this.events.emit('itemsTransferred', { id, direction, moved });
   }
 
   /** Le bouton « Prendre » : tout le coffre passe dans le sac, dans la limite de la place. */

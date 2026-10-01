@@ -19,7 +19,7 @@ proximité** : toutes les 10 ticks, les arbres et rochers à portée (quatre au
 plus, du plus proche au plus loin) lâchent une unité (bois, fer, charbon,
 pierre), qu'il marche ou non. Il **heurte** le reste : un chantier heurté
 reçoit ce qu'il attend ; une foreuse ou une ferme heurtée vide son coffre
-dans le sac (bouton « Prendre » dans sa fenêtre), ce qui la relance si elle
+dans le sac (« Tout prendre » dans sa fenêtre), ce qui la relance si elle
 était bloquée. Une foreuse ne se pose que sur un filon (refus `noOre`) :
 armée, elle montre les filons autour d'Adam, rochers compris — on casse le
 rocher, puis on pose la foreuse à sa place. Rochers et bâtiments sont solides ; d'un arbre, seul le tronc
@@ -44,8 +44,14 @@ sorties (plaques, charbon) à la mairie ; leurs entrées restent au four.
 
 **Ville et sac** — deux stocks. Le **sac** (`player.inventory`, plafonné)
 est ce qu'Adam porte ; la **ville** est le coffre de la mairie
-(`World.townStock()`), rempli par Adam (« Déposer en ville », « Déposer le
-sac » dans sa fenêtre, ou en la heurtant) et par les porteurs. Les chantiers
+(`World.townStock()`), rempli par Adam (« Déposer en ville », la zone
+d'échange de sa fenêtre, ou en la heurtant) et par les porteurs. La fenêtre
+d'un bâtiment à coffre (mairie, producteurs, forge, nurserie) a une **zone
+d'échange** (`ui/transferPanel.ts`, logique dans `sim/transfer.ts`, commande
+`transferItems`) : coffre et sac en deux bandes, un tap passe un objet de
+l'autre côté (1 / 10 / Tout), « Tout prendre » / « Tout déposer » ; le sac ne
+prend que ce qui rentre, le réservé reste au coffre, un coffre filtré grise
+le reste. Les chantiers
 puisent dans les deux, la ville seulement dans son rayon (`logisticRadius`,
 `sim/warehouse.ts`, le cercle jaune du mode construction). Le HUD
 les montre en deux cartes compactes ; le sac (tap, ou touche I) ouvre
