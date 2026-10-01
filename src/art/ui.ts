@@ -94,6 +94,18 @@ function confettiLeaf(tone: 'mint' | 'yellow' | 'coral'): string {
   );
 }
 
+/**
+ * Une flèche pleine, vers le bas (`down`) ou vers le haut : une hampe en
+ * capsule et sa pointe. Blanche sur les gros boutons de la zone d'échange,
+ * posée sur son ombre de la teinte du bouton.
+ */
+function arrow(down: boolean, color: (typeof PALETTE)[keyof typeof PALETTE]['base' | 'shade']): string {
+  const tip = down ? 21 : 3;
+  const back = down ? 11 : 13;
+
+  return rect(9.5, down ? 3 : 10, 5, 11, color, 2.5) + polygon([3.5, back, 20.5, back, 12, tip], color);
+}
+
 function round(value: number): number {
   return Math.round(value * 100) / 100;
 }
@@ -284,6 +296,22 @@ export const UI_ICONS = {
   leafMint: svg(S, S, confettiLeaf('mint')),
   leafYellow: svg(S, S, confettiLeaf('yellow')),
   petal: svg(S, S, confettiLeaf('coral')),
+  /**
+   * Le coffre d'un bâtiment : une malle jaune de la colonie, couvercle
+   * corail comme les toits, fermoir indigo. Face au sac, dans la zone d'échange.
+   */
+  chest: svg(
+    S,
+    S,
+    shadedBlock(3, 10, 18, 11, 3, 'yellow', 3),
+    shadedBlock(2.5, 5, 19, 7, 2, 'coral', 3),
+    pill(5, 6.5, 6, 1.8, coral.light),
+    rect(10.5, 9.5, 3, 5, ink.base, 1.5),
+  ),
+  /** « Tout prendre » : une flèche blanche qui descend vers le sac. */
+  takeAll: svg(S, S, group('translate(0.6 0.8)', arrow(true, violet.shade)), arrow(true, paper.base)),
+  /** « Tout déposer » : une flèche blanche qui remonte vers le coffre. */
+  depositAll: svg(S, S, group('translate(0.6 0.8)', arrow(false, mint.shade)), arrow(false, paper.base)),
   /** Un drapeau planté : l'objectif en cours. */
   goal: svg(
     S,

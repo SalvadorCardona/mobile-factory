@@ -13,6 +13,7 @@ import type { BuildingId } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
 import type { PerkId } from '../data/perks.ts';
 import type { ResearchId } from '../data/research.ts';
+import type { TransferDirection, TransferQuantity } from './transfer.ts';
 import type { EntityId, MobileId } from './types.ts';
 
 export type Command =
@@ -29,7 +30,8 @@ export type Command =
   | { type: 'transferToSite'; id: EntityId }
   /**
    * Vide le coffre d'une foreuse ou d'une ferme dans le sac, dans la limite
-   * de la place. Le bouton « Prendre » de la fenêtre du bâtiment.
+   * de la place. Le bouton « Prendre le reste » du panneau Recherche ; la
+   * fenêtre des autres bâtiments passe par `transferItems`.
    */
   | { type: 'takeFromBuilding'; id: EntityId }
   /**
@@ -44,6 +46,16 @@ export type Command =
    * être à portée de la mairie. Sans `item`, tout le sac ; avec, cet objet seulement.
    */
   | { type: 'depositToTown'; item?: ItemId }
+  /**
+   * Fait passer un objet entre le sac et le coffre d'un bâtiment — la mairie,
+   * une foreuse, une forge… (`sim/transfer.ts`) : `take` du coffre au sac,
+   * `deposit` du sac au coffre, `quantity` unités au plus. Sans `item`, tout
+   * ce qui peut passer — « Tout prendre », « Tout déposer ». Le sac ne prend
+   * que ce qui y rentre, le coffre que ce qu'il accepte, et ce que des jobs
+   * ont réservé reste au coffre. Adam doit être à portée. La zone d'échange
+   * de la fenêtre du bâtiment.
+   */
+  | { type: 'transferItems'; id: EntityId; direction: TransferDirection; quantity: TransferQuantity; item?: ItemId }
   /**
    * Jette à ses pieds, en tas ramassable, ce qu'Adam porte. Sans `item`, tout
    * le sac ; avec, cet objet seulement.
@@ -180,6 +192,17 @@ export type DepositRejection =
   | 'outOfReach'
   /** Rien à déposer : le sac est vide, ou ne contient pas cet objet. */
   | 'empty';
+
+/** Motif de refus d'un échange sac ⇄ coffre. */
+export type TransferRejection =
+  /** Le bâtiment n'existe plus, ou n'a pas de coffre où échanger. */
+  | 'missing'
+  /** Adam est trop loin de l'emprise. */
+  | 'outOfReach'
+  /** Rien ne passe : le coffre n'a rien de libre, ou n'accepte rien du sac. */
+  | 'nothing'
+  /** Le sac est plein : rien n'est pris, rien n'est jeté. */
+  | 'bagFull';
 
 /** Motif de refus d'un échange avec la caravane. */
 export type TradeRejection =

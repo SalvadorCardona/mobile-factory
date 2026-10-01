@@ -614,6 +614,10 @@ function wireSave(world: World, saves: LocalSave, started: () => boolean): Autos
   world.events.on('dawnBroke', () => {
     due = true;
   });
+  // Un échange sac ⇄ coffre est un geste du joueur : il ne doit pas se perdre à la fermeture de l'onglet.
+  world.events.on('itemsTransferred', () => {
+    due = true;
+  });
   world.events.on('townHallDestroyed', () => saves.clear());
 
   return {

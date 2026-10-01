@@ -496,6 +496,10 @@ export class Hud {
       if (reason === 'empty') this.notify('Le coffre est vide', 'bad');
       if (reason === 'bagFull') this.notify('Sac plein — rien à prendre de plus', 'bad');
     });
+    world.events.on('transferRejected', ({ reason }) => {
+      if (reason === 'outOfReach') this.notify(REJECTION_LABELS.outOfReach, 'bad');
+      if (reason === 'bagFull') this.notify('Sac plein — rien à prendre de plus', 'bad');
+    });
     world.events.on('inventoryFull', () => this.notify(this.bagFullMessage(), 'bad'));
     world.events.on('harvestRefused', ({ item, wanted, plenty }) => {
       this.refused(item);

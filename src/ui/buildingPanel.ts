@@ -11,15 +11,17 @@
  * qu'il attend et qu'Adam porte, puis le complète avec le stock de la ville —
  * le dernier objet livré achève le chantier, la fenêtre montre alors le
  * bâtiment. La ville ne sert que les chantiers dans le rayon de la mairie
- * (`logisticRadius`) : ailleurs, on livre à la main ou par les porteurs. La
- * mairie montre le stock de la ville, et « Déposer le sac » l'y vide. Sur une
- * foreuse, une ferme ou une forge, « Prendre » vide son coffre dans le sac,
- * dans la limite de la place. Sur une nurserie ou une forge, « Transférer le
- * sac » y verse ce que sa recette consomme. Sur un bâtiment abîmé,
+ * (`logisticRadius`) : ailleurs, on livre à la main ou par les porteurs. Un
+ * bâtiment qui a un coffre — la mairie, dont le coffre est le stock de la
+ * ville, une foreuse, une ferme, une forge, une nurserie… — montre la zone
+ * d'échange (`transferPanel.ts`) : son coffre et le sac en deux bandes, un
+ * tap fait passer un objet de l'autre côté, « Tout prendre » et « Tout
+ * déposer » le reste. Sur une nurserie ou une forge, « Transférer » y verse
+ * ce que sa recette consomme, le sac puis la ville. Sur un bâtiment abîmé,
  * « Réparer » y pose le bois qu'il faut (`REPAIR`), le sac puis la ville, et
  * une ligne dit qu'on peut aussi le heurter. La fenêtre ne modifie rien
  * elle-même : chaque bouton pousse une commande (`transferToSite`,
- * `takeFromBuilding`, `supplyBuilding`, `depositToTown`, `repairBuilding`)
+ * `transferItems`, `supplyBuilding`, `repairBuilding`)
  * que le tick consomme.
  *
  * Sur le labo de recherche, la fenêtre devient le panneau Recherche
@@ -53,9 +55,10 @@ import type { Building, Entity, EntityId, Forge, Nursery } from '../sim/types.ts
 import { TICKS_PER_SECOND, repairCost, siteMissing, type SiteCoverage, type World } from '../sim/world.ts';
 import { itemAmount, uiIcon } from './icons.ts';
 import { ResearchPanel } from './researchPanel.ts';
+import { TransferPanel } from './transferPanel.ts';
 
 /** L'état d'une foreuse ou d'une ferme qui attend qu'on la vide. */
-const BLOCKED = 'Bloquée : coffre plein — heurtez-la ou appuyez sur Prendre.';
+const BLOCKED = 'Bloquée : coffre plein — heurtez-la ou appuyez sur Tout prendre.';
 
 /** L'état d'un producteur mis en pause. */
 const PAUSED = 'En pause : plus rien ne sort ni n’entre en production — appuyez sur Reprendre.';
@@ -71,8 +74,8 @@ export class BuildingPanel {
   private readonly items: HTMLElement;
   private readonly actions: HTMLElement;
   private readonly transferButton: HTMLButtonElement;
-  private readonly takeButton: HTMLButtonElement;
-  private readonly depositButton: HTMLButtonElement;
+  /** La zone d'échange sac ⇄ coffre, pour les bâtiments qui ont un coffre. */
+  private readonly exchange: TransferPanel;
   private readonly repairButton: HTMLButtonElement;
   private readonly pauseButton: HTMLButtonElement;
   /** « Annuler le chantier » : un premier tap arme, le second annule. */
@@ -152,19 +155,11 @@ export class BuildingPanel {
       this.world.push({ type: kind === 'site' ? 'transferToSite' : 'supplyBuilding', id: this.entityId });
     });
 
-    this.takeButton = document.createElement('button');
-    this.takeButton.type = 'button';
-    this.takeButton.textContent = 'Prendre';
-    this.takeButton.addEventListener('click', () => {
-      if (this.entityId !== null) this.world.push({ type: 'takeFromBuilding', id: this.entityId });
-    });
-
-    this.depositButton = document.createElement('button');
-    this.depositButton.type = 'button';
-    this.depositButton.textContent = 'Déposer le sac';
-    this.depositButton.addEventListener('click', () => {
-      if (this.entityId !== null) this.world.push({ type: 'depositToTown' });
-    });
+    this.exchange = new TransferPanel(
+      () => this.world.player.inventory,
+      (command) => this.world.push(command),
+    );
+    this.exchange.root.hidden = true;
 
     this.repairButton = document.createElement('button');
     this.repairButton.type = 'button';
@@ -198,8 +193,6 @@ export class BuildingPanel {
       this.pauseButton,
       this.repairButton,
       this.transferButton,
-      this.takeButton,
-      this.depositButton,
       this.cancelButton,
     );
 
@@ -252,6 +245,7 @@ export class BuildingPanel {
       this.items,
       this.lines,
       this.crew,
+      this.exchange.root,
       this.actions,
       this.upgrade,
       this.research.root,
@@ -363,15 +357,13 @@ export class BuildingPanel {
         ),
         `site:${entity.id}:${JSON.stringify(entity.delivered)}`,
       );
-      this.actions.hidden = false;
       this.transferButton.hidden = building;
       this.transferButton.textContent = this.world.townStock() ? 'Transférer' : 'Transférer le sac';
       this.transferButton.disabled = !inReach || !canGive;
       // Le chantier de la mairie ne s'annule pas.
       this.cancelButton.hidden = entity.id === this.world.townHallId;
       this.cancelButton.textContent = this.cancelArmed ? 'Vraiment annuler ?' : 'Annuler le chantier';
-      this.takeButton.hidden = true;
-      this.depositButton.hidden = true;
+      this.exchange.show(null);
       this.repairButton.hidden = true;
       this.pauseButton.hidden = true;
       this.crew.hidden = true;
@@ -386,13 +378,6 @@ export class BuildingPanel {
       const pausable = canPause(entity.proto);
       const stopped = this.world.stopped(entity);
 
-      // Une foreuse, une ferme, une carrière, une forge ou une cabane de bûcheron remplit son coffre : Adam vient le vider.
-      const producer =
-        entity.kind === 'drill' ||
-        entity.kind === 'farm' ||
-        entity.kind === 'quarry' ||
-        entity.kind === 'forge' ||
-        entity.kind === 'lumberCamp';
       // Une nurserie ou une forge consomme : Adam vient la remplir. L'antenne attend son étage suivant.
       const consumer = entity.kind === 'nursery' || entity.kind === 'forge';
       const floor = entity.kind === 'antenna' && nextUpgrade(entity.proto, entity.level) !== null;
@@ -415,7 +400,6 @@ export class BuildingPanel {
 
       if (this.repairButton.textContent !== repairLabel) this.repairButton.textContent = repairLabel;
 
-      this.actions.hidden = !producer && !consumer && !floor && !pausable && cost === 0;
       this.pauseButton.hidden = !pausable;
       this.pauseButton.textContent = entity.paused ? 'Reprendre' : 'Pause';
       this.pauseButton.dataset['tone'] = entity.paused ? 'resume' : 'pause';
@@ -424,10 +408,20 @@ export class BuildingPanel {
       this.transferButton.hidden = !consumer && !floor;
       this.transferButton.textContent = this.world.inTownRange(entity) ? 'Transférer' : 'Transférer le sac';
       this.transferButton.disabled = !inReach || !this.world.canSupply(entity);
-      this.takeButton.hidden = !producer;
-      this.takeButton.disabled =
-        !inReach || !producer || this.world.takeable(entity).length === 0 || this.world.player.inventory.freeSpace() <= 0;
-      this.depositButton.hidden = true;
+
+      // Un coffre où échanger : la mairie, un producteur, une forge, une nurserie.
+      const rules = this.world.transferRules(entity);
+
+      this.exchange.show(
+        rules && {
+          id: entity.id,
+          store: entity.store,
+          rules,
+          title: entity.kind === 'townHall' ? 'Coffre de la ville' : 'Coffre',
+          icon: entity.kind === 'townHall' ? 'town' : 'chest',
+          reachable: inReach,
+        },
+      );
 
       switch (entity.kind) {
         case 'townHall': {
@@ -438,9 +432,6 @@ export class BuildingPanel {
           );
           lines.push(this.world.night === 0 ? 'Aucune nuit pour l’instant.' : `Nuits affrontées : ${this.world.night}.`);
           lines.push(`Les chantiers à ${proto.logisticRadius} cases à la ronde puisent dans son coffre.`);
-          this.actions.hidden = false;
-          this.depositButton.hidden = false;
-          this.depositButton.disabled = !inReach || this.world.player.inventory.isEmpty();
           break;
         }
 
@@ -595,9 +586,11 @@ export class BuildingPanel {
         }
       }
 
-      // Le coffre de la mairie est le stock de la ville. Celui du labo se lit dans le panneau Recherche,
-      // celui de l'antenne en jauges de son étage suivant, comme un chantier.
-      if (entity.kind === 'antenna') {
+      // Le coffre de la mairie est le stock de la ville. Un coffre où échanger se lit dans la zone d'échange,
+      // celui du labo dans le panneau Recherche, celui de l'antenne en jauges de son étage suivant, comme un chantier.
+      if (rules) {
+        this.setItems([], 'exchange');
+      } else if (entity.kind === 'antenna') {
         const cost = floorCost(entity);
 
         this.setItems(
@@ -607,7 +600,7 @@ export class BuildingPanel {
       } else if (proto.storage > 0 && !lab) {
         const capacity = Number.isFinite(proto.storage) ? `/${proto.storage}` : '';
         const entries = entity.store.entries();
-        const label = entity.kind === 'townHall' ? 'Stock de la ville' : `Coffre ${entity.store.total()}${capacity}`;
+        const label = `Coffre ${entity.store.total()}${capacity}`;
 
         lines.push(`${label}${entries.length ? '' : ' : vide'}`);
         this.setItems(
@@ -619,6 +612,9 @@ export class BuildingPanel {
       }
       this.refreshUpgrade(entity, inReach);
     }
+
+    // Plus aucun bouton à montrer : la rangée disparaît.
+    this.actions.hidden = [...this.actions.children].every((button) => (button as HTMLElement).hidden);
 
     const text = lines.filter(Boolean).join('\n');
 
