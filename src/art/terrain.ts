@@ -6,10 +6,10 @@
  * - le **sable** a un liseré clair côté lumière, là où il touche un autre sol ;
  * - l'**eau** a trois profondeurs (`WATER_TILES`) : claire au bord, plus
  *   bleue au large, plus encore au milieu des grands lacs, chaque palier aux
- *   coins arrondis ; des reflets en capsule au large ; sa face avant, plus
- *   sombre, se voit en bas — c'est un creux, vu de trois quarts. L'écume des
- *   rives et les reflets qui scintillent sont des sprites à part, animés
- *   au-dessus du sol baké (`WATER_SPRITES`, `render/waterLayer.ts`) ;
+ *   coins arrondis ; sa face avant, plus sombre, se voit en bas — c'est un
+ *   creux, vu de trois quarts. L'écume des rives et les vaguelettes du large
+ *   sont des sprites à part, animés au-dessus du sol baké (`WATER_SPRITES`,
+ *   `render/waterLayer.ts`) ;
  * - la **roche** est un plateau : dessus pâle, face avant sombre en bas,
  *   liseré clair en haut.
  * Là où un sol s'avance dans un autre, son coin s'arrondit (`corner`) : les
@@ -19,7 +19,7 @@
  * du chunk (`render/chunkLayer.ts`).
  */
 
-import { GROUND, PALETTE, pill, rect, shape, svg, type Ground } from '../data/artDirection.ts';
+import { GROUND, PALETTE, circle, pill, rect, shape, svg, type Ground } from '../data/artDirection.ts';
 
 const T = 32;
 
@@ -43,22 +43,14 @@ export const WATER_DEPTH_COLORS = [GROUND.water.base, GROUND.water.alt, GROUND.w
 export type WaterDepth = 0 | 1 | 2;
 
 /**
- * Les tuiles d'eau, par profondeur. Au bord, un aplat clair : l'écume animée
- * suffit à l'animer. Au large, la sobre le plus souvent, puis un long reflet
- * ou deux petits, posés à des endroits différents pour ne pas faire de motif.
+ * Les tuiles d'eau, par profondeur : un aplat par palier, sans reflet baké.
+ * Un reflet figé dans le sol se lit comme un tiret peint sur l'eau ; ce
+ * sont les vaguelettes animées qui font vivre le large.
  */
 export const WATER_TILES: Readonly<Record<WaterDepth, readonly string[]>> = {
   0: [tile(flat('water'))],
-  1: [
-    tile(rect(0, 0, T, T, GROUND.water.alt, 0)),
-    tile(rect(0, 0, T, T, GROUND.water.alt, 0), pill(4, 11, 14, 2.6, GROUND.water.light)),
-    tile(rect(0, 0, T, T, GROUND.water.alt, 0), pill(15, 6, 9, 2.4, GROUND.water.light), pill(7, 23, 6, 2.2, GROUND.water.light)),
-  ],
-  2: [
-    tile(rect(0, 0, T, T, GROUND.water.deep, 0)),
-    tile(rect(0, 0, T, T, GROUND.water.deep, 0), pill(13, 20, 14, 2.6, GROUND.water.light)),
-    tile(rect(0, 0, T, T, GROUND.water.deep, 0), pill(5, 5, 8, 2.4, GROUND.water.light), pill(18, 15, 7, 2.2, GROUND.water.light)),
-  ],
+  1: [tile(rect(0, 0, T, T, GROUND.water.alt, 0))],
+  2: [tile(rect(0, 0, T, T, GROUND.water.deep, 0))],
 };
 
 /**
@@ -129,36 +121,59 @@ export function shadowTile(ground: Ground): string {
 /**
  * Les sprites animés de l'eau, posés au-dessus du sol baké.
  *
- * - `foam.0`, `foam.1` : le liseré d'écume d'une rive, deux capsules claires
- *   d'inégale longueur, un reflet blanc dans la plus longue ; centré sur le
- *   milieu du côté de la tuile (tourné d'un quart pour les rives gauche et
- *   droite). Il tient loin des bouts du côté : les coins arrondis de la rive
- *   ne le coupent pas.
- * - `glint.0`, `glint.1` : un reflet au large, une capsule claire ou deux.
+ * - `foam.0`, `foam.1` : l'écume d'une rive, une rangée de bulles claires de
+ *   tailles mêlées, un reflet blanc dans la plus grosse ; centrée sur le
+ *   milieu du côté de la tuile (tournée d'un quart pour les rives gauche et
+ *   droite). Des ronds plutôt qu'une capsule : bout à bout, ils font un
+ *   bouillon, pas un pointillé.
+ * - `wavelet.0`, `wavelet.1` : une vaguelette du large, un croissant clair
+ *   bombé vers la lumière, un point blanc à gauche.
  *
- * Cadres serrés, centrés sur leur milieu : le rendu les fait respirer et
- * glisser autour de ce point.
+ * Cadres serrés, centrés sur leur milieu (la base pour une vaguelette) : le
+ * rendu les fait gonfler et naître autour de ce point.
  */
-const FOAM = { width: 20, height: 4 } as const;
+const FOAM_HEIGHT = 6;
 
-function foam(long: number, first: boolean): string {
-  const short = FOAM.width - long - 2;
-  const [longX, shortX] = first ? [0, long + 2] : [short + 2, 0];
+function foam(radii: readonly number[]): string {
+  const centres: number[] = [];
+  let x = 0;
+
+  for (const r of radii) {
+    centres.push(x + r);
+    x += r * 2 - 0.6;
+  }
+
+  const biggest = radii.indexOf(Math.max(...radii));
+  const r = radii[biggest]!;
 
   return svg(
-    FOAM.width,
-    FOAM.height,
-    pill(longX, 0, long, FOAM.height, GROUND.water.light),
-    pill(shortX, 0, short, FOAM.height, GROUND.water.light),
-    pill(longX + 2.5, 1, long * 0.4, 1.6, PALETTE.paper.base),
+    x + 0.6,
+    FOAM_HEIGHT,
+    ...radii.map((radius, i) => circle(centres[i]!, FOAM_HEIGHT / 2, radius, GROUND.water.light)),
+    circle(centres[biggest]! - r * 0.3, FOAM_HEIGHT / 2 - r * 0.35, r * 0.38, PALETTE.paper.base),
+  );
+}
+
+const WAVELET_HEIGHT = 6;
+
+/** Un croissant : deux demi-ellipses de même corde, l'une plus bombée que l'autre. */
+function wavelet(width: number): string {
+  const rx = width / 2;
+  const base = WAVELET_HEIGHT - 1;
+
+  return svg(
+    width,
+    WAVELET_HEIGHT,
+    shape(`M0 ${base}A${rx} ${base - 0.5} 0 0 1 ${width} ${base}A${rx} ${base - 3.2} 0 0 0 0 ${base}Z`, GROUND.water.light),
+    circle(width * 0.3, 2.2, 1, PALETTE.paper.base),
   );
 }
 
 export const WATER_SPRITES = {
-  'foam.0': foam(12, true),
-  'foam.1': foam(13, false),
-  'glint.0': svg(12, 3, pill(0, 0, 12, 3, GROUND.water.light)),
-  'glint.1': svg(14, 6, pill(0, 0, 8, 2.6, GROUND.water.light), pill(6, 3.4, 8, 2.6, GROUND.water.light)),
+  'foam.0': foam([2.2, 1.5, 2.8, 1.8, 2.4, 1.4]),
+  'foam.1': foam([1.6, 2.6, 2, 1.4, 2.8, 1.9]),
+  'wavelet.0': wavelet(14),
+  'wavelet.1': wavelet(10),
 } as const;
 
 export type WaterSprite = keyof typeof WATER_SPRITES;

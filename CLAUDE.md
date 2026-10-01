@@ -258,8 +258,9 @@ Les règles, en résumé :
   `decor`, tiré par `decorAt()`) sont bakés par blocs de 16 × 16 tuiles
   (`render/chunkLayer.ts`, résolution plafonnée à 2) et jamais rebakés : ils
   ne changent pas. Le décor ne se heurte pas et n'est jamais de l'état.
-  L'eau a trois profondeurs bakées ; son écume et ses reflets animés sont
-  des sprites par-dessus (`render/waterLayer.ts`), par blocs, cachés et
+  L'eau a trois profondeurs bakées, sans reflet baké ; son écume en bulles
+  (le ressac) et ses vaguelettes (des croissants qui naissent, dérivent et se
+  résorbent, par la taille) sont des sprites par-dessus (`render/waterLayer.ts`), par blocs, cachés et
   immobiles hors de l'écran, figés sous `prefers-reduced-motion`.
 - Ombres portées : capsules pleines dans la teinte foncée du sol sous
   l'objet (`TerrainTiles.shadow`), dans un conteneur sous tout le reste.

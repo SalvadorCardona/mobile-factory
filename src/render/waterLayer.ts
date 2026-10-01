@@ -1,28 +1,30 @@
 /**
- * L'eau qui bouge : l'écume des rives et les reflets du large.
+ * L'eau qui bouge : l'écume des rives et les vaguelettes du large.
  *
  * Le sol est baké une fois par bloc et ne l'est jamais plus (`chunkLayer.ts`) :
- * ce qui bouge ne peut pas y vivre. L'écume et les reflets sont donc des
+ * ce qui bouge ne peut pas y vivre. L'écume et les vaguelettes sont donc des
  * sprites de l'atlas, posés au-dessus du sol baké, sous les ombres portées —
  * tous sur la même page, un appel de dessin.
  *
- * - L'**écume** borde chaque côté de tuile d'eau qui touche la rive. Elle
- *   respire : elle s'allonge et avance d'un pixel vers le large, puis
- *   revient, avec un déphasage le long de la rive — une vague lente qui court.
- * - Les **reflets** tombent sur une tuile du large sur six, parmi celles que
- *   le sol baké laisse sans reflet. Ils glissent d'un ou deux pixels,
- *   s'allongent puis se rétractent en six secondes, sans jamais disparaître
- *   ni devenir transparents : un scintillement, pas un clignotement.
+ * Rien ne glisse ni ne s'allume : tout vit par la taille, sans transparence.
+ * - L'**écume** borde chaque côté de tuile d'eau qui touche la rive : une
+ *   rangée de bulles qui gonfle et monte d'un pas sur la rive, puis se
+ *   retire, avec un déphasage le long de la rive — le ressac qui court.
+ * - Les **vaguelettes** vivent sur une tuile du large sur huit : un croissant
+ *   naît de rien, dérive de quelques pixels avec le vent en grandissant, puis
+ *   se résorbe ; il renaît ailleurs dans sa tuile, à son propre rythme — pas
+ *   de motif, pas de battement d'ensemble.
  *
  * Coût tenu ici, par les mêmes blocs de 16 × 16 tuiles que le sol :
  * - un bloc n'existe que s'il touche l'écran, et il est détruit avec la
  *   même marge d'éviction que le sol ;
  * - un bloc hors de l'écran est caché et n'est pas animé ; dans un bloc
- *   visible, un sprite hors de l'écran est caché et n'est pas animé non plus ;
+ *   visible, un sprite hors de l'écran est caché et n'est pas animé non plus,
+ *   et une vaguelette entre deux vies est cachée ;
  * - `prefers-reduced-motion` : l'eau est figée, au repos — rien n'est animé.
  *
  * Tout est seedé par tuile : les mêmes tuiles ont la même écume et les
- * mêmes reflets d'une partie à l'autre. Rien ici n'est de l'état de jeu.
+ * mêmes vaguelettes d'une partie à l'autre. Rien ici n'est de l'état de jeu.
  */
 
 import { Container, Sprite } from 'pixi.js';
@@ -30,39 +32,50 @@ import { TILE_SIZE, coordKey } from '../core/grid.ts';
 import { hash3 } from '../core/rng.ts';
 import type { Camera } from './camera.ts';
 import { BAKE_MARGIN, BLOCK_SIZE, BLOCK_TILES, KEEP_MARGIN } from './chunkLayer.ts';
-import { BlockTerrain, SIDES, SIDE_OFFSET, groundRoll, variantOf, type Side, type TerrainTiles } from './terrainTiles.ts';
+import { BlockTerrain, SIDES, SIDE_OFFSET, type Side, type TerrainTiles } from './terrainTiles.ts';
 
-/** Période de la respiration de l'écume, et de l'éclat d'un reflet, en millisecondes. */
-const FOAM_PERIOD_MS = 3200;
-const GLINT_PERIOD_MS = 6000;
+/** Période du ressac, et durée d'une vie de vaguelette (plus un écart tiré par tuile), en millisecondes. */
+const FOAM_PERIOD_MS = 4200;
+const WAVELET_LIFE_MS = 4200;
+const WAVELET_LIFE_SPREAD_MS = 2400;
 
-/** Amplitudes : de combien l'écume s'allonge et avance, de combien un reflet glisse. */
-const FOAM_STRETCH = 0.08;
-const FOAM_SWELL_PX = 1;
-const GLINT_DRIFT_PX = 1.5;
-const GLINT_SHRINK = 0.25;
+/** Ressac : de combien l'écume monte sur la rive, s'épaissit et s'allonge. */
+const FOAM_REACH_PX = 1.5;
+const FOAM_SWELL = 0.2;
+const FOAM_STRETCH = 0.07;
 
-/** Un reflet sur six tuiles du large laissées sans reflet par le sol baké. */
-const GLINT_ODDS = 6;
+/** Dérive d'une vaguelette sur sa vie, avec le vent : vers la droite, un peu vers le haut. */
+const WAVELET_DRIFT_X = 5;
+const WAVELET_DRIFT_Y = -1.5;
+/** En dessous de cette taille, une vaguelette entre deux vies est cachée. */
+const WAVELET_MIN_SCALE = 0.05;
+
+/** Une vaguelette sur huit tuiles du large. */
+const WAVELET_ODDS = 8;
 
 /** Écart de l'écume au bord de la tuile, en pixels monde ; en bas, la face avant du creux la repousse. */
 const FOAM_INSET = 2;
 const FOAM_BOTTOM = 21;
 
-type Kind = 'foam' | 'glint';
+type Kind = 'foam' | 'wavelet';
 
 interface Ripple {
   sprite: Sprite;
   kind: Kind;
   tx: number;
   ty: number;
-  /** Position de repos, et direction du large (vers où l'écume avance). */
+  /** Écume : position de repos ; vaguelette : coin de sa tuile. */
   x: number;
   y: number;
+  /** Direction de la rive, vers où l'écume monte. */
   towardX: number;
   towardY: number;
-  /** Déphasage, en radians. */
+  /** Écume : déphasage, en radians ; vaguelette : décalage de sa vie, en vies. */
   phase: number;
+  /** Durée d'une vie de vaguelette, en millisecondes. */
+  life: number;
+  /** Le tirage de la tuile : d'où renaît la vaguelette. */
+  roll: number;
   /** ±1 : l'écume est retournée une fois sur deux, pour ne pas faire de motif. */
   flip: number;
 }
@@ -129,8 +142,9 @@ export class WaterLayer {
         ripple.sprite.visible = visible;
         if (!visible) continue;
 
-        sprites += 1;
         pose(ripple, still ? 0 : 1, this.time);
+        if (!ripple.sprite.visible) continue;
+        sprites += 1;
         if (!still) animated += 1;
       }
     }
@@ -139,7 +153,7 @@ export class WaterLayer {
     this.evict(camera.visibleCells(BLOCK_SIZE, KEEP_MARGIN));
   }
 
-  /** L'écume et les reflets d'un bloc, tirés une fois depuis la seed. */
+  /** L'écume et les vaguelettes d'un bloc, tirées une fois depuis la seed. */
   private build(bx: number, by: number): WaterBlock {
     const baseTx = bx * BLOCK_TILES;
     const baseTy = by * BLOCK_TILES;
@@ -160,11 +174,9 @@ export class WaterLayer {
           if (terrain.kind(lx + dx, ly + dy) !== 'water') ripples.push(this.foam(tx, ty, side));
         }
 
-        // Le même tirage que le sol baké : un reflet ne se pose que là où le sol n'en a pas.
-        const bakedGlint = variantOf(groundRoll(this.seed, tx, ty)) !== 0;
         const roll = hash3(this.seed ^ 0x3c6ef372, tx, ty);
 
-        if (terrain.depth(lx, ly) > 0 && !bakedGlint && roll % GLINT_ODDS === 0) ripples.push(this.glint(tx, ty, roll));
+        if (terrain.depth(lx, ly) > 0 && roll % WAVELET_ODDS === 0) ripples.push(this.wavelet(tx, ty, roll));
       }
     }
 
@@ -201,29 +213,33 @@ export class WaterLayer {
       ty,
       x,
       y,
-      towardX: -dx,
-      towardY: -dy,
-      // La vague court le long de la rive : la phase suit la position.
-      phase: (tx + ty) * 0.9,
+      towardX: dx,
+      towardY: dy,
+      // Le ressac court le long de la rive : la phase suit la position.
+      phase: (tx + ty) * 0.55,
+      life: 0,
+      roll: 0,
       flip: (tx + ty) & 1 ? -1 : 1,
     };
   }
 
-  private glint(tx: number, ty: number, roll: number): Ripple {
-    const sprite = new Sprite(this.tiles.water(roll & 0x100 ? 'glint.1' : 'glint.0'));
+  private wavelet(tx: number, ty: number, roll: number): Ripple {
+    const sprite = new Sprite(this.tiles.water(roll & 0x100 ? 'wavelet.1' : 'wavelet.0'));
 
-    sprite.anchor.set(0.5);
+    // Ancrée à sa base : elle naît du niveau de l'eau.
+    sprite.anchor.set(0.5, 0.8);
     return {
       sprite,
-      kind: 'glint',
+      kind: 'wavelet',
       tx,
       ty,
-      // Quelque part dans le milieu de la tuile, loin des bords.
-      x: tx * TILE_SIZE + 10 + ((roll >>> 9) % 12),
-      y: ty * TILE_SIZE + 8 + ((roll >>> 13) % 16),
-      towardX: 1,
+      x: tx * TILE_SIZE,
+      y: ty * TILE_SIZE,
+      towardX: 0,
       towardY: 0,
-      phase: ((roll >>> 17) % 628) / 100,
+      phase: ((roll >>> 13) % 1000) / 1000,
+      life: WAVELET_LIFE_MS + ((roll >>> 9) % WAVELET_LIFE_SPREAD_MS),
+      roll,
       flip: 1,
     };
   }
@@ -248,24 +264,36 @@ export class WaterLayer {
 
 /**
  * Pose un sprite d'eau à l'instant `time`. `motion` vaut 0 pour l'eau au
- * repos : l'écume à sa taille, le reflet net, à sa place.
+ * repos : l'écume à sa place, chaque vaguelette au plus haut de sa première vie.
  */
 function pose(ripple: Ripple, motion: number, time: number): void {
   const { sprite } = ripple;
 
   if (ripple.kind === 'foam') {
     const wave = Math.sin((time / FOAM_PERIOD_MS) * Math.PI * 2 + ripple.phase) * motion;
-    const swell = wave * FOAM_SWELL_PX;
+    const reach = wave * FOAM_REACH_PX;
 
-    sprite.position.set(ripple.x + ripple.towardX * swell, ripple.y + ripple.towardY * swell);
-    sprite.scale.set(ripple.flip * (1 + wave * FOAM_STRETCH), 1);
+    sprite.position.set(ripple.x + ripple.towardX * reach, ripple.y + ripple.towardY * reach);
+    sprite.scale.set(ripple.flip * (1 + wave * FOAM_STRETCH), 1 + wave * FOAM_SWELL);
     return;
   }
 
-  const angle = (time / GLINT_PERIOD_MS) * Math.PI * 2 + ripple.phase;
-  const shine = Math.sin(angle) * motion;
+  // Au repos, la vaguelette est figée au milieu de sa première vie.
+  const age = motion === 0 ? 0.5 : time / ripple.life + ripple.phase;
+  const cycle = Math.floor(age);
+  const t = age - cycle;
+  // Elle naît, grandit puis se résorbe : jamais d'apparition ni d'effacement d'un coup.
+  const size = Math.sin(Math.PI * t);
 
-  sprite.position.set(ripple.x + Math.sin(angle * 0.5) * GLINT_DRIFT_PX * motion, ripple.y);
-  // Pas de transparence : le reflet s'allonge puis se rétracte de moitié, jamais éteint.
-  sprite.scale.set(1 - (1 - shine) * GLINT_SHRINK * motion, 1);
+  sprite.visible = size > WAVELET_MIN_SCALE;
+  if (!sprite.visible) return;
+
+  // Chaque vie renaît ailleurs dans la tuile, loin des bords.
+  const spot = hash3(ripple.roll, cycle, 0x2545f491);
+
+  sprite.position.set(
+    ripple.x + 8 + (spot % 12) + (t - 0.5) * WAVELET_DRIFT_X * motion,
+    ripple.y + 10 + ((spot >>> 8) % 14) + (t - 0.5) * WAVELET_DRIFT_Y * motion,
+  );
+  sprite.scale.set(size);
 }
