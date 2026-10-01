@@ -18,6 +18,7 @@
 import { BUILDINGS, maxLevel, type BuildingId } from '../data/buildings.ts';
 import { ENEMIES, WILDLIFE, type EnemyId, type WildlifeId } from '../data/enemies.ts';
 import { ITEMS, type ItemId } from '../data/items.ts';
+import { OBJECTIVES } from '../data/objectives.ts';
 import { JOB_PRIORITY, type JobPriority } from '../data/workers.ts';
 import { PERKS, type PerkId } from '../data/perks.ts';
 import { RESEARCH, type ResearchId } from '../data/research.ts';
@@ -36,6 +37,7 @@ import type {
   PatientState,
   Player,
   Wandering,
+  WorldStats,
 } from './types.ts';
 import { World } from './world.ts';
 
@@ -89,6 +91,13 @@ export interface WorldState {
   giftedSites: BuildingId[];
   /** Recherches finies, dans l'ordre. Absent des sauvegardes d'avant le labo : aucune. */
   researchDone: ResearchId[];
+  /** Index de l'objectif en cours ; `OBJECTIVES.length` une fois la chaîne bouclée. */
+  objective: number;
+  victory: boolean;
+  victoryTick: number;
+  stats: WorldStats;
+  /** Les compteurs au début de l'objectif en cours. */
+  objectiveBase: WorldStats;
   player: SavedPlayer;
   /** Tuiles entamées : `"tx,ty"` → unités déjà prises. */
   resources: Record<string, number>;
@@ -263,6 +272,7 @@ function parseState(raw: unknown): WorldState {
     perks: array(state['perks'] ?? []).map((id) => oneOf(id, PERKS) as PerkId),
     giftedSites: array(state['giftedSites'] ?? []).map((id) => oneOf(id, BUILDINGS) as BuildingId),
     researchDone: [...new Set(array(state['researchDone'] ?? []).map((id) => oneOf(id, RESEARCH) as ResearchId))],
+    ...parseObjectives(state),
     player: parsePlayer(state['player']),
     resources: parseResources(state['resources']),
     entities: unique(array(state['entities']).map(parseEntity)),
@@ -270,6 +280,38 @@ function parseState(raw: unknown): WorldState {
     dens: unique(array(state['dens']).map(parseDen)),
     scheduler: parseScheduler(state['scheduler']),
   };
+}
+
+/**
+ * La chaîne d'objectifs. Une sauvegarde d'avant les objectifs reprend au
+ * premier : ce qui est déjà fait tombe au tick suivant, récompenses
+ * comprises ; les nuits déjà survécues se relisent dans le numéro de nuit.
+ */
+function parseObjectives(state: Json): Pick<WorldState, 'objective' | 'victory' | 'victoryTick' | 'stats' | 'objectiveBase'> {
+  if (state['objective'] === undefined) {
+    const mutants = array(state['mobiles']).some((mobile) => isRecord(mobile) && mobile['kind'] === 'mutant');
+    const night = int(state['night']);
+    const stats: WorldStats = { nightsSurvived: mutants ? Math.max(0, night - 1) : night, births: 0, produced: {} };
+
+    return { objective: 0, victory: false, victoryTick: 0, stats, objectiveBase: { ...stats, produced: {} } };
+  }
+
+  const objective = int(state['objective']);
+
+  if (objective < 0 || objective > OBJECTIVES.length) throw new SaveError(`objectif inconnu : ${objective}`);
+  return {
+    objective,
+    victory: bool(state['victory']),
+    victoryTick: int(state['victoryTick']),
+    stats: parseStats(state['stats']),
+    objectiveBase: parseStats(state['objectiveBase']),
+  };
+}
+
+function parseStats(raw: unknown): WorldStats {
+  const stats = record(raw);
+
+  return { nightsSurvived: int(stats['nightsSurvived']), births: int(stats['births']), produced: stock(stats['produced']) };
 }
 
 function parsePlayer(raw: unknown): SavedPlayer {

@@ -21,6 +21,7 @@ import { ENEMIES, LOOT_DROPS, NIGHT_PLAN, WAVES, WILDLIFE, WILDLIFE_SPAWN, type 
 import { EVE } from './eve.ts';
 import { ICON_SIZE, ITEM_ICONS } from './icons.ts';
 import { ITEMS } from './items.ts';
+import { OBJECTIVES, type ObjectiveProto } from './objectives.ts';
 import { PERKS, type PerkProto } from './perks.ts';
 import { QUESTS, QUEST_IDS, TOOLS, type QuestProto } from './quests.ts';
 import { RECIPES, type RecipeProto } from './recipes.ts';
@@ -450,6 +451,31 @@ export function validatePrototypes(): string[] {
         errors.push(`PERKS.${id} : accélération de récolte invalide sur « ${resourceId} »`);
       }
     }
+  }
+
+  const objectives: readonly ObjectiveProto[] = OBJECTIVES;
+
+  for (const [index, objective] of objectives.entries()) {
+    const at = `OBJECTIVES[${index}]`;
+
+    if (objective.title === '' || objective.hint === '' || objective.celebration === '') {
+      errors.push(`${at} : titre, conseil ou célébration vide`);
+    }
+    if (objective.goals.length === 0) errors.push(`${at} : aucune condition, il serait réussi d'office`);
+
+    for (const goal of objective.goals) {
+      if (!Number.isInteger(goal.count) || goal.count <= 0) errors.push(`${at} : condition « ${goal.type} » à compte invalide`);
+      if (goal.type === 'build' && !(goal.building in BUILDINGS)) errors.push(`${at} : bâtiment inconnu « ${goal.building} »`);
+      if (goal.type === 'produce' && !(goal.item in ITEMS)) errors.push(`${at} : objet inconnu « ${goal.item} »`);
+      if (goal.type === 'quests' && goal.count > QUEST_IDS.length) errors.push(`${at} : plus de quêtes qu'Ève n'en donne`);
+    }
+
+    const { items, bag } = objective.reward;
+
+    for (const [item, amount] of Object.entries<number>(items ?? {})) {
+      if (!(item in ITEMS) || amount <= 0) errors.push(`${at} : récompense invalide en « ${item} »`);
+    }
+    if (bag !== undefined && (!Number.isInteger(bag) || bag <= 0)) errors.push(`${at} : places de sac invalides`);
   }
 
   const labels = new Map<string, string>();

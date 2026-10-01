@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BUILDINGS, REPAIR } from '../data/buildings.ts';
 import { EVE, EVE_LINES } from '../data/eve.ts';
+import { OBJECTIVES } from '../data/objectives.ts';
 import { World } from '../sim/world.ts';
 import { INVENTORY_CAPACITY } from '../sim/player.ts';
 import { harvestRefusedText, tutorialAdvice, tutorialHint, uselessBagHint, type HintProgress } from './hint.ts';
@@ -58,7 +59,7 @@ describe('tutorialHint', () => {
     expect(tutorialAdvice(builtWorld(), FRESH, false, 0)?.wants).toBeNull();
   });
 
-  it('envoie poser une carrière quand la pierre manque en ville, et se tait dès qu’il y en a', () => {
+  it('envoie poser une carrière quand la pierre manque en ville, et laisse parler l’objectif dès qu’il y en a', () => {
     const world = builtWorld();
 
     expect(world.townStock()!.available('stone')).toBe(0);
@@ -67,7 +68,7 @@ describe('tutorialHint', () => {
     expect(tutorialHint(world, FRESH, true, 1)).not.toBe(EVE_LINES.hints.quarry);
 
     world.townStock()!.add('stone', 1);
-    expect(tutorialHint(world, FRESH, true, 0)).toBeNull();
+    expect(tutorialHint(world, FRESH, true, 0)).toBe(OBJECTIVES[1].hint);
   });
 
   it('apprend à réparer la mairie abîmée entre deux vagues, tant qu’Ève n’est pas là', () => {
@@ -85,17 +86,19 @@ describe('tutorialHint', () => {
 
     world.player.inventory.add(REPAIR.item, 1);
     expect(tutorialHint(world, FRESH, true, 0)).toBe(EVE_LINES.hints.repair);
-    // Pendant la vague, l'arc d'abord ; une fois qu'Adam sait réparer, elle se tait.
+    // Pendant la vague, l'arc d'abord ; une fois qu'Adam sait réparer, elle se tait
+    // et c'est l'objectif en cours qui parle.
     expect(tutorialHint(world, FRESH, true, 1)).not.toBe(EVE_LINES.hints.repair);
-    expect(tutorialHint(world, { ...FRESH, repaired: true }, true, 0)).toBeNull();
+    expect(tutorialHint(world, { ...FRESH, repaired: true }, true, 0)).toBe(OBJECTIVES[world.objective]?.hint);
   });
 
   it('annonce la forge une fois débloquée, et envoie chercher du charbon', () => {
     const world = builtWorld();
 
-    // De la pierre en ville : Ève ne parle pas de carrière.
+    // De la pierre en ville : Ève ne parle pas de carrière, c'est l'objectif en cours qui parle.
     world.townStock()!.add('stone', 1);
-    expect(tutorialAdvice(world, FRESH, true, 0)).toBeNull();
+    expect(world.objective).toBe(1);
+    expect(tutorialAdvice(world, FRESH, true, 0)).toEqual({ text: OBJECTIVES[1].hint, wants: null });
 
     // Tant qu'Ève annonce son arrivée par radio, c'est elle qui parle d'abord.
     world.night = Math.max(BUILDINGS.forge.unlockNight, EVE.arrivalNight);

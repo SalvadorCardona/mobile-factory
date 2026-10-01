@@ -165,6 +165,18 @@ statistique, lu en un seul point, `World.bonus(stat)` ; les données ne
 bougent pas. `researchDone` est de l'état ; la recherche en cours est celle
 du labo. La fenêtre du labo est le panneau Recherche (`ui/researchPanel.ts`).
 
+**Objectifs** — la partie est une chaîne d'objectifs en données
+(`src/data/objectives.ts`, jugés par `src/sim/objectives.ts`) : mairie,
+3 nuits (Ève arrive), les demandes d'Ève (ses quêtes), foreuse et 20 fer,
+premier enfant, 5 nuits de plus → victoire « La colonie vivra », puis mode
+infini.
+Le panneau du haut affiche toujours l'objectif courant (la quête d'Ève en
+cours dessous) ; le conseil d'Ève retombe sur celui de l'objectif. Chaque
+objectif réussi a sa célébration (son, pluie de feuilles, bandeau) et une
+récompense concrète (objets, places de sac, réparation de la mairie). Ce
+qui est fait en avance compte ; les nuits à « tenir » se comptent depuis
+le début de l'objectif.
+
 **Faune** — en plus des mutants, des **crabes** vivent sur le sable et des
 **loups** au cœur des forêts (`WILDLIFE`, `src/data/enemies.ts` ;
 `src/sim/wildlife.ts`). Leurs tanières se tirent de la seed par chunk ; une

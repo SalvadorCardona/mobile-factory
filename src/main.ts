@@ -20,6 +20,7 @@ import { PALETTE, hex } from './data/artDirection.ts';
 import { MENU_BUILDING_IDS } from './data/buildings.ts';
 import type { WildlifeId } from './data/enemies.ts';
 import type { ItemId } from './data/items.ts';
+import { OBJECTIVES } from './data/objectives.ts';
 import { IndicatorTap } from './input/indicatorTap.ts';
 import { seedsFor, type PerkId } from './data/perks.ts';
 import { Inspect } from './input/inspect.ts';
@@ -202,6 +203,8 @@ async function main(): Promise<void> {
    */
   let started = false;
   let paused = false;
+  // L'écran de victoire arrête l'horloge jusqu'à « Continuer en mode infini ».
+  let celebrating = false;
 
   const autosave = wireSave(world, saves, () => started);
   const garden = wireGarden(world, LocalGarden.browser());
@@ -228,6 +231,15 @@ async function main(): Promise<void> {
     pause.visible = value;
     accumulator = 0;
   }
+
+  world.events.on('victory', () => {
+    celebrating = true;
+    window.umami?.track('victoire');
+  });
+  hud.setOnContinue(() => {
+    celebrating = false;
+    accumulator = 0;
+  });
 
   hud.pauseButton.addEventListener('click', () => setPaused(!paused));
   hud.root.append(pause.root, title.root);
@@ -326,9 +338,9 @@ async function main(): Promise<void> {
   let lastAxisY = 0;
 
   renderer.app.ticker.add((ticker) => {
-    if (started && !paused) accumulator += Math.min(ticker.deltaMS, MAX_FRAME_MS);
+    if (started && !paused && !celebrating) accumulator += Math.min(ticker.deltaMS, MAX_FRAME_MS);
 
-    while (accumulator >= STEP_MS) {
+    while (accumulator >= STEP_MS && !celebrating) {
       pushAxisIfChanged();
       world.tick();
       accumulator -= STEP_MS;
@@ -466,6 +478,8 @@ function wireAudio(world: World, audio: AudioEngine, hud: Hud): void {
   world.events.on('eveArrived', () => audio.play('build'));
   world.events.on('questCompleted', () => audio.play('build'));
   world.events.on('townHallDestroyed', () => audio.play('defeat'));
+  // Le dernier objectif a sa fanfare à lui.
+  world.events.on('objectiveCompleted', ({ index }) => audio.play(index < OBJECTIVES.length - 1 ? 'objective' : 'colony'));
 }
 
 interface Autosave {
@@ -482,9 +496,9 @@ interface Autosave {
  * titre ne doit pas écraser la sauvegarde qu'il propose de continuer — et
  * jamais une partie perdue : à la chute de la mairie, elle est effacée.
  *
- * Les moments clés (un bâtiment terminé, une vague repoussée, l'aube) arrivent en
- * plein tick ; ils ne font que lever un drapeau, et l'écriture attend la fin
- * du tick, quand l'état est cohérent.
+ * Les moments clés (un bâtiment terminé, une vague repoussée, l'aube, un
+ * objectif réussi) arrivent en plein tick ; ils ne font que lever un drapeau, et
+ * l'écriture attend la fin du tick, quand l'état est cohérent.
  */
 function wireSave(world: World, saves: LocalSave, started: () => boolean): Autosave {
   let elapsed = 0;
@@ -505,6 +519,9 @@ function wireSave(world: World, saves: LocalSave, started: () => boolean): Autos
     due = true;
   });
   world.events.on('buildingUpgraded', () => {
+    due = true;
+  });
+  world.events.on('objectiveCompleted', () => {
     due = true;
   });
   const waveOver = (): void => {
