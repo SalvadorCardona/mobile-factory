@@ -29,6 +29,7 @@ import { Joystick } from './input/joystick.ts';
 import { Keyboard, isTyping, type KeyboardState } from './input/keyboard.ts';
 import { Placement } from './input/placement.ts';
 import { PointerRouter } from './input/pointer.ts';
+import { Pinch, bindWheelZoom } from './input/zoom.ts';
 import { GameRenderer } from './render/renderer.ts';
 import { isUnlocked } from './sim/eve.ts';
 import { activePerks, harvestSeeds, plant, type Garden } from './sim/garden.ts';
@@ -37,6 +38,7 @@ import { STEP_MS, World } from './sim/world.ts';
 import { LocalGarden } from './storage/localGarden.ts';
 import { LocalRecord } from './storage/localRecord.ts';
 import { LocalSave, type LoadResult } from './storage/localSave.ts';
+import { LocalZoom } from './storage/localZoom.ts';
 import { TILE_SIZE } from './core/grid.ts';
 import { BuildingPanel } from './ui/buildingPanel.ts';
 import { CaravanPanel } from './ui/caravanPanel.ts';
@@ -47,6 +49,7 @@ import { BuildMenu } from './ui/buildMenu.ts';
 import { Hud } from './ui/hud.ts';
 import { PauseScreen, TitleScreen } from './ui/screens.ts';
 import { formatSeed, parseSeed } from './ui/seed.ts';
+import { ZoomControls } from './ui/zoomControls.ts';
 
 /**
  * Clamp anti-spirale de la mort.
@@ -210,7 +213,20 @@ async function main(): Promise<void> {
     (id) => hud.showPerson(id),
   );
 
-  hud.root.append(stick.root, buildMenu.root, panel.root, inventory.root, trade.root);
+  // Le zoom de la carte : un niveau choisi par le joueur, mémorisé sur l'appareil.
+  const zoomPrefs = LocalZoom.browser();
+  const savedZoom = zoomPrefs.load();
+
+  if (savedZoom !== null) renderer.restoreZoom(savedZoom);
+
+  let shownZoom = renderer.zoomLevel;
+  const zoom = new ZoomControls({
+    zoomIn: () => renderer.stepZoom(1),
+    zoomOut: () => renderer.stepZoom(-1),
+    recenter: () => renderer.resetZoom(),
+  });
+
+  hud.root.append(zoom.root, stick.root, buildMenu.root, panel.root, inventory.root, trade.root);
   stick.avoid([...buildMenu.root.children]);
   hud.bag.addEventListener('click', () => inventory.toggle());
   hud.setProjector((x, y) => renderer.worldToScreen(x, y));
@@ -349,6 +365,16 @@ async function main(): Promise<void> {
   pointers.add(inspect);
   pointers.add(stick.canvasFinger(renderer.canvas, () => placement.mode === 'idle'));
   pointers.add(placement);
+  // Deux doigts sur la carte : le pinch, autour du milieu des deux. Il ne
+  // prend que des doigts libres ou de tap — jamais le pouce du joystick ni
+  // le doigt qui place un bâtiment.
+  pointers.setGesture(new Pinch((factor, x, y) => renderer.zoomBy(factor, { x, y }, true)));
+  // La molette zoome sous le curseur ; ni elle ni le pinch d'un pavé tactile ne zooment la page.
+  bindWheelZoom(
+    renderer.canvas,
+    () => started && !paused,
+    ({ factor, immediate }, x, y) => renderer.zoomBy(factor, { x, y }, immediate),
+  );
 
   wireAudio(world, audio, hud, pause);
   wireParticles(world, renderer);
@@ -387,8 +413,17 @@ async function main(): Promise<void> {
 
     // Lire la mise en page force un reflow : une fois tous les dix cadres suffit.
     if (++frame % 10 === 0) {
-      renderer.setHudInsets(hud.topInset(), bottomInset(), [...hud.obstacles(), stick.root.getBoundingClientRect()]);
+      renderer.setHudInsets(hud.topInset(), bottomInset(), [
+        ...hud.obstacles(),
+        stick.root.getBoundingClientRect(),
+        zoom.root.getBoundingClientRect(),
+      ]);
+      if (renderer.zoomLevel !== shownZoom) {
+        shownZoom = renderer.zoomLevel;
+        zoomPrefs.save(shownZoom);
+      }
     }
+    zoom.update(renderer.zoomLimits);
     renderer.setObjective(hud.wantedItem());
     renderer.setSelected(panel.shown);
     buildMenu.refresh();

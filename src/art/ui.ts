@@ -322,6 +322,22 @@ export const UI_ICONS = {
     pill(9, 6, 5, 2, coral.light),
     pill(3.5, 18.5, 9, 3, mint.base),
   ),
+  /** Zoomer : une croix en capsules indigo, comme les deux barres de la pause. */
+  zoomIn: svg(S, S, pill(4, 9.75, 16, 4.5, ink.base), pill(9.75, 4, 4.5, 16, ink.base), pill(5.5, 10.5, 4, 1.4, ink.light)),
+  /** Dézoomer : la barre seule. */
+  zoomOut: svg(S, S, pill(4, 9.75, 16, 4.5, ink.base), pill(5.5, 10.5, 4, 1.4, ink.light)),
+  /** Revenir sur Adam : une mire indigo, son cœur corail au centre. */
+  recenter: svg(
+    S,
+    S,
+    circle(12, 12, 8, ink.base),
+    circle(12, 12, 5.5, paper.base),
+    pill(10.75, 1.5, 2.5, 5, ink.base),
+    pill(10.75, 17.5, 2.5, 5, ink.base),
+    pill(1.5, 10.75, 5, 2.5, ink.base),
+    pill(17.5, 10.75, 5, 2.5, ink.base),
+    shadedCircle(12, 12, 3, 'coral'),
+  ),
 } as const;
 
 export type UiIcon = keyof typeof UI_ICONS;

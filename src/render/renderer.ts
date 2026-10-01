@@ -26,7 +26,7 @@ import type { ItemId } from '../data/items.ts';
 import type { GhostState, RoadTool, RoadTrail } from '../input/placement.ts';
 import type { EntityId } from '../sim/types.ts';
 import { STEP_MS, type World } from '../sim/world.ts';
-import { Camera } from './camera.ts';
+import { Camera, ZOOM, stepZoom } from './camera.ts';
 import { ChunkLayer } from './chunkLayer.ts';
 import { EntityLayer } from './entityLayer.ts';
 import { GhostLayer } from './ghostLayer.ts';
@@ -192,6 +192,38 @@ export class GameRenderer {
   /** Recule la caméra un instant : cf. `Camera.zoomOut`. */
   public zoomOut(zoom: number, holdMs: number, focus: { x: number; y: number } | null = null): void {
     this.camera.zoomOut(zoom, holdMs, focus);
+  }
+
+  /** Le niveau de zoom choisi par le joueur : cf. `Camera.level`. */
+  public get zoomLevel(): number {
+    return this.camera.level;
+  }
+
+  /** Ce que les boutons de zoom peuvent encore faire : avancer, reculer, revenir sur Adam. */
+  public get zoomLimits(): { canZoomIn: boolean; canZoomOut: boolean; atHome: boolean } {
+    const level = this.camera.level;
+
+    return { canZoomIn: level < ZOOM.max - 1e-3, canZoomOut: level > ZOOM.min + 1e-3, atHome: this.camera.atHome };
+  }
+
+  /** Zoome de `factor` autour d'un point écran : cf. `Camera.zoomBy`. */
+  public zoomBy(factor: number, anchor: { x: number; y: number } | null, immediate = false): void {
+    this.camera.zoomBy(factor, anchor, immediate);
+  }
+
+  /** Un cran de zoom, en glissant, autour du centre de l'écran. */
+  public stepZoom(direction: 1 | -1): void {
+    this.camera.zoomTo(stepZoom(this.camera.level, direction));
+  }
+
+  /** Retour au zoom par défaut, centré sur Adam. */
+  public resetZoom(): void {
+    this.camera.resetZoom();
+  }
+
+  /** Reprend un niveau de zoom mémorisé, sans glisser. */
+  public restoreZoom(level: number): void {
+    this.camera.restoreLevel(level);
   }
 
   /** Un clic de souris refusé : le fantôme secoue la tête. */

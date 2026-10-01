@@ -366,6 +366,12 @@ Les règles, en résumé :
   l'objet (`TerrainTiles.shadow`), dans un conteneur sous tout le reste.
 - Ressenti (rebond, secousse, tremblement, flash, caméra) : des minuteurs
   de vue côté `render/`, jamais de l'état de simulation.
+  Le **zoom** du joueur (`Camera.level`, bornes `ZOOM` : 0,6–1,5) se
+  pilote aux trois boutons du bord droit (`ui/zoomControls.ts` : avancer,
+  revenir sur Adam, reculer), à la molette sous le curseur et au pinch
+  (`input/zoom.ts`, le geste à deux doigts de `PointerDispatch`, qui ne
+  prend que des doigts libres ou de tap) ; mémorisé sous
+  `mobile-factory:zoom` (`storage/localZoom.ts`), jamais dans la partie.
   `render/indicatorLayer.ts` dessine les repères de bord (mutants, mairie,
   gisement que réclame le conseil — `sim/deposits.ts`), jamais sous le HUD ;
   taper celui de la mairie y jette un coup d'œil (`Camera.peek`).
