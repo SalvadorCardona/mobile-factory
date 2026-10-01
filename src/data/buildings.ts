@@ -31,7 +31,8 @@ export type BuildingKind =
   | 'lab'
   | 'lumberCamp'
   | 'depot'
-  | 'yard';
+  | 'yard'
+  | 'antenna';
 
 export interface BuildingProto {
   label: string;
@@ -70,8 +71,18 @@ export interface BuildingProto {
   minWorkers: number;
   /** Proposé dans le menu de construction ? La mairie, unique, ne l'est pas. */
   menu: boolean;
-  /** Un seul par colonie, chantier compris : le labo de recherche. */
+  /** Un seul par colonie, chantier compris : le labo de recherche, l'antenne. */
   unique: boolean;
+  /**
+   * L'objectif à atteindre — son index dans `OBJECTIVES` — avant de pouvoir
+   * le poser : l'antenne attend la fin de l'acte I. Absent : dès le début.
+   */
+  unlockObjective?: number;
+  /**
+   * Distance minimale à la mairie, en tuiles, de centre d'emprise à centre
+   * d'emprise : l'antenne se dresse loin, il faudra la défendre. Absent : aucune.
+   */
+  hallDistance?: number;
   /**
    * Faut-il un plan pour le bâtir ? Un bâtiment à plan n'entre dans le menu
    * qu'une fois le plan donné par Ève, en récompense d'une quête (`data/quests.ts`).
@@ -439,6 +450,53 @@ export const BUILDINGS = {
     sprite: 'lab',
     weapon: null,
     upgrades: [],
+  },
+  antenna: {
+    label: LORE.buildings.antenna.name,
+    siteDescription: LORE.buildings.antenna.site,
+    description: LORE.buildings.antenna.description,
+    effect: LORE.buildings.antenna.effect,
+    // Ses étages 2 et 3 sont ses `upgrades` : pas payés d'un coup, mais livrés dans son coffre
+    // comme sur un chantier — le sac, la ville dans son rayon, les porteurs (`sim/antenna.ts`).
+    kind: 'antenna',
+    width: 3,
+    height: 3,
+    cost: { stone: 60, wood: 40, ironPlate: 20 },
+    // De quoi recevoir l'étage le plus lourd, le troisième : 92 objets.
+    storage: 100,
+    logisticRadius: 0,
+    hp: 160,
+    workers: 0,
+    minWorkers: 0,
+    menu: true,
+    unique: true,
+    plan: false,
+    unlockNight: 0,
+    // Après « Tenir 5 nuits » : l'objectif 7.
+    unlockObjective: 6,
+    hallDistance: 8,
+    sprite: 'antenna',
+    weapon: null,
+    upgrades: [
+      {
+        label: LORE.buildings.antenna.floors[0].name,
+        action: LORE.buildings.antenna.floors[0].action,
+        description: LORE.buildings.antenna.floors[0].description,
+        cost: { ironPlate: 40, coal: 20, radCore: 1 },
+        hp: 220,
+        weapon: null,
+        sprite: 'antenna2',
+      },
+      {
+        label: LORE.buildings.antenna.floors[1].name,
+        action: LORE.buildings.antenna.floors[1].action,
+        description: LORE.buildings.antenna.floors[1].description,
+        cost: { ironPlate: 60, radCore: 2, food: 30 },
+        hp: 300,
+        weapon: null,
+        sprite: 'antenna3',
+      },
+    ],
   },
 } as const satisfies Record<string, BuildingProto>;
 

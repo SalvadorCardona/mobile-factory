@@ -210,8 +210,26 @@ du labo. La fenêtre du labo est le panneau Recherche (`ui/researchPanel.ts`).
 **Objectifs** — la partie est une chaîne d'objectifs en données
 (`src/data/objectives.ts`, jugés par `src/sim/objectives.ts`) : mairie,
 3 nuits (Ève arrive), les demandes d'Ève (ses quêtes), foreuse et 20 fer,
-premier enfant, 5 nuits de plus → victoire « La colonie vivra », puis mode
-infini.
+premier enfant, 5 nuits de plus → « Acte I terminé » (`banner`), puis
+l'**Antenne** → victoire « Le Signal », puis la partie sans fin.
+
+**L'Antenne** (`antenna`, kind `antenna`, unique, 3 × 3) — débloquée par
+l'objectif 7 (`unlockObjective`), posée à 8 cases au moins de la mairie,
+de centre à centre (`hallDistance`, refus `nearHall`, disque corail du
+mode construction). Trois étages : le premier est un chantier ; les deux
+autres sont ses `upgrades`, mais **livrés** dans son coffre comme un
+chantier — heurt, « Transférer » (`supplyBuilding` : sac puis ville),
+porteurs — et l'étage monte quand tout y est (`sim/antenna.ts`, la
+commande `upgradeBuilding` refuse : `delivered`). Chaque étage fini fixe
+`World.lureNight` : cette nuit-là, toutes les vagues la visent (la Reine
+garde la mairie). Abattue au-dessus du premier étage, elle n'en perd qu'un.
+Le troisième lance le Signal (`signalSent` : l'émetteur s'allume, ondes
+`SIGNAL_WAVES` de `render/signalLayer.ts`, Ève : « Quelqu'un répond ! »),
+puis l'écran du Signal. Ensuite, chaque aube, `SURVIVORS` (1 à 3, PRNG du
+monde) survivants arrivent : des porteurs `survivor` logés à la mairie. Le
+record « nuits tenues après le Signal » (`World.nightsAfterSignal()`) vit
+sous sa propre clé (`storage/localRecord.ts`, à côté du jardin) et
+s'affiche à l'écran titre.
 Le panneau du haut affiche toujours l'objectif courant (la quête d'Ève en
 cours dessous) ; le conseil d'Ève retombe sur celui de l'objectif. Chaque
 objectif réussi a sa célébration (son, pluie de feuilles, bandeau) et une

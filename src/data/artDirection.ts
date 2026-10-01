@@ -197,6 +197,19 @@ export type ParticleFamily = keyof typeof PARTICLES;
 export const PARTICLE_SHADOW: Color = PALETTE.violet.shade;
 export const DUST: Color = PALETTE.paper.shade;
 
+/**
+ * L'allumage de l'antenne : `count` ondes cyan claires partent de l'émetteur
+ * l'une après l'autre et s'élargissent jusqu'à couvrir l'écran, pendant
+ * `durationMs` ; l'écran du Signal ne s'ouvre qu'après.
+ */
+export const SIGNAL_WAVES = {
+  color: PALETTE.cyan.light,
+  count: 4,
+  durationMs: 4500,
+  /** Épaisseur d'une onde, en pixels écran. */
+  thickness: 10,
+} as const;
+
 /* ------------------------------------------------------------ primitives */
 
 /** Nombre court et stable dans le SVG : deux décimales au plus. */

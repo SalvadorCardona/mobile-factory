@@ -103,8 +103,13 @@ export interface WorldState {
   rareTrades: Partial<Record<RareOfferId, number>>;
   /** Index de l'objectif en cours ; `OBJECTIVES.length` une fois la chaîne bouclée. */
   objective: number;
+  /** Le Signal est lancé : l'antenne a son troisième étage, la chaîne est bouclée. */
   victory: boolean;
   victoryTick: number;
+  /** Nuits survécues au moment du Signal : le record compte celles d'après. Absent d'avant le Signal : 0. */
+  signalNights?: number;
+  /** La nuit dont toutes les vagues marchent sur l'antenne — celle qui suit un étage fini. 0 : aucune. */
+  lureNight?: number;
   stats: WorldStats;
   /** Les compteurs au début de l'objectif en cours. */
   objectiveBase: WorldStats;
@@ -307,7 +312,9 @@ function parseState(raw: unknown): WorldState {
  * premier : ce qui est déjà fait tombe au tick suivant, récompenses
  * comprises ; les nuits déjà survécues se relisent dans le numéro de nuit.
  */
-function parseObjectives(state: Json): Pick<WorldState, 'objective' | 'victory' | 'victoryTick' | 'stats' | 'objectiveBase'> {
+function parseObjectives(
+  state: Json,
+): Pick<WorldState, 'objective' | 'victory' | 'victoryTick' | 'signalNights' | 'lureNight' | 'stats' | 'objectiveBase'> {
   if (state['objective'] === undefined) {
     const mutants = array(state['mobiles']).some((mobile) => isRecord(mobile) && mobile['kind'] === 'mutant');
     const night = int(state['night']);
@@ -319,10 +326,16 @@ function parseObjectives(state: Json): Pick<WorldState, 'objective' | 'victory' 
   const objective = int(state['objective']);
 
   if (objective < 0 || objective > OBJECTIVES.length) throw new SaveError(`objectif inconnu : ${objective}`);
+
+  // Une victoire d'avant l'Antenne n'était que la fin de l'acte I : la partie reprend à l'acte II.
+  const victory = bool(state['victory']) && objective === OBJECTIVES.length;
+
   return {
     objective,
-    victory: bool(state['victory']),
-    victoryTick: int(state['victoryTick']),
+    victory,
+    victoryTick: victory ? int(state['victoryTick']) : 0,
+    signalNights: state['signalNights'] === undefined ? 0 : int(state['signalNights']),
+    lureNight: state['lureNight'] === undefined ? 0 : int(state['lureNight']),
     stats: parseStats(state['stats']),
     objectiveBase: parseStats(state['objectiveBase']),
   };
@@ -440,6 +453,7 @@ function parseEntity(raw: unknown): SavedEntity {
     case 'lumberCamp':
     case 'depot':
     case 'yard':
+    case 'antenna':
       return { ...built, kind };
     case 'lab': {
       const research = entity['research'] === null ? null : (oneOf(entity['research'], RESEARCH) as ResearchId);
@@ -549,6 +563,8 @@ function parseMobile(raw: unknown): Mobile {
         logistician: mobile['logistician'] === undefined ? false : bool(mobile['logistician']),
         // Absents des sauvegardes d'avant le poste de construction : aucun bâtisseur.
         builder: mobile['builder'] === undefined ? false : bool(mobile['builder']),
+        // Absent des sauvegardes d'avant le Signal : aucun survivant.
+        survivor: mobile['survivor'] === undefined ? false : bool(mobile['survivor']),
         build: mobile['build'] === undefined || mobile['build'] === null ? null : int(mobile['build']),
         inside: bool(mobile['inside']),
         job: mobile['job'] === null ? null : parseJob(mobile['job']),

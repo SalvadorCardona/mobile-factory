@@ -40,12 +40,13 @@
  * seule si l'entité disparaît — rasée par un mutant, par exemple.
  */
 
-import { BUILDINGS, REPAIR, buildingLevel, nextUpgrade, type BuildingLevel } from '../data/buildings.ts';
+import { BUILDINGS, REPAIR, buildingLevel, maxLevel, nextUpgrade, type BuildingLevel } from '../data/buildings.ts';
 import { CLINIC } from '../data/clinic.ts';
 import { ITEMS, type ItemId } from '../data/items.ts';
 import { RECIPES, type RecipeProto } from '../data/recipes.ts';
 import { WEAPONS } from '../data/weapons.ts';
 import { BUILDERS, LOGISTICIANS, LUMBERJACKS } from '../data/workers.ts';
+import { floorCost } from '../sim/antenna.ts';
 import { forgeRecipe } from '../sim/consumers.ts';
 import { canPause } from '../sim/staffing.ts';
 import type { Building, Entity, EntityId, Forge, Nursery } from '../sim/types.ts';
@@ -392,8 +393,9 @@ export class BuildingPanel {
         entity.kind === 'quarry' ||
         entity.kind === 'forge' ||
         entity.kind === 'lumberCamp';
-      // Une nurserie ou une forge consomme : Adam vient la remplir.
+      // Une nurserie ou une forge consomme : Adam vient la remplir. L'antenne attend son étage suivant.
       const consumer = entity.kind === 'nursery' || entity.kind === 'forge';
+      const floor = entity.kind === 'antenna' && nextUpgrade(entity.proto, entity.level) !== null;
 
       // Abîmé : le bouton dit ce que coûte la remise à neuf, la ligne dit comment s'en passer.
       const cost = repairCost(entity);
@@ -413,13 +415,13 @@ export class BuildingPanel {
 
       if (this.repairButton.textContent !== repairLabel) this.repairButton.textContent = repairLabel;
 
-      this.actions.hidden = !producer && !consumer && !pausable && cost === 0;
+      this.actions.hidden = !producer && !consumer && !floor && !pausable && cost === 0;
       this.pauseButton.hidden = !pausable;
       this.pauseButton.textContent = entity.paused ? 'Reprendre' : 'Pause';
       this.pauseButton.dataset['tone'] = entity.paused ? 'resume' : 'pause';
       this.refreshCrew(entity);
       this.cancelButton.hidden = true;
-      this.transferButton.hidden = !consumer;
+      this.transferButton.hidden = !consumer && !floor;
       this.transferButton.textContent = this.world.inTownRange(entity) ? 'Transférer' : 'Transférer le sac';
       this.transferButton.disabled = !inReach || !this.world.canSupply(entity);
       this.takeButton.hidden = !producer;
@@ -564,6 +566,22 @@ export class BuildingPanel {
           break;
         }
 
+        case 'antenna': {
+          const max = maxLevel(entity.proto);
+          const lure = this.world.lureNight;
+          const clock = this.world.clock();
+
+          lines.push(`Étage ${entity.level}/${max}`);
+          lines.push(
+            floor
+              ? 'L’étage suivant se livre comme un chantier : transférez, heurtez-la, ou laissez faire les porteurs.'
+              : 'Le Signal est lancé : des survivants arrivent à chaque aube.',
+          );
+          if (lure > this.world.night) lines.push(`La nuit ${lure}, toutes les vagues marcheront sur elle.`);
+          else if (lure === this.world.night && clock?.phase === 'night') lines.push('Cette nuit, toutes les vagues marchent sur elle.');
+          break;
+        }
+
         case 'clinic': {
           const used = this.world.clinicBedsUsed(entity.id);
 
@@ -577,8 +595,16 @@ export class BuildingPanel {
         }
       }
 
-      // Le coffre de la mairie est le stock de la ville. Celui du labo se lit dans le panneau Recherche.
-      if (proto.storage > 0 && !lab) {
+      // Le coffre de la mairie est le stock de la ville. Celui du labo se lit dans le panneau Recherche,
+      // celui de l'antenne en jauges de son étage suivant, comme un chantier.
+      if (entity.kind === 'antenna') {
+        const cost = floorCost(entity);
+
+        this.setItems(
+          cost.map(([item, needed]) => itemAmount(item, needed, entity.store.count(item))),
+          `floor:${entity.id}:${entity.level}:${cost.map(([item]) => `${item}=${entity.store.count(item)}`).join(',')}`,
+        );
+      } else if (proto.storage > 0 && !lab) {
         const capacity = Number.isFinite(proto.storage) ? `/${proto.storage}` : '';
         const entries = entity.store.entries();
         const label = entity.kind === 'townHall' ? 'Stock de la ville' : `Coffre ${entity.store.total()}${capacity}`;
@@ -658,7 +684,8 @@ export class BuildingPanel {
     const proto = BUILDINGS[entity.proto];
     const upgrade = nextUpgrade(entity.proto, entity.level);
 
-    this.upgrade.hidden = proto.upgrades.length === 0;
+    // Les étages de l'antenne se livrent : pas de bouton qui les achète d'un coup.
+    this.upgrade.hidden = proto.upgrades.length === 0 || entity.kind === 'antenna';
     if (this.upgrade.hidden) return;
 
     const missing = this.world.upgradeMissing(entity) ?? {};

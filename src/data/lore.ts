@@ -221,5 +221,41 @@ export const LORE = {
         'ressort des améliorations pour toute la partie.',
       effect: 'Recherches : un meilleur arc, un plus grand sac, des porteurs plus forts… Un seul par colonie.',
     },
+    /**
+     * L'Antenne, le projet de l'acte II : trois étages livrés l'un après
+     * l'autre, et au sommet, l'émetteur qui appelle d'autres survivants.
+     */
+    antenna: {
+      name: 'Antenne',
+      site: 'Un socle de pierre à couler, des poutres à dresser : le premier étage du Signal.',
+      description:
+        'Un pylône de poutres sur un socle de pierre. Chaque étage monté attire les mutants : ' +
+        'la nuit suivante, toutes les vagues marchent sur elle.',
+      effect: 'Trois étages pour appeler d’autres survivants. À 8 cases au moins de la mairie.',
+      floors: [
+        {
+          name: 'Antenne — 2ᵉ étage',
+          action: 'Monter l’étage',
+          description:
+            'Le pylône s’élève, cerclé de plaques de fer, un cœur radioactif dans sa cage. ' +
+            'Encore un étage, et l’émetteur pourra parler.',
+        },
+        {
+          name: 'Antenne — l’émetteur',
+          action: 'Monter l’émetteur',
+          description:
+            'Au sommet, la parabole et ses deux cœurs radioactifs : le Signal part vers ' +
+            'les autres survivants, et ils répondent.',
+        },
+      ],
+    },
+  },
+
+  /** Ce que le Signal change : la fin de l'acte I, puis la partie sans fin. */
+  signal: {
+    actOne: 'Acte I terminé',
+    title: 'Le Signal',
+    answer: 'Quelqu’un répond !',
+    text: 'L’antenne parle : d’autres survivants ont entendu, et ils viennent. La nuit, elle, n’a pas fini de monter.',
   },
 } as const;

@@ -38,17 +38,19 @@
  *
  * La partie suit une chaîne d'objectifs (`data/objectives.ts`) : la mairie
  * d'abord, puis des nuits à tenir, les demandes d'Ève, une foreuse, un
- * enfant. Chacun réussi rapporte sa récompense ; le dernier, c'est la
- * victoire — et la partie continue, en mode infini.
+ * enfant, cinq nuits à tenir — la fin de l'acte I. L'acte II est l'Antenne :
+ * trois étages livrés l'un après l'autre, chacun attirant toutes les vagues
+ * de la nuit suivante. Le dernier lance le Signal : c'est la victoire, et la
+ * partie continue sans fin, des survivants arrivant à chaque aube.
  */
 
 import { Emitter } from '../core/events.ts';
 import { CHUNK_TILES, TILE_SIZE, coordKey, distanceSq, floorDiv, type TileCoord } from '../core/grid.ts';
 import { mulberry32, type StatefulRng } from '../core/rng.ts';
-import { BUILDINGS, REPAIR, RUIN, buildingLevel, nextUpgrade, type BuildingId } from '../data/buildings.ts';
+import { BUILDINGS, REPAIR, RUIN, buildingLevel, nextUpgrade, type BuildingId, type BuildingProto } from '../data/buildings.ts';
 import { CARAVAN, RARE_OFFERS, type RareOfferId } from '../data/caravan.ts';
 import { CLINIC } from '../data/clinic.ts';
-import { DAWN_REWARD } from '../data/dayNight.ts';
+import { DAWN_REWARD, SURVIVORS } from '../data/dayNight.ts';
 import {
   ENEMIES,
   ENEMY_IDS,
@@ -86,6 +88,7 @@ import { WEAPONS } from '../data/weapons.ts';
 import { BUILDERS, JOB_PRIORITY, LUMBERJACKS, PORTERS } from '../data/workers.ts';
 import { WEATHER, WEATHER_CALENDAR, type WeatherId } from '../data/weather.ts';
 import { ChunkIndex } from './chunk.ts';
+import { floorCost, floorMissing, floorNeeds, floorWants } from './antenna.ts';
 import { consumerRecipe, consumerRoom, consumerWants, forgeRecipe, isConsumer } from './consumers.ts';
 import { NO_WIND, nearestFoe, shoot, stepArrow, type Wind } from './combat.ts';
 import { clockAt, nextWave, ticksToWave, waveAt, type DayClock } from './dayNight.ts';
@@ -160,6 +163,7 @@ import { allocateStaff, canPause, clampStaff, employs, type Staffing } from './s
 import { carryOf, clearLine, standStill, walkToward, wander, wanderFrom } from './workers.ts';
 import { nextWeather, spoilsNight, weatherAt, type WeatherSpell } from './weather.ts';
 import type {
+  Antenna,
   Beast,
   Building,
   Caravan,
@@ -488,8 +492,19 @@ export type WorldEvents = {
    * qui n'a pas tenu dans le sac et attend à la mairie.
    */
   objectiveCompleted: { index: number; stored: Partial<Record<ItemId, number>> };
-  /** Le dernier objectif est réussi : la colonie vivra. La partie continue. */
+  /** Le dernier objectif est réussi : le Signal est lancé. La partie continue, sans fin. */
   victory: Record<string, never>;
+  /**
+   * L'antenne `id` a son étage `floor` (1 à 3) : la nuit `lureNight`, toutes
+   * les vagues marcheront sur elle.
+   */
+  antennaRaised: { id: EntityId; floor: number; lureNight: number };
+  /** Abattue, l'antenne a perdu son étage du haut : elle est retombée à `floor`. */
+  antennaFell: { id: EntityId; floor: number };
+  /** L'émetteur est posé : l'antenne s'allume en (x, y), le centre de son emprise, et quelqu'un répond. */
+  signalSent: { id: EntityId; x: number; y: number };
+  /** L'aube après le Signal : `count` survivants arrivent à la mairie, en (x, y). */
+  survivorsArrived: { count: number; x: number; y: number };
 };
 
 export class World {
@@ -565,11 +580,20 @@ export class World {
   /** Index de l'objectif en cours dans `OBJECTIVES` ; leur nombre une fois la chaîne bouclée. */
   public objective = 0;
 
-  /** Vrai une fois le dernier objectif réussi : la partie continue en mode infini. */
+  /** Vrai une fois le dernier objectif réussi : le Signal est lancé, la partie continue sans fin. */
   public victory = false;
 
   /** Tick de la victoire ; 0 tant qu'elle n'est pas acquise. */
   public victoryTick = 0;
+
+  /** Nuits survécues au moment du Signal : le record de l'écran titre compte celles d'après. */
+  public signalNights = 0;
+
+  /**
+   * La nuit dont toutes les vagues marchent sur l'antenne : celle qui suit
+   * le dernier étage fini. 0 : aucune.
+   */
+  public lureNight = 0;
 
   /** Les compteurs que les objectifs lisent. */
   public stats: WorldStats = emptyStats();
@@ -696,6 +720,8 @@ export class World {
       objective: this.objective,
       victory: this.victory,
       victoryTick: this.victoryTick,
+      signalNights: this.signalNights,
+      lureNight: this.lureNight,
       stats: copyStats(this.stats),
       objectiveBase: copyStats(this.objectiveBase),
       player: { ...player, inventory: inventory.toJSON() },
@@ -750,6 +776,8 @@ export class World {
     this.objective = state.objective;
     this.victory = state.victory;
     this.victoryTick = state.victoryTick;
+    this.signalNights = state.signalNights ?? 0;
+    this.lureNight = state.lureNight ?? 0;
     this.stats = copyStats(state.stats);
     this.objectiveBase = copyStats(state.objectiveBase);
 
@@ -1057,7 +1085,8 @@ export class World {
   public upgradeMissing(building: Building): Partial<Record<ItemId, number>> | null {
     const upgrade = nextUpgrade(building.proto, building.level);
 
-    if (!upgrade) return null;
+    // L'étage d'une antenne ne s'achète pas : il se livre (`sim/antenna.ts`).
+    if (!upgrade || building.kind === 'antenna') return null;
 
     const town = this.townStockFor(building);
     const missing: Partial<Record<ItemId, number>> = {};
@@ -1081,6 +1110,7 @@ export class World {
     const reject = (reason: UpgradeRejection): void => this.events.emit('upgradeRejected', { id, reason });
 
     if (!building || building.kind === 'site') return reject('missing');
+    if (building.kind === 'antenna') return reject('delivered');
     if (!this.inReach(building)) return reject('outOfReach');
 
     const upgrade = nextUpgrade(building.proto, building.level);
@@ -1484,6 +1514,7 @@ export class World {
     }
     else if (entity?.kind === 'nursery') this.supplyOne(entity);
     else if (entity?.kind === 'lab') this.supplyLabOne(entity);
+    else if (entity?.kind === 'antenna') this.supplyFloorOne(entity);
     // La forge prend d'abord ce qu'Adam lui apporte, puis lui rend ses plaques.
     else if (entity?.kind === 'forge' && !this.supplyOne(entity)) this.collect(entity);
   }
@@ -1673,6 +1704,15 @@ export class World {
    * cette réponse, le tick décide sur la même.
    */
   public canSupply(entity: Entity): boolean {
+    if (entity.kind === 'antenna') {
+      const town = this.townStockFor(entity);
+
+      return floorCost(entity).some(
+        ([item]) =>
+          (floorNeeds(entity, item) > 0 && this.player.inventory.count(item) > 0) ||
+          (floorWants(entity, item) > 0 && (town?.available(item) ?? 0) > 0),
+      );
+    }
     if (!isConsumer(entity)) return false;
 
     const town = this.townStockFor(entity);
@@ -1729,6 +1769,10 @@ export class World {
   private supplyAll(id: EntityId): void {
     const entity = this.entities.get(id);
 
+    if (entity?.kind === 'antenna') {
+      this.supplyFloor(entity);
+      return;
+    }
     if (!entity || !isConsumer(entity)) {
       this.events.emit('supplyRejected', { id, reason: 'missing' });
       return;
@@ -1772,6 +1816,107 @@ export class World {
     } else if (consumer.blocked) {
       this.startForge(consumer);
     }
+  }
+
+  /* ---------------------------------------------------------------- antenne */
+
+  /** L'antenne de la colonie — il n'y en a qu'une —, finie, ou `null`. */
+  public antenna(): Antenna | null {
+    for (const entity of this.entities.values()) {
+      if (entity.kind === 'antenna') return entity;
+    }
+    return null;
+  }
+
+  /** Les nuits survécues depuis le Signal — le record de l'écran titre. 0 avant lui. */
+  public nightsAfterSignal(): number {
+    return this.victory ? Math.max(0, this.stats.nightsSurvived - this.signalNights) : 0;
+  }
+
+  /** « Transférer » sur l'antenne : ce que l'étage suivant attend, le sac d'abord, puis la ville dans son rayon. */
+  private supplyFloor(antenna: Antenna): void {
+    if (!this.inReach(antenna)) {
+      this.events.emit('supplyRejected', { id: antenna.id, reason: 'outOfReach' });
+      return;
+    }
+
+    const town = this.townStockFor(antenna);
+    let moved = 0;
+
+    for (const [item] of floorCost(antenna)) {
+      moved += this.supplyAntenna(antenna, item, floorNeeds(antenna, item), this.player.inventory, 'bag');
+      if (town) moved += this.supplyAntenna(antenna, item, floorWants(antenna, item), town, 'town');
+    }
+
+    if (moved === 0) {
+      this.events.emit('supplyRejected', { id: antenna.id, reason: 'nothingToGive' });
+      return;
+    }
+    this.raiseFloor(antenna);
+  }
+
+  /** Au contact : un objet du sac que l'étage attend entre dans le coffre. */
+  private supplyFloorOne(antenna: Antenna): void {
+    for (const [item] of floorCost(antenna)) {
+      if (this.supplyAntenna(antenna, item, Math.min(1, floorNeeds(antenna, item)), this.player.inventory, 'bag') > 0) {
+        this.raiseFloor(antenna);
+        return;
+      }
+    }
+  }
+
+  private supplyAntenna(antenna: Antenna, item: ItemId, wanted: number, from: Store, source: 'bag' | 'town'): number {
+    const amount = Math.min(wanted, from.available(item), antenna.store.freeSpace());
+
+    if (amount <= 0) return 0;
+
+    const moved = antenna.store.add(item, from.remove(item, amount));
+
+    if (moved > 0) this.events.emit('buildingSupplied', { id: antenna.id, item, amount: moved, source });
+    return moved;
+  }
+
+  /**
+   * Tout l'étage est au coffre : il est consommé, et l'antenne monte d'un
+   * niveau — ses points de vie gardent leur proportion, comme une tour
+   * renforcée. Le troisième lance le Signal.
+   */
+  private raiseFloor(antenna: Antenna): void {
+    const floor = nextUpgrade(antenna.proto, antenna.level);
+
+    if (!floor || floorMissing(antenna) > 0) return;
+
+    for (const [item, amount] of floorCost(antenna)) antenna.store.remove(item, amount);
+
+    const before = buildingLevel(antenna.proto, antenna.level).hp;
+
+    antenna.level += 1;
+    antenna.hp = Math.max(1, Math.round((antenna.hp / before) * floor.hp));
+    this.events.emit('buildingUpgraded', { id: antenna.id, level: antenna.level, fromBag: [] });
+    this.lure(antenna);
+  }
+
+  /**
+   * Un étage fini attire les mutants : la nuit qui vient — celle de ce soir
+   * le jour, la suivante si la nuit est déjà tombée —, toutes les vagues
+   * marchent sur l'antenne. Le dernier étage lance le Signal.
+   */
+  private lure(antenna: Antenna): void {
+    const clock = this.clock();
+
+    this.lureNight = !clock ? 1 : clock.phase === 'day' || clock.phase === 'dusk' ? clock.cycle : clock.cycle + 1;
+    this.events.emit('antennaRaised', { id: antenna.id, floor: antenna.level, lureNight: this.lureNight });
+
+    if (nextUpgrade(antenna.proto, antenna.level) === null) {
+      this.events.emit('signalSent', { id: antenna.id, ...footprintCenter(antenna) });
+    }
+  }
+
+  /** Abattue au-dessus du premier étage, l'antenne n'en perd qu'un : le coffre garde ce qui était livré. */
+  private dropFloor(antenna: Antenna): void {
+    antenna.level -= 1;
+    antenna.hp = Math.ceil(buildingLevel(antenna.proto, antenna.level).hp / 2);
+    this.events.emit('antennaFell', { id: antenna.id, floor: antenna.level });
   }
 
   /* ------------------------------------------------------ labo de recherche */
@@ -1984,7 +2129,7 @@ export class World {
    * cases seulement. Trop loin : toute l'emprise l'est.
    */
   public placementBlock(building: BuildingId, tx: number, ty: number): PlacementBlock | null {
-    const proto = BUILDINGS[building];
+    const proto: BuildingProto = BUILDINGS[building];
     const tiles = (blocks: (x: number, y: number) => boolean): TileCoord[] => {
       const found: TileCoord[] = [];
 
@@ -2012,6 +2157,11 @@ export class World {
       const found = tiles(blocks);
 
       if (found.length > 0) return { reason, tiles: found };
+    }
+
+    // L'antenne se dresse loin de la mairie : il faudra la défendre.
+    if (proto.hallDistance !== undefined && this.nearHall(proto.hallDistance, tx, ty, proto.width, proto.height)) {
+      return { reason: 'nearHall', tiles: tiles(() => true) };
     }
 
     // Une foreuse posée à sec ne produirait jamais rien : le rocher d'un filon
@@ -2143,7 +2293,24 @@ export class World {
    * d'Ève), et avoir vu tomber la nuit `unlockNight`.
    */
   public isUnlocked(building: BuildingId): boolean {
-    return isUnlocked(building, this.questsDone) && this.night >= BUILDINGS[building].unlockNight;
+    const proto: BuildingProto = BUILDINGS[building];
+
+    return isUnlocked(building, this.questsDone) && this.night >= proto.unlockNight && this.objective >= (proto.unlockObjective ?? 0);
+  }
+
+  /**
+   * Une emprise posée en (tx, ty) est-elle à moins de `tiles` tuiles de la
+   * mairie, de centre à centre — comme le cercle que montre le fantôme ?
+   */
+  public nearHall(tiles: number, tx: number, ty: number, width: number, height: number): boolean {
+    const hall = this.entities.get(this.townHallId);
+
+    if (!hall) return false;
+
+    const reach = tiles * TILE_SIZE;
+    const { x, y } = footprintCenter(hall);
+
+    return distanceSq(x, y, (tx + width / 2) * TILE_SIZE, (ty + height / 2) * TILE_SIZE) < reach * reach;
   }
 
   /** Un bâtiment unique (`unique`) déjà posé — chantier compris — n'en admet pas un second. */
@@ -2274,6 +2441,10 @@ export class World {
       case 'yard':
         building = { ...base, kind: 'yard' };
         break;
+
+      case 'antenna':
+        building = { ...base, kind: 'antenna' };
+        break;
     }
 
     this.entities.set(site.id, building);
@@ -2332,6 +2503,11 @@ export class World {
 
       case 'lab':
         // Aucune recherche choisie : il attend le joueur, sans rien coûter.
+        break;
+
+      case 'antenna':
+        // Le premier étage est debout : la nuit qui vient, les vagues marchent sur lui.
+        this.lure(building);
         break;
 
       case 'townHall':
@@ -2402,6 +2578,7 @@ export class World {
       case 'lumberCamp':
       case 'depot':
       case 'yard':
+      case 'antenna':
         break;
     }
   }
@@ -2642,7 +2819,7 @@ export class World {
 
     for (const mobile of this.mobiles.values()) {
       if (mobile.kind === 'kid') children += 1;
-      if (mobile.kind === 'worker' && mobile.exMutant) workers += 1;
+      if (mobile.kind === 'worker' && (mobile.exMutant || mobile.survivor)) workers += 1;
     }
     for (const entity of this.entities.values()) {
       if (entity.kind !== 'site') workers += BUILDINGS[entity.proto].workers;
@@ -3081,6 +3258,7 @@ export class World {
       exMutant: true,
       logistician: false,
       builder: false,
+      survivor: false,
       build: null,
       // Il reste un instant sur le seuil, qu'on le voie sortir, avant de chercher du travail.
       inside: false,
@@ -3244,6 +3422,7 @@ export class World {
 
     this.victory = true;
     this.victoryTick = this.tickCount;
+    this.signalNights = this.stats.nightsSurvived;
     this.events.emit('victory', {});
   }
 
@@ -3564,6 +3743,11 @@ export class World {
    * vague, c'est la mairie.
    */
   private waveTarget(): Building {
+    const antenna = this.antenna();
+
+    // La nuit qui suit un étage fini, toutes les vagues marchent sur l'antenne.
+    if (antenna && this.night === this.lureNight) return antenna;
+
     if (this.nextWaveTarget === null) {
       const aimed = this.rng() < WAVES.targetChance ? this.nearestWaveTarget(this.waveOrigin()) : null;
 
@@ -3682,6 +3866,49 @@ export class World {
     // La nuit est survécue : la mairie tient encore (`stepClock` s'arrête à la défaite).
     this.stats.nightsSurvived += 1;
     this.events.emit('dawnBroke', { night: this.night, reward, to: town ? 'town' : 'bag' });
+
+    // Après le Signal, des survivants ont entendu l'antenne : ils arrivent avec le jour.
+    if (this.victory) this.welcomeSurvivors();
+  }
+
+  /**
+   * De `SURVIVORS.min` à `SURVIVORS.max` survivants, tirés du PRNG du monde,
+   * sortent sur le seuil de la mairie : des porteurs de plus, logés chez elle.
+   */
+  private welcomeSurvivors(): void {
+    const hall = this.entities.get(this.townHallId);
+
+    if (!hall || hall.kind === 'site') return;
+
+    const count = SURVIVORS.min + Math.floor(this.rng() * (SURVIVORS.max - SURVIVORS.min + 1));
+    const door = doorOf(hall);
+
+    for (let i = 0; i < count; i += 1) {
+      const x = door.x + (i - (count - 1) / 2) * DROP_SPACING;
+      const worker: Worker = {
+        kind: 'worker',
+        id: this.nextMobileId++,
+        x,
+        y: door.y,
+        prevX: x,
+        prevY: door.y,
+        facing: 'down',
+        moving: false,
+        homeId: hall.id,
+        exMutant: false,
+        logistician: false,
+        builder: false,
+        survivor: true,
+        build: null,
+        inside: false,
+        job: null,
+        searchTicks: PORTERS.retryTicks,
+        ...wanderFrom(x, door.y),
+      };
+
+      this.mobiles.set(worker.id, worker);
+    }
+    this.events.emit('survivorsArrived', { count, x: door.x, y: door.y });
   }
 
   /** Le point, en pixels monde, d'où surgira la prochaine vague : ce que l'annonce montre du doigt. */
@@ -3777,6 +4004,7 @@ export class World {
         exMutant: false,
         logistician: house.kind === 'depot',
         builder: house.kind === 'yard',
+        survivor: false,
         build: null,
         inside: true,
         job: null,
@@ -3948,6 +4176,9 @@ export class World {
 
       accepted = Math.max(0, Math.min(job.amount, needed - delivered));
       if (accepted > 0) target.delivered[job.item] = delivered + accepted;
+    } else if (target.kind === 'antenna') {
+      // L'étage ne prend que ce qui lui manque encore ; le reste repart à la mairie.
+      accepted = target.store.add(job.item, Math.min(job.amount, floorNeeds(target, job.item)));
     } else if (isConsumer(target)) {
       // Adam a pu la remplir entre-temps : elle ne prend que sa part, le reste repart à la mairie.
       accepted = target.store.add(job.item, Math.min(job.amount, consumerRoom(target, job.item)));
@@ -3962,6 +4193,8 @@ export class World {
       if (target.kind === 'site') this.settle(target);
       // Au labo, il lance le compte à rebours.
       if (target.kind === 'lab') this.startCountdown(target);
+      // À l'antenne, il peut faire monter l'étage.
+      if (target.kind === 'antenna') this.raiseFloor(target);
       // À la nurserie ou à la forge, il réveille ce qui attendait.
       if (isConsumer(target)) this.afterSupply(target);
     }
@@ -4510,7 +4743,8 @@ export class World {
     entity.hp = Math.max(0, entity.hp - amount);
     this.events.emit('buildingDamaged', { id, hp: entity.hp });
 
-    if (entity.hp === 0) this.destroyBuilding(entity);
+    if (entity.hp === 0 && entity.kind === 'antenna' && entity.level > 1) this.dropFloor(entity);
+    else if (entity.hp === 0) this.destroyBuilding(entity);
   }
 
   private destroyBuilding(building: Building): void {
@@ -4527,8 +4761,8 @@ export class World {
       ty: building.ty,
     });
 
-    // Un bâtiment de l'usine redevient son chantier, à moitié livré.
-    if (isWaveTarget(building.proto)) this.ruin(building);
+    // Un bâtiment de l'usine — ou l'antenne à son premier étage — redevient son chantier, à moitié livré.
+    if (isWaveTarget(building.proto) || building.kind === 'antenna') this.ruin(building);
 
     if (building.id === this.townHallId && !this.defeated) {
       this.defeated = true;
@@ -4632,7 +4866,7 @@ export class World {
     const crews = new Map<EntityId, MobileId[]>();
 
     for (const mobile of this.mobiles.values()) {
-      if (mobile.kind !== 'lumberjack' && (mobile.kind !== 'worker' || mobile.exMutant)) continue;
+      if (mobile.kind !== 'lumberjack' && (mobile.kind !== 'worker' || mobile.exMutant || mobile.survivor)) continue;
 
       const crew = crews.get(mobile.homeId);
 
@@ -4653,7 +4887,7 @@ export class World {
 
   /** L'ouvrier a-t-il un poste ? Sinon, il finit son geste, puis flâne. */
   private onDuty(mobile: Worker | Lumberjack): boolean {
-    return (mobile.kind === 'worker' && mobile.exMutant) || this.roster().onDuty.has(mobile.id);
+    return (mobile.kind === 'worker' && (mobile.exMutant || mobile.survivor)) || this.roster().onDuty.has(mobile.id);
   }
 
   /**

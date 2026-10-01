@@ -2890,6 +2890,21 @@ button.hud-stock:active {
   min-width: 210px;
 }
 
+/* Le record d'après le Signal : une capsule blanche, la vignette de l'antenne devant. */
+.title-record {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 4px 14px 4px 8px;
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow: 0 3px 0 var(--paper-shade);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
 .title-garden[data-pure='true'] {
   color: var(--muted);
 }

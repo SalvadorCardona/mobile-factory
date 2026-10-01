@@ -60,7 +60,7 @@
  */
 
 import { gridStep, type GridMove } from '../core/gridNav.ts';
-import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
+import { BUILDINGS, type BuildingProto, type BuildingId } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
 import { ROADS } from '../data/roads.ts';
 import type { Placement } from '../input/placement.ts';
@@ -516,8 +516,9 @@ export class BuildMenu {
     if (!this.unlocked()) return 'Débloqué après la mairie';
     if (this.world.atLimit(id)) return 'Un seul par colonie';
 
-    const { unlockNight } = BUILDINGS[id];
+    const { unlockNight, unlockObjective }: BuildingProto = BUILDINGS[id];
 
+    if (unlockObjective !== undefined && this.world.objective < unlockObjective) return `Après l’objectif ${unlockObjective}`;
     return this.world.night < unlockNight ? `Dès la nuit ${unlockNight}` : null;
   }
 

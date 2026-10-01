@@ -11,7 +11,7 @@
  *   cabane, les ombres portées (et celles des particules, leurs flaques),
  *   puis le conteneur trié en profondeur (bâtiments, arbres, rochers, personnages), les particules, la
  *   nuit (une passe de teinte et ses lueurs) et le fantôme de construction ;
- * - `hud`, en pixels écran, où vivent la météo et les repères de bord (le
+ * - `hud`, en pixels écran, où vivent la météo, les ondes du Signal et les repères de bord (le
  *   joystick, lui, est dans le DOM : `ui/joystick.ts`).
  *
  * Tout est vectoriel, rastérisé à la résolution de l'écran : aucune texture
@@ -20,7 +20,7 @@
 
 import { Application, Container } from 'pixi.js';
 import type { TileCoord } from '../core/grid.ts';
-import { GROUND, hex } from '../data/artDirection.ts';
+import { GROUND, SIGNAL_WAVES, hex } from '../data/artDirection.ts';
 import type { BuildingId } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
 import type { GhostState, RoadTool, RoadTrail } from '../input/placement.ts';
@@ -34,11 +34,15 @@ import { IndicatorLayer, indicatorSources, type ScreenRect } from './indicatorLa
 import { NightLayer } from './nightLayer.ts';
 import { ParticleLayer } from './particles.ts';
 import { ResourceLayer } from './resourceLayer.ts';
+import { SignalLayer } from './signalLayer.ts';
 import { SpriteLibrary, type AtlasStats } from './spriteLibrary.ts';
 import { TerrainTiles, terrainSources } from './terrainTiles.ts';
 import { WaterLayer, type WaterStats } from './waterLayer.ts';
 import { WorkReachLayer } from './workReach.ts';
 import { WeatherLayer } from './weatherLayer.ts';
+
+/** Le recul de la caméra quand l'antenne s'allume : de quoi voir le pylône entier et ses premières ondes. */
+const SIGNAL_ZOOM = 0.75;
 
 export class GameRenderer {
   public readonly camera = new Camera();
@@ -60,6 +64,7 @@ export class GameRenderer {
   private readonly tiles: TerrainTiles;
   private readonly indicators: IndicatorLayer;
   private readonly weather: WeatherLayer;
+  private readonly signal: SignalLayer;
 
   public readonly app: Application;
 
@@ -87,6 +92,9 @@ export class GameRenderer {
     this.nightLayer = new NightLayer(app.renderer, world);
     this.weather = new WeatherLayer(world, library);
     this.particles = new ParticleLayer(library);
+    this.signal = new SignalLayer(world);
+    // L'antenne s'allume : la caméra recule vers elle le temps que ses ondes couvrent l'écran.
+    world.events.on('signalSent', ({ x, y }) => this.camera.zoomOut(SIGNAL_ZOOM, SIGNAL_WAVES.durationMs, { x, y }));
 
     this.worldContainer.addChild(
       this.chunkLayer.container,
@@ -101,7 +109,7 @@ export class GameRenderer {
       this.ghostLayer.container,
     );
 
-    this.hudContainer.addChild(this.weather.screen, this.indicators.container);
+    this.hudContainer.addChild(this.weather.screen, this.signal.container, this.indicators.container);
 
     app.stage.addChild(this.worldContainer, this.hudContainer);
 
@@ -253,6 +261,7 @@ export class GameRenderer {
     else this.ghostLayer.update(armed, ghost, block, this.app.ticker.deltaMS);
     this.workReach.update(building ? ghost : null, this.selected);
     this.weather.update(this.camera, this.app.ticker.deltaMS, alpha);
+    this.signal.update(this.camera, this.app.ticker.deltaMS);
     this.indicators.update(this.camera, this.app.ticker.deltaMS, alpha);
   }
 
@@ -286,6 +295,7 @@ export class GameRenderer {
     this.nightLayer.destroy();
     this.indicators.destroy();
     this.weather.destroy();
+    this.signal.destroy();
     this.particles.destroy();
     this.library.destroy();
     this.app.destroy(true, { children: true });

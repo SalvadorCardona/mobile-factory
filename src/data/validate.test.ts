@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BUILDINGS } from './buildings.ts';
+import { BUILDINGS, type BuildingUpgrade } from './buildings.ts';
 import { ITEMS } from './items.ts';
 import { RECIPES, type RecipeProto } from './recipes.ts';
 import { RESEARCH, type ResearchProto } from './research.ts';
@@ -26,14 +26,17 @@ describe('prototypes', () => {
   });
 
   it('refuse un objet récoltable sans débouché', () => {
-    // Sans la forge ni les foreuses rapides du labo, le charbon ne servirait à rien : la validation doit le dire.
+    // Sans la forge, les foreuses rapides du labo ni l'étage 2 de l'antenne, le charbon ne servirait à rien : la validation doit le dire.
     const forge = RECIPES.smeltPlate as RecipeProto;
     const drills = RESEARCH.fastDrills as ResearchProto;
+    const floor = BUILDINGS.antenna.upgrades[0] as BuildingUpgrade;
     const inputs = forge.inputs;
     const cost = drills.cost;
+    const floorCost = floor.cost;
 
     forge.inputs = { ironOre: 2 };
     drills.cost = { ironOre: 10 };
+    floor.cost = { ironPlate: 40, radCore: 1 };
     try {
       expect(validatePrototypes()).toContain(
         "ITEMS.coal : aucun débouché — ni coût de bâtiment ou d'amélioration, ni entrée de recette, ni coût de recherche",
@@ -41,6 +44,7 @@ describe('prototypes', () => {
     } finally {
       forge.inputs = inputs;
       drills.cost = cost;
+      floor.cost = floorCost;
     }
     expect(validatePrototypes()).toEqual([]);
   });

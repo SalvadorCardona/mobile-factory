@@ -25,7 +25,7 @@ export interface PlacementReason {
   remedy: string | null;
 }
 
-const LABELS: Readonly<Record<Exclude<PlacementRejection, 'resource' | 'noOre' | 'road'>, string>> = {
+const LABELS: Readonly<Record<Exclude<PlacementRejection, 'resource' | 'noOre' | 'road' | 'nearHall'>, string>> = {
   locked: 'Il vous manque le plan',
   terrain: 'Pas sur l’eau',
   occupied: 'Case occupée',
@@ -46,8 +46,15 @@ const ROAD: PlacementReason = {
   remedy: 'Retirez-la d’abord : Bâtir › Route › Retirer',
 };
 
+/** L'antenne se dresse loin : le cercle de la mairie montre jusqu'où. */
+const NEAR_HALL: PlacementReason = {
+  text: 'Trop près de la mairie',
+  remedy: 'Éloignez-vous, hors du cercle autour d’elle',
+};
+
 export function placementReason(block: PlacementBlock, world: World): PlacementReason {
   if (block.reason === 'noOre') return NO_ORE;
+  if (block.reason === 'nearHall') return NEAR_HALL;
   if (block.reason === 'road') return ROAD;
   if (block.reason !== 'resource') return { text: LABELS[block.reason], remedy: null };
 

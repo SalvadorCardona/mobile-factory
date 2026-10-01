@@ -12,7 +12,9 @@
  * donnerait — y compris sous les rochers, qu'il faut casser avant de poser.
  *
  * Le cercle jaune autour de la mairie finie est son rayon logistique : un
- * chantier posé dedans puisera dans le stock de la colonie.
+ * chantier posé dedans puisera dans le stock de la colonie. L'antenne armée
+ * ajoute un disque corail plus petit : sa distance minimale (`hallDistance`),
+ * où elle ne se pose pas.
  *
  * Le fantôme dit trois choses en même temps : où le bâtiment ira, s'il est
  * posable, et jusqu'où le joueur peut construire. La couleur vient de
@@ -39,7 +41,7 @@
 
 import { Container, Graphics, Sprite } from 'pixi.js';
 import { TILE_SIZE, worldToTile } from '../core/grid.ts';
-import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
+import { BUILDINGS, type BuildingId, type BuildingProto } from '../data/buildings.ts';
 import { PALETTE, RADIUS, STROKE, hex } from '../data/artDirection.ts';
 import { BUILD_REACH_TILES } from '../sim/player.ts';
 import { oreAt } from '../sim/terrain.ts';
@@ -82,6 +84,9 @@ export class GhostLayer {
   private readonly cells = new Graphics();
   private readonly reach = new Graphics();
   private readonly warehouseReach = new Graphics();
+  /** La zone interdite autour de la mairie, pour un bâtiment qui se dresse loin d'elle. */
+  private readonly keepOut = new Graphics();
+  private lastKeepOutKey = '';
   /** Les filons autour d'Adam, quand une foreuse est armée : cases teintées et icônes. */
   private readonly ores = new Graphics();
   private readonly oreIcons = new Container();
@@ -121,6 +126,7 @@ export class GhostLayer {
       this.ores,
       this.oreIcons,
       this.warehouseReach,
+      this.keepOut,
       this.reach,
       this.ghost,
       this.trail,
@@ -149,6 +155,7 @@ export class GhostLayer {
       this.lastGridKey = '';
       this.refuseLeft = 0;
       this.lastWarehouseKey = '';
+      this.lastKeepOutKey = '';
       this.lastOreKey = '';
       return;
     }
@@ -157,6 +164,7 @@ export class GhostLayer {
     this.updateGrid();
     this.updateOres(BUILDINGS[armed].kind === 'drill');
     this.updateWarehouseReach();
+    this.updateKeepOut(armed);
 
     // Le cercle de portée suit le joueur en continu, lui.
     this.reach.position.set(this.world.player.x, this.world.player.y);
@@ -314,6 +322,24 @@ export class GhostLayer {
       .circle((hall.tx + hall.width / 2) * TILE_SIZE, (hall.ty + hall.height / 2) * TILE_SIZE, radius * TILE_SIZE)
       .fill({ color: SITE, alpha: 0.08 })
       .stroke({ width: STROKE.width, color: SITE, alpha: 0.7 });
+  }
+
+  /** Le disque corail où le bâtiment armé ne se pose pas : trop près de la mairie. */
+  private updateKeepOut(armed: BuildingId): void {
+    const hall = this.world.entities.get(this.world.townHallId);
+    const { hallDistance }: BuildingProto = BUILDINGS[armed];
+    const key = hall && hallDistance !== undefined ? `${hall.id}:${hallDistance}` : '';
+
+    if (key === this.lastKeepOutKey) return;
+    this.lastKeepOutKey = key;
+    this.keepOut.clear();
+
+    if (!hall || hallDistance === undefined) return;
+
+    this.keepOut
+      .circle((hall.tx + hall.width / 2) * TILE_SIZE, (hall.ty + hall.height / 2) * TILE_SIZE, hallDistance * TILE_SIZE)
+      .fill({ color: INVALID, alpha: 0.1 })
+      .stroke({ width: STROKE.width, color: INVALID, alpha: 0.7 });
   }
 
   /**

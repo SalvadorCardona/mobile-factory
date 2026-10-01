@@ -41,6 +41,7 @@ import { SPRITES, type SpriteId, type SpriteProto } from '../data/sprites.ts';
 import { LUMBERJACKS } from '../data/workers.ts';
 import type { Entity, EntityId } from '../sim/types.ts';
 import { terrainAt } from '../sim/terrain.ts';
+import { floorCost, floorMissing } from '../sim/antenna.ts';
 import { canPause } from '../sim/staffing.ts';
 import { siteMissing, type World } from '../sim/world.ts';
 import { PLAYER_MAX_HP } from '../sim/player.ts';
@@ -168,6 +169,8 @@ export class EntityLayer {
 
       if (view) view.pop = POP_MS;
     });
+    // Abattue, l'antenne perd son étage du haut : son sprite redescend d'un niveau.
+    world.events.on('antennaFell', ({ id }) => this.replace(id));
     world.events.on('buildingUpgraded', ({ id }) => {
       this.replace(id);
 
@@ -327,8 +330,10 @@ export class EntityLayer {
   }
 
   /** Fini ou cabossé, selon ce qu'il reste de points de vie. */
-  private faceOf(entity: Exclude<Entity, { kind: 'site' }>): 'built' | 'damaged' {
-    return entity.hp <= buildingLevel(entity.proto, entity.level).hp * DAMAGED_RATIO ? 'damaged' : 'built';
+  /** Le visage d'un bâtiment fini ; l'émetteur de l'antenne, une fois le Signal lancé, reste allumé. */
+  private faceOf(entity: Exclude<Entity, { kind: 'site' }>): 'built' | 'damaged' | 'lit' {
+    if (entity.hp <= buildingLevel(entity.proto, entity.level).hp * DAMAGED_RATIO) return 'damaged';
+    return this.world.victory && 'lit' in SPRITES[spriteOf(entity)].parts ? 'lit' : 'built';
   }
 
   private drawBar(view: EntityView, entity: Entity): void {
@@ -345,6 +350,12 @@ export class EntityLayer {
       const total = Object.values(BUILDINGS[entity.proto].cost).reduce((sum, amount) => sum + amount, 0);
 
       ratio = total === 0 ? 1 : 1 - siteMissing(entity) / total;
+      color = PROGRESS_FG;
+    } else if (entity.kind === 'antenna' && entity.hp >= buildingLevel(entity.proto, entity.level).hp && entity.store.total() > 0) {
+      // L'étage suivant se livre : intacte, l'antenne montre sa jauge comme un chantier.
+      const total = floorCost(entity).reduce((sum, [, amount]) => sum + amount, 0);
+
+      ratio = total === 0 ? 1 : 1 - floorMissing(entity) / total;
       color = PROGRESS_FG;
     } else {
       const max = buildingLevel(entity.proto, entity.level).hp;

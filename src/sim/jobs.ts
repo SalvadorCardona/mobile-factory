@@ -16,7 +16,7 @@
  * recalcule depuis les jobs des ouvriers (`rebuild`), comme les réservations
  * des coffres, dont la sauvegarde ne garde que le stock réel.
  *
- * Premier périmètre : livrer les chantiers, le labo de recherche, les forges
+ * Premier périmètre : livrer les chantiers, l'étage suivant de l'antenne, le labo de recherche, les forges
  * (la forge, le four à charbon) et la nurserie depuis la mairie, et vider
  * dans la mairie les coffres des foreuses, des fermes et des cabanes de
  * bûcheron, et les sorties des forges — plaques, charbon.
@@ -34,6 +34,7 @@ import { TILE_SIZE, distanceSq } from '../core/grid.ts';
 import { BUILDINGS } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
 import { BUILDERS, JOB_PRIORITY, LOGISTICIANS, PORTERS } from '../data/workers.ts';
+import { floorCost, floorWants } from './antenna.ts';
 import { labSurplus, labWants, researchCost } from './research.ts';
 import { consumerRecipe, consumerWants, forgeOutputs, isStarving } from './consumers.ts';
 import type { Store } from './store.ts';
@@ -227,6 +228,15 @@ export class JobBoard {
             const amount = Math.min(carry, labSurplus(entity, item), hall.store.freeSpace());
 
             if (amount > 0) offers.push({ from: entity.id, to: hall.id, item, amount, priority: JOB_PRIORITY.surplus });
+          }
+          break;
+
+        case 'antenna':
+          // L'étage suivant se livre comme un chantier, depuis la mairie.
+          for (const [item] of floorCost(entity)) {
+            const amount = Math.min(carry, floorWants(entity, item), hall.store.available(item), entity.store.freeSpace());
+
+            if (amount > 0) offers.push({ from: hall.id, to: entity.id, item, amount, priority: JOB_PRIORITY.site });
           }
           break;
 
