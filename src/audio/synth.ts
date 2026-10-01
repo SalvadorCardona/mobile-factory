@@ -34,6 +34,8 @@ export type SoundName =
   | 'horn'
   | 'gloop'
   | 'victory'
+  | 'brute'
+  | 'dawn'
   | 'pickup'
   | 'eureka'
   | 'objective'
@@ -272,6 +274,19 @@ export const SOUNDS: Record<SoundName, (ctx: AudioContext, out: AudioNode, at: n
       tone(ctx, out, at + i * 0.11, 'square', f, f, { attack: 0.01, decay: 0.16, peak: 0.14 });
     }
     tone(ctx, out, at + 0.44, 'triangle', 1047, 1047, { attack: 0.01, decay: 0.5, peak: 0.35 });
+  },
+
+  /** Un gros mutant dans la vague : un accent grave qui s'effondre de 110 à 40 Hz. */
+  brute(ctx, out, at) {
+    tone(ctx, out, at, 'sawtooth', 110, 40, { attack: 0.02, decay: 0.58, peak: 0.28 });
+    tone(ctx, out, at, 'sine', 110, 40, { attack: 0.02, decay: 0.58, peak: 0.5 });
+  },
+
+  /** L'aube : la, do dièse, mi, un petit arpège majeur — « on a tenu ». */
+  dawn(ctx, out, at) {
+    for (const [i, f] of [440, 554.37, 659.25].entries()) {
+      tone(ctx, out, at + i * 0.12, 'triangle', f, f, { attack: 0.01, decay: i === 2 ? 0.45 : 0.11, peak: 0.28 });
+    }
   },
 
   /** Une recherche aboutit : une bulle qui monte, puis trois notes claires en tierce — « eurêka ». */
