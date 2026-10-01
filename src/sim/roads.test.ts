@@ -68,6 +68,7 @@ function porter(x: number, y: number): Worker {
     exMutant: false,
     logistician: false,
     builder: false,
+    survivor: false,
     build: null,
     inside: false,
     job: null,

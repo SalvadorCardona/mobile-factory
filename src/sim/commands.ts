@@ -36,7 +36,7 @@ export type Command =
    * Vide dans le coffre d'une nurserie ou d'une forge ce que sa recette
    * consomme, dans la limite de la place : le sac d'abord, puis la ville si
    * le bâtiment est dans le rayon de la mairie. Le bouton « Transférer » de
-   * sa fenêtre.
+   * sa fenêtre. Sur l'antenne, ce que son étage suivant attend.
    */
   | { type: 'supplyBuilding'; id: EntityId }
   /**
@@ -190,7 +190,9 @@ export type TradeRejection =
   /** L'échange est déjà fait — ou l'offre rare a atteint son plafond sur la partie. */
   | 'done'
   /** Ni le sac, ni la ville à portée n'ont tout le coût. */
-  | 'missingItems';
+  | 'missingItems'
+  /** Un étage d'antenne ne s'achète pas : il se livre, comme un chantier (`supplyBuilding`). */
+  | 'delivered';
 
 /** Motif de refus d'une amélioration. */
 /** Motif de refus d'une réparation — remonté à l'UI par un événement. */
@@ -212,7 +214,9 @@ export type UpgradeRejection =
   /** Le bâtiment est déjà à son niveau maximal. */
   | 'maxLevel'
   /** Ni le sac, ni la ville à portée n'ont tout le coût. */
-  | 'missingItems';
+  | 'missingItems'
+  /** Un étage d'antenne ne s'achète pas : il se livre, comme un chantier (`supplyBuilding`). */
+  | 'delivered';
 
 /** Pourquoi une tuile d'un tracé de route n'a pas été pavée — remonté à l'UI par un événement. */
 export type RoadRejection =
@@ -238,9 +242,12 @@ export type PlacementRejection =
   | 'onPlayer'
   /** Une foreuse sans filon sous son emprise ne produirait jamais rien. */
   | 'noOre'
+  /** Trop près de la mairie : l'antenne se dresse à `hallDistance` tuiles au moins. */
+  | 'nearHall'
   /**
    * Pas encore débloqué : il faut d'abord le plan, qu'Ève donne en récompense
-   * d'une quête, ou voir tomber d'autres nuits (`unlockNight`).
+   * d'une quête, voir tomber d'autres nuits (`unlockNight`), ou finir
+   * l'acte I (`unlockObjective`).
    */
   | 'locked'
   /** Un seul par colonie, et il y en a déjà un — chantier compris. */

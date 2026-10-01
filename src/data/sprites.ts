@@ -17,6 +17,7 @@
  */
 
 import { ADAM } from '../art/adam.ts';
+import { ANTENNA, ANTENNA_2, ANTENNA_3 } from '../art/antenna.ts';
 import { ARROW } from '../art/arrow.ts';
 import { BUILDER } from '../art/builder.ts';
 import { BUILDER_HOUSE } from '../art/builderHouse.ts';
@@ -132,6 +133,10 @@ export const SPRITES = {
   quarry: QUARRY,
   logisticsPost: LOGISTICS_POST,
   constructionPost: CONSTRUCTION_POST,
+  /** L'Antenne, étage par étage ; l'émetteur a aussi sa version allumée (`lit`), après le Signal. */
+  antenna: ANTENNA,
+  antenna2: ANTENNA_2,
+  antenna3: ANTENNA_3,
 
   /** Décor de surface : un morceau par élément, cf. `data/decor.ts`. */
   decor: DECOR_ART,

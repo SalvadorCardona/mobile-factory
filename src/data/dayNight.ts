@@ -68,3 +68,12 @@ export const DAWN_REWARD = {
   stone: 5,
   food: 3,
 } as const satisfies Partial<Record<ItemId, number>>;
+
+/**
+ * Après le Signal, chaque aube : de `min` à `max` survivants, tirés du PRNG
+ * du monde, arrivent à la mairie. Ce sont des porteurs, logés chez elle.
+ */
+export const SURVIVORS = {
+  min: 1,
+  max: 3,
+} as const;

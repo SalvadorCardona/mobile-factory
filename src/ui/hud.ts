@@ -57,8 +57,9 @@ import { TILE_SIZE } from '../core/grid.ts';
 import { BUILDINGS, buildingLevel, type BuildingId } from '../data/buildings.ts';
 import { ITEMS, type ItemId } from '../data/items.ts';
 import { EVE_LINES } from '../data/eve.ts';
+import { SIGNAL_WAVES } from '../data/artDirection.ts';
 import { LORE } from '../data/lore.ts';
-import { OBJECTIVES, type Goal } from '../data/objectives.ts';
+import { OBJECTIVES, type Goal, type ObjectiveProto } from '../data/objectives.ts';
 import { seedsFor } from '../data/perks.ts';
 import { QUESTS, TOOLS, type QuestReward } from '../data/quests.ts';
 import { RESEARCH } from '../data/research.ts';
@@ -88,6 +89,7 @@ const REJECTION_LABELS: Record<PlacementRejection, string> = {
   noOre: 'Aucun filon ici — une foreuse se pose sur un filon',
   locked: 'Pas encore débloqué — il faut son plan, ou tenir encore une nuit',
   unique: 'Un seul par colonie — il y en a déjà un',
+  nearHall: `Trop près de la mairie — l’antenne se dresse à ${BUILDINGS.antenna.hallDistance} cases au moins`,
 };
 
 /** Ce que dit la bulle quand un tracé de route n'a pas été pavé en entier ; `paved` tuiles l'ont été. */
@@ -388,10 +390,10 @@ export class Hud {
     const endless = element('button', 'button-primary');
 
     this.victoryStats = element('dl', 'overlay-stats');
-    victoryTitle.textContent = 'La colonie vivra';
-    victoryText.textContent = 'Les mutants n’ont pas eu raison de la colonie : la vie a repris ses droits.';
+    victoryTitle.textContent = LORE.signal.title;
+    victoryText.textContent = LORE.signal.text;
     endless.type = 'button';
-    endless.textContent = 'Continuer en mode infini';
+    endless.textContent = 'Continuer sans fin';
     endless.addEventListener('click', () => {
       this.victory.hidden = true;
       this.onContinue();
@@ -608,10 +610,27 @@ export class Hud {
         this.notify(`Sac plein : ${kept.map(([item, amount]) => `${amount} ${ITEMS[item].label.toLowerCase()}`).join(', ')} attend à la mairie`, 'info');
       }
     });
-    world.events.on('victory', () => this.showVictory());
+    // L'antenne s'allume d'abord, ses ondes couvrent l'écran : l'écran du Signal vient après.
+    world.events.on('victory', () => window.setTimeout(() => this.showVictory(), SIGNAL_WAVES.durationMs));
+    world.events.on('antennaRaised', ({ floor, lureNight }) => {
+      this.notify(`Étage ${floor} debout ! La nuit ${lureNight}, toutes les vagues marcheront sur l’antenne.`, 'info');
+    });
+    world.events.on('antennaFell', ({ floor }) => this.notify(`L’antenne a perdu un étage — elle retombe à l’étage ${floor}`, 'bad'));
+    world.events.on('signalSent', () => {
+      // Ève le dit tout de suite, à la place de ce qu'elle disait.
+      this.speechQueue.length = 0;
+      this.speechQueue.push(LORE.signal.answer);
+      this.speechUntil = 0;
+    });
+    world.events.on('survivorsArrived', ({ count }) =>
+      this.notify(
+        count > 1 ? `${count} survivants arrivent à l’appel de l’antenne : ${count} porteurs de plus` : 'Un survivant arrive à l’appel de l’antenne : un porteur de plus',
+        'good',
+      ),
+    );
   }
 
-  /** Ce que fait « Continuer en mode infini » : `main.ts` relance l'horloge. */
+  /** Ce que fait « Continuer sans fin » : `main.ts` relance l'horloge. */
   public setOnContinue(onContinue: () => void): void {
     this.onContinue = onContinue;
   }
@@ -1279,7 +1298,7 @@ export class Hud {
 
     if (!objective) return;
 
-    const title = text('hud-celebration-title', 'Objectif réussi !');
+    const title = text('hud-celebration-title', (objective as ObjectiveProto).banner ?? 'Objectif réussi !');
 
     title.prepend(uiIcon('goal', 28));
     this.celebration.replaceChildren(
@@ -1355,7 +1374,7 @@ export class Hud {
     for (const entity of world.entities.values()) if (entity.kind !== 'site') buildings += 1;
 
     const rows: [string, string][] = [
-      ['Nuits survécues', String(world.stats.nightsSurvived)],
+      ['Nuits tenues', String(world.stats.nightsSurvived)],
       ['Mutants abattus', String(world.kills)],
       ['Habitants', String(adults + children + workers)],
       ['Bâtiments', String(buildings)],
@@ -1481,9 +1500,9 @@ function crewDetail({ byBuilding, porters, assigned, free, missing }: Workforce)
   return detail;
 }
 
-/** « Objectif 3/6 », ou « Mode infini » une fois la chaîne bouclée. */
+/** « Objectif 3/7 », ou « Après le Signal » une fois la chaîne bouclée : la partie sans fin. */
 function objectiveLabel(index: number): string {
-  return index < OBJECTIVES.length ? `Objectif ${index + 1}/${OBJECTIVES.length}` : 'Mode infini';
+  return index < OBJECTIVES.length ? `Objectif ${index + 1}/${OBJECTIVES.length}` : 'Après le Signal';
 }
 
 /**

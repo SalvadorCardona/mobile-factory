@@ -12,7 +12,8 @@
  * les deux écrans le font confirmer avant.
  *
  * L'écran titre ouvre aussi le jardin des souvenirs (`garden.ts`), où l'on
- * plante les graines des colonies tombées.
+ * plante les graines des colonies tombées, et rappelle le record : les nuits
+ * tenues après le Signal, par la meilleure colonie.
  *
  * Aucun de ces écrans ne touche au monde ni à la sauvegarde : ils disent à
  * `main.ts` de jouer, d'arrêter l'horloge ou de recommencer, et c'est tout.
@@ -34,13 +35,15 @@ export interface TitleOptions {
   onRestart: () => void;
   /** Le jardin des souvenirs, et de quoi y planter. */
   garden: Garden;
+  /** Le record « nuits tenues après le Signal » ; 0 tant qu'aucune antenne n'a parlé. */
+  record: number;
   gardenActions: GardenActions;
 }
 
 export class TitleScreen {
   public readonly root: HTMLElement;
 
-  public constructor({ resume, notice, onPlay, onRestart, garden, gardenActions }: TitleOptions) {
+  public constructor({ resume, notice, onPlay, onRestart, garden, gardenActions, record }: TitleOptions) {
     this.root = document.createElement('div');
     this.root.className = 'overlay title-screen';
 
@@ -139,6 +142,17 @@ export class TitleScreen {
     });
     panel.append(gardenButton);
     this.root.append(gardenPanel.root);
+
+    if (record > 0) {
+      const best = document.createElement('p');
+      const icon = buildingIcon('antenna', 22);
+
+      icon.alt = '';
+      icon.setAttribute('aria-hidden', 'true');
+      best.className = 'title-record';
+      best.append(icon, `Record après le Signal : ${record} nuit${record > 1 ? 's' : ''} tenue${record > 1 ? 's' : ''}`);
+      panel.append(best);
+    }
 
     if (notice) {
       const line = document.createElement('p');

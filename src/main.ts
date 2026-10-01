@@ -20,7 +20,7 @@ import { GROUND, PARTICLES, type ParticleStyle } from './data/artDirection.ts';
 import { MENU_BUILDING_IDS } from './data/buildings.ts';
 import type { WildlifeId } from './data/enemies.ts';
 import type { ItemId } from './data/items.ts';
-import { OBJECTIVES } from './data/objectives.ts';
+import { OBJECTIVES, type ObjectiveProto } from './data/objectives.ts';
 import { IndicatorTap } from './input/indicatorTap.ts';
 import { seedsFor, type PerkId } from './data/perks.ts';
 import { Inspect } from './input/inspect.ts';
@@ -34,6 +34,7 @@ import { activePerks, harvestSeeds, plant, type Garden } from './sim/garden.ts';
 import type { Entity } from './sim/types.ts';
 import { STEP_MS, World } from './sim/world.ts';
 import { LocalGarden } from './storage/localGarden.ts';
+import { LocalRecord } from './storage/localRecord.ts';
 import { LocalSave, type LoadResult } from './storage/localSave.ts';
 import { TILE_SIZE } from './core/grid.ts';
 import { BuildingPanel } from './ui/buildingPanel.ts';
@@ -216,11 +217,12 @@ async function main(): Promise<void> {
    */
   let started = false;
   let paused = false;
-  // L'écran de victoire arrête l'horloge jusqu'à « Continuer en mode infini ».
+  // L'écran de victoire arrête l'horloge jusqu'à « Continuer sans fin ».
   let celebrating = false;
 
   const autosave = wireSave(world, saves, () => started);
   const garden = wireGarden(world, LocalGarden.browser());
+  const record = wireRecord(world, LocalRecord.browser());
 
   const pause = new PauseScreen(world.seed, () => setPaused(false), () => autosave.restart());
   const title = new TitleScreen({
@@ -228,6 +230,7 @@ async function main(): Promise<void> {
     notice: LOAD_NOTICES[loaded.status] ?? linkNotice(world),
     garden: garden.current(),
     gardenActions: garden,
+    record,
     onPlay: () => {
       // Une nouvelle colonie part avec les bonus du jardin ; une colonie reprise garde les siens.
       if (loaded.status !== 'ok') world.push({ type: 'applyPerks', perks: activePerks(garden.current()) });
@@ -531,8 +534,13 @@ function wireAudio(world: World, audio: AudioEngine, hud: Hud): void {
     audio.play('defeat');
     audio.night('dawn');
   });
-  // Le dernier objectif a sa fanfare à lui.
-  world.events.on('objectiveCompleted', ({ index }) => audio.play(index < OBJECTIVES.length - 1 ? 'objective' : 'colony'));
+  // Le dernier objectif, et la fin d'un acte, ont leur fanfare à eux.
+  world.events.on('objectiveCompleted', ({ index }) =>
+    audio.play(index < OBJECTIVES.length - 1 && !(OBJECTIVES[index] as ObjectiveProto).banner ? 'objective' : 'colony'),
+  );
+  world.events.on('antennaRaised', () => audio.play('build'));
+  world.events.on('antennaFell', () => audio.play('alarm'));
+  world.events.on('survivorsArrived', () => audio.play('build'));
 }
 
 interface Autosave {
@@ -636,6 +644,19 @@ function wireGarden(world: World, gardens: LocalGarden): GardenWiring {
     plant: (perk) => keep(plant(garden, perk)),
     setPure: (pure) => keep({ ...garden, pure }),
   };
+}
+
+/**
+ * Le record « nuits tenues après le Signal » : chaque aube d'après le Signal
+ * le propose, et la chute de la mairie aussi. Renvoie le record au démarrage,
+ * pour l'écran titre.
+ */
+function wireRecord(world: World, records: LocalRecord): number {
+  const offer = (): void => void records.offer(world.nightsAfterSignal());
+
+  world.events.on('dawnBroke', offer);
+  world.events.on('townHallDestroyed', offer);
+  return records.load();
 }
 
 /** Les éclats : copeaux à la coupe, sang vert à l'impact, gravats à l'effondrement. */

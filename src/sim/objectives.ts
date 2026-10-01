@@ -19,8 +19,21 @@ export interface GoalProgress {
   need: number;
 }
 
-/** Où en est une condition. `have` est plafonné à `need` : une jauge ne déborde pas. */
+/**
+ * Où en est une condition. `have` est plafonné à `need` : une jauge ne déborde pas.
+ * Un bâtiment à étages (`level`) se compte en étages : « 2/3 » pour l'antenne.
+ */
 export function goalProgress(world: World, goal: Goal): GoalProgress {
+  if (goal.type === 'build' && goal.level !== undefined) {
+    if (count(world, goal) >= goal.count) return { have: goal.level, need: goal.level };
+
+    let floors = 0;
+
+    for (const entity of world.entities.values()) {
+      if (entity.kind !== 'site' && entity.proto === goal.building) floors = Math.max(floors, entity.level);
+    }
+    return { have: Math.min(goal.level, floors), need: goal.level };
+  }
   return { have: Math.min(goal.count, count(world, goal)), need: goal.count };
 }
 
@@ -30,7 +43,7 @@ function count(world: World, goal: Goal): number {
       let built = 0;
 
       for (const entity of world.entities.values()) {
-        if (entity.kind !== 'site' && entity.proto === goal.building) built += 1;
+        if (entity.kind !== 'site' && entity.proto === goal.building && entity.level >= (goal.level ?? 1)) built += 1;
       }
       return built;
     }
@@ -132,7 +145,7 @@ export function objectiveDone(world: World, objective: ObjectiveProto): boolean 
   return objective.goals.every((goal) => count(world, goal) >= goal.count);
 }
 
-/** L'objectif en cours, ou `null` une fois la chaîne bouclée — le mode infini. */
+/** L'objectif en cours, ou `null` une fois la chaîne bouclée — la partie sans fin, après le Signal. */
 export function currentObjective(world: World): ObjectiveProto | null {
   return OBJECTIVES[world.objective] ?? null;
 }

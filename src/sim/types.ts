@@ -200,6 +200,16 @@ export interface Yard extends Built {
   kind: 'yard';
 }
 
+/**
+ * L'Antenne, unique : son premier étage est un chantier comme un autre ;
+ * les suivants (`BUILDINGS.antenna.upgrades`) se livrent dans son coffre —
+ * le sac, la ville dans son rayon, les porteurs — et l'étage monte dès que
+ * tout y est (`sim/antenna.ts`). Son niveau est son étage.
+ */
+export interface Antenna extends Built {
+  kind: 'antenna';
+}
+
 export type Entity =
   | Site
   | Drill
@@ -214,7 +224,8 @@ export type Entity =
   | Lab
   | LumberCamp
   | Depot
-  | Yard;
+  | Yard
+  | Antenna;
 
 export type Building = Exclude<Entity, Site>;
 
@@ -438,6 +449,11 @@ export interface Worker extends Moving, Wandering {
   logistician: boolean;
   /** Vrai pour un bâtisseur du poste de construction. */
   builder: boolean;
+  /**
+   * Vrai pour un survivant venu à l'appel de l'antenne : un porteur logé à
+   * la mairie, toujours au travail comme un ex-mutant, de force ordinaire.
+   */
+  survivor: boolean;
   /** Le chantier qu'un bâtisseur est allé bâtir, `null` sinon. Jamais en même temps qu'un job. */
   build: EntityId | null;
   /** Vrai s'il est chez lui : invisible, immobile. */

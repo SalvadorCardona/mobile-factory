@@ -4,8 +4,9 @@
  * La partie est une chaîne d'objectifs, dans l'ordre de la liste. Le panneau
  * du haut affiche toujours le courant ; quand toutes ses conditions tiennent
  * en même temps, il est réussi, sa récompense tombe, et le suivant prend sa
- * place. Le dernier réussi, la colonie vivra : c'est la victoire, et la
- * partie continue en mode infini.
+ * place. Le sixième clôt l'acte I — la colonie vivra ; l'acte II est
+ * l'Antenne, et son dernier étage lance le Signal : c'est la victoire, et la
+ * partie continue sans fin, des survivants à chaque aube.
  *
  * Ajouter un objectif = ajouter une entrée ici. Aucune logique à écrire tant
  * que ses conditions (`Goal`) et sa récompense (`Reward`) existent déjà.
@@ -26,7 +27,8 @@ import { QUEST_IDS } from './quests.ts';
 
 /**
  * Une condition, lue dans l'état de la simulation :
- * - `build` : au moins `count` bâtiments `building` finis et debout ;
+ * - `build` : au moins `count` bâtiments `building` finis et debout, montés
+ *   au moins au niveau `level` s'il est donné — l'étage d'une antenne ;
  * - `nights` : `count` nuits survécues **pendant l'objectif** (l'aube levée,
  *   la mairie debout) — « tenir », c'est à partir de maintenant ;
  * - `produce` : `count` objets `item` sortis des machines depuis le début ;
@@ -34,7 +36,7 @@ import { QUEST_IDS } from './quests.ts';
  * - `quests` : `count` quêtes d'Ève finies.
  */
 export type Goal =
-  | { type: 'build'; building: BuildingId; count: number }
+  | { type: 'build'; building: BuildingId; count: number; level?: number }
   | { type: 'nights'; count: number }
   | { type: 'produce'; item: ItemId; count: number }
   | { type: 'births'; count: number }
@@ -63,9 +65,11 @@ export interface ObjectiveProto {
   reward: Reward;
   /** La phrase de la célébration : ce que la récompense change. */
   celebration: string;
+  /** Le titre du bandeau, quand ce n'est pas « Objectif réussi ! » : la fin d'un acte. */
+  banner?: string;
 }
 
-const { townHall, drill, nursery } = LORE.buildings;
+const { townHall, drill, nursery, antenna } = LORE.buildings;
 const eve = LORE.characters.eve.name;
 
 export const OBJECTIVES = [
@@ -116,7 +120,15 @@ export const OBJECTIVES = [
     hint: 'Des tours tout autour de la mairie, et toi au milieu. Cinq nuits, et on tient, Adam !',
     goals: [{ type: 'nights', count: 5 }],
     reward: {},
-    celebration: 'La colonie vivra.',
+    celebration: `La colonie vivra. ${eve} a une idée : une ${antenna.name.toLowerCase()} pour appeler d’autres survivants.`,
+    banner: LORE.signal.actOne,
+  },
+  {
+    title: `Bâtir l’${antenna.name}`,
+    hint: 'Une antenne à 8 cases de la mairie, trois étages : il faudra des cœurs de la Reine, et la défendre !',
+    goals: [{ type: 'build', building: 'antenna', count: 1, level: 3 }],
+    reward: {},
+    celebration: LORE.signal.answer,
   },
 ] as const satisfies readonly ObjectiveProto[];
 

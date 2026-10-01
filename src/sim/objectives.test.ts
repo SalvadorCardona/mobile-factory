@@ -145,6 +145,66 @@ function guardTownHall(world: World): void {
   standNextTo(world, hall.tx, hall.ty, hall.width, hall.height);
 }
 
+/**
+ * L'antenne, à 8 ou 9 cases de la mairie — dans son rayon : la ville la
+ * livre —, ses trois étages déposés en ville puis transférés, ou portés par
+ * les porteurs qui les ont vus arriver.
+ */
+function raiseAntenna(world: World): void {
+  const hall = world.entities.get(world.townHallId)!;
+  const town = world.townStock()!;
+  const at = antennaSpot(world);
+  const before = new Set(world.entities.keys());
+
+  world.push({ type: 'placeBuilding', building: 'antenna', tx: at.tx, ty: at.ty });
+  world.tick();
+
+  const id = [...world.entities.keys()].find((key) => !before.has(key));
+
+  if (id === undefined) throw new Error('l’antenne n’a pas été posée');
+  for (const [item, amount] of Object.entries(BUILDINGS.antenna.cost) as [ItemId, number][]) town.add(item, amount);
+  world.push({ type: 'transferToSite', id });
+  world.tick();
+
+  for (const floor of BUILDINGS.antenna.upgrades) {
+    for (const [item, amount] of Object.entries(floor.cost) as [ItemId, number][]) town.add(item, amount);
+    world.push({ type: 'supplyBuilding', id });
+    world.tick();
+  }
+
+  // Ce que les porteurs avaient déjà en route arrive à pied.
+  runUntil(world, () => world.victory, 20 * 60);
+
+  const antenna = world.entities.get(id);
+
+  if (antenna?.kind !== 'antenna' || antenna.level !== 3) throw new Error('l’antenne n’a pas ses trois étages');
+  guardTownHall(world);
+  expect(hall.kind).toBe('townHall');
+}
+
+/** Une case où poser l'antenne, à 8 ou 9 cases de la mairie ; Adam se poste au pied. */
+function antennaSpot(world: World): { tx: number; ty: number } {
+  const hall = world.entities.get(world.townHallId)!;
+  const cx = hall.tx + hall.width / 2;
+  const cy = hall.ty + hall.height / 2;
+
+  for (let dy = -10; dy <= 10; dy += 1) {
+    for (let dx = -10; dx <= 10; dx += 1) {
+      const distance = Math.hypot(dx, dy);
+
+      if (distance < 8 || distance > 9) continue;
+
+      const tx = Math.round(cx + dx - 1.5);
+      const ty = Math.round(cy + dy - 1.5);
+
+      world.player.x = (tx + 1.5) * TILE_SIZE;
+      world.player.y = (ty + 4.5) * TILE_SIZE;
+      if (world.canPlace('antenna', tx, ty) === null) return { tx, ty };
+    }
+  }
+  throw new Error('aucune case pour l’antenne');
+}
+
 /** Avance jusqu'à ce que `done` soit vrai, en `limit` ticks au plus. */
 function runUntil(world: World, done: () => boolean, limit: number): void {
   for (let i = 0; i < limit && !done(); i += 1) world.tick();
@@ -245,18 +305,25 @@ describe('objectifs', () => {
     expect(world.stats.births).toBeGreaterThanOrEqual(1);
     expect(victories).toBe(0);
 
-    // 6. Cinq nuits de plus, comptées depuis le début de l'objectif.
+    // 6. Cinq nuits de plus, comptées depuis le début de l'objectif : l'acte I est fini, pas la partie.
     const survived = world.stats.nightsSurvived;
 
-    runUntil(world, () => world.victory, CYCLE * 6);
+    runUntil(world, () => world.objective >= 6, CYCLE * 6);
     expect(world.stats.nightsSurvived - survived).toBe(5);
     expect(completed).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(victories).toBe(0);
+    expect(currentObjective(world)?.title).toBe(OBJECTIVES[6].title);
+
+    // 7. L'Antenne, ses trois étages livrés depuis la ville : le Signal, c'est la victoire.
+    raiseAntenna(world);
+    expect(completed).toEqual([0, 1, 2, 3, 4, 5, 6]);
     expect(victories).toBe(1);
+    expect(world.victory).toBe(true);
     expect(world.objective).toBe(OBJECTIVES.length);
     expect(currentObjective(world)).toBeNull();
     expect(world.defeated).toBe(false);
 
-    // Le mode infini : les nuits continuent, la victoire ne se refête pas.
+    // Le mode sans fin : les nuits continuent, la victoire ne se refête pas.
     const night = world.night;
 
     for (let i = 0; i < CYCLE + 1; i += 1) world.tick();
