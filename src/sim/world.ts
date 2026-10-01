@@ -23,6 +23,8 @@
  * — crabes sur les plages, loups en forêt — s'en prend à Adam s'il approche.
  * Après la troisième vague repoussée, Ève arrive : elle vit à la mairie,
  * répare le bâti entre les vagues et donne les quêtes (`sim/eve.ts`).
+ * À partir du quatrième jour, un jour sur deux, une caravane de troc se gare
+ * au bord de la clairière et échange les surplus de la ville (`sim/caravan.ts`).
  * Les ouvriers de la maison des constructeurs portent : ils vident foreuses,
  * fermes et cabanes de bûcheron dans la mairie, et livrent les chantiers
  * depuis la mairie. Les bûcherons coupent seuls les arbres autour de leur
@@ -44,6 +46,7 @@ import { Emitter } from '../core/events.ts';
 import { CHUNK_TILES, TILE_SIZE, coordKey, distanceSq, floorDiv, type TileCoord } from '../core/grid.ts';
 import { mulberry32, type StatefulRng } from '../core/rng.ts';
 import { BUILDINGS, REPAIR, buildingLevel, nextUpgrade, type BuildingId } from '../data/buildings.ts';
+import { CARAVAN, RARE_OFFERS, type RareOfferId } from '../data/caravan.ts';
 import { CLINIC } from '../data/clinic.ts';
 import { DAWN_REWARD } from '../data/dayNight.ts';
 import {
@@ -92,8 +95,10 @@ import type {
   SiteRejection,
   SupplyRejection,
   TakeRejection,
+  TradeRejection,
   UpgradeRejection,
 } from './commands.ts';
+import { caravanBagBonus, caravanRoute, createCaravan, drawOffers, isCaravanDay, rideTo, tradeCost } from './caravan.ts';
 import type { WildlifeId } from '../data/enemies.ts';
 import { compassOf, spawnPoint, stepMutant, type Compass } from './enemies.ts';
 import { createEve, currentQuest, harvestYieldWithTools, isUnlocked, mostDamaged, questProgress, rideHome, walkTo } from './eve.ts';
@@ -142,7 +147,7 @@ import type { SavedEntity, WorldState } from './save.ts';
 import { Scheduler } from './scheduler.ts';
 import { Store } from './store.ts';
 import { findSpawn, habitatAt, isBuildable, isWalkable, oreAt, terrainAt } from './terrain.ts';
-import { inLogisticRange } from './warehouse.ts';
+import { inLogisticRange, pointInLogisticRange } from './warehouse.ts';
 import { chopSpot, isTree, pickTree, treesInRange } from './lumberjacks.ts';
 import { allocateStaff, canPause, clampStaff, employs, type Staffing } from './staffing.ts';
 import { carryOf, clearLine, standStill, walkToward, wander, wanderFrom } from './workers.ts';
@@ -150,6 +155,7 @@ import { nextWeather, spoilsNight, weatherAt, type WeatherSpell } from './weathe
 import type {
   Beast,
   Building,
+  Caravan,
   Clinic,
   Contact,
   Depot,
@@ -177,6 +183,7 @@ import type {
   Site,
   Tower,
   TownHall,
+  TradeOffer,
   Worker,
   Yard,
   WorldStats,
@@ -376,6 +383,19 @@ export type WorldEvents = {
   playerKnockedOut: { x: number; y: number };
   /** La nurserie a produit un enfant. */
   childBorn: { nurseryId: EntityId; kidId: MobileId; x: number; y: number };
+  /** Une caravane de troc part de loin vers le bord de la clairière : c'est le jour `day`. */
+  caravanArriving: { id: MobileId; day: number };
+  /** Adam arrive au contact de la caravane garée : la fenêtre Troc s'ouvre. */
+  caravanReached: { id: MobileId };
+  /** La caravane repart : plus d'échange possible. */
+  caravanLeaving: { id: MobileId };
+  /**
+   * L'échange `offer` de la caravane est fait. `fromBag` : ce qui est sorti du
+   * sac pour le payer ; `stored` : ce qui n'a pas tenu dans le sac et attend à la mairie.
+   */
+  traded: { id: MobileId; offer: number; fromBag: [ItemId, number][]; stored: Partial<Record<ItemId, number>> };
+  /** Un échange a été refusé. */
+  tradeRejected: { id: MobileId; reason: TradeRejection };
   /** Ève part du bord de la carte sur son vélo-cargo. */
   eveArriving: { id: MobileId };
   /** Ève est arrivée à la mairie : la population compte deux adultes. */
@@ -486,6 +506,12 @@ export class World {
    * elle, est l'état du labo (`Lab.research`).
    */
   public researchDone: ResearchId[] = [];
+
+  /**
+   * Combien de fois chaque offre rare de la caravane a été prise : leur
+   * plafond sur la partie, et les places de sac qu'elles ont données.
+   */
+  public rareTrades: Partial<Record<RareOfferId, number>> = {};
 
   /** Chantiers offerts par les bonus et pas encore ouverts : le prochain de ce bâtiment arrive livré. */
   private giftedSites: BuildingId[] = [];
@@ -619,6 +645,7 @@ export class World {
       perks: [...this.perks],
       giftedSites: [...this.giftedSites],
       researchDone: [...this.researchDone],
+      rareTrades: { ...this.rareTrades },
       objective: this.objective,
       victory: this.victory,
       victoryTick: this.victoryTick,
@@ -670,6 +697,7 @@ export class World {
     this.perks = [...state.perks];
     this.giftedSites = [...state.giftedSites];
     this.researchDone = [...state.researchDone];
+    this.rareTrades = { ...state.rareTrades };
     this.objective = state.objective;
     this.victory = state.victory;
     this.victoryTick = state.victoryTick;
@@ -677,9 +705,13 @@ export class World {
     this.objectiveBase = copyStats(state.objectiveBase);
 
     const { inventory, ...player } = state.player;
-    // La taille du sac se relit dans les bonus, les recherches et les récompenses déjà tombées.
+    // La taille du sac se relit dans les bonus, les recherches, les récompenses déjà tombées et les trocs.
     const capacity =
-      INVENTORY_CAPACITY + bagBonus(this.perks) + this.bonus('bagCapacity') + objectiveBagBonus(state.objective);
+      INVENTORY_CAPACITY +
+      bagBonus(this.perks) +
+      this.bonus('bagCapacity') +
+      objectiveBagBonus(state.objective) +
+      caravanBagBonus(this.rareTrades);
 
     Object.assign(this.player, player, { inventory: Store.fromJSON(capacity, inventory) });
     this.resources.restore(state.resources);
@@ -832,6 +864,10 @@ export class World {
 
       case 'cancelSite':
         this.cancelSite(command.id);
+        break;
+
+      case 'trade':
+        this.trade(command.caravan, command.offer);
         break;
     }
   }
@@ -1051,6 +1087,130 @@ export class World {
 
     building.hp = Math.min(buildingLevel(building.proto, building.level).hp, building.hp + amount * REPAIR.hp);
     this.events.emit('playerRepaired', { id: building.id, hp: building.hp, item: REPAIR.item, amount, fromBag });
+  }
+
+  /* -------------------------------------------------------------- caravane */
+
+  /** La caravane de troc, si elle est de passage — en route, garée ou sur le départ. */
+  public caravan(): Caravan | undefined {
+    for (const mobile of this.mobiles.values()) {
+      if (mobile.kind === 'caravan') return mobile;
+    }
+    return undefined;
+  }
+
+  /** Adam est-il au contact de la charrette ? */
+  public caravanInReach(caravan: Caravan): boolean {
+    return distanceSq(this.player.x, this.player.y, caravan.x, caravan.y) <= CARAVAN.reach * CARAVAN.reach;
+  }
+
+  /** La caravane est-elle dans le rayon de la mairie ? Alors un échange puise aussi dans la ville. */
+  public caravanInTownRange(caravan: Caravan): boolean {
+    return this.townStockForCaravan(caravan) !== null;
+  }
+
+  private townStockForCaravan(caravan: Caravan): Store | null {
+    const hall = this.warehouse();
+
+    return hall && pointInLogisticRange(hall, caravan.x, caravan.y) ? hall.store : null;
+  }
+
+  /** Ce qui manquerait pour payer l'échange : ni dans le sac, ni dans la ville à portée. Vide : il se paie. */
+  public tradeMissing(caravan: Caravan, trade: TradeOffer): [ItemId, number][] {
+    const town = this.townStockForCaravan(caravan);
+
+    return tradeCost(trade).flatMap(([item, needed]): [ItemId, number][] => {
+      const short = needed - this.player.inventory.available(item) - (town?.available(item) ?? 0);
+
+      return short > 0 ? [[item, short]] : [];
+    });
+  }
+
+  /**
+   * Un échange, tout ou rien : le coût, le sac d'abord, puis la ville si la
+   * caravane est dans son rayon — comme « Renforcer » ; puis ce qu'il
+   * rapporte, le sac d'abord agrandi, puis rempli, le surplus à la mairie.
+   */
+  private trade(id: MobileId, index: number): void {
+    const caravan = this.mobiles.get(id);
+    const reject = (reason: TradeRejection): void => this.events.emit('tradeRejected', { id, reason });
+
+    if (caravan?.kind !== 'caravan' || caravan.state !== 'parked') return reject('missing');
+
+    const trade = caravan.offers[index];
+
+    if (!trade) return reject('missing');
+    if (!this.caravanInReach(caravan)) return reject('outOfReach');
+    if (trade.done || (trade.rare && (this.rareTrades[trade.rare] ?? 0) >= RARE_OFFERS[trade.rare].limit)) return reject('done');
+    if (this.tradeMissing(caravan, trade).length > 0) return reject('missingItems');
+
+    const town = this.townStockForCaravan(caravan);
+    const fromBag: [ItemId, number][] = [];
+
+    for (const [item, needed] of tradeCost(trade)) {
+      const bag = Math.min(needed, this.player.inventory.available(item));
+
+      if (bag > 0) {
+        this.player.inventory.remove(item, bag);
+        fromBag.push([item, bag]);
+      }
+      if (needed > bag) town?.remove(item, needed - bag);
+    }
+
+    trade.done = true;
+    if (trade.rare) this.rareTrades[trade.rare] = (this.rareTrades[trade.rare] ?? 0) + 1;
+
+    const stored = this.grant({ items: trade.items, bag: trade.bag });
+
+    this.events.emit('traded', { id, offer: index, fromBag, stored });
+  }
+
+  /**
+   * La caravane part de loin vers le bord de la clairière, ses offres tirées
+   * sur ce que la ville a à cet instant. Une seule à la fois.
+   */
+  private sendCaravan(day: number): void {
+    if (this.caravan()) return;
+
+    const town = this.townStock();
+    const route = caravanRoute(this.seed, day, this.target, this.isSolid);
+    const offers = drawOffers(this.seed, day, (item) => town?.available(item) ?? 0, this.rareTrades);
+    const caravan = createCaravan(this.nextMobileId++, day, route, offers);
+
+    this.mobiles.set(caravan.id, caravan);
+    this.events.emit('caravanArriving', { id: caravan.id, day });
+  }
+
+  /** La charrette roule, attend `CARAVAN.stay` ticks garée — Adam au contact ouvre le troc —, puis repart. */
+  private stepCaravan(caravan: Caravan): void {
+    switch (caravan.state) {
+      case 'arriving':
+        if (rideTo(caravan, caravan.parkX, caravan.parkY, STEP_SECONDS)) {
+          caravan.state = 'parked';
+          caravan.leaveTick = this.tickCount + CARAVAN.stay;
+        }
+        break;
+
+      case 'parked': {
+        const near = this.caravanInReach(caravan);
+
+        caravan.prevX = caravan.x;
+        caravan.prevY = caravan.y;
+        if (near && !caravan.met) this.events.emit('caravanReached', { id: caravan.id });
+        caravan.met = near;
+
+        if (this.tickCount >= caravan.leaveTick) {
+          caravan.state = 'leaving';
+          caravan.met = false;
+          this.events.emit('caravanLeaving', { id: caravan.id });
+        }
+        break;
+      }
+
+      case 'leaving':
+        if (rideTo(caravan, caravan.fromX, caravan.fromY, STEP_SECONDS)) this.mobiles.delete(caravan.id);
+        break;
+    }
   }
 
   /* ------------------------------------------------------- ville et sac */
@@ -2446,6 +2606,10 @@ export class World {
         case 'patient':
           this.stepPatient(mobile);
           break;
+
+        case 'caravan':
+          this.stepCaravan(mobile);
+          break;
       }
     }
 
@@ -3106,6 +3270,9 @@ export class World {
       if (clock.phase === 'night') this.night = clock.cycle;
       if (clock.phase === 'dawn') this.dawn();
     }
+
+    // Un jour sur deux, une caravane de troc, une fois le matin bien levé.
+    if (clock.phase === 'day' && clock.elapsed === CARAVAN.arriveAfter && isCaravanDay(clock.cycle)) this.sendCaravan(clock.cycle);
 
     const left = ticksToNextWave(clock);
 
@@ -4302,6 +4469,9 @@ function saveEntity(entity: Entity): SavedEntity {
 function copyMobile(mobile: Mobile): Mobile {
   if (mobile.kind === 'worker') return { ...mobile, job: mobile.job && { ...mobile.job } };
   if (mobile.kind === 'lumberjack') return { ...mobile, tree: mobile.tree && { ...mobile.tree } };
+  if (mobile.kind === 'caravan') {
+    return { ...mobile, offers: mobile.offers.map((trade) => ({ ...trade, cost: { ...trade.cost }, items: { ...trade.items } })) };
+  }
   return { ...mobile };
 }
 

@@ -2304,6 +2304,105 @@ button.hud-stock:active {
   color: var(--danger);
 }
 
+/* ------------------------------------------------------------- fenêtre Troc */
+
+.caravan-panel h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.caravan-timer {
+  margin: 6px 0 0;
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.caravan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* L'ombre de la dernière carte ne se fait pas rogner. */
+  padding-bottom: 4px;
+  max-height: min(44dvh, 360px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+
+.trade-row {
+  padding: 6px 10px 8px;
+  border-radius: 16px;
+  background: var(--paper);
+  box-shadow: 0 3px 0 var(--paper-shade);
+}
+
+.trade-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.trade-name {
+  margin: 0;
+  min-width: 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.trade-button {
+  flex: none;
+  min-width: 96px;
+  min-height: 40px;
+}
+
+.trade-button[disabled] {
+  opacity: 0.45;
+}
+
+.trade-deal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-top: 4px;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.trade-arrow {
+  color: var(--violet);
+  font-weight: 700;
+}
+
+/* Ce qui manque se lit en rouge : c'est ce qu'il faut aller chercher. */
+.trade-deal .item-amount[data-done='false'] {
+  color: var(--danger);
+}
+
+.trade-status {
+  margin: 2px 0 0;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.trade-row[data-status='done'] {
+  background: var(--mint-light);
+  box-shadow: 0 3px 0 var(--mint);
+}
+
+.trade-row[data-status='done'] .trade-status {
+  color: var(--good);
+  font-weight: 700;
+}
+
+.trade-row[data-status='short'] .trade-status {
+  color: var(--danger);
+}
+
 /* -------------------------------------------------------------- plein cadre */
 
 .overlay {

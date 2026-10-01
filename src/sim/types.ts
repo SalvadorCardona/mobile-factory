@@ -8,11 +8,12 @@
  * Deux familles :
  * - les **entités** posées sur la grille — chantiers et bâtiments — qui
  *   dorment entre deux réveils du scheduler ;
- * - les **mobiles** — mutants, bêtes, flèches, enfants, Ève, ouvriers, bûcherons, butin, patients — qui bougent à chaque tick.
+ * - les **mobiles** — mutants, bêtes, flèches, enfants, Ève, ouvriers, bûcherons, butin, patients, caravane — qui bougent à chaque tick.
  *   Ils sont peu nombreux, et c'est ce qui rend le tick par mobile acceptable.
  */
 
 import type { BuildingId } from '../data/buildings.ts';
+import type { RareOfferId } from '../data/caravan.ts';
 import type { EnemyId, WildlifeId } from '../data/enemies.ts';
 import type { ItemId } from '../data/items.ts';
 import type { ResearchId } from '../data/research.ts';
@@ -492,7 +493,48 @@ export interface Patient extends Moving {
   ticks: number;
 }
 
-export type Mobile = Mutant | Beast | Arrow | Kid | Eve | Worker | Lumberjack | Pickup | Patient;
+/**
+ * Un échange de la caravane, tiré à son arrivée (`sim/caravan.ts`) :
+ * ce qu'il coûte, ce qu'il rapporte — objets ou places de sac —, et s'il a
+ * déjà été fait. Chaque échange ne se fait qu'une fois.
+ */
+export interface TradeOffer {
+  kind: 'surplus' | 'loot' | 'rare';
+  cost: Partial<Record<ItemId, number>>;
+  items: Partial<Record<ItemId, number>>;
+  bag: number;
+  /** L'offre rare d'où il vient, comptée sur la partie ; `null` pour les autres. */
+  rare: RareOfferId | null;
+  done: boolean;
+}
+
+/**
+ * Ce que fait la caravane :
+ * - `arriving` : la charrette roule jusqu'au bord de la clairière ;
+ * - `parked` : elle attend les échanges, jusqu'à `leaveTick` ;
+ * - `leaving` : elle repart par où elle est venue, et disparaît.
+ */
+export type CaravanState = 'arriving' | 'parked' | 'leaving';
+
+/** La caravane de troc : une charrette tirée par un survivant, un jour sur deux. */
+export interface Caravan extends Moving {
+  kind: 'caravan';
+  state: CaravanState;
+  /** Le jour de son passage : il fixe ses tirages. */
+  day: number;
+  /** Où elle se gare, et d'où elle vient — où elle repart. */
+  parkX: number;
+  parkY: number;
+  fromX: number;
+  fromY: number;
+  /** Tick du départ, une fois garée ; 0 avant. */
+  leaveTick: number;
+  offers: TradeOffer[];
+  /** Vrai tant qu'Adam est au contact : la fenêtre Troc ne s'ouvre qu'en arrivant. */
+  met: boolean;
+}
+
+export type Mobile = Mutant | Beast | Arrow | Kid | Eve | Worker | Lumberjack | Pickup | Patient | Caravan;
 
 /**
  * Les compteurs de la partie, que les objectifs lisent. Ils ne font que

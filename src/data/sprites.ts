@@ -20,6 +20,7 @@ import { ADAM } from '../art/adam.ts';
 import { ARROW } from '../art/arrow.ts';
 import { BUILDER } from '../art/builder.ts';
 import { BUILDER_HOUSE } from '../art/builderHouse.ts';
+import { CARAVAN_SPRITE } from '../art/caravan.ts';
 import { CARGO_BIKE } from '../art/cargoBike.ts';
 import { CLINIC_SPRITE } from '../art/clinic.ts';
 import { CONSTRUCTION_POST } from '../art/constructionPost.ts';
@@ -73,6 +74,8 @@ export const SPRITES = {
   adam: ADAM,
   eve: EVE_SPRITE,
   cargoBike: CARGO_BIKE,
+  /** La caravane de troc : la charrette, son marchand, et la roue qui tourne. */
+  caravan: CARAVAN_SPRITE,
   mutant: MUTANT,
   kid: KID,
   worker: WORKER,

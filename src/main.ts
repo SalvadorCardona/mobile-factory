@@ -36,6 +36,7 @@ import { LocalGarden } from './storage/localGarden.ts';
 import { LocalSave, type LoadResult } from './storage/localSave.ts';
 import { TILE_SIZE } from './core/grid.ts';
 import { BuildingPanel } from './ui/buildingPanel.ts';
+import { CaravanPanel } from './ui/caravanPanel.ts';
 import { InventoryPanel } from './ui/inventoryPanel.ts';
 import { escapeAction } from './ui/escape.ts';
 import { JoystickView } from './ui/joystick.ts';
@@ -170,15 +171,25 @@ async function main(): Promise<void> {
     () => audio.play('open'),
     (id) => isUnlocked(id, world.questsDone),
   );
-  // La fenêtre d'un bâtiment et le sac occupent la même place : l'un ferme l'autre.
+  // La fenêtre d'un bâtiment, le sac et le troc occupent la même place : l'un ferme les autres.
   const panel = new BuildingPanel(world, () => {
     inventory.close();
+    trade.close();
     audio.play('open');
   });
   const inventory = new InventoryPanel(world, () => {
     panel.close();
+    trade.close();
     audio.play('open');
   });
+  const trade = new CaravanPanel(world, () => {
+    panel.close();
+    inventory.close();
+    audio.play('open');
+  });
+
+  // Adam arrive au contact de la caravane garée : la fenêtre Troc s'ouvre.
+  world.events.on('caravanReached', ({ id }) => trade.show(id));
   const inspect = new Inspect(
     world,
     (x, y) => renderer.screenToWorld(x, y),
@@ -191,7 +202,7 @@ async function main(): Promise<void> {
     },
   );
 
-  hud.root.append(stick.root, buildMenu.root, panel.root, inventory.root);
+  hud.root.append(stick.root, buildMenu.root, panel.root, inventory.root, trade.root);
   stick.avoid([...buildMenu.root.children]);
   hud.bag.addEventListener('click', () => inventory.toggle());
   hud.setProjector((x, y) => renderer.worldToScreen(x, y));
@@ -280,12 +291,15 @@ async function main(): Promise<void> {
       const action = escapeAction({
         paused,
         menuOpen: buildMenu.isOpen,
-        panelOpen: panel.open,
+        panelOpen: panel.open || trade.open,
         inventoryOpen: inventory.open,
       });
 
       if (action === 'closeMenu') buildMenu.close();
-      else if (action === 'closePanel') panel.close();
+      else if (action === 'closePanel') {
+        panel.close();
+        trade.close();
+      }
       else if (action === 'closeInventory') inventory.close();
       else setPaused(action === 'pause');
     }
@@ -332,7 +346,7 @@ async function main(): Promise<void> {
   wireShake(
     world,
     renderer,
-    () => placement.mode !== 'idle' || buildMenu.isOpen || panel.open || inventory.open,
+    () => placement.mode !== 'idle' || buildMenu.isOpen || panel.open || inventory.open || trade.open,
   );
 
   let accumulator = 0;
@@ -362,9 +376,10 @@ async function main(): Promise<void> {
     buildMenu.refresh();
     panel.update();
     inventory.update();
+    trade.update();
     // Un menu, une fenêtre ou la pause par-dessus : le joystick s'efface et
     // lâche son doigt ; il revient à la fermeture.
-    stick.setEnabled(started && !paused && !world.defeated && !buildMenu.isOpen && !panel.open && !inventory.open);
+    stick.setEnabled(started && !paused && !world.defeated && !buildMenu.isOpen && !panel.open && !inventory.open && !trade.open);
     if (hud.root.dataset['stick'] !== String(stick.shown)) hud.root.dataset['stick'] = String(stick.shown);
   });
 
@@ -376,7 +391,7 @@ async function main(): Promise<void> {
     const height = renderer.app.screen.height;
     let top = height - HUD_BOTTOM_INSET;
 
-    for (const node of [...buildMenu.root.children, panel.root, inventory.root]) {
+    for (const node of [...buildMenu.root.children, panel.root, inventory.root, trade.root]) {
       const rect = node.getBoundingClientRect();
 
       if (rect.height > 0) top = Math.min(top, rect.top);
@@ -495,6 +510,7 @@ function wireAudio(world: World, audio: AudioEngine, hud: Hud): void {
   world.events.on('lootPicked', () => audio.play('pickup'));
   world.events.on('childBorn', () => audio.play('baby'));
   world.events.on('eveArrived', () => audio.play('build'));
+  world.events.on('traded', () => audio.play('deliver'));
   world.events.on('questCompleted', () => audio.play('build'));
   world.events.on('townHallDestroyed', () => {
     audio.play('defeat');

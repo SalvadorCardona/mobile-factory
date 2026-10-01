@@ -534,6 +534,23 @@ export class Hud {
     world.events.on('weatherEnded', ({ id }) => this.notify(`Fin : ${WEATHER[id].label.toLowerCase()}`, 'good'));
     world.events.on('playerKnockedOut', () => this.notify('Adam s’est évanoui — il se réveille à la mairie', 'bad'));
     world.events.on('eveArriving', () => this.notify('Quelqu’un arrive à vélo…', 'good'));
+    world.events.on('caravanArriving', () => {
+      this.notify('Une caravane de troc arrive au bord de la clairière', 'good');
+      this.say([EVE_LINES.caravan]);
+    });
+    world.events.on('caravanLeaving', () => this.notify('La caravane repart', 'info'));
+    world.events.on('traded', ({ fromBag, stored }) => {
+      for (const [item, amount] of fromBag) this.float(item, -amount);
+      for (const [item, amount] of Object.entries(stored) as [ItemId, number][]) {
+        if (amount > 0) this.notify(`Sac plein : ${amount} ${ITEMS[item].label.toLowerCase()} attend à la mairie`, 'info');
+      }
+    });
+    world.events.on('tradeRejected', ({ reason }) => {
+      if (reason === 'outOfReach') this.notify('Approchez-vous de la charrette', 'bad');
+      if (reason === 'missingItems') this.notify('Il manque de quoi payer cet échange', 'bad');
+      if (reason === 'done') this.notify('Cet échange est déjà fait', 'bad');
+      if (reason === 'missing') this.notify('La caravane est repartie', 'bad');
+    });
     world.events.on('eveArrived', () => {
       this.notify('Ève a rejoint la colonie !', 'good');
       this.say(EVE_LINES.arrival);
