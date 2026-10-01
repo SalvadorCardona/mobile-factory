@@ -156,6 +156,11 @@ export class GameRenderer {
     this.indicators.setObjective(item);
   }
 
+  /** Une alerte de la ville tapée : un repère de bord pointe quelques secondes vers le bâtiment en cause. */
+  public pointTo(id: EntityId, item: ItemId): void {
+    this.indicators.pointTo(id, item);
+  }
+
   /** Le bâtiment sélectionné — sa fenêtre est ouverte —, ou `null`. */
   public setSelected(id: EntityId | null): void {
     this.selected = id;

@@ -49,7 +49,11 @@ sac » dans sa fenêtre, ou en la heurtant) et par les porteurs. Les chantiers
 puisent dans les deux, la ville seulement dans son rayon (`logisticRadius`,
 `sim/warehouse.ts`, le cercle jaune du mode construction). Le HUD
 les montre en deux cartes compactes ; le sac (tap, ou touche I) ouvre
-`ui/inventoryPanel.ts`, sans pause, comme la fenêtre d'un bâtiment. Loin de
+`ui/inventoryPanel.ts`, sans pause, comme la fenêtre d'un bâtiment. Sa
+section Ville est un tableau de bord (`sim/flows.ts`, `World.flows`) : débit
+net par objet sur deux minutes (anneau d'échantillons, pas sauvegardé) et
+deux alertes au plus — pénurie d'une recette, surplus que rien n'utilise —
+dont le tap pointe un repère de bord vers le bâtiment en cause. Loin de
 la mairie, « Jeter » pose le sac au sol en tas (le mobile `pickup` du
 butin, avec `amount`), qu'Adam reprend après s'en être éloigné.
 Tant que la mairie n'est pas debout, Adam ne récolte d'un objet que ce

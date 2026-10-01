@@ -18,9 +18,12 @@
  *   qui grossit et clignote en corail quand la mairie est frappée (`alarm`) ;
  * - dans la teinte de sa famille, avec l'icône de l'objet, vers le gisement
  *   le plus proche de la ressource que réclame le conseil. Un gisement que le
- *   joueur n'a encore jamais eu à l'écran est une piste : un « ? » l'annonce.
+ *   joueur n'a encore jamais eu à l'écran est une piste : un « ? » l'annonce ;
+ * - dans la teinte de sa famille, avec l'icône de l'objet, vers le bâtiment
+ *   d'une alerte de la ville tapée dans le panneau du sac (`pointTo`) —
+ *   la forge qui attend son charbon —, quelques secondes.
  *
- * La mairie et le gisement disent leur distance (« 24 m ») quand ils sont
+ * La mairie, le gisement et le bâtiment d'une alerte disent leur distance (« 24 m ») quand ils sont
  * loin. Le repère de la mairie se tape (`homeAt`).
  *
  * Aucun repère ne se pose sous le HUD : la zone utile s'arrête sous la quête
@@ -39,6 +42,7 @@ import { ICON_SIZE, ITEM_ICONS } from '../data/icons.ts';
 import { ITEM_IDS, type ItemId } from '../data/items.ts';
 import { findDeposit, type Deposit } from '../sim/deposits.ts';
 import { ticksToNextWave } from '../sim/dayNight.ts';
+import type { EntityId } from '../sim/types.ts';
 import { TICKS_PER_SECOND, type World } from '../sim/world.ts';
 import type { Camera } from './camera.ts';
 import type { SpriteLibrary, SvgSource } from './spriteLibrary.ts';
@@ -94,6 +98,9 @@ export const ITEM_TONES: Record<ItemId, Tone> = {
   crabClaw: FAMILY_TONES.humans,
 };
 
+/** Durée du repère d'une alerte de la ville, en ms : le temps de regarder, puis de marcher. */
+const FLAG_MS = 8000;
+
 /** Taille de l'icône d'objet dans la pastille, en pixels écran. */
 const ICON_PX = 14;
 
@@ -141,6 +148,8 @@ export class IndicatorLayer {
   private readonly icon = new Sprite();
   private readonly homeLabel = label();
   private readonly depositLabel = label();
+  private readonly flagIcon = new Sprite();
+  private readonly flagLabel = label();
   private readonly world: World;
   private readonly library: SpriteLibrary;
   private elapsed = 0;
@@ -158,12 +167,17 @@ export class IndicatorLayer {
   private deposit: Deposit | null = null;
   private searchIn = 0;
 
+  /** Le bâtiment d'une alerte tapée, l'objet en cause, et le temps qui reste au repère. */
+  private flag: { id: EntityId; item: ItemId; ms: number } | null = null;
+
   public constructor(world: World, library: SpriteLibrary) {
     this.world = world;
     this.library = library;
     this.icon.anchor.set(0.5);
     this.icon.visible = false;
-    this.container.addChild(this.graphics, this.icon, this.homeLabel, this.depositLabel);
+    this.flagIcon.anchor.set(0.5);
+    this.flagIcon.visible = false;
+    this.container.addChild(this.graphics, this.icon, this.flagIcon, this.homeLabel, this.depositLabel, this.flagLabel);
   }
 
   /**
@@ -182,6 +196,11 @@ export class IndicatorLayer {
     this.objective = item;
     this.deposit = null;
     this.searchIn = 0;
+  }
+
+  /** Une alerte de la ville tapée : un repère pointe quelques secondes vers son bâtiment. */
+  public pointTo(id: EntityId, item: ItemId): void {
+    this.flag = { id, item, ms: FLAG_MS };
   }
 
   /** Le repère de la mairie est-il sous ce point écran ? */
@@ -208,6 +227,8 @@ export class IndicatorLayer {
     this.icon.visible = false;
     this.homeLabel.visible = false;
     this.depositLabel.visible = false;
+    this.flagIcon.visible = false;
+    this.flagLabel.visible = false;
     this.home = null;
 
     const { player } = this.world;
@@ -254,6 +275,8 @@ export class IndicatorLayer {
       }
     }
 
+    this.pointFlag(camera, zone, px, py, deltaMs);
+
     const { world } = this;
     const clock = world.clock();
     const left = clock ? ticksToNextWave(clock) : 0;
@@ -278,6 +301,34 @@ export class IndicatorLayer {
       this.home = center;
       if (center && tiles >= LABEL_TILES) this.tag(this.homeLabel, center, meters(tiles));
     }
+  }
+
+  /** Le repère d'une alerte de la ville : il bat, et s'éteint au bout de `FLAG_MS` ou si le bâtiment tombe. */
+  private pointFlag(camera: Camera, zone: Zone, px: number, py: number, deltaMs: number): void {
+    if (!this.flag) return;
+
+    const target = this.world.entities.get(this.flag.id);
+
+    this.flag.ms -= deltaMs;
+    if (!target || this.flag.ms <= 0) {
+      this.flag = null;
+      return;
+    }
+
+    const x = (target.tx + target.width / 2) * TILE_SIZE;
+    const y = (target.ty + target.height / 2) * TILE_SIZE;
+    const center = this.arrow(camera, zone, x, y, ITEM_TONES[this.flag.item], 1, 1.15 + Math.sin(this.elapsed / 150) * 0.1, 'item');
+
+    if (!center) return;
+    this.flagIcon.texture = this.library.texture(iconKey(this.flag.item));
+    this.flagIcon.width = ICON_PX;
+    this.flagIcon.height = ICON_PX;
+    this.flagIcon.position.set(center.x, center.y);
+    this.flagIcon.visible = true;
+
+    const tiles = Math.hypot(x - px, y - py) / TILE_SIZE;
+
+    if (tiles >= LABEL_TILES) this.tag(this.flagLabel, center, meters(tiles));
   }
 
   /** La zone utile de l'écran : entre la quête et le bouton du bas, étiquette comprise. */
