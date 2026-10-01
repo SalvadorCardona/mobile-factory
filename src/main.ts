@@ -311,8 +311,10 @@ async function main(): Promise<void> {
   // d'abord (il ne revendique qu'un doigt posé dessus), l'inspection ensuite
   // (elle ne revendique qu'un tap sur un bâtiment), le placement en dernier
   // (il ne revendique rien tant qu'aucun bâtiment n'est armé). Le joystick
-  // n'en est pas : il est dans le DOM, au-dessus du canvas, et garde ses
-  // doigts pour lui — Adam marche au pouce pendant que l'autre doigt vise.
+  // est dans le DOM, au-dessus du canvas, et garde ses doigts pour lui —
+  // Adam marche au pouce pendant que l'autre doigt vise. Un pouce qui rate
+  // l'anneau, dans le quart bas-gauche, passe après les taps : l'anneau
+  // saute sous lui, sauf si un bâtiment armé attend d'être posé.
   //
   // À la souris, le survol seul fait suivre le fantôme au curseur : le mode
   // PC se décide à l'événement (`pointerType`), le tactile n'en voit rien.
@@ -320,6 +322,7 @@ async function main(): Promise<void> {
 
   pointers.add(homeTap);
   pointers.add(inspect);
+  pointers.add(stick.canvasFinger(renderer.canvas, () => placement.mode === 'idle'));
   pointers.add(placement);
 
   wireAudio(world, audio, hud);

@@ -1,5 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { DEAD_ZONE, Joystick, STICK_RADIUS, TOUCH_RADIUS, readStick } from './joystick.ts';
+import type { Entity } from '../sim/types.ts';
+import type { World } from '../sim/world.ts';
+import { Inspect } from './inspect.ts';
+import {
+  CAPTURE_ZONE,
+  DEAD_ZONE,
+  Joystick,
+  RING_RIM,
+  STICK_RADIUS,
+  StickCapture,
+  TOUCH_RADIUS,
+  inCaptureZone,
+  readStick,
+} from './joystick.ts';
+import { PointerDispatch, type PointerSample } from './pointer.ts';
 
 describe('sortie du joystick', () => {
   it('au centre et dans la zone morte, Adam ne bouge pas', () => {
@@ -46,7 +60,27 @@ describe('doigt sur le joystick', () => {
     expect(joystick.state.active).toBe(false);
     expect(joystick.press(1, STICK_RADIUS + 10, 0)).toBe(true);
     expect(joystick.state.active).toBe(true);
-    expect(joystick.state.axisX).toBeCloseTo(1);
+  });
+
+  it('dans le creux de l’anneau, rien ne saute : on marche dès le contact', () => {
+    const joystick = new Joystick();
+
+    joystick.press(1, STICK_RADIUS - RING_RIM, 0);
+    expect(joystick.state).toMatchObject({ originX: 0, originY: 0 });
+    expect(joystick.state.axisX).toBeGreaterThan(0.8);
+  });
+
+  it('sur le bord ou à côté, l’anneau saute sous le doigt et part de zéro', () => {
+    const joystick = new Joystick();
+
+    // Le doigt à 54 px au-dessus du centre, glissé de 50 px vers le bas : il descend.
+    joystick.press(1, 0, -54);
+    expect(joystick.state).toMatchObject({ originX: 0, originY: -54, axisX: 0, axisY: 0 });
+    joystick.drag(1, 0, -4);
+    expect(joystick.state.axisY).toBeGreaterThan(0.8);
+
+    joystick.release(1);
+    expect(joystick.state).toMatchObject({ originX: 0, originY: 0 });
   });
 
   it('un seul doigt à la fois : le second ne le vole pas', () => {
@@ -69,7 +103,7 @@ describe('doigt sur le joystick', () => {
     expect(joystick.state.active).toBe(true);
 
     joystick.release(1);
-    expect(joystick.state).toEqual({ active: false, knobX: 0, knobY: 0, axisX: 0, axisY: 0 });
+    expect(joystick.state).toEqual({ active: false, knobX: 0, knobY: 0, axisX: 0, axisY: 0, originX: 0, originY: 0 });
     expect(joystick.press(3, 0, 0)).toBe(true);
   });
 
@@ -82,5 +116,65 @@ describe('doigt sur le joystick', () => {
     expect(joystick.state).toMatchObject({ active: false, axisX: 0, axisY: 0 });
     joystick.drag(1, 0, STICK_RADIUS);
     expect(joystick.state.axisY).toBe(0);
+  });
+});
+
+/** Un écran de téléphone, 390 × 844, l'anneau au repos en (90, 754). */
+const PHONE = { width: 390, height: 844, centerX: 90, centerY: 754 };
+
+describe('pouce posé à côté de l’anneau', () => {
+  const at = (x: number, y: number, id = 1): PointerSample => ({ id, x, y });
+
+  it('la zone de prise est le quart bas-gauche de l’écran', () => {
+    expect(inCaptureZone(90, 600, PHONE.width, PHONE.height)).toBe(true);
+    expect(inCaptureZone(PHONE.width * CAPTURE_ZONE.maxX + 1, 700, PHONE.width, PHONE.height)).toBe(false);
+    expect(inCaptureZone(90, PHONE.height * CAPTURE_ZONE.minY - 1, PHONE.width, PHONE.height)).toBe(false);
+  });
+
+  it('posé hors de l’anneau dans la zone : sortie nulle au contact, puis Adam suit le glissé', () => {
+    const joystick = new Joystick();
+    const capture = new StickCapture(joystick, () => PHONE);
+
+    expect(capture.onDown(at(90, 600))).toBe(true);
+    expect(joystick.state).toMatchObject({ active: true, axisX: 0, axisY: 0, originX: 0, originY: -154 });
+
+    capture.onMove(at(90, 650));
+    expect(joystick.state.axisY).toBeGreaterThan(0.8);
+    expect(joystick.state.axisX).toBeCloseTo(0);
+
+    capture.onUp(at(90, 650));
+    expect(joystick.state).toMatchObject({ active: false, axisY: 0, originX: 0, originY: 0 });
+  });
+
+  it('hors de la zone, masqué ou à la souris, le doigt n’est pas pris', () => {
+    const joystick = new Joystick();
+
+    expect(new StickCapture(joystick, () => PHONE).onDown(at(300, 600))).toBe(false);
+    expect(new StickCapture(joystick, () => PHONE).onDown(at(90, 300))).toBe(false);
+    expect(new StickCapture(joystick, () => null).onDown(at(90, 600))).toBe(false);
+    expect(new StickCapture(joystick, () => PHONE).onDown({ ...at(90, 600), mouse: true })).toBe(false);
+    expect(joystick.state.active).toBe(false);
+  });
+
+  it('un tap sur un bâtiment du coin ouvre toujours sa fenêtre', () => {
+    const joystick = new Joystick();
+    const opened: number[] = [];
+    // Une maison des constructeurs sous le doigt, en (64, 576) – écran = monde.
+    const building = { id: 7, proto: 'builderHouse', tx: 2, ty: 17, width: 2, height: 2 } as unknown as Entity;
+    const world = { entities: new Map([[7, building]]), eve: () => undefined } as unknown as World;
+    const pointers = new PointerDispatch();
+
+    pointers.add(new Inspect(world, (x, y) => ({ x, y }), () => true, (id) => opened.push(id)));
+    pointers.add(new StickCapture(joystick, () => PHONE));
+
+    pointers.down(at(80, 600));
+    pointers.move(at(80 + DEAD_ZONE - 1, 600));
+    expect(joystick.state.active).toBe(false);
+    pointers.up(at(80 + DEAD_ZONE - 1, 600));
+    expect(opened).toEqual([7]);
+
+    // À côté du bâtiment, le même doigt prend le joystick.
+    pointers.down(at(170, 600, 2));
+    expect(joystick.state.active).toBe(true);
   });
 });

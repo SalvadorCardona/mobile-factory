@@ -958,8 +958,15 @@ button.hud-stock:active {
   border-radius: 50%;
   background: rgb(255 255 255 / 0.34);
   box-shadow:
-    0 0 0 6px rgb(255 255 255 / 0.5) inset,
+    0 0 0 var(--stick-rim) rgb(255 255 255 / 0.5) inset,
     0 4px 0 rgb(43 45 143 / 0.16);
+  /* Relâché : l'anneau revient à sa place de repos. */
+  transition: transform 150ms ease-out;
+}
+
+/* Tenu : l'anneau saute sous un pouce posé à côté de lui. */
+.joystick[data-active='true'] .joystick-ring {
+  transition: transform 80ms ease-out;
 }
 
 .joystick-knob {

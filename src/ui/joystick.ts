@@ -12,8 +12,13 @@
  * visible (`STICK_RADIUS`) : le pouce n'a pas à viser juste. Le doigt capturé
  * peut ensuite sortir de la zone, et même de l'écran, sans être perdu.
  *
+ * Un pouce qui rate l'anneau mais tombe dans le quart bas-gauche, lui,
+ * arrive sur le canvas : `canvasFinger()` le prend pour le routeur, après
+ * les taps sur la carte. L'anneau saute alors sous le doigt (80 ms) et y
+ * reste tant qu'il est tenu ; relâché, il revient à sa place (150 ms).
+ *
  * Au repos il est voilé ; tenu, il est plein. Relâché, le bouton revient au
- * centre avec un petit ressort — une transition CSS, pas de l'état.
+ * centre avec un petit ressort — des transitions CSS, pas de l'état.
  *
  * Une barre qui s'ouvre en bas d'écran par-dessus lui (celle du placement)
  * le fait monter au-dessus d'elle : il ne cache rien, et rien ne le cache.
@@ -25,11 +30,20 @@
  * ici on ne fait que lire le doigt et poser le bouton.
  */
 
-import { KNOB_RADIUS, STICK_RADIUS, TOUCH_RADIUS, type Joystick } from '../input/joystick.ts';
+import {
+  KNOB_RADIUS,
+  RING_RIM,
+  STICK_RADIUS,
+  StickCapture,
+  TOUCH_RADIUS,
+  type Joystick,
+} from '../input/joystick.ts';
+import type { PointerConsumer } from '../input/pointer.ts';
 
 export class JoystickView {
   public readonly root: HTMLElement;
 
+  private readonly ring: HTMLElement;
   private readonly knob: HTMLElement;
   private touch = window.matchMedia('(pointer: coarse)').matches;
   private enabled = false;
@@ -44,12 +58,12 @@ export class JoystickView {
     this.root.style.setProperty('--stick-zone', `${TOUCH_RADIUS * 2}px`);
     this.root.style.setProperty('--stick-ring', `${STICK_RADIUS * 2}px`);
     this.root.style.setProperty('--stick-knob', `${KNOB_RADIUS * 2}px`);
+    this.root.style.setProperty('--stick-rim', `${RING_RIM}px`);
 
-    const ring = element('div', 'joystick-ring');
-
+    this.ring = element('div', 'joystick-ring');
     this.knob = element('div', 'joystick-knob');
-    ring.append(this.knob);
-    this.root.append(ring);
+    this.ring.append(this.knob);
+    this.root.append(this.ring);
 
     this.root.addEventListener('pointerdown', (event) => this.handleDown(event));
     this.root.addEventListener('pointermove', (event) => this.handleMove(event));
@@ -87,6 +101,31 @@ export class JoystickView {
     });
 
     for (const node of nodes) observer.observe(node);
+  }
+
+  /**
+   * Le consommateur des doigts du canvas posés à côté de l'anneau, dans le
+   * quart bas-gauche. `enabled` : `false` quand la carte veut ces doigts —
+   * un bâtiment armé se pose aussi dans le coin.
+   */
+  public canvasFinger(canvas: HTMLCanvasElement, enabled: () => boolean): PointerConsumer {
+    return new StickCapture(
+      this.joystick,
+      () => {
+        if (!this.shown || !enabled()) return null;
+
+        const screen = canvas.getBoundingClientRect();
+        const rest = this.root.getBoundingClientRect();
+
+        return {
+          width: screen.width,
+          height: screen.height,
+          centerX: rest.left + rest.width / 2 - screen.left,
+          centerY: rest.top + rest.height / 2 - screen.top,
+        };
+      },
+      () => this.render(),
+    );
   }
 
   /** Le joystick est-il affiché — au doigt, et quand rien ne le recouvre ? */
@@ -142,9 +181,10 @@ export class JoystickView {
   }
 
   private render(): void {
-    const { active, knobX, knobY } = this.joystick.state;
+    const { active, knobX, knobY, originX, originY } = this.joystick.state;
 
     this.root.dataset['active'] = String(active);
+    this.ring.style.transform = `translate(${originX}px, ${originY}px)`;
     this.knob.style.transform = `translate(${knobX}px, ${knobY}px)`;
   }
 }
