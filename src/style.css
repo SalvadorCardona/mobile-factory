@@ -2008,6 +2008,16 @@ button.hud-stock:active {
   font-size: 16px;
 }
 
+/* Les ouvriers qu'il emploiera : la puce violette du sélecteur d'ouvriers. */
+.build-card-workers {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--violet);
+}
+
 .build-card-footer {
   display: flex;
   flex-wrap: wrap;
@@ -2211,11 +2221,178 @@ button.hud-stock:active {
   margin: -4px -6px -4px 0;
 }
 
+/* (i) : la phrase d'ambiance se déplie dessous. */
+.building-panel-info {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  margin: -4px -4px -4px 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+}
+
+.building-panel-info[hidden],
+.building-panel-description[hidden],
+.building-panel-lines[hidden],
+.building-panel-stats[hidden],
+.building-panel-stock[hidden],
+.building-panel-meter-icon[hidden] {
+  display: none;
+}
+
+.building-panel-info[aria-expanded='true'] {
+  background: var(--paper-shade);
+}
+
 .building-panel-description {
   margin: 6px 0 10px;
   font-size: 15px;
   font-weight: 500;
   color: var(--muted);
+}
+
+/*
+ * La fenêtre d'un bâtiment, compacte pour laisser voir le jeu : vignette et
+ * nom en tête, puces plutôt que phrases, boutons un peu moins hauts.
+ */
+.building-window {
+  padding: 12px 16px 14px;
+}
+
+/* La vignette du bâtiment, celle du menu de construction. */
+.building-window header .icon-building {
+  border-radius: 10px;
+}
+
+.building-window h2 {
+  flex: 1;
+  min-width: 0;
+  font-size: 22px;
+}
+
+.building-window .building-panel-description {
+  margin: 6px 0 0;
+}
+
+.building-window .building-panel-actions {
+  margin-top: 12px;
+}
+
+.building-window .building-panel-actions button {
+  min-height: 46px;
+}
+
+/* Points de vie sur une ligne : cœur, barre, nombre. */
+.building-panel-meter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.building-panel-meter-icon {
+  display: inline-flex;
+  flex: none;
+}
+
+.building-panel-meter .building-panel-bar {
+  flex: 1;
+}
+
+.building-panel-meter-value {
+  flex: none;
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.building-panel-meter-value:empty {
+  display: none;
+}
+
+/* Les puces « pictogramme + nombre » : un tap dit ce qu'elles comptent. */
+.building-panel-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.building-panel-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 0 10px 0 6px;
+  border: none;
+  border-radius: 999px;
+  background: var(--paper-shade);
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+
+.building-panel-stat:active {
+  transform: translateY(1px);
+}
+
+.building-panel-tip {
+  position: absolute;
+  z-index: 1;
+  max-width: calc(100% - 16px);
+  padding: 6px 12px;
+  border-radius: 14px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.25;
+  pointer-events: none;
+  animation: panel-tip-in 140ms ease-out both;
+}
+
+.building-panel-tip[hidden] {
+  display: none;
+}
+
+@keyframes panel-tip-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+/* Le coffre coiffe ce qu'il contient : un trait de chaque côté du pictogramme. */
+.building-panel-stock {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.building-panel-stock::before,
+.building-panel-stock::after {
+  content: '';
+  flex: 1;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--paper-shade);
+}
+
+.building-panel-stock + .building-panel-items {
+  margin-top: 4px;
 }
 
 .building-panel-bar {

@@ -330,6 +330,11 @@ Les règles, en résumé :
   pictogrammes (`src/art/ui.ts`) en `data:` URL SVG pour le DOM. Le menu de construction est un tiroir derrière un
   seul bouton, « Bâtir » — aucun autre bouton ne porte ce libellé ; armer un bâtiment passe la carte en mode construction
   (grille + emprises, `render/ghostLayer.ts`).
+- La fenêtre d'un bâtiment (`ui/buildingPanel.ts`) laisse voir le jeu : vignette
+  et nom en tête, phrase d'ambiance derrière (i), points de vie en une ligne
+  (cœur, barre, nombre), ce qui se compte en puces pictogramme + nombre — un
+  tap affiche le libellé, aussi en `aria-label` —, le coffre en pictogramme
+  au-dessus de ses objets.
 
 ## Système de sprites
 

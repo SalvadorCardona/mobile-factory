@@ -38,6 +38,14 @@
  * poste, plein s'il est occupé, vide sinon, marqué s'il est demandé mais
  * qu'aucun ouvrier libre ne vient le prendre.
  *
+ * Sur un téléphone, elle doit laisser voir le jeu autour : ce qui se compte
+ * se dit en puces « pictogramme + nombre » (habitants, nuits, rayon,
+ * coffre…) plutôt qu'en phrases. Chaque puce porte son libellé
+ * (`aria-label`), qu'un tap affiche dans une bulle ; la phrase d'ambiance
+ * se déplie sous le bouton (i). Les points de vie tiennent sur une ligne :
+ * cœur, barre, nombre. Le coffre — le stock de la ville pour la mairie —
+ * coiffe ses objets d'un pictogramme de coffre.
+ *
  * Elle **lit** le monde à chaque frame tant qu'elle est ouverte, et se ferme
  * seule si l'entité disparaît — rasée par un mutant, par exemple.
  */
@@ -53,12 +61,23 @@ import { forgeRecipe } from '../sim/consumers.ts';
 import { canPause } from '../sim/staffing.ts';
 import type { Building, Entity, EntityId, Forge, Nursery } from '../sim/types.ts';
 import { TICKS_PER_SECOND, repairCost, siteMissing, type SiteCoverage, type World } from '../sim/world.ts';
-import { itemAmount, uiIcon } from './icons.ts';
+import type { UiIcon } from '../art/ui.ts';
+import { buildingIcon, buildingIconUrl, itemAmount, uiIcon } from './icons.ts';
 import { ResearchPanel } from './researchPanel.ts';
 import { TransferPanel } from './transferPanel.ts';
 
 /** L'état d'une foreuse ou d'une ferme qui attend qu'on la vide. */
 const BLOCKED = 'Bloquée : coffre plein — heurtez-la ou appuyez sur Tout prendre.';
+
+/** Combien de temps la bulle d'une puce reste affichée. */
+const TIP_MS = 2200;
+
+/** Une puce : un pictogramme, un nombre, et ce qu'il compte. */
+interface Stat {
+  icon: UiIcon;
+  value: string;
+  label: string;
+}
 
 /** L'état d'un producteur mis en pause. */
 const PAUSED = 'En pause : plus rien ne sort ni n’entre en production — appuyez sur Reprendre.';
@@ -67,10 +86,23 @@ export class BuildingPanel {
   public readonly root: HTMLElement;
 
   private readonly title: HTMLElement;
+  private readonly thumb: HTMLImageElement;
+  private readonly infoButton: HTMLButtonElement;
   private readonly description: HTMLElement;
   private readonly lines: HTMLElement;
+  /** Cœur (ou rien pour un chantier), barre, nombre : une seule ligne. */
+  private readonly meter: HTMLElement;
+  private readonly meterIcon: HTMLElement;
+  private readonly meterValue: HTMLElement;
   private readonly bar: HTMLElement;
   private readonly barFill: HTMLElement;
+  private readonly stats: HTMLElement;
+  /** La bulle qui dit ce que compte une puce. */
+  private readonly tip: HTMLElement;
+  private tipTimer: number | undefined;
+  /** Le pictogramme du coffre, au-dessus de ce qu'il contient. */
+  private readonly stock: HTMLElement;
+  private readonly stockCount: HTMLElement;
   private readonly items: HTMLElement;
   private readonly actions: HTMLElement;
   private readonly transferButton: HTMLButtonElement;
@@ -96,6 +128,8 @@ export class BuildingPanel {
   private readonly upgradeCost: HTMLElement;
   private readonly upgradeButton: HTMLButtonElement;
   private lastText = '';
+  /** `null` : rien d'affiché encore — une liste vide est une clé comme une autre. */
+  private lastStats: string | null = null;
   private lastItems = '';
   private lastUpgrade = '';
 
@@ -109,12 +143,30 @@ export class BuildingPanel {
     this.onOpen = onOpen;
 
     this.root = document.createElement('section');
-    this.root.className = 'panel building-panel';
+    this.root.className = 'panel building-panel building-window';
     this.root.hidden = true;
 
     const header = document.createElement('header');
 
+    this.thumb = buildingIcon('townHall', 36);
+    this.thumb.alt = '';
+    this.thumb.setAttribute('aria-hidden', 'true');
     this.title = document.createElement('h2');
+
+    this.description = document.createElement('p');
+    this.description.className = 'building-panel-description';
+    this.description.id = 'building-panel-description';
+    this.description.hidden = true;
+
+    // La phrase d'ambiance ne prend de place que si on la demande.
+    this.infoButton = document.createElement('button');
+    this.infoButton.type = 'button';
+    this.infoButton.className = 'building-panel-info';
+    this.infoButton.setAttribute('aria-label', 'À propos');
+    this.infoButton.setAttribute('aria-controls', this.description.id);
+    this.infoButton.setAttribute('aria-expanded', 'false');
+    this.infoButton.append(uiIcon('info', 26));
+    this.infoButton.addEventListener('click', () => this.toggleDescription());
 
     const close = document.createElement('button');
 
@@ -124,15 +176,39 @@ export class BuildingPanel {
     close.append(uiIcon('close'));
     close.addEventListener('click', () => this.close());
 
-    header.append(this.title, close);
+    header.append(this.thumb, this.title, this.infoButton, close);
 
-    this.description = document.createElement('p');
-    this.description.className = 'building-panel-description';
-
+    this.meter = document.createElement('div');
+    this.meter.className = 'building-panel-meter';
+    this.meterIcon = document.createElement('span');
+    this.meterIcon.className = 'building-panel-meter-icon';
+    this.meterIcon.append(uiIcon('heart', 22));
+    this.meterValue = document.createElement('span');
+    this.meterValue.className = 'building-panel-meter-value';
     this.bar = document.createElement('div');
     this.bar.className = 'building-panel-bar';
     this.barFill = document.createElement('div');
     this.bar.append(this.barFill);
+    this.meter.append(this.meterIcon, this.bar, this.meterValue);
+
+    this.stats = document.createElement('div');
+    this.stats.className = 'building-panel-stats';
+    this.stats.addEventListener('click', (event) => {
+      const chip = (event.target as HTMLElement).closest<HTMLElement>('.building-panel-stat');
+
+      if (chip) this.showTip(chip);
+    });
+
+    this.tip = document.createElement('div');
+    this.tip.className = 'building-panel-tip';
+    this.tip.setAttribute('role', 'status');
+    this.tip.hidden = true;
+
+    this.stock = document.createElement('div');
+    this.stock.className = 'building-panel-stock';
+    this.stock.setAttribute('role', 'img');
+    this.stockCount = document.createElement('span');
+    this.stock.append(uiIcon('chest', 20), this.stockCount);
 
     this.lines = document.createElement('pre');
     this.lines.className = 'building-panel-lines';
@@ -241,7 +317,9 @@ export class BuildingPanel {
     this.root.append(
       header,
       this.description,
-      this.bar,
+      this.meter,
+      this.stats,
+      this.stock,
       this.items,
       this.lines,
       this.crew,
@@ -249,6 +327,7 @@ export class BuildingPanel {
       this.actions,
       this.upgrade,
       this.research.root,
+      this.tip,
     );
   }
 
@@ -269,16 +348,20 @@ export class BuildingPanel {
     this.entityId = id;
     this.root.hidden = false;
     this.lastText = '';
+    this.lastStats = null;
     this.lastItems = '';
     this.lastUpgrade = '';
     this.lastCrew = '';
     this.cancelArmed = false;
+    this.setDescription(false);
+    this.hideTip();
     this.refresh(entity);
     this.onOpen();
   }
 
   public close(): void {
     this.entityId = null;
+    this.hideTip();
     this.root.hidden = true;
   }
 
@@ -298,8 +381,11 @@ export class BuildingPanel {
   private refresh(entity: Entity): void {
     const proto = BUILDINGS[entity.proto];
     const lines: string[] = [];
+    const stats: Stat[] = [];
     let ratio: number;
     let barClass: string;
+    let meterValue = '';
+    let meterLabel = '';
 
     const inReach = this.world.inReach(entity);
 
@@ -307,11 +393,16 @@ export class BuildingPanel {
     this.title.textContent = entity.kind === 'site' ? proto.label : buildingLevel(entity.proto, entity.level).label;
     this.description.textContent = panelDescription(entity);
 
+    const thumb = buildingIconUrl(entity.proto);
+
+    if (this.thumb.src !== thumb) this.thumb.src = thumb;
+
     // Le labo fini : sa fenêtre devient le panneau Recherche, qui a besoin de toute la place.
     const lab = entity.kind === 'lab';
 
     this.root.dataset['kind'] = entity.kind;
-    this.description.hidden = lab;
+    this.infoButton.hidden = lab;
+    if (lab) this.setDescription(false);
     this.research.root.hidden = !lab;
     if (entity.kind === 'lab') this.research.update(entity);
 
@@ -349,7 +440,7 @@ export class BuildingPanel {
                 : siteCoverageText(this.world.siteCoverage(entity)),
         );
       }
-      if (proto.workers > 0) lines.push(`Emploiera ${proto.workers} ouvriers.`);
+      if (proto.workers > 0) stats.push({ icon: 'worker', value: String(proto.workers), label: `Ouvriers qu’il emploiera : ${proto.workers}` });
 
       this.setItems(
         (Object.entries(proto.cost) as [ItemId, number][]).map(([item, needed]) =>
@@ -368,12 +459,14 @@ export class BuildingPanel {
       this.pauseButton.hidden = true;
       this.crew.hidden = true;
       this.upgrade.hidden = true;
+      this.stock.hidden = true;
     } else {
       const level = buildingLevel(entity.proto, entity.level);
 
       ratio = entity.hp / level.hp;
       barClass = 'hp';
-      lines.push(`Points de vie ${entity.hp}/${level.hp}`);
+      meterValue = `${entity.hp}/${level.hp}`;
+      meterLabel = `Points de vie : ${meterValue}`;
 
       const pausable = canPause(entity.proto);
       const stopped = this.world.stopped(entity);
@@ -427,11 +520,17 @@ export class BuildingPanel {
         case 'townHall': {
           const { adults, children, workers } = this.world.population();
 
-          lines.push(
-            `Population : ${adults} adulte${adults > 1 ? 's' : ''}, ${children} enfant${children > 1 ? 's' : ''}, ${workers} ouvrier${workers > 1 ? 's' : ''}`,
+          stats.push(
+            { icon: 'people', value: String(adults), label: `Adultes : ${adults}` },
+            { icon: 'child', value: String(children), label: `Enfants : ${children}` },
+            { icon: 'worker', value: String(workers), label: `Ouvriers : ${workers}` },
+            { icon: 'moon', value: String(this.world.night), label: `Nuits affrontées : ${this.world.night}` },
+            {
+              icon: 'range',
+              value: String(proto.logisticRadius),
+              label: `Rayon d’approvisionnement : les chantiers à ${proto.logisticRadius} cases puisent dans son coffre`,
+            },
           );
-          lines.push(this.world.night === 0 ? 'Aucune nuit pour l’instant.' : `Nuits affrontées : ${this.world.night}.`);
-          lines.push(`Les chantiers à ${proto.logisticRadius} cases à la ronde puisent dans son coffre.`);
           break;
         }
 
@@ -451,7 +550,7 @@ export class BuildingPanel {
                 ? `En attente d’un repas. ${starvedLine(this.world, entity)}`
                 : `Prochain enfant dans ${clock(remaining)}`,
           );
-          lines.push(`Enfants nés ici : ${entity.born}`);
+          stats.push({ icon: 'child', value: String(entity.born), label: `Enfants nés ici : ${entity.born}` });
           break;
         }
 
@@ -477,7 +576,7 @@ export class BuildingPanel {
         case 'tower': {
           const weapon = level.weapon ? WEAPONS[level.weapon] : null;
 
-          if (weapon) lines.push(`${weapon.label} — portée ${weapon.range} tuiles`);
+          if (weapon) stats.push({ icon: 'range', value: String(weapon.range), label: `${weapon.label} — portée : ${weapon.range} cases` });
           lines.push(entity.armed ? 'En alerte : des mutants approchent.' : 'En veille.');
           break;
         }
@@ -515,7 +614,11 @@ export class BuildingPanel {
           break;
 
         case 'lumberCamp':
-          lines.push(`Les bûcherons coupent les arbres à ${LUMBERJACKS.radius} cases à la ronde.`);
+          stats.push({
+            icon: 'range',
+            value: String(LUMBERJACKS.radius),
+            label: `Rayon : les bûcherons coupent les arbres à ${LUMBERJACKS.radius} cases`,
+          });
           lines.push(
             entity.paused
               ? 'En pause : les bûcherons rapportent leur bois, puis flânent.'
@@ -532,7 +635,11 @@ export class BuildingPanel {
         case 'depot': {
           const served = this.world.depotProducers(entity);
 
-          lines.push(`Les logisticiens vident les producteurs à ${LOGISTICIANS.radius} cases à la ronde.`);
+          stats.push({
+            icon: 'range',
+            value: String(LOGISTICIANS.radius),
+            label: `Rayon : les logisticiens vident les producteurs à ${LOGISTICIANS.radius} cases`,
+          });
           lines.push(
             served === 0
               ? 'Aucun producteur à portée : ils flânent.'
@@ -544,7 +651,11 @@ export class BuildingPanel {
         case 'yard': {
           const served = this.world.yardSites(entity);
 
-          lines.push(`Les bâtisseurs livrent et bâtissent les chantiers à ${BUILDERS.radius} cases à la ronde.`);
+          stats.push({
+            icon: 'range',
+            value: String(BUILDERS.radius),
+            label: `Rayon : les bâtisseurs livrent et bâtissent les chantiers à ${BUILDERS.radius} cases`,
+          });
           lines.push(
             entity.paused
               ? 'En pause : ses chantiers reviennent aux porteurs et à vous.'
@@ -576,7 +687,7 @@ export class BuildingPanel {
         case 'clinic': {
           const used = this.world.clinicBedsUsed(entity.id);
 
-          lines.push(`Places : ${used}/${CLINIC.beds}`);
+          stats.push({ icon: 'people', value: `${used}/${CLINIC.beds}`, label: `Places occupées : ${used}/${CLINIC.beds}` });
           lines.push(
             used >= CLINIC.beds
               ? 'Complète : les mutants vaincus ne tombent plus assommés pour elle.'
@@ -589,10 +700,12 @@ export class BuildingPanel {
       // Le coffre de la mairie est le stock de la ville. Un coffre où échanger se lit dans la zone d'échange,
       // celui du labo dans le panneau Recherche, celui de l'antenne en jauges de son étage suivant, comme un chantier.
       if (rules) {
+        this.stock.hidden = true;
         this.setItems([], 'exchange');
       } else if (entity.kind === 'antenna') {
         const cost = floorCost(entity);
 
+        this.stock.hidden = true;
         this.setItems(
           cost.map(([item, needed]) => itemAmount(item, needed, entity.store.count(item))),
           `floor:${entity.id}:${entity.level}:${cost.map(([item]) => `${item}=${entity.store.count(item)}`).join(',')}`,
@@ -601,28 +714,90 @@ export class BuildingPanel {
         const capacity = Number.isFinite(proto.storage) ? `/${proto.storage}` : '';
         const entries = entity.store.entries();
         const label = `Coffre ${entity.store.total()}${capacity}`;
+        // Sans plafond, un coffre ne dit son compte que vide.
+        const count = entries.length === 0 ? 'vide' : capacity ? `${entity.store.total()}${capacity}` : '';
 
-        lines.push(`${label}${entries.length ? '' : ' : vide'}`);
+        this.stock.hidden = false;
+        this.stock.setAttribute('aria-label', `${label}${entries.length ? '' : ' : vide'}`);
+        this.stock.title = label;
+        if (this.stockCount.textContent !== count) this.stockCount.textContent = count;
         this.setItems(
           entries.map(([item, amount]) => itemAmount(item, amount)),
           `store:${entity.id}:${entries.map(([item, amount]) => `${item}=${amount}`).join(',')}`,
         );
       } else {
+        this.stock.hidden = true;
         this.setItems([], 'none');
       }
       this.refreshUpgrade(entity, inReach);
     }
 
+    this.setStats(stats);
+
     // Plus aucun bouton à montrer : la rangée disparaît.
     this.actions.hidden = [...this.actions.children].every((button) => (button as HTMLElement).hidden);
 
     const text = lines.filter(Boolean).join('\n');
+    const width = `${Math.round(Math.max(0, Math.min(1, ratio)) * 100)}%`;
 
-    if (text === this.lastText) return;
-    this.lastText = text;
-    this.lines.textContent = text;
+    this.lines.hidden = text === '';
+    if (this.lines.textContent !== text) this.lines.textContent = text;
+    if (`${barClass}:${width}:${meterValue}` === this.lastText) return;
+    this.lastText = `${barClass}:${width}:${meterValue}`;
     this.bar.dataset['kind'] = barClass;
-    this.barFill.style.width = `${Math.round(Math.max(0, Math.min(1, ratio)) * 100)}%`;
+    this.barFill.style.width = width;
+    // Un chantier n'a que sa barre ; un bâtiment, son cœur et ses points de vie.
+    this.meterIcon.hidden = meterValue === '';
+    this.meterValue.textContent = meterValue;
+    if (meterLabel) {
+      this.meter.setAttribute('role', 'img');
+      this.meter.setAttribute('aria-label', meterLabel);
+    } else {
+      this.meter.removeAttribute('role');
+      this.meter.removeAttribute('aria-label');
+    }
+  }
+
+  /** Les puces ne sont reconstruites que si l'une change. */
+  private setStats(stats: readonly Stat[]): void {
+    const key = stats.map(({ icon, value, label }) => `${icon}:${value}:${label}`).join('|');
+
+    if (key === this.lastStats) return;
+    this.lastStats = key;
+    this.stats.replaceChildren(...stats.map(statChip));
+    this.stats.hidden = stats.length === 0;
+  }
+
+  /** Un tap sur une puce : son libellé dans une bulle au-dessus d'elle, le temps de le lire. */
+  private showTip(chip: HTMLElement): void {
+    this.tip.textContent = chip.getAttribute('aria-label') ?? '';
+    this.tip.hidden = false;
+    // La bulle reste dans la fenêtre : centrée sur la puce, bornée aux bords.
+    const width = this.tip.offsetWidth;
+    const center = chip.offsetLeft + chip.offsetWidth / 2;
+    const left = Math.max(8, Math.min(this.root.clientWidth - width - 8, center - width / 2));
+
+    this.tip.style.left = `${left}px`;
+    this.tip.style.top = `${chip.offsetTop - this.tip.offsetHeight - 6}px`;
+    window.clearTimeout(this.tipTimer);
+    this.tipTimer = window.setTimeout(() => this.hideTip(), TIP_MS);
+  }
+
+  private hideTip(): void {
+    window.clearTimeout(this.tipTimer);
+    this.tipTimer = undefined;
+    this.tip.hidden = true;
+  }
+
+  private toggleDescription(): void {
+    // La fenêtre grandit : la bulle ne serait plus sur sa puce.
+    this.hideTip();
+    this.setDescription(this.infoButton.getAttribute('aria-expanded') !== 'true');
+  }
+
+  private setDescription(open: boolean): void {
+    this.description.hidden = !open;
+    this.infoButton.setAttribute('aria-expanded', String(open));
   }
 
   /** Le sélecteur d'ouvriers : un pictogramme par poste — occupé, libre, ou demandé mais vide. */
@@ -738,6 +913,21 @@ export class BuildingPanel {
   public destroy(): void {
     this.root.remove();
   }
+}
+
+/**
+ * Une puce « pictogramme + nombre ». Un bouton, pour que le tap et le clavier
+ * l'atteignent : il ne fait qu'afficher son libellé.
+ */
+function statChip({ icon, value, label }: Stat): HTMLButtonElement {
+  const chip = document.createElement('button');
+
+  chip.type = 'button';
+  chip.className = 'building-panel-stat';
+  chip.setAttribute('aria-label', label);
+  chip.title = label;
+  chip.append(uiIcon(icon, 20), value);
+  return chip;
 }
 
 /** Un bouton rond du sélecteur d'ouvriers. */
