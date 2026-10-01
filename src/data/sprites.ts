@@ -41,6 +41,7 @@ import { LUMBERJACK } from '../art/lumberjack.ts';
 import { MUTANT } from '../art/mutant.ts';
 import { NURSERY } from '../art/nursery.ts';
 import { PATIENT } from '../art/patient.ts';
+import { DUST_RING, PARTICLE_FX } from '../art/particles.ts';
 import { PAUSED } from '../art/paused.ts';
 import { QUARRY } from '../art/quarry.ts';
 import { PUDDLE } from '../art/puddle.ts';
@@ -130,6 +131,11 @@ export const SPRITES = {
   /** Météo : gouttes, vent, brouillard, fleurs, et l'arc-en-ciel — cf. `data/weather.ts`. */
   weather: WEATHER_FX,
   rainbow: RAINBOW,
+
+  /** Particules : une silhouette blanche par forme, teintée au rendu — cf. `PARTICLES` de `data/artDirection.ts`. */
+  particles: PARTICLE_FX,
+  /** L'anneau de poussière d'un bâtiment qui s'achève. */
+  dustRing: DUST_RING,
 } satisfies Record<string, SpriteProto>;
 
 export type SpriteId = keyof typeof SPRITES;

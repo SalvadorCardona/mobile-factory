@@ -143,6 +143,60 @@ export const LIGHT = {
 /** Les couleurs qu'un trait peut prendre : l'indigo, ou la teinte foncée d'un objet. */
 export type StrokeColor = (typeof PALETTE)['ink']['base' | 'light'] | (typeof PALETTE)[Tone]['shade'];
 
+/* ------------------------------------------------------------- particules */
+
+/** Les formes de particule : un morceau du sprite `particles` chacune (`art/particles.ts`). */
+export type ParticleShape = 'chip' | 'shard' | 'spark' | 'drop' | 'square';
+
+export interface ParticleStyle {
+  shape: ParticleShape;
+  /** Chaque particule pioche sa couleur ici. */
+  colors: readonly Color[];
+  /** Durée de vie moyenne, en millisecondes. */
+  lifeMs: number;
+  /** Pixels monde par milliseconde au carré : légère pour un copeau, sèche pour un éclat. */
+  gravity: number;
+  /** Tourne sur elle-même en vol. */
+  spin: boolean;
+  /** Une goutte tombée laisse au sol une flaque de cette couleur. */
+  puddle?: Color;
+}
+
+/**
+ * Ce qui saute quand on frappe, par famille : la forme dit ce qu'on a
+ * touché avant la couleur. Copeaux orange qui tournent et retombent
+ * doucement, éclats de roche secs, étincelles de fer très brèves, gouttes
+ * fluo qui laissent une flaque ; les confettis restent des carrés.
+ */
+export const PARTICLES = {
+  wood: { shape: 'chip', colors: [PALETTE.orange.base, PALETTE.orange.light], lifeMs: 400, gravity: 0.0006, spin: true },
+  stone: { shape: 'shard', colors: [GROUND.rock.base, GROUND.rock.shade], lifeMs: 250, gravity: 0.0016, spin: false },
+  iron: { shape: 'spark', colors: [PALETTE.cyan.light], lifeMs: 150, gravity: 0.0002, spin: false },
+  coal: { shape: 'shard', colors: [PALETTE.ink.base, PALETTE.ink.light], lifeMs: 250, gravity: 0.0016, spin: false },
+  food: { shape: 'chip', colors: [PALETTE.yellow.base, PALETTE.mint.base, PALETTE.mint.light], lifeMs: 400, gravity: 0.0006, spin: true },
+  bone: { shape: 'shard', colors: [PALETTE.paper.base, PALETTE.paper.shade], lifeMs: 300, gravity: 0.0012, spin: false },
+  claw: { shape: 'shard', colors: [PALETTE.orange.base, PALETTE.orange.light, PALETTE.coral.base], lifeMs: 300, gravity: 0.0012, spin: false },
+  fur: { shape: 'chip', colors: [PALETTE.violet.base, PALETTE.violet.light], lifeMs: 400, gravity: 0.0006, spin: true },
+  mutant: { shape: 'drop', colors: [PALETTE.toxic.base], lifeMs: 450, gravity: 0.0012, spin: false, puddle: PALETTE.toxic.shade },
+  /** La pluie acide qui ronge un bâtiment : des gouttes menthe, sans flaque. */
+  acid: { shape: 'drop', colors: [PALETTE.mint.light, PALETTE.mint.base, PALETTE.cyan.light], lifeMs: 400, gravity: 0.0009, spin: false },
+  rubble: { shape: 'shard', colors: [PALETTE.yellow.base, PALETTE.yellow.shade, PALETTE.orange.base, PALETTE.violet.light], lifeMs: 450, gravity: 0.0012, spin: false },
+  confetti: {
+    shape: 'square',
+    colors: [PALETTE.yellow.base, PALETTE.coral.base, PALETTE.cyan.base, PALETTE.mint.base, PALETTE.violet.base],
+    lifeMs: 500,
+    gravity: 0.0009,
+    spin: true,
+  },
+  star: { shape: 'square', colors: [PALETTE.yellow.base, PALETTE.yellow.light, PALETTE.paper.base], lifeMs: 500, gravity: 0.0009, spin: true },
+} as const satisfies Record<string, ParticleStyle>;
+
+export type ParticleFamily = keyof typeof PARTICLES;
+
+/** L'ombre d'une particule en l'air, et l'anneau de poussière d'un bâtiment achevé. */
+export const PARTICLE_SHADOW: Color = PALETTE.violet.shade;
+export const DUST: Color = PALETTE.paper.shade;
+
 /* ------------------------------------------------------------ primitives */
 
 /** Nombre court et stable dans le SVG : deux décimales au plus. */

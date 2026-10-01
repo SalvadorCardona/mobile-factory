@@ -26,7 +26,7 @@
  * Un bâtiment amélioré (`buildingUpgraded`) change de sprite sur place : celui
  * de son niveau (`BUILDINGS[proto].upgrades`), et il rebondit comme à l'achèvement.
  *
- * Le ressenti : un bâtiment achevé « pousse » (il sort du sol en rebondissant),
+ * Le ressenti : un bâtiment achevé fait « pop » (écrasé, étiré, posé, ancré au pied),
  * un bâtiment frappé rougit et tremble. Les deux sont des minuteurs de vue,
  * en millisecondes d'écran — la simulation n'en sait rien.
  */
@@ -56,8 +56,19 @@ const PROGRESS_FG = hex(PALETTE.yellow.shade);
 const BUILD_FG = hex(PALETTE.violet.base);
 const HP_FG = hex(PALETTE.coral.base);
 
-/** Durée du rebond d'un bâtiment achevé, et de la secousse d'un bâtiment frappé. */
-const POP_MS = 420;
+/**
+ * Le « pop » d'un bâtiment achevé, en trois temps, ancré au pied : écrasé,
+ * étiré, posé. Chaque clé est une échelle (largeur, hauteur) atteinte à sa
+ * fraction de `POP_MS` ; entre deux clés, une courbe douce.
+ */
+const POP_MS = 360;
+const POP_KEYS: readonly (readonly [at: number, x: number, y: number])[] = [
+  [0, 1, 1],
+  [1 / 3, 1.15, 0.85],
+  [2 / 3, 0.95, 1.08],
+  [1, 1, 1],
+];
+/** Durée de la secousse d'un bâtiment frappé. */
 const HIT_MS = 220;
 const HIT_TINT = hex(PALETTE.coral.light);
 
@@ -451,11 +462,9 @@ export class EntityLayer {
     if (view.pop > 0) {
       view.pop = Math.max(0, view.pop - deltaMs);
 
-      // Ressort amorti : écrasé, étiré, puis posé.
-      const t = 1 - view.pop / POP_MS;
-      const spring = Math.exp(-5 * t) * Math.cos(t * Math.PI * 3);
+      const [x, y] = popScale(1 - view.pop / POP_MS);
 
-      root.scale.set(1 - spring * 0.12, 1 + spring * 0.18);
+      root.scale.set(x, y);
     } else if (root.scale.x !== 1) {
       root.scale.set(1);
     }
@@ -478,6 +487,22 @@ export class EntityLayer {
     this.adam.destroy();
     this.container.destroy({ children: true });
   }
+}
+
+/** L'échelle du « pop » à la fraction `t` de sa durée : interpolée entre deux clés de `POP_KEYS`. */
+function popScale(t: number): [number, number] {
+  for (let i = 1; i < POP_KEYS.length; i += 1) {
+    const [at, x, y] = POP_KEYS[i]!;
+
+    if (t > at && i < POP_KEYS.length - 1) continue;
+
+    const [from, fx, fy] = POP_KEYS[i - 1]!;
+    const u = Math.max(0, Math.min(1, (t - from) / (at - from)));
+    const ease = u * u * (3 - 2 * u);
+
+    return [fx + (x - fx) * ease, fy + (y - fy) * ease];
+  }
+  return [1, 1];
 }
 
 /**

@@ -34,6 +34,10 @@ import type { TerrainTiles } from './terrainTiles.ts';
 
 /** Durée du tremblement d'une ressource frappée. */
 const WOBBLE_MS = 200;
+/** Un arbre entamé s'écrase d'abord, bref et franc : élargi, tassé, puis il revient. */
+const SQUASH_MS = 120;
+const SQUASH_X = 1.08;
+const SQUASH_Y = 0.94;
 /** Période du clignotement d'une ressource qui gêne un placement, et son opacité au plus bas. */
 const BLINK_MS = 700;
 const BLINK_MIN_ALPHA = 0.35;
@@ -52,6 +56,8 @@ interface ResourceView {
 export class ResourceLayer {
   private readonly chunks = new Map<string, Map<string, ResourceView>>();
   private readonly wobbles = new Map<string, number>();
+  /** Les tremblements qui sont ceux d'un arbre : il s'écrase au lieu de se tasser. */
+  private readonly squashes = new Set<string>();
   /** Tuiles qui clignotent, et l'horloge du clignotement. */
   private blinking = new Set<string>();
   private blinkClock = 0;
@@ -69,14 +75,18 @@ export class ResourceLayer {
     this.sorted = sorted;
     this.shadows = shadows;
 
-    const struck = ({ tx, ty }: TileCoord): void => {
+    const struck = ({ tx, ty }: TileCoord, tree: boolean): void => {
+      const key = coordKey(tx, ty);
+
       this.refresh(tx, ty);
-      this.wobbles.set(coordKey(tx, ty), WOBBLE_MS);
+      this.wobbles.set(key, WOBBLE_MS);
+      if (tree) this.squashes.add(key);
+      else this.squashes.delete(key);
     };
 
-    world.events.on('resourceHarvested', struck);
+    world.events.on('resourceHarvested', (event) => struck(event, event.item === 'wood'));
     // Un coup de hache de bûcheron fait trembler l'arbre comme un passage d'Adam.
-    world.events.on('treeChopped', struck);
+    world.events.on('treeChopped', (event) => struck(event, true));
   }
 
   /** `blocking` : les tuiles dont la ressource gêne le fantôme, à faire clignoter. */
@@ -219,15 +229,27 @@ export class ResourceLayer {
       const view = this.chunks.get(coordKey(floorDiv(tx, CHUNK_TILES), floorDiv(ty, CHUNK_TILES)))?.get(key);
       const remaining = Math.max(0, left - deltaMs);
 
-      if (remaining === 0) this.wobbles.delete(key);
-      else this.wobbles.set(key, remaining);
+      const tree = this.squashes.has(key);
+
+      if (remaining === 0) {
+        this.wobbles.delete(key);
+        this.squashes.delete(key);
+      } else {
+        this.wobbles.set(key, remaining);
+      }
 
       if (!view) continue;
 
       const strength = remaining / WOBBLE_MS;
 
       view.sprite.x = view.baseX + Math.sin(remaining * 0.09) * 2.2 * strength;
-      view.sprite.scale.set(1 + strength * 0.05, 1 - strength * 0.07);
+      if (tree) {
+        const squash = Math.max(0, 1 - (WOBBLE_MS - remaining) / SQUASH_MS);
+
+        view.sprite.scale.set(1 + (SQUASH_X - 1) * squash, 1 + (SQUASH_Y - 1) * squash);
+      } else {
+        view.sprite.scale.set(1 + strength * 0.05, 1 - strength * 0.07);
+      }
     }
   }
 
