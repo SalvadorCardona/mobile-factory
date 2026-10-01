@@ -16,7 +16,7 @@ import '@fontsource/fredoka/latin-700.css';
 import './style.css';
 import { AudioEngine } from './audio/engine.ts';
 import { assertPrototypes } from './data/validate.ts';
-import { PALETTE, hex } from './data/artDirection.ts';
+import { PARTICLES, type ParticleStyle } from './data/artDirection.ts';
 import { MENU_BUILDING_IDS } from './data/buildings.ts';
 import type { WildlifeId } from './data/enemies.ts';
 import type { ItemId } from './data/items.ts';
@@ -63,20 +63,20 @@ const AXIS_EPSILON = 0.01;
 /** L'axe d'un clavier au repos : ce que lit le déplacement quand le menu de construction a le clavier. */
 const STILL: KeyboardState = { active: false, axisX: 0, axisY: 0 };
 
-/** Couleurs des éclats projetés quand Adam entame une ressource. */
 /** Distance, en tuiles, à laquelle Adam entend la hache d'un bûcheron. */
 const CHOP_HEARING_TILES = 9;
 
-const HARVEST_COLORS: Record<ItemId, readonly number[]> = {
-  wood: [PALETTE.mint.base, PALETTE.mint.light, PALETTE.orange.light, PALETTE.ink.light].map(hex),
-  stone: [PALETTE.coral.base, PALETTE.coral.light, PALETTE.coral.shade].map(hex),
-  ironOre: [PALETTE.cyan.base, PALETTE.cyan.light, PALETTE.cyan.shade].map(hex),
-  coal: [PALETTE.ink.base, PALETTE.ink.light, PALETTE.yellow.light].map(hex),
-  food: [PALETTE.yellow.base, PALETTE.mint.base, PALETTE.mint.light].map(hex),
-  ironPlate: [PALETTE.cyan.base, PALETTE.cyan.light, PALETTE.ink.base].map(hex),
-  mutantGoo: [PALETTE.toxic.base, PALETTE.toxic.light, PALETTE.toxic.shade].map(hex),
-  wolfFang: [PALETTE.paper.base, PALETTE.paper.shade, PALETTE.ink.light].map(hex),
-  crabClaw: [PALETTE.orange.base, PALETTE.orange.light, PALETTE.orange.shade].map(hex),
+/** Ce qui saute d'une ressource entamée, ou d'un butin ramassé : la famille de l'objet. */
+const ITEM_PARTICLES: Record<ItemId, ParticleStyle> = {
+  wood: PARTICLES.wood,
+  stone: PARTICLES.stone,
+  ironOre: PARTICLES.iron,
+  coal: PARTICLES.coal,
+  food: PARTICLES.food,
+  ironPlate: PARTICLES.iron,
+  mutantGoo: PARTICLES.mutant,
+  wolfFang: PARTICLES.bone,
+  crabClaw: PARTICLES.claw,
 };
 
 /**
@@ -113,16 +113,10 @@ declare global {
   }
 }
 
-const MUTANT_COLORS = [PALETTE.toxic.base, PALETTE.toxic.light, PALETTE.toxic.shade].map(hex);
-const BEAST_COLORS: Record<WildlifeId, readonly number[]> = {
-  crab: [PALETTE.coral.base, PALETTE.orange.base, PALETTE.coral.light].map(hex),
-  wolf: [PALETTE.violet.base, PALETTE.violet.light, PALETTE.ink.light].map(hex),
+const BEAST_PARTICLES: Record<WildlifeId, ParticleStyle> = {
+  crab: PARTICLES.claw,
+  wolf: PARTICLES.fur,
 };
-const STAR_COLORS = [PALETTE.yellow.base, PALETTE.yellow.light, PALETTE.paper.base].map(hex);
-/** Les gouttes qui rongent un bâtiment sous la pluie acide : la menthe claire de la pluie. */
-const ACID_COLORS = [PALETTE.mint.light, PALETTE.mint.base, PALETTE.cyan.light].map(hex);
-const RUBBLE_COLORS = [PALETTE.yellow.base, PALETTE.yellow.shade, PALETTE.orange.base, PALETTE.violet.light].map(hex);
-const CELEBRATION_COLORS = [PALETTE.yellow.base, PALETTE.coral.base, PALETTE.cyan.base, PALETTE.mint.base, PALETTE.violet.base].map(hex);
 
 async function main(): Promise<void> {
   // Le contrôle d'intégrité des prototypes ne tourne qu'en dev : en production
@@ -612,38 +606,41 @@ function wireParticles(world: World, renderer: GameRenderer): void {
   const { particles } = renderer;
 
   world.events.on('resourceHarvested', ({ tx, ty, item }) =>
-    particles.burst((tx + 0.5) * TILE_SIZE, (ty + 0.5) * TILE_SIZE, HARVEST_COLORS[item]),
+    particles.burst((tx + 0.5) * TILE_SIZE, (ty + 0.5) * TILE_SIZE, ITEM_PARTICLES[item]),
   );
   // Les petits éclats d'un coup de hache de bûcheron, au pied du tronc.
   world.events.on('treeChopped', ({ tx, ty, remaining }) =>
-    particles.burst((tx + 0.4) * TILE_SIZE, (ty + 0.8) * TILE_SIZE, HARVEST_COLORS.wood, remaining > 0 ? 3 : 8, 0.07),
+    particles.burst((tx + 0.4) * TILE_SIZE, (ty + 0.8) * TILE_SIZE, PARTICLES.wood, remaining > 0 ? 3 : 8, 0.07),
   );
-  world.events.on('mutantHit', ({ x, y }) => particles.burst(x, y - 12, MUTANT_COLORS, 4));
-  world.events.on('mutantDied', ({ x, y }) => particles.burst(x, y - 12, MUTANT_COLORS, 12, 0.12));
-  world.events.on('mutantFled', ({ x, y }) => particles.burst(x, y - 12, MUTANT_COLORS, 6, 0.1));
-  world.events.on('beastHit', ({ proto, x, y }) => particles.burst(x, y - 8, BEAST_COLORS[proto], 4));
-  world.events.on('beastDied', ({ proto, x, y }) => particles.burst(x, y - 8, BEAST_COLORS[proto], 10, 0.12));
+  world.events.on('mutantHit', ({ x, y }) => particles.burst(x, y - 12, PARTICLES.mutant, 4));
+  world.events.on('mutantDied', ({ x, y }) => particles.burst(x, y - 12, PARTICLES.mutant, 12, 0.12));
+  world.events.on('mutantFled', ({ x, y }) => particles.burst(x, y - 12, PARTICLES.mutant, 6, 0.1));
+  world.events.on('beastHit', ({ proto, x, y }) => particles.burst(x, y - 8, BEAST_PARTICLES[proto], 4));
+  world.events.on('beastDied', ({ proto, x, y }) => particles.burst(x, y - 8, BEAST_PARTICLES[proto], 10, 0.12));
   world.events.on('buildingDamaged', ({ id }) => {
     const entity = world.entities.get(id);
 
     if (entity) {
-      particles.burst((entity.tx + entity.width / 2) * TILE_SIZE, (entity.ty + entity.height) * TILE_SIZE, RUBBLE_COLORS, 3);
+      particles.burst((entity.tx + entity.width / 2) * TILE_SIZE, (entity.ty + entity.height) * TILE_SIZE, PARTICLES.rubble, 3);
     }
   });
   world.events.on('buildingCorroded', ({ id }) => {
     const entity = world.entities.get(id);
 
-    if (entity) particles.burst((entity.tx + entity.width / 2) * TILE_SIZE, entity.ty * TILE_SIZE + 8, ACID_COLORS, 4);
+    if (entity) particles.burst((entity.tx + entity.width / 2) * TILE_SIZE, entity.ty * TILE_SIZE + 8, PARTICLES.acid, 4);
   });
   world.events.on('buildingCompleted', ({ id }) => {
     const entity = world.entities.get(id);
 
     if (!entity) return;
 
-    // Un nuage de poussière et des éclats dorés tout le long du pied du bâtiment : ça y est, il tient debout.
+    // Le bâtiment fait « pop » (`entityLayer.ts`), un anneau de poussière s'ouvre à son pied, puis
+    // des confettis tout le long : ça y est, il tient debout.
+    const foot = (entity.ty + entity.height) * TILE_SIZE;
+
+    particles.dustRing((entity.tx + entity.width / 2) * TILE_SIZE, foot, entity.width * TILE_SIZE);
     for (let i = 0; i <= entity.width; i += 1) {
-      particles.burst((entity.tx + i) * TILE_SIZE, (entity.ty + entity.height) * TILE_SIZE, RUBBLE_COLORS, 6, 0.05);
-      particles.burst((entity.tx + i) * TILE_SIZE, (entity.ty + entity.height) * TILE_SIZE, CELEBRATION_COLORS, 7, 0.16);
+      particles.burst((entity.tx + i) * TILE_SIZE, foot, PARTICLES.confetti, 7, 0.16);
     }
   });
   world.events.on('buildingUpgraded', ({ id }) => {
@@ -653,18 +650,18 @@ function wireParticles(world: World, renderer: GameRenderer): void {
 
     // Des éclats de fer et des confettis qui sautent du haut de l'emprise : le blindage est vissé.
     for (let i = 0; i <= entity.width; i += 1) {
-      particles.burst((entity.tx + i) * TILE_SIZE, entity.ty * TILE_SIZE, HARVEST_COLORS.ironPlate, 6, 0.14);
-      particles.burst((entity.tx + i) * TILE_SIZE, entity.ty * TILE_SIZE, CELEBRATION_COLORS, 5, 0.16);
+      particles.burst((entity.tx + i) * TILE_SIZE, entity.ty * TILE_SIZE, PARTICLES.iron, 6, 0.14);
+      particles.burst((entity.tx + i) * TILE_SIZE, entity.ty * TILE_SIZE, PARTICLES.confetti, 5, 0.16);
     }
   });
   world.events.on('buildingDestroyed', ({ tx, ty }) =>
-    particles.burst((tx + 1) * TILE_SIZE, (ty + 1) * TILE_SIZE, RUBBLE_COLORS, 16, 0.14),
+    particles.burst((tx + 1) * TILE_SIZE, (ty + 1) * TILE_SIZE, PARTICLES.rubble, 16, 0.14),
   );
-  world.events.on('siteCancelled', ({ tx, ty }) => particles.burst((tx + 1) * TILE_SIZE, (ty + 1) * TILE_SIZE, RUBBLE_COLORS, 8, 0.08));
-  world.events.on('lootDropped', ({ x, y }) => particles.burst(x, y - 6, CELEBRATION_COLORS, 5, 0.08));
-  world.events.on('mutantStunned', ({ x, y }) => particles.burst(x, y - 16, STAR_COLORS, 6, 0.1));
-  world.events.on('mutantHealed', ({ x, y }) => particles.burst(x, y - 12, CELEBRATION_COLORS, 10, 0.14));
-  world.events.on('lootPicked', ({ item, x, y }) => particles.burst(x, y - 6, HARVEST_COLORS[item], 6, 0.1));
+  world.events.on('siteCancelled', ({ tx, ty }) => particles.burst((tx + 1) * TILE_SIZE, (ty + 1) * TILE_SIZE, PARTICLES.rubble, 8, 0.08));
+  world.events.on('lootDropped', ({ x, y }) => particles.burst(x, y - 6, PARTICLES.confetti, 5, 0.08));
+  world.events.on('mutantStunned', ({ x, y }) => particles.burst(x, y - 16, PARTICLES.star, 6, 0.1));
+  world.events.on('mutantHealed', ({ x, y }) => particles.burst(x, y - 12, PARTICLES.confetti, 10, 0.14));
+  world.events.on('lootPicked', ({ item, x, y }) => particles.burst(x, y - 6, ITEM_PARTICLES[item], 6, 0.1));
   world.events.on('waveCleared', () => {
     const hall = world.entities.get(world.townHallId);
 
@@ -672,7 +669,7 @@ function wireParticles(world: World, renderer: GameRenderer): void {
 
     // Des confettis sur le toit de la mairie : elle a tenu.
     for (let i = 0; i <= hall.width; i += 1) {
-      particles.burst((hall.tx + i) * TILE_SIZE, hall.ty * TILE_SIZE, CELEBRATION_COLORS, 8, 0.16);
+      particles.burst((hall.tx + i) * TILE_SIZE, hall.ty * TILE_SIZE, PARTICLES.confetti, 8, 0.16);
     }
   });
 }

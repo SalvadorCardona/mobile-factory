@@ -8,8 +8,8 @@
  * Deux conteneurs seulement :
  * - `world`, translaté par la caméra, où vit tout ce qui a des coordonnées
  *   monde : le sol baké, l'eau qui bouge par-dessus, le rayon de coupe d'une
- *   cabane, les ombres portées, puis le conteneur trié en
- *   profondeur (bâtiments, arbres, rochers, personnages), les particules, la
+ *   cabane, les ombres portées (et celles des particules, leurs flaques),
+ *   puis le conteneur trié en profondeur (bâtiments, arbres, rochers, personnages), les particules, la
  *   nuit (une passe de teinte et ses lueurs) et le fantôme de construction ;
  * - `hud`, en pixels écran, où vivent la météo et les repères de bord (le
  *   joystick, lui, est dans le DOM : `ui/joystick.ts`).
@@ -54,7 +54,7 @@ export class GameRenderer {
   /** Le bâtiment dont la fenêtre est ouverte : une cabane y montre son rayon de coupe. */
   private selected: EntityId | null = null;
   private readonly nightLayer: NightLayer;
-  public readonly particles = new ParticleLayer();
+  public readonly particles: ParticleLayer;
   private readonly library: SpriteLibrary;
   private readonly tiles: TerrainTiles;
   private readonly indicators: IndicatorLayer;
@@ -78,12 +78,14 @@ export class GameRenderer {
     this.workReach = new WorkReachLayer(world);
     this.nightLayer = new NightLayer(app.renderer, world);
     this.weather = new WeatherLayer(world, library);
+    this.particles = new ParticleLayer(library);
 
     this.worldContainer.addChild(
       this.chunkLayer.container,
       this.waterLayer.container,
       this.workReach.container,
       this.shadows,
+      this.particles.ground,
       this.weather.ground,
       this.entityLayer.container,
       this.particles.container,
