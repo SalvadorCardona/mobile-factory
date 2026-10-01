@@ -20,7 +20,8 @@
 import { writeFileSync } from 'node:fs';
 import { ROAD_TILES } from '../art/road.ts';
 import { GROUND_TILES, WATER_SPRITES, WATER_TILES, cornerTile, edgeTile, shadowTile } from '../art/terrain.ts';
-import { UI_ICONS } from '../art/ui.ts';
+import { UI_ICONS, dayDialSvg } from '../art/ui.ts';
+import { DIAL_ARCS } from '../sim/dayNight.ts';
 import { GROUND, PALETTE, rect, svg, type Ground } from '../data/artDirection.ts';
 import { BUILDINGS, BUILDING_IDS } from '../data/buildings.ts';
 import { ITEM_ICONS } from '../data/icons.ts';
@@ -115,6 +116,9 @@ const allSections: [string, Cell[][]][] = [
     rows([
       ...Object.entries(ITEM_ICONS).map(([item, svg]) => cell(`objet.${item}`, svg)),
       ...Object.entries(UI_ICONS).map(([name, svg]) => cell(`ui.${name}`, svg)),
+      cell('ui.horloge.jour', dayDialSvg(DIAL_ARCS, 0.3, false, false)),
+      cell('ui.horloge.alerte', dayDialSvg(DIAL_ARCS, 0.66, false, true)),
+      cell('ui.horloge.nuit', dayDialSvg(DIAL_ARCS, 0.8, true, false)),
     ]),
   ],
 ];

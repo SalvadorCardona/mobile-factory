@@ -9,7 +9,7 @@
  * Le cycle commence par une journée : day → dusk → night → dawn → day…
  */
 
-import { DAY_CYCLE } from '../data/dayNight.ts';
+import { DAY_CYCLE, DAY_DIAL } from '../data/dayNight.ts';
 import { WAVES } from '../data/enemies.ts';
 
 export type DayPhase = keyof typeof DAY_CYCLE;
@@ -130,4 +130,46 @@ const DAWN_OFFSET = NIGHT_OFFSET + DAY_CYCLE.night;
 export function ticksToDawn(clock: DayClock): number {
   if (clock.offset < DAWN_OFFSET) return DAWN_OFFSET - clock.offset;
   return CYCLE_TICKS - clock.offset + DAWN_OFFSET;
+}
+
+/**
+ * Le cadran de l'horloge du HUD : il part de l'aube, si bien que le jour
+ * change de numéro quand l'aiguille repasse en haut. Les arcs des quatre
+ * phases y gardent leurs vraies durées, en part du cycle.
+ */
+export const DIAL_PHASES: readonly DayPhase[] = ['dawn', 'day', 'dusk', 'night'];
+
+export const DIAL_ARCS: readonly { phase: DayPhase; from: number; to: number }[] = DIAL_PHASES.map((phase, i) => {
+  const from = DIAL_PHASES.slice(0, i).reduce((total, before) => total + DAY_CYCLE[before], 0);
+
+  return { phase, from: from / CYCLE_TICKS, to: (from + DAY_CYCLE[phase]) / CYCLE_TICKS };
+});
+
+export interface DayDial {
+  phase: DayPhase;
+  /** Le numéro du jour : 1 au premier lever, un de plus à chaque aube. */
+  day: number;
+  /** Vrai de la tombée de la nuit à l'aube : les vagues sortent. */
+  night: boolean;
+  /** Position de l'aiguille, de 0 (début de l'aube) à 1, cf. `DIAL_ARCS`. */
+  progress: number;
+  /** Ticks avant le prochain changement : l'aube la nuit, la tombée de la nuit sinon. */
+  left: number;
+  /** Vrai dans les `DAY_DIAL.nightWarning` derniers ticks avant la nuit. */
+  warning: boolean;
+}
+
+/** Ce que montre l'horloge du HUD à cette heure-ci. */
+export function dayDial(clock: DayClock): DayDial {
+  const night = clock.phase === 'night';
+  const left = night ? clock.left : ticksToNight(clock);
+
+  return {
+    phase: clock.phase,
+    day: clock.cycle + (clock.phase === 'dawn' ? 1 : 0),
+    night,
+    progress: ((clock.offset + DAY_CYCLE.dawn) % CYCLE_TICKS) / CYCLE_TICKS,
+    left,
+    warning: !night && left <= DAY_DIAL.nightWarning,
+  };
 }

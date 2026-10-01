@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { brandBanner, brandIcon } from '../art/brand.ts';
 import { ROAD_THUMB, ROAD_TILES } from '../art/road.ts';
 import { GROUND_TILES, WATER_SPRITES, WATER_TILES, cornerTile, edgeTile, shadowTile } from '../art/terrain.ts';
-import { UI_ICONS } from '../art/ui.ts';
+import { UI_ICONS, dayDialSvg } from '../art/ui.ts';
+import { DIAL_ARCS } from '../sim/dayNight.ts';
 import { GROUND, PALETTE, auditSvg, type Ground } from './artDirection.ts';
 import { BUILDINGS, BUILDING_IDS } from './buildings.ts';
 import { ITEM_ICONS } from './icons.ts';
@@ -38,6 +39,9 @@ function everySvg(): [string, string][] {
   const icons = [
     ...Object.entries(ITEM_ICONS).map(([item, svg]): [string, string] => [`icon.${item}`, svg]),
     ...Object.entries(UI_ICONS).map(([name, svg]): [string, string] => [`ui.${name}`, svg]),
+    ['ui.horloge.jour', dayDialSvg(DIAL_ARCS, 0.3, false, false)] as [string, string],
+    ['ui.horloge.alerte', dayDialSvg(DIAL_ARCS, 0.66, false, true)] as [string, string],
+    ['ui.horloge.nuit', dayDialSvg(DIAL_ARCS, 0.8, true, false)] as [string, string],
   ];
   const brand: [string, string][] = [
     ['brand.icon', brandIcon()],

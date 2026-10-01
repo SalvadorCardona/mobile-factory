@@ -77,3 +77,11 @@ export const SURVIVORS = {
   min: 1,
   max: 3,
 } as const;
+
+/**
+ * L'horloge du HUD : à `nightWarning` ticks de la tombée de la nuit, son
+ * cadran pulse et vire au corail — le temps de rentrer.
+ */
+export const DAY_DIAL = {
+  nightWarning: 20 * 20,
+} as const;

@@ -204,6 +204,9 @@ describe('sauvegarde', () => {
     expect(copy.population()).toEqual(original.population());
     expect(copy.pendingWakes()).toBe(original.pendingWakes());
     expect(copy.player.inventory.entries()).toEqual(original.player.inventory.entries());
+    // L'horloge du HUD reprend à la même heure, au même jour.
+    expect(copy.dayDial()).toEqual(original.dayDial());
+    expect(copy.dayDial()).not.toBeNull();
   });
 
   it('le monde rechargé joue exactement la même suite de ticks', () => {
