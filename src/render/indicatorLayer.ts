@@ -96,6 +96,7 @@ export const ITEM_TONES: Record<ItemId, Tone> = {
   mutantGoo: FAMILY_TONES.mutants,
   wolfFang: 'paper',
   crabClaw: FAMILY_TONES.humans,
+  radCore: FAMILY_TONES.mutants,
 };
 
 /** Durée du repère d'une alerte de la ville, en ms : le temps de regarder, puis de marcher. */

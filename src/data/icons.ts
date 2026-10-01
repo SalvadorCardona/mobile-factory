@@ -110,4 +110,21 @@ export const ITEM_ICONS: Record<ItemId, string> = {
     pill(12.5, 6.8, 4, 1.6, orange.light),
     circle(6, 16, 1, orange.light),
   ),
+  /**
+   * Le cœur de la Reine : une bille fluo cerclée d'indigo — un disque plein
+   * derrière elle, pas un trait —, reflet en haut à gauche, et le trèfle
+   * radioactif en trois points indigo autour d'un quatrième.
+   */
+  radCore: svg(
+    S,
+    S,
+    circle(12, 12.5, 10.5, ink.base),
+    circle(12, 12.5, 8.5, toxic.shade),
+    circle(11.4, 11.6, 7.8, toxic.base),
+    pill(6.5, 6.5, 5.5, 2.6, toxic.light),
+    circle(12, 12.5, 1.6, ink.base),
+    circle(12, 8.4, 1.7, ink.base),
+    circle(15.6, 14.6, 1.7, ink.base),
+    circle(8.4, 14.6, 1.7, ink.base),
+  ),
 };

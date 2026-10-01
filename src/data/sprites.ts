@@ -46,6 +46,7 @@ import { PATIENT } from '../art/patient.ts';
 import { DUST_RING, PARTICLE_FX } from '../art/particles.ts';
 import { PAUSED } from '../art/paused.ts';
 import { QUARRY } from '../art/quarry.ts';
+import { QUEEN_SPRITE } from '../art/queen.ts';
 import { PUDDLE } from '../art/puddle.ts';
 import { ROCK_COAL, ROCK_IRON, ROCK_STONE } from '../art/rocks.ts';
 import { STORE_FULL } from '../art/storeFull.ts';
@@ -80,6 +81,8 @@ export const SPRITES = {
   /** La caravane de troc : la charrette, son marchand, et la roue qui tourne. */
   caravan: CARAVAN_SPRITE,
   mutant: MUTANT,
+  /** La Reine des flaques : trois tuiles sur trois, couronne de bulles. */
+  queen: QUEEN_SPRITE,
   kid: KID,
   worker: WORKER,
   /** Un bûcheron : chemise à carreaux, barbe, et sa hache, qui s'abat à chaque coup. */

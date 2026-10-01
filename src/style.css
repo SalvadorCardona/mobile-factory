@@ -1343,7 +1343,8 @@ button.hud-stock:active {
   line-height: 1.2;
 }
 
-.hud-banner[data-tone='cleared'] {
+.hud-banner[data-tone='cleared'],
+.hud-banner[data-tone='queen'] {
   padding-left: 20px;
 }
 

@@ -79,6 +79,7 @@ const ITEM_PARTICLES: Record<ItemId, ParticleStyle> = {
   mutantGoo: PARTICLES.mutant,
   wolfFang: PARTICLES.bone,
   crabClaw: PARTICLES.claw,
+  radCore: PARTICLES.mutant,
 };
 
 /**
@@ -517,6 +518,10 @@ function wireAudio(world: World, audio: AudioEngine, hud: Hud): void {
     audio.night('dawn');
     audio.play('dawn');
   });
+  world.events.on('queenAnnounced', () => audio.play('horn'));
+  world.events.on('queenLaid', () => audio.play('gloop'));
+  world.events.on('queenDived', () => audio.play('gloop'));
+  world.events.on('queenSlain', () => audio.play('objective'));
   world.events.on('lootPicked', () => audio.play('pickup'));
   world.events.on('childBorn', () => audio.play('baby'));
   world.events.on('eveArrived', () => audio.play('build'));

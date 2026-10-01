@@ -28,6 +28,8 @@ export const ITEMS = {
   mutantGoo: { label: 'Gelée de mutant', stack: 50 },
   wolfFang: { label: 'Croc de loup', stack: 50 },
   crabClaw: { label: 'Pince de crabe', stack: 50 },
+  // Le cœur de la Reine des flaques : un seul par Reine abattue.
+  radCore: { label: 'Cœur radioactif', stack: 10 },
 } as const satisfies Record<string, ItemProto>;
 
 export type ItemId = keyof typeof ITEMS;

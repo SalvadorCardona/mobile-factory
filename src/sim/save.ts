@@ -37,9 +37,11 @@ import type {
   Job,
   LumberjackState,
   Mobile,
+  Mutant,
   PatientState,
   Player,
   TradeOffer,
+  QueenState,
   Wandering,
   WorldStats,
 } from './types.ts';
@@ -449,13 +451,21 @@ function parseEntity(raw: unknown): SavedEntity {
   }
 }
 
+function parseQueen(raw: unknown): QueenState {
+  const queen = record(raw);
+  const phase = queen['phase'];
+
+  if (phase !== 1 && phase !== 2) throw new SaveError(`phase de Reine inconnue : ${String(phase)}`);
+  return { phase, layTicks: int(queen['layTicks']), prey: queen['prey'] === null ? null : int(queen['prey']) };
+}
+
 function parseMobile(raw: unknown): Mobile {
   const mobile = record(raw);
   const base = { id: int(mobile['id']), ...moving(mobile) };
 
   switch (mobile['kind']) {
-    case 'mutant':
-      return {
+    case 'mutant': {
+      const mutant: Mutant = {
         ...base,
         kind: 'mutant',
         proto: oneOf(mobile['proto'], ENEMIES) as EnemyId,
@@ -465,6 +475,11 @@ function parseMobile(raw: unknown): Mobile {
         // Absente d'une sauvegarde d'avant les cibles de vague : la mairie.
         ...(mobile['target'] !== undefined && { target: int(mobile['target']) }),
       };
+
+      // La Reine seule retient sa phase, sa ponte et sa proie.
+      if (mutant.proto === 'queen') mutant.queen = parseQueen(mobile['queen']);
+      return mutant;
+    }
     case 'beast': {
       const state = mobile['state'];
 

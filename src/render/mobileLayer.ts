@@ -62,6 +62,11 @@ import type { TerrainTiles } from './terrainTiles.ts';
 
 const HP_TRACK = hex(PALETTE.paper.base);
 const HP_FG = hex(PALETTE.coral.base);
+/** Largeur d'une barre de vie, en pixels monde ; celle de la Reine se lit de loin. */
+const HP_WIDTH = 18;
+const QUEEN_HP_WIDTH = 52;
+/** La flaque de la Reine, agrandie d'autant : elle en sort tout entière. */
+const QUEEN_PUDDLE = 2.6;
 
 const SPAWN_MS = 500;
 const DEATH_MS = 520;
@@ -120,7 +125,9 @@ function puppetOf(
 ): { id: PuppetId; shadowWidth: number; stride: number; gait?: 'scuttle' | 'limp' } {
   switch (mobile.kind) {
     case 'mutant':
-      return { id: ENEMIES[mobile.proto].sprite, shadowWidth: 22, stride: 4 };
+      return mobile.proto === 'queen'
+        ? { id: 'queen', shadowWidth: 72, stride: 12 }
+        : { id: ENEMIES[mobile.proto].sprite, shadowWidth: 22, stride: 4 };
     case 'patient':
       return { id: 'patient', shadowWidth: 22, stride: 4, gait: 'limp' };
     case 'kid':
@@ -158,6 +165,8 @@ interface MobileView {
   stars: { orbit: Container; spin: Sprite } | null;
   /** Taille du pantin : le gros mutant est un mutant en plus grand. */
   size: number;
+  /** Taille de la flaque d'où il sort (`puddleSize`). */
+  puddle: number;
   /** Le recul d'un mutant touché : direction du tir, ms restantes. */
   recoil: { dx: number; dy: number; left: number } | null;
 }
@@ -176,7 +185,7 @@ interface Puddle {
   root: Container;
   pool: Sprite;
   bubbles: Sprite[];
-  /** Taille de la mare : 1 pour une vague, plus petite sous un mort. */
+  /** Taille de la mare : 1 pour une vague, plus petite sous un mort, bien plus grande sous la Reine. */
   size: number;
   /** Le mutant qui en sort — ou qui y est mort. */
   mutant: MobileId;
@@ -242,11 +251,18 @@ export class MobileLayer {
     };
 
     world.events.on('mutantDied', (event) => {
-      const size = this.views.get(event.id)?.size ?? 1;
+      const view = this.views.get(event.id);
+      // Le gros mutant laisse une mare à sa taille, la Reine une mare à la sienne.
+      const size = Math.max(view?.size ?? 1, view?.puddle ?? 1);
 
       fall(event);
       // Le mort devient une flaque, sous lui, qui se résorbe après lui.
-      this.spill(event, { size: size * DEATH_PUDDLE_SIZE });
+      this.spill(event, size * DEATH_PUDDLE_SIZE, true);
+    });
+    // La Reine plonge : une flaque là où elle s'enfonce, une autre là où elle ressortira, près de la tour.
+    world.events.on('queenDived', ({ id, x, y, toX, toY }) => {
+      this.spill({ id, x, y }, QUEEN_PUDDLE);
+      this.spill({ id, x: toX, y: toY }, QUEEN_PUDDLE);
     });
     world.events.on('mutantFled', fall);
     world.events.on('mutantHit', ({ id, dx, dy }) => {
@@ -346,9 +362,11 @@ export class MobileLayer {
 
           if ((mobile.kind === 'mutant' || mobile.kind === 'beast') && view.hp) {
             const max = mobile.kind === 'mutant' ? ENEMIES[mobile.proto].hp : WILDLIFE[mobile.proto].hp;
+            const queen = mobile.kind === 'mutant' && mobile.proto === 'queen';
 
-            view.hp.visible = mobile.hp < max;
-            if (view.hp.visible) drawHp(view.hp, mobile.hp / max);
+            // La Reine porte sa barre dès qu'elle sort : on voit d'emblée ce qu'il faut user.
+            view.hp.visible = queen || mobile.hp < max;
+            if (view.hp.visible) drawHp(view.hp, mobile.hp / max, queen ? QUEEN_HP_WIDTH : HP_WIDTH);
             if (mobile.hp < view.lastHp) puppet.hit();
             view.lastHp = mobile.hp;
 
@@ -476,7 +494,7 @@ export class MobileLayer {
         const phase = ((puddle.age + (k * BUBBLE_MS) / BUBBLES) % BUBBLE_MS) / BUBBLE_MS;
         const spot = Math.sin(k * 2.4 + Math.floor((puddle.age + (k * BUBBLE_MS) / BUBBLES) / BUBBLE_MS) * 1.7);
 
-        bubble.position.set(spot * 13 * size, Math.cos(k * 1.9) * 3 * size - phase * 5);
+        bubble.position.set(spot * 13 * size * puddle.size, Math.cos(k * 1.9) * 3 * size * puddle.size - phase * 5);
         // Elle gonfle, puis éclate d'un coup.
         bubble.scale.set(phase < 0.85 ? (0.4 + phase * 0.9) * size : 0);
         bubble.visible = puddle.fading === null || puddle.fading > PUDDLE_FADE_MS / 2;
@@ -492,8 +510,10 @@ export class MobileLayer {
   /**
    * Une flaque sous un mutant qui sort de terre, à l'endroit où il sort ; ou,
    * sans bulles, sous un mutant mort, qui reste un moment avant de se résorber.
+   * `size` : la taille de la mare.
    */
-  private spill(mutant: { id: MobileId; x: number; y: number }, death?: { size: number }): void {
+  private spill(mutant: { id: MobileId; x: number; y: number }, size = 1, death = false): void {
+    const { x, y } = mutant;
     const root = new Container();
     const pool = new Sprite(this.library.part('puddle', 'pool'));
     const bubbles: Sprite[] = [];
@@ -511,9 +531,9 @@ export class MobileLayer {
       root.addChild(bubble);
     }
 
-    root.position.set(mutant.x, mutant.y);
+    root.position.set(x, y);
     // Au sol : sous le mutant qui en sort, sous tout ce qui passe devant.
-    root.zIndex = mutant.y - 16;
+    root.zIndex = y - 16;
     this.container.addChild(root);
     this.puddles.push({
       root,
@@ -522,7 +542,7 @@ export class MobileLayer {
       mutant: mutant.id,
       age: 0,
       hold: death ? DEATH_PUDDLE_MS : 0,
-      size: death?.size ?? 1,
+      size,
       fading: null,
     });
   }
@@ -571,7 +591,7 @@ export class MobileLayer {
       }
       sprite.anchor.set(SPRITES.arrow.anchorX, SPRITES.arrow.anchorY);
       root.addChild(sprite);
-      view = { root, puppet: null, hp: null, lastHp: 0, age: SPAWN_MS, tile: '', bike: null, stars: null, size: 1, recoil: null };
+      view = { root, puppet: null, hp: null, lastHp: 0, age: SPAWN_MS, tile: '', bike: null, stars: null, size: 1, puddle: 1, recoil: null };
     } else if (mobile.kind === 'pickup') {
       const tx = floorDiv(mobile.x, TILE_SIZE);
       const ty = floorDiv(mobile.y, TILE_SIZE);
@@ -590,14 +610,14 @@ export class MobileLayer {
       // Butin rechargé d'une sauvegarde : déjà posé, pas de saut.
       const fresh = LOOT_DROPS.lifetimeTicks - mobile.ttl < 20;
 
-      view = { root, puppet: null, hp: null, lastHp: 0, age: fresh ? 0 : LOOT_DROP_MS, tile: '', bike: null, stars: null, size: 1, recoil: null };
+      view = { root, puppet: null, hp: null, lastHp: 0, age: fresh ? 0 : LOOT_DROP_MS, tile: '', bike: null, stars: null, size: 1, puddle: 1, recoil: null };
     } else if (mobile.kind === 'caravan') {
       const cart = this.cart(this.tiles.shadow('grass'));
 
       // Rechargée garée, elle garde le sens où elle roulait.
       cart.figure.scale.x = mobile.facing === 'left' ? -1 : 1;
       root.addChild(cart.root);
-      view = { root, puppet: null, hp: null, lastHp: 0, age: SPAWN_MS, tile: '', bike: cart, stars: null, size: 1, recoil: null };
+      view = { root, puppet: null, hp: null, lastHp: 0, age: SPAWN_MS, tile: '', bike: cart, stars: null, size: 1, puddle: 1, recoil: null };
     } else {
       const foe = mobile.kind === 'mutant' || mobile.kind === 'beast';
       const { id, ...options } = puppetOf(mobile);
@@ -617,7 +637,7 @@ export class MobileLayer {
         const proto = SPRITES[id];
 
         hp = new Graphics();
-        hp.position.set(-9, -proto.height * proto.anchorY * scale - 2);
+        hp.position.set(-(id === 'queen' ? QUEEN_HP_WIDTH : HP_WIDTH) / 2, -proto.height * proto.anchorY * scale - 2);
         hp.visible = false;
         root.addChild(hp);
         root.alpha = 0;
@@ -625,8 +645,10 @@ export class MobileLayer {
       const stars = mobile.kind === 'patient' ? this.stars() : null;
 
       if (stars) root.addChild(stars.orbit);
-      view = { root, puppet, hp, lastHp: foe ? mobile.hp : 0, age: foe ? 0 : SPAWN_MS, tile: '', bike, stars, size: scale, recoil: null };
-      if (mobile.kind === 'mutant' && mobile.emerge > 0) this.spill(mobile);
+      const puddle = mobile.kind === 'mutant' ? puddleSize(mobile) : 1;
+
+      view = { root, puppet, hp, lastHp: foe ? mobile.hp : 0, age: foe ? 0 : SPAWN_MS, tile: '', bike, stars, size: scale, puddle, recoil: null };
+      if (mobile.kind === 'mutant' && mobile.emerge > 0) this.spill(mobile, puddle);
     }
 
     this.views.set(mobile.id, view);
@@ -752,7 +774,12 @@ function rideBike(bike: BikeView, left: boolean, deltaMs: number): void {
 }
 
 /** Une capsule blanche et son remplissage corail, au-dessus de la tête. */
-export function drawHp(graphics: Graphics, ratio: number): void {
-  graphics.clear().roundRect(0, 0, 18, 6, 3).fill(HP_TRACK);
-  if (ratio > 0) graphics.roundRect(1.5, 1.5, Math.max(3, 15 * ratio), 3, 1.5).fill(HP_FG);
+export function drawHp(graphics: Graphics, ratio: number, width = HP_WIDTH): void {
+  graphics.clear().roundRect(0, 0, width, 6, 3).fill(HP_TRACK);
+  if (ratio > 0) graphics.roundRect(1.5, 1.5, Math.max(3, (width - 3) * ratio), 3, 1.5).fill(HP_FG);
+}
+
+/** La taille de la flaque d'où sort un mutant : celle d'un mutant, plus petite pour une larve, bien plus grande pour la Reine. */
+function puddleSize(mutant: Mutant): number {
+  return mutant.proto === 'queen' ? QUEEN_PUDDLE : Math.min(1, ENEMIES[mutant.proto].scale);
 }

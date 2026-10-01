@@ -103,6 +103,19 @@ export function ticksToNextWave(clock: DayClock): number {
   return nextWave(clock).ticks;
 }
 
+/**
+ * Ticks avant la vague `wave` (la première vaut 1) de la nuit qui tombe ou
+ * qui court, ou `null` si elle est déjà sortie ou qu'on n'est ni au
+ * crépuscule ni dans la nuit.
+ */
+export function ticksToWave(clock: DayClock, wave: number): number | null {
+  if (clock.phase !== 'dusk' && clock.phase !== 'night') return null;
+
+  const at = NIGHT_OFFSET + WAVES.firstAt + (wave - 1) * WAVES.interval;
+
+  return at >= clock.offset ? at - clock.offset : null;
+}
+
 /** Ticks avant la tombée de la prochaine nuit ; 0 pendant la nuit. */
 export function ticksToNight(clock: DayClock): number {
   if (clock.phase === 'night') return 0;

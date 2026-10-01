@@ -150,13 +150,22 @@ ramasse en marchant dessus — sac plein, il reste au sol. L'arc d'Adam et la to
 (`src/data/weapons.ts`) tirent seuls. La mairie à zéro = partie perdue.
 La courbe est une table, nuit par nuit (`NIGHT_PLAN`) : pic à la nuit 3,
 répit après chaque grosse nuit, un **gros mutant** (`brute`) dès la nuit 5 ;
-au-delà, les cinq dernières se répètent en plus gros. Adam **répare** un
+au-delà, les cinq dernières se répètent en plus gros. Aux nuits 10, 15, 20…
+la **Reine des flaques** (`queen`, `QUEEN`) mène la dernière vague :
+annoncée la veille au crépuscule par Ève, compte à rebours au bandeau
+(`World.queenCountdown()`). Phase 1, elle marche sur la mairie et pond des
+larves (`larva`) ; sous la moitié de ses PV, elle plonge (`stepQueen`,
+`sim/enemies.ts`) et ressort à quatre cases de la tour la plus proche, qu'elle
+charge pour la raser — des tours qui se couvrent. Jamais assommée (`stunnable`) ; à
+l'aube, elle repart ; abattue, elle lâche un **cœur radioactif** (`radCore`). Adam **répare** un
 bâtiment abîmé en le heurtant avec du bois, ou via « Réparer » (sac puis
 ville ; `REPAIR`, `src/data/buildings.ts`). Frappée hors écran, la mairie
 sonne l'alarme : bord rouge, repère qui clignote, vibration.
 `src/sim/defense.test.ts` mesure l'équilibre (Adam immobile, Ève qui répare :
-deux tours passent la nuit 10, une seule tombe aux nuits 8–10 ; l'usine
-isolée, AFK, y laisse des plumes en six nuits, deux tours par bâtiment la sauvent).
+deux tours passent la nuit 9, et celle de la Reine si l'on répare, une seule
+tombe aux nuits 8–10 ; l'usine isolée, AFK, y laisse des plumes en six nuits,
+deux tours par bâtiment la sauvent ; deux tours de base, la Reine en rase
+une ; quatre renforcées, elle tombe avant l'aube).
 La **nurserie** fait naître un enfant toutes les trois minutes, contre six
 nourritures (recette `raiseChild`) : sans elles, elle attend.
 

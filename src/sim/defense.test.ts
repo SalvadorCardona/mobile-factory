@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_SIZE } from '../core/grid.ts';
 import { BUILDINGS, REPAIR, buildingLevel, type BuildingId } from '../data/buildings.ts';
+import { DAY_CYCLE } from '../data/dayNight.ts';
+import { ENEMIES, QUEEN, queenWave, waveSpec } from '../data/enemies.ts';
 import type { ItemId } from '../data/items.ts';
-import type { Building, EntityId } from './types.ts';
+import { isTargetable } from './combat.ts';
+import { CYCLE_TICKS } from './dayNight.ts';
+import { queenPhase } from './enemies.ts';
+import { deserialize, serialize } from './save.ts';
+import type { Building, EntityId, Mutant, Tower } from './types.ts';
 import { World, repairCost } from './world.ts';
 
 /**
@@ -228,14 +234,14 @@ describe('réparer', () => {
 describe('courbe des nuits', () => {
   const SEEDS = [7, 42, 99];
 
-  it.each(SEEDS)('seed %i : Adam immobile et deux tours passent la nuit 10', (seed) => {
+  it.each(SEEDS)('seed %i : Adam immobile et deux tours passent la nuit 9, jusqu’à la Reine', (seed) => {
     const world = worldWithTownHall(seed);
 
     addTowers(world, 2);
-    playThroughNight(world, 10);
+    playThroughNight(world, 9);
 
     expect(world.defeated).toBe(false);
-    expect(world.night).toBe(10);
+    expect(world.night).toBe(9);
   }, 60_000);
 
   it.each(SEEDS)('seed %i : une seule tour tient les premières nuits, mais la mairie tombe avant l’aube de la nuit 10', (seed) => {
@@ -303,5 +309,235 @@ describe('l’usine la nuit', () => {
     expect(world.defeated).toBe(false);
     expect(world.night).toBe(6);
     expect(destroyed).toEqual([]);
+  }, 60_000);
+});
+
+/* ------------------------------------------------------------ la Reine */
+
+function towersOf(world: World): Tower[] {
+  return [...world.entities.values()].filter((entity): entity is Tower => entity.kind === 'tower');
+}
+
+function queenOf(world: World): Mutant | undefined {
+  return [...world.mobiles.values()].find((mobile): mobile is Mutant => mobile.kind === 'mutant' && mobile.proto === 'queen');
+}
+
+function centerOf(entity: { tx: number; ty: number; width: number; height: number }): { x: number; y: number } {
+  return { x: (entity.tx + entity.width / 2) * TILE_SIZE, y: (entity.ty + entity.height / 2) * TILE_SIZE };
+}
+
+/** Une Reine posée à la main, sortie de terre, à (x, y), avec `hp` points de vie. */
+function placeQueen(world: World, x: number, y: number, hp: number = ENEMIES.queen.hp, id = 90_000): Mutant {
+  const queen: Mutant = {
+    kind: 'mutant',
+    id,
+    proto: 'queen',
+    x,
+    y,
+    prevX: x,
+    prevY: y,
+    facing: 'down',
+    moving: false,
+    hp,
+    attackCooldown: 0,
+    emerge: 0,
+    queen: { phase: 1, layTicks: QUEEN.layTicks, prey: null },
+  };
+
+  world.mobiles.set(id, queen);
+  return queen;
+}
+
+/** Avance l'horloge : le prochain tick est `before` ticks avant la tombée de la nuit `night`. */
+function jumpToNight(world: World, night: number, before: number): void {
+  world.cycleStartTick = world.tickCount + 1 - ((night - 1) * CYCLE_TICKS + DAY_CYCLE.day + DAY_CYCLE.dusk - before);
+  world.night = night - 1;
+}
+
+describe('Reine des flaques — calendrier', () => {
+  it('mène la dernière vague des nuits 10, 15, 20 ; la nuit 5 garde son gros mutant', () => {
+    expect(waveSpec(10, 3).queen).toBe(1);
+    expect(queenWave(10)).not.toBeNull();
+    expect(queenWave(15)).not.toBeNull();
+    expect(queenWave(20)).not.toBeNull();
+
+    for (const night of [1, 4, 5, 6, 9, 11, 14, 16]) expect(queenWave(night), `nuit ${night}`).toBeNull();
+    expect(waveSpec(5, 3).brute).toBe(1);
+  });
+
+  it('s’annonce la veille au crépuscule, puis le bandeau compte jusqu’à sa sortie', () => {
+    const world = worldWithTownHall(42);
+    const announced: number[] = [];
+
+    world.events.on('queenAnnounced', ({ night }) => announced.push(night));
+    // Le crépuscule de la nuit 9 tombe au prochain tick.
+    jumpToNight(world, 9, DAY_CYCLE.dusk);
+    world.tick();
+    expect(announced).toEqual([10]);
+    expect(world.queenCountdown()).toBeNull();
+
+    jumpToNight(world, 10, DAY_CYCLE.dusk - 1);
+    world.tick();
+    const first = world.queenCountdown();
+
+    world.tick();
+    expect(first).not.toBeNull();
+    expect(world.queenCountdown()).toBe(first! - 1);
+  });
+});
+
+describe('Reine des flaques — phases', () => {
+  it('reste en phase 1 à la moitié de ses PV, passe en phase 2 en dessous', () => {
+    const world = worldWithTownHall(42);
+    const half = placeQueen(world, 0, 0, ENEMIES.queen.hp * 0.5);
+    const below = placeQueen(world, 0, 0, Math.floor(ENEMIES.queen.hp * 0.49 * 100) / 100, 90_001);
+
+    expect(below.hp / ENEMIES.queen.hp).toBeCloseTo(0.49);
+    expect(queenPhase(half)).toBe(1);
+    expect(queenPhase(below)).toBe(2);
+  });
+
+  it('pond deux larves toutes les huit secondes en phase 1', () => {
+    const world = worldWithTownHall(42);
+    const hall = hallOf(world);
+    const queen = placeQueen(world, hall.tx * TILE_SIZE - 12 * TILE_SIZE, hall.ty * TILE_SIZE);
+    const larvae = (): number => [...world.mobiles.values()].filter((m) => m.kind === 'mutant' && m.proto === 'larva').length;
+
+    for (let i = 0; i < QUEEN.layTicks - 1; i += 1) world.tick();
+    expect(larvae()).toBe(0);
+    world.tick();
+    expect(larvae()).toBe(QUEEN.brood);
+    expect(queen.queen!.phase).toBe(1);
+  });
+
+  it('à 49 % de ses PV, plonge et ressort à quatre cases de la tour la plus proche, puis la frappe', () => {
+    const world = worldWithTownHall(42);
+
+    addTowers(world, 2);
+
+    const hall = hallOf(world);
+    const queen = placeQueen(world, (hall.tx - 10) * TILE_SIZE, hall.ty * TILE_SIZE, ENEMIES.queen.hp * 0.49);
+    const nearest = towersOf(world).sort(
+      (a, b) => Math.hypot(centerOf(a).x - queen.x, centerOf(a).y - queen.y) - Math.hypot(centerOf(b).x - queen.x, centerOf(b).y - queen.y),
+    )[0]!;
+    const hits: number[] = [];
+
+    world.events.on('buildingDamaged', ({ id }) => hits.push(id));
+    world.tick();
+
+    expect(queen.queen).toMatchObject({ phase: 2, prey: nearest.id });
+    expect(queen.emerge).toBe(QUEEN.burrowTicks);
+    expect(isTargetable(queen)).toBe(false);
+    expect(Math.hypot(queen.x - centerOf(nearest).x, queen.y - centerOf(nearest).y) / TILE_SIZE).toBeCloseTo(QUEEN.surfaceDistance);
+
+    for (let i = 0; i < QUEEN.burrowTicks + 20 * 15 && !hits.includes(nearest.id); i += 1) {
+      // Hors d'atteinte des arcs le temps de l'essai : on regarde où elle va.
+      queen.hp = ENEMIES.queen.hp * 0.49;
+      world.tick();
+    }
+    expect(hits).toContain(nearest.id);
+  });
+
+  it('sa mort lâche un cœur radioactif et une à trois plaques de fer', () => {
+    const world = worldWithTownHall(42);
+    const dropped: ItemId[] = [];
+    const slain: number[] = [];
+
+    world.events.on('lootDropped', ({ item }) => dropped.push(item));
+    world.events.on('queenSlain', ({ id }) => slain.push(id));
+
+    const queen = placeQueen(world, world.player.x + 3 * TILE_SIZE, world.player.y, 1);
+
+    for (let i = 0; i < 200 && world.mobiles.has(queen.id); i += 1) world.tick();
+
+    expect(world.mobiles.has(queen.id)).toBe(false);
+    expect(slain).toEqual([queen.id]);
+    expect(dropped.filter((item) => item === 'radCore')).toHaveLength(1);
+
+    const plates = dropped.filter((item) => item === 'ironPlate').length;
+
+    expect(plates).toBeGreaterThanOrEqual(1);
+    expect(plates).toBeLessThanOrEqual(3);
+  });
+
+  it('se sauvegarde et se recharge en pleine phase 2, et reprend à l’identique', () => {
+    const world = worldWithTownHall(42);
+
+    addTowers(world, 2);
+
+    const hall = hallOf(world);
+    const queen = placeQueen(world, (hall.tx - 10) * TILE_SIZE, hall.ty * TILE_SIZE, ENEMIES.queen.hp * 0.4);
+
+    for (let i = 0; i < 20; i += 1) world.tick();
+    expect(queen.queen!.phase).toBe(2);
+    expect(queen.emerge).toBeGreaterThan(0);
+
+    const restored = deserialize(JSON.parse(JSON.stringify(serialize(world))));
+    const copy = restored.mobiles.get(queen.id) as Mutant;
+
+    expect(copy).toEqual(queen);
+
+    for (let i = 0; i < 20 * 10; i += 1) {
+      world.tick();
+      restored.tick();
+    }
+    expect(restored.mobiles.get(queen.id)).toEqual(world.mobiles.get(queen.id));
+    expect(towersOf(restored).map((tower) => tower.hp)).toEqual(towersOf(world).map((tower) => tower.hp));
+  });
+
+  it('repart à l’aube si elle est encore debout', () => {
+    const world = worldWithTownHall(42);
+    const hall = hallOf(world);
+    const queen = placeQueen(world, (hall.tx - 12) * TILE_SIZE, hall.ty * TILE_SIZE);
+
+    // L'aube de la nuit 10 se lève au prochain tick.
+    jumpToNight(world, 10, -DAY_CYCLE.night);
+    world.tick();
+
+    expect(world.clock()?.phase).toBe('dawn');
+    expect(world.mobiles.has(queen.id)).toBe(false);
+  });
+});
+
+/*
+ * La Reine, mesurée : Adam planté sous la mairie, la nuit 10 jouée de son
+ * crépuscule à son aube. Deux tours de base ne se couvrent pas assez : elle
+ * en rase une. Quatre tours renforcées la descendent avant le jour.
+ */
+describe('Reine des flaques — équilibre', () => {
+  /** Joue la nuit 10 depuis son crépuscule ; renvoie les tours qu'elle a rasées et si elle est tombée. */
+  function queenNight(world: World): { razed: number; slain: boolean } {
+    let razed = 0;
+    let slain = false;
+
+    world.events.on('buildingDestroyed', ({ id, proto }) => {
+      const queen = queenOf(world);
+
+      if (proto === 'watchtower' && queen?.queen?.prey === id) razed += 1;
+    });
+    world.events.on('queenSlain', () => (slain = true));
+
+    jumpToNight(world, 10, DAY_CYCLE.dusk);
+    for (let i = 0; i < DAY_CYCLE.dusk + DAY_CYCLE.night + 1 && !world.defeated; i += 1) world.tick();
+    expect(world.clock()?.phase === 'dawn' || world.defeated).toBe(true);
+    return { razed, slain };
+  }
+
+  it('seed 42, la mairie et deux tours de base : elle rase au moins une tour', () => {
+    const world = worldWithTownHall(42);
+
+    addTowers(world, 2);
+    expect(queenNight(world).razed).toBeGreaterThanOrEqual(1);
+  }, 60_000);
+
+  it('seed 42, la mairie et quatre tours renforcées : elle tombe avant l’aube', () => {
+    const world = worldWithTownHall(42);
+
+    addTowers(world, 4);
+    for (const tower of towersOf(world)) {
+      tower.level = 2;
+      tower.hp = buildingLevel(tower.proto, 2).hp;
+    }
+    expect(queenNight(world).slain).toBe(true);
   }, 60_000);
 });

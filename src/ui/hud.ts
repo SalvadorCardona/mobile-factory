@@ -504,14 +504,22 @@ export class Hud {
 
       if (label) this.notify(label, 'bad');
     });
-    world.events.on('waveCountdown', ({ seconds, night, wave, count, boss, from, targetProto, x, y }) => {
+    world.events.on('waveCountdown', ({ seconds, night, wave, count, boss, queen, from, targetProto, x, y }) => {
       this.showCountdown(String(seconds));
-      this.announce(night, wave, count, boss, from, targetProto, { x, y });
+      this.announce(night, wave, count, boss, queen, from, targetProto, { x, y });
     });
+    // La veille au soir : Ève prévient, dans sa bulle — ou par radio si elle n'est pas là.
+    world.events.on('queenAnnounced', () => {
+      if (world.eve()) this.say([EVE_LINES.queen]);
+      else this.notify(`Ève, par radio : ${EVE_LINES.queen}`, 'bad');
+    });
+    world.events.on('queenSlain', ({ night }) =>
+      this.showBanner('cleared', 'La Reine des flaques est tombée !', `Nuit ${night} — son cœur radioactif est au sol`, null, BANNER_CLEARED_MS),
+    );
     world.events.on('duskFell', () => this.notify('La nuit tombe — rentrez !', 'bad'));
     // Une vague qui n'a pas eu son compte à rebours (partie reprise pile avant) s'annonce quand même.
-    world.events.on('waveStarted', ({ night, wave, count, boss, from, targetProto, x, y }) => {
-      this.announce(night, wave, count, boss, from, targetProto, { x, y });
+    world.events.on('waveStarted', ({ night, wave, count, boss, queen, from, targetProto, x, y }) => {
+      this.announce(night, wave, count, boss, queen, from, targetProto, { x, y });
       this.unfoldQuest(QUEST_ALERT_TICKS);
     });
     world.events.on('buildingDamaged', ({ id, hp }) => {
@@ -737,13 +745,15 @@ export class Hud {
 
   /**
    * Le bandeau d'une vague, une seule fois par vague ; `boss` : un gros
-   * mutant mène la charge. Il dit ce qu'elle vise : la mairie, ou l'usine.
+   * mutant ou la Reine (`queen`) mène la charge. Il dit ce qu'elle vise : la
+   * mairie, ou l'usine.
    */
   private announce(
     night: number,
     wave: number,
     count: number,
     boss: boolean,
+    queen: boolean,
     from: Compass,
     target: BuildingId,
     origin: { x: number; y: number },
@@ -760,9 +770,11 @@ export class Hud {
     this.showBanner(
       'wave',
       wave === 1 ? `Nuit ${night}` : 'Renforts',
-      boss
-        ? `Un gros mutant mène la charge ${FROM_LABELS[from]} : ${aim}`
-        : `${count} mutant${plural ? 's' : ''} arrive${plural ? 'nt' : ''} ${FROM_LABELS[from]} : ${aim}`,
+      queen
+        ? `La Reine des flaques sort ${FROM_LABELS[from]} !`
+        : boss
+          ? `Un gros mutant mène la charge ${FROM_LABELS[from]} : ${aim}`
+          : `${count} mutant${plural ? 's' : ''} arrive${plural ? 'nt' : ''} ${FROM_LABELS[from]} : ${aim}`,
       origin,
       BANNER_WAVE_MS,
     );
@@ -790,8 +802,33 @@ export class Hud {
     }
   }
 
+  /**
+   * Le soir d'une nuit de Reine, le bandeau compte jusqu'à sa sortie, du
+   * crépuscule à sa vague. Un autre bandeau (une vague, une victoire) passe
+   * devant le temps de se lire ; le compte revient ensuite.
+   */
+  private updateQueenBanner(): void {
+    const ticks = this.world.queenCountdown();
+    const counting = this.banner.dataset['tone'] === 'queen';
+
+    if (ticks === null) {
+      if (counting) this.banner.hidden = true;
+      return;
+    }
+    if (!this.banner.hidden && !counting) return;
+
+    const seconds = Math.ceil(ticks / TICKS_PER_SECOND);
+    const text = `Elle sort dans ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+
+    if (this.banner.hidden) {
+      this.showBanner('queen', `Nuit ${this.world.clock()!.cycle} — la Reine des flaques`, text, null, Infinity);
+    } else if (this.bannerText.textContent !== text) {
+      this.bannerText.textContent = text;
+    }
+  }
+
   /** Le bandeau, au-dessus du compte à rebours ; sa flèche suit `target` tant qu'il est là. */
-  private showBanner(tone: 'wave' | 'cleared', title: string, body: string, target: { x: number; y: number } | null, ms: number): void {
+  private showBanner(tone: 'wave' | 'cleared' | 'queen', title: string, body: string, target: { x: number; y: number } | null, ms: number): void {
     this.banner.dataset['tone'] = tone;
     this.bannerTitle.textContent = title;
     this.bannerText.textContent = body;
@@ -806,6 +843,8 @@ export class Hud {
     this.banner.style.animation = '';
 
     window.clearTimeout(this.bannerTimer);
+    // `Infinity` : il reste jusqu'à ce qu'un autre le remplace (le compte à rebours de la Reine).
+    if (!Number.isFinite(ms)) return;
     this.bannerTimer = window.setTimeout(() => {
       this.banner.hidden = true;
       this.bannerTarget = null;
@@ -887,6 +926,7 @@ export class Hud {
     this.updateSpeech();
     this.updateWeather();
     this.placeCelebration();
+    this.updateQueenBanner();
     this.root.dataset['danger'] = String(this.mutantCount() > 0 && !this.world.defeated);
     if (!this.banner.hidden) this.aimBanner();
     if (this.root.dataset['alarm'] === 'true' && (performance.now() > this.alarmUntil || this.world.defeated)) {
