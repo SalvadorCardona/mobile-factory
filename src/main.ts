@@ -431,6 +431,12 @@ function wireAudio(world: World, audio: AudioEngine, hud: Hud): void {
   hud.setMuted(audio.muted);
   hud.audioButton.addEventListener('click', () => hud.setMuted(audio.toggleMuted()));
 
+  // Une partie rechargée au crépuscule ou en pleine vague : l'oreille le sait aussitôt.
+  const phase = world.clock()?.phase;
+
+  if (phase === 'dusk' || phase === 'night') audio.night('dusk');
+  if ([...world.mobiles.values()].some((mobile) => mobile.kind === 'mutant')) audio.night('wave');
+
   world.events.on('resourceHarvested', ({ item }) => audio.play(item === 'wood' ? 'chop' : 'rock'));
   // Une hache de bûcheron ne s'entend qu'à côté d'Adam : dix cabanes au loin ne font pas un vacarme.
   world.events.on('treeChopped', ({ tx, ty }) => {
@@ -471,16 +477,29 @@ function wireAudio(world: World, audio: AudioEngine, hud: Hud): void {
     if (seconds === WAVE_ANNOUNCE_SECONDS) audio.play('horn');
     audio.play('countdown');
   });
-  world.events.on('waveStarted', () => {
+  world.events.on('duskFell', () => audio.night('dusk'));
+  world.events.on('waveStarted', ({ boss }) => {
     audio.play('alarm');
     audio.play('gloop');
+    audio.night('wave');
+    if (boss) audio.play('brute');
   });
-  world.events.on('waveCleared', () => audio.play('victory'));
+  world.events.on('waveCleared', () => {
+    audio.play('victory');
+    audio.night('cleared');
+  });
+  world.events.on('dawnBroke', () => {
+    audio.night('dawn');
+    audio.play('dawn');
+  });
   world.events.on('lootPicked', () => audio.play('pickup'));
   world.events.on('childBorn', () => audio.play('baby'));
   world.events.on('eveArrived', () => audio.play('build'));
   world.events.on('questCompleted', () => audio.play('build'));
-  world.events.on('townHallDestroyed', () => audio.play('defeat'));
+  world.events.on('townHallDestroyed', () => {
+    audio.play('defeat');
+    audio.night('dawn');
+  });
   // Le dernier objectif a sa fanfare à lui.
   world.events.on('objectiveCompleted', ({ index }) => audio.play(index < OBJECTIVES.length - 1 ? 'objective' : 'colony'));
 }

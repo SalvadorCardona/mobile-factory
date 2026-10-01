@@ -7,12 +7,18 @@
  * 2. Le moteur ne connaît pas le monde. Il expose `play(name)` ; c'est le
  *    câblage (`main.ts`) qui abonne chaque événement de simulation à un son.
  *
+ * La nuit a sa propre humeur (`nightMood.ts`) : le moteur la tient même
+ * avant le premier geste, et l'applique dès qu'il a un contexte — passe-bas
+ * sur la musique, couche de tension (`nightLayer.ts`) si le son est activé.
+ *
  * Le réglage muet survit au rechargement (`localStorage`) : couper le son
  * dans un jeu mobile est une décision qu'on ne veut pas reprendre à chaque
  * partie.
  */
 
 import { Music } from './music.ts';
+import { NightLayer } from './nightLayer.ts';
+import { DAWN_RAMP_S, DAY_MOOD, DUSK_RAMP_S, TENSION_FADE_S, nightLevels, nightMood, type NightMoment } from './nightMood.ts';
 import { SOUNDS, type SoundName } from './synth.ts';
 
 const MUTE_KEY = 'mobile-factory:muted';
@@ -25,6 +31,9 @@ export class AudioEngine {
   private master: GainNode | null = null;
   private sfx: GainNode | null = null;
   private music: Music | null = null;
+  private mood = DAY_MOOD;
+  /** La couche de tension : elle n'existe que la nuit, son activé. */
+  private tension: NightLayer | null = null;
   private readonly lastPlayed = new Map<SoundName, number>();
   private mutedFlag: boolean;
 
@@ -61,6 +70,9 @@ export class AudioEngine {
       this.sfx.connect(this.master);
 
       this.music = new Music(this.ctx, this.master);
+      // Une partie rechargée en pleine nuit : la nuit est déjà là, sans rampe.
+      this.music.setNight(this.mood.night, 0);
+      this.syncTension(DUSK_RAMP_S);
     }
 
     if (this.ctx.state !== 'running') void this.ctx.resume();
@@ -79,6 +91,17 @@ export class AudioEngine {
     SOUNDS[name](this.ctx, this.sfx, this.ctx.currentTime);
   }
 
+  /** Un moment de la nuit : crépuscule, vague, vague repoussée, aube. */
+  public night(moment: NightMoment): void {
+    const wasNight = this.mood.night;
+
+    this.mood = nightMood(this.mood, moment, this.ctx?.currentTime ?? 0);
+    if (this.mood.night === wasNight) return;
+
+    this.music?.setNight(this.mood.night, this.mood.night ? DUSK_RAMP_S : DAWN_RAMP_S);
+    this.syncTension(this.mood.night ? DUSK_RAMP_S : TENSION_FADE_S);
+  }
+
   public toggleMuted(): boolean {
     this.setMuted(!this.mutedFlag);
     return this.mutedFlag;
@@ -93,10 +116,26 @@ export class AudioEngine {
       this.master.gain.cancelScheduledValues(this.ctx.currentTime);
       this.master.gain.setTargetAtTime(muted ? 0 : 1, this.ctx.currentTime, 0.02);
     }
+    this.syncTension(muted ? TENSION_FADE_S : DUSK_RAMP_S);
+  }
+
+  /** Crée la couche de tension s'il fait nuit et que le son est activé, l'éteint sinon. */
+  private syncTension(fadeS: number): void {
+    const wanted = this.mood.night && !this.mutedFlag && this.ctx !== null && this.master !== null;
+
+    if (wanted && !this.tension && this.ctx && this.master) {
+      this.tension = new NightLayer(this.ctx, this.master, (now) => nightLevels(this.mood, now));
+      this.tension.start(fadeS);
+    } else if (!wanted && this.tension) {
+      this.tension.stop(fadeS);
+      this.tension = null;
+    }
   }
 
   public destroy(): void {
     this.music?.stop();
+    this.tension?.stop(0);
+    this.tension = null;
     void this.ctx?.close();
     this.ctx = null;
   }

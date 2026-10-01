@@ -9,9 +9,14 @@
  * en fondu quand il arrive. Décodé une fois, le buffer reste en cache ; un
  * `start()` après un `stop()` repart sans le recharger.
  *
+ * La nuit, la boucle passe derrière un passe-bas qui se ferme et son volume
+ * baisse (`setNight`) : on l'entend « de l'autre côté du mur ».
+ *
  * Si le chargement ou le décodage échoue, le jeu continue sans musique : les
  * bruitages suffisent, une erreur à l'écran n'aiderait personne.
  */
+
+import { MUSIC_DAY, MUSIC_NIGHT } from './nightMood.ts';
 
 const TRACK_URL = `${import.meta.env.BASE_URL}audio/lofi-loop.mp3`;
 
@@ -24,14 +29,14 @@ const TRACK_URL = `${import.meta.env.BASE_URL}audio/lofi-loop.mp3`;
  */
 const LOOP_END_S = 98.461538;
 
-/** Volume de la musique : sous les bruitages, qui portent l'information. */
-const VOLUME = 0.35;
 const FADE_IN_S = 1.5;
 const FADE_OUT_S = 0.3;
 
 export class Music {
   private readonly ctx: AudioContext;
   private readonly out: GainNode;
+  /** Le passe-bas de la nuit, entre les lectures et `out` : grand ouvert le jour. */
+  private readonly filter: BiquadFilterNode;
   private buffer: AudioBuffer | null = null;
   private loading: Promise<AudioBuffer | null> | null = null;
   /** La lecture en cours et son fondu ; `null` quand rien ne joue. */
@@ -42,8 +47,28 @@ export class Music {
   public constructor(ctx: AudioContext, destination: AudioNode) {
     this.ctx = ctx;
     this.out = ctx.createGain();
-    this.out.gain.value = VOLUME;
+    // Sous les bruitages, qui portent l'information.
+    this.out.gain.value = MUSIC_DAY.volume;
     this.out.connect(destination);
+    this.filter = ctx.createBiquadFilter();
+    this.filter.type = 'lowpass';
+    this.filter.frequency.value = MUSIC_DAY.cutoff;
+    this.filter.connect(this.out);
+  }
+
+  /** Ferme (nuit) ou rouvre (jour) le passe-bas et règle le volume, en rampe sur `rampS` secondes. */
+  public setNight(on: boolean, rampS: number): void {
+    const { cutoff, volume } = on ? MUSIC_NIGHT : MUSIC_DAY;
+    const now = this.ctx.currentTime;
+
+    for (const [param, value] of [
+      [this.filter.frequency, cutoff],
+      [this.out.gain, volume],
+    ] as const) {
+      param.cancelScheduledValues(now);
+      param.setValueAtTime(param.value, now);
+      param.linearRampToValueAtTime(value, now + rampS);
+    }
   }
 
   public start(): void {
@@ -104,7 +129,7 @@ export class Music {
     source.loopEnd = LOOP_END_S;
     fade.gain.setValueAtTime(0, now);
     fade.gain.linearRampToValueAtTime(1, now + FADE_IN_S);
-    source.connect(fade).connect(this.out);
+    source.connect(fade).connect(this.filter);
     source.start(now);
     this.voice = { source, fade };
   }
