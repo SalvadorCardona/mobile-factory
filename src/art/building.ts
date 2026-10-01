@@ -16,6 +16,7 @@
  * | tour de guet | la plus haute, sur pilotis | blanc (auvent de toile) | plateforme, drapeau |
  * | tour renforcée (niveau 2 de la tour de guet) | celle de la tour de guet | cyan (plaques de fer) | plaques rivetées, drapeau jaune |
  * | forge | bloc trapu, haute cheminée | indigo (cheminée) | four, fumée, enclume, plaques |
+ * | four à charbon | dôme de briques sur un socle, cheminée | corail (briques) et orange (porte qui rougeoie) | bûches, tas de charbon, pelle, fumée en cuisson |
 | clinique | bloc bas, toit plat en toile blanche | menthe (croix sur médaillon blanc) | bandages, brancard, plante en pot |
  * | labo de recherche | bloc coiffé d'une coupole d'observatoire | violet (coupole) | fioles, antenne, cheminée qui fume en recherche |
  * | cabane de bûcheron | cabane basse en rondins, toit pointu | orange (bardeaux, bûches) | pile de bûches, hache plantée dans la souche |

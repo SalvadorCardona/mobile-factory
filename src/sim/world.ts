@@ -82,7 +82,7 @@ import { WEAPONS } from '../data/weapons.ts';
 import { BUILDERS, JOB_PRIORITY, LUMBERJACKS, PORTERS } from '../data/workers.ts';
 import { WEATHER, WEATHER_CALENDAR, type WeatherId } from '../data/weather.ts';
 import { ChunkIndex } from './chunk.ts';
-import { consumerRecipe, consumerRoom, consumerWants, isConsumer } from './consumers.ts';
+import { consumerRecipe, consumerRoom, consumerWants, forgeRecipe, isConsumer } from './consumers.ts';
 import { NO_WIND, nearestFoe, shoot, stepArrow, type Wind } from './combat.ts';
 import { clockAt, isWaveTick, ticksToNextWave, type DayClock } from './dayNight.ts';
 import type {
@@ -208,9 +208,6 @@ const QUARRY_RECIPE: RecipeId = 'cutStone';
 
 /** Ce que coûte une naissance à la nurserie, et tous les combien. */
 const NURSERY_RECIPE: RecipeId = 'raiseChild';
-
-/** Recette d'une forge. */
-const FORGE_RECIPE: RecipeId = 'smeltPlate';
 
 /** Ticks de contact entre deux objets livrés sur un chantier. Court : le chantier se remplit à vue. */
 export const DELIVER_TICKS = 2;
@@ -2320,15 +2317,16 @@ export class World {
   }
 
   /**
-   * Un cycle de forge : les entrées deviennent la plaque. Comme la foreuse,
-   * une forge à qui il manque du fer ou du charbon ne se replanifie pas —
-   * c'est la livraison d'Adam qui la relance.
+   * Un cycle de forge : les entrées deviennent la plaque — ou, au four à
+   * charbon, le bois devient du charbon. Comme la foreuse, une forge à qui il
+   * manque une entrée ne se replanifie pas — c'est la livraison d'Adam ou
+   * d'un porteur qui la relance.
    */
   private runForge(forge: Forge): void {
-    const recipe: RecipeProto = RECIPES[FORGE_RECIPE];
+    const recipe = forgeRecipe(forge);
 
-    // En pause, le four ne mange rien : le cycle en cours ne se termine pas.
-    if (!forge.paused && canCraft(forge.store, recipe)) {
+    // En pause, ou sans chauffeur, le four ne mange rien : le cycle en cours ne se termine pas.
+    if (!this.stopped(forge) && canCraft(forge.store, recipe)) {
       for (const [item, amount] of amountsOf(recipe.inputs)) forge.store.remove(item, amount);
       for (const [item, amount] of amountsOf(recipe.outputs)) {
         forge.store.add(item, amount);
@@ -2341,9 +2339,9 @@ export class World {
 
   /** Planifie le prochain cycle s'il a de quoi tourner ; sinon, la forge s'arrête. */
   private startForge(forge: Forge): void {
-    const recipe: RecipeProto = RECIPES[FORGE_RECIPE];
+    const recipe = forgeRecipe(forge);
 
-    if (forge.paused || !canCraft(forge.store, recipe)) {
+    if (this.stopped(forge) || !canCraft(forge.store, recipe)) {
       forge.blocked = true;
       return;
     }
@@ -4335,10 +4333,10 @@ export class World {
     }
   }
 
-  /** Les effectifs ont changé : une ferme ou une carrière qui n'avait plus personne peut repartir. */
+  /** Les effectifs ont changé : une ferme, une carrière ou un four qui n'avait plus personne peut repartir. */
   private restartFarms(): void {
     for (const entity of this.entities.values()) {
-      if (entity.kind === 'farm' || entity.kind === 'quarry') this.restart(entity);
+      if (entity.kind === 'farm' || entity.kind === 'quarry' || entity.kind === 'forge') this.restart(entity);
     }
   }
 
@@ -4401,8 +4399,8 @@ export class World {
 
   /**
    * Ce qu'Adam peut prendre dans un coffre : tout, pour une foreuse ou une
-   * ferme ; les plaques seulement pour une forge — son fer et son charbon
-   * restent au four ; au labo, le reste d'une recherche abandonnée, jamais
+   * ferme ; les sorties seulement pour une forge — plaques ou charbon, ses
+   * entrées restent au four ; au labo, le reste d'une recherche abandonnée, jamais
    * ce que la recherche en cours attend.
    */
   public takeable(producer: Producer | Lab): [ItemId, number][] {
@@ -4418,7 +4416,7 @@ export class World {
 
     if (producer.kind !== 'forge') return entries;
 
-    const outputs: RecipeProto['outputs'] = RECIPES[FORGE_RECIPE].outputs;
+    const outputs: RecipeProto['outputs'] = forgeRecipe(producer).outputs;
 
     return entries.filter(([item]) => (outputs[item] ?? 0) > 0);
   }

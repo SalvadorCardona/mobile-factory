@@ -30,6 +30,7 @@ import { DRILL } from '../art/drill.ts';
 import { EX_MUTANT_SPRITE } from '../art/exMutant.ts';
 import { EVE_SPRITE } from '../art/eve.ts';
 import { FARM } from '../art/farm.ts';
+import { CHARCOAL_KILN } from '../art/charcoalKiln.ts';
 import { FORGE } from '../art/forge.ts';
 import { KID } from '../art/kid.ts';
 import { LAB } from '../art/lab.ts';
@@ -117,6 +118,7 @@ export const SPRITES = {
   farm: FARM,
   watchtower: WATCHTOWER,
   forge: FORGE,
+  charcoalKiln: CHARCOAL_KILN,
   reinforcedTower: REINFORCED_TOWER,
   clinic: CLINIC_SPRITE,
   lab: LAB,

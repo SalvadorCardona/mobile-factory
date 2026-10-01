@@ -427,7 +427,7 @@ export class EntityLayer {
     this.adam.setShadow(this.tiles.shadow(terrainAt(this.world.seed, tx, ty)));
   }
 
-  /** La roue tourne quand la foreuse travaille ; les cultures ondulent ; le labo fume quand il cherche. */
+  /** La roue tourne quand la foreuse travaille ; les cultures ondulent ; le labo fume quand il cherche, le four à charbon quand il cuit. */
   private animate(view: EntityView, entity: Entity, now: number): void {
     if (!view.moving) return;
 
@@ -441,9 +441,9 @@ export class EntityLayer {
 
       view.moving.skew.x = sway * 0.05;
       view.moving.scale.y = 1 + Math.sin(now * 0.004 + entity.id) * 0.03;
-    } else if (entity.kind === 'lab') {
-      // Une fumée légère qui monte et gonfle, en boucle, tant que le compte à rebours tourne.
-      const running = entity.endTick > 0;
+    } else if (entity.kind === 'lab' || entity.kind === 'forge') {
+      // Une fumée légère qui monte et gonfle, en boucle, tant que le compte à rebours tourne — ou que le four cuit.
+      const running = entity.kind === 'lab' ? entity.endTick > 0 : !entity.blocked;
 
       view.moving.visible = running;
       if (!running) return;

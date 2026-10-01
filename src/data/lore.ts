@@ -194,6 +194,15 @@ export const LORE = {
         'et un charbon y deviennent une plaque de fer.',
       effect: '2 fer + 1 charbon → 1 plaque de fer.',
     },
+    charcoalKiln: {
+      name: 'Four à charbon',
+      site: 'Un dôme de briques à monter autour d’une porte ronde. Il lui faudra un chauffeur.',
+      description:
+        'Un dôme de briques roses où le bois couve à l’étouffée. Son chauffeur y ' +
+        'cuit trois bois en un charbon, que les porteurs emportent à la mairie : ' +
+        'la forge ne reste plus à sec, et le bois en trop sert enfin.',
+      effect: '3 bois → 1 charbon, 1 ouvrier.',
+    },
     clinic: {
       name: 'Clinique',
       site: 'Des murs à monter, un lit de camp qui attend déjà. Il faudra aussi de quoi nourrir les convalescents.',

@@ -1,11 +1,12 @@
 /**
- * Les bâtiments qui consomment — la nurserie et la forge — et ce que leur
+ * Les bâtiments qui consomment — la nurserie, la forge et le four à charbon,
+ * une forge sur sa propre recette — et ce que leur
  * coffre accepte. Adam les remplit (sac, contact, « Transférer »), les
  * porteurs aussi, depuis la mairie : les deux décident sur ces fonctions.
  */
 
 import type { ItemId } from '../data/items.ts';
-import { RECIPES, type RecipeProto } from '../data/recipes.ts';
+import { RECIPES, recipeOf, type RecipeProto } from '../data/recipes.ts';
 import type { Entity, Forge, Nursery } from './types.ts';
 
 /** Un bâtiment qui consomme les entrées de sa recette. */
@@ -13,9 +14,28 @@ export function isConsumer(entity: Entity): entity is Nursery | Forge {
   return entity.kind === 'nursery' || entity.kind === 'forge';
 }
 
-/** La recette d'un bâtiment qui consomme. */
+/** La recette d'un bâtiment qui consomme : une forge a celle de son id — fonte, ou cuisson du charbon. */
 export function consumerRecipe(consumer: Nursery | Forge): RecipeProto {
-  return RECIPES[consumer.kind === 'nursery' ? 'raiseChild' : 'smeltPlate'];
+  if (consumer.kind === 'nursery') return RECIPES.raiseChild;
+  return forgeRecipe(consumer);
+}
+
+const FORGE_RECIPES = new Map<Forge['proto'], RecipeProto>();
+
+/** La recette d'une forge, cherchée une fois par bâtiment : `validatePrototypes()` garantit qu'elle existe. */
+export function forgeRecipe(forge: Forge): RecipeProto {
+  let recipe = FORGE_RECIPES.get(forge.proto);
+
+  if (!recipe) {
+    recipe = recipeOf(forge.proto) ?? RECIPES.smeltPlate;
+    FORGE_RECIPES.set(forge.proto, recipe);
+  }
+  return recipe;
+}
+
+/** Ce que les porteurs emportent d'une forge à la mairie : ses sorties — plaques, charbon —, jamais ses entrées. */
+export function forgeOutputs(forge: Forge): ItemId[] {
+  return Object.keys(forgeRecipe(forge).outputs) as ItemId[];
 }
 
 /**

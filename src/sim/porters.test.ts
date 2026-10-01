@@ -11,7 +11,7 @@ import { decodeSave, encodeSave, type SavedEntity } from './save.ts';
 import { isWalkable, terrainAt } from './terrain.ts';
 import type { EntityId, Forge, Site, TownHall, Worker } from './types.ts';
 import { clearLine } from './workers.ts';
-import { World } from './world.ts';
+import { TICKS_PER_SECOND, World } from './world.ts';
 
 type Stock = Partial<Record<ItemId, number>>;
 
@@ -25,6 +25,8 @@ interface Layout {
   drills?: Stock[];
   /** Forges finies, coffre déjà garni, posées au plus près de la mairie — dans son rayon. */
   forges?: Stock[];
+  /** Fours à charbon finis, coffre déjà garni, posés près de la mairie, après les forges. */
+  kilns?: Stock[];
   /** Nurseries finies, affamées : l'heure de la naissance est passée. */
   nurseries?: Stock[];
 }
@@ -86,6 +88,18 @@ function colony(layout: Layout): World {
 
   for (const store of layout.forges ?? []) {
     entities.push({ ...placeNear('forge'), kind: 'forge', store, hp: BUILDINGS.forge.hp, level: 1, paused: false, staff: BUILDINGS.forge.workers, blocked: true });
+  }
+  for (const store of layout.kilns ?? []) {
+    entities.push({
+      ...placeNear('charcoalKiln'),
+      kind: 'forge',
+      store,
+      hp: BUILDINGS.charcoalKiln.hp,
+      level: 1,
+      paused: false,
+      staff: BUILDINGS.charcoalKiln.workers,
+      blocked: true,
+    });
   }
   for (const store of layout.nurseries ?? []) {
     entities.push({
@@ -486,7 +500,7 @@ describe('porteurs', () => {
 
 describe('forge et nurserie ravitaillées par la ville', () => {
   function forgeOf(world: World): Forge {
-    const forge = [...world.entities.values()].find((entity): entity is Forge => entity.kind === 'forge');
+    const forge = [...world.entities.values()].find((entity): entity is Forge => entity.kind === 'forge' && entity.proto === 'forge');
 
     if (!forge) throw new Error('pas de forge');
     return forge;
@@ -508,7 +522,9 @@ describe('forge et nurserie ravitaillées par la ville', () => {
       expectCoveredPromises(world);
     });
 
-    expect(forge.store.count('ironPlate')).toBeGreaterThanOrEqual(1);
+    expect(census(world).ironPlate).toBeGreaterThanOrEqual(1);
+    // Les plaques ne restent pas au four : les porteurs les rapportent à la mairie.
+    expect(world.townStock()?.count('ironPlate') ?? 0).toBeGreaterThanOrEqual(1);
     // Adam, resté à l'écart, n'a rien porté.
     expect(world.player.inventory.isEmpty()).toBe(true);
   });
@@ -573,5 +589,82 @@ describe('forge et nurserie ravitaillées par la ville', () => {
     expect(hallOf(world).store.count('ironOre')).toBe(28 - (ironShare - 2));
     expect(hallOf(world).store.count('coal')).toBe(0);
     expect(forge.blocked).toBe(false);
+  });
+});
+
+describe('four à charbon', () => {
+  function kilnsOf(world: World): Forge[] {
+    return [...world.entities.values()].filter((entity): entity is Forge => entity.proto === 'charcoalKiln');
+  }
+
+  it('la recette : 3 bois → 1 charbon en 8 s, un ouvrier, un coffre de 10, débloqué avec la forge', () => {
+    expect(RECIPES.burnCharcoal).toMatchObject({ building: 'charcoalKiln', duration: 20 * 8, inputs: { wood: 3 }, outputs: { coal: 1 } });
+    expect(BUILDINGS.charcoalKiln).toMatchObject({ kind: 'forge', cost: { stone: 10, wood: 6 }, workers: 1, storage: 10 });
+    expect(BUILDINGS.charcoalKiln.unlockNight).toBe(BUILDINGS.forge.unlockNight);
+  });
+
+  it('30 bois en ville : 10 charbons cuits en 80 s et rapportés à la mairie — rien de perdu ni de dupliqué', () => {
+    const world = colony({ hall: { wood: 30 }, houses: 1, kilns: [{}] });
+    const [kiln] = kilnsOf(world);
+    const cooked: number[] = [];
+    let lit = -1;
+
+    if (!kiln) throw new Error('pas de four');
+    expect(world.inTownRange(kiln)).toBe(true);
+    world.events.on('forgeProduced', () => cooked.push(world.tickCount));
+
+    run(world, 100 * TICKS_PER_SECOND, () => {
+      const { wood, coal } = census(world);
+
+      if (lit < 0 && !kiln.blocked) lit = world.tickCount;
+      // Un charbon, c'est trois bois : le compte ne bouge pas.
+      expect(wood + 3 * coal).toBe(30);
+      expectCoveredPromises(world);
+    });
+
+    // Les porteurs le tiennent garni : dix cuissons d'affilée, 80 s du premier feu au dernier charbon.
+    expect(cooked).toHaveLength(10);
+    expect(cooked[9]! - lit).toBe(10 * RECIPES.burnCharcoal.duration);
+    expect(hallOf(world).store.count('coal')).toBe(10);
+    expect(census(world).wood).toBe(0);
+    // Adam, resté à l'écart, n'a rien porté.
+    expect(world.player.inventory.isEmpty()).toBe(true);
+  });
+
+  it('sans ouvrier, le four ne cuit rien', () => {
+    const world = colony({ hall: { wood: 30 }, houses: 1, kilns: [{}] });
+    const [kiln] = kilnsOf(world);
+
+    if (!kiln) throw new Error('pas de four');
+    world.push({ type: 'setWorkers', id: kiln.id, count: 0 });
+    run(world, 30 * TICKS_PER_SECOND);
+
+    expect(world.stopped(kiln)).toBe(true);
+    expect(census(world).coal).toBe(0);
+  });
+
+  /*
+   * Le playtest v2 : la forge bâtie, 311 minerais en ville et 0 charbon —
+   * deux plaques en 33 minutes. Une foreuse, deux fours et une forge, la
+   * ville pleine de bois : la chaîne bois → charbon → plaque tourne seule.
+   */
+  it('forge + 2 fours + foreuse pendant 5 min : au moins 30 plaques, sans rien dupliquer', () => {
+    const world = colony({ hall: { wood: 300 }, houses: 2, forges: [{}], kilns: [{}, {}], drills: [{ ironOre: 1 }] });
+    let plates = 0;
+
+    world.events.on('forgeProduced', ({ item }) => {
+      if (item === 'ironPlate') plates += 1;
+    });
+
+    run(world, 5 * 60 * TICKS_PER_SECOND, () => {
+      const { wood, coal, ironPlate } = census(world);
+
+      // Le bois devient charbon, le charbon devient plaque : rien ne se crée en route.
+      expect(wood + 3 * (coal + ironPlate)).toBe(300);
+      expectCoveredPromises(world);
+    });
+
+    expect(plates).toBeGreaterThanOrEqual(30);
+    expect(census(world).ironPlate).toBe(plates);
   });
 });

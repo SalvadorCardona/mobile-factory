@@ -15,6 +15,10 @@
  * pas un objet. Sa recette dit ce que coûte une naissance, et tous les
  * combien.
  *
+ * La forge et le four à charbon partagent un même `kind` : un bâtiment qui
+ * consomme les entrées de sa recette et range ses sorties dans son coffre.
+ * Chacun trouve sa recette par son id (`recipeOf`) : une seule par bâtiment.
+ *
  * Tout objet doit entrer quelque part — un coût de bâtiment ou une entrée de
  * recette : `validatePrototypes()` refuse une ressource qu'on récolterait
  * pour rien.
@@ -69,8 +73,20 @@ export const RECIPES = {
     inputs: { ironOre: 2, coal: 1 },
     outputs: { ironPlate: 1 },
   },
+  burnCharcoal: {
+    label: 'Cuisson',
+    building: 'charcoalKiln',
+    duration: 20 * 8,
+    inputs: { wood: 3 },
+    outputs: { coal: 1 },
+  },
 } as const satisfies Record<string, RecipeProto>;
 
 export type RecipeId = keyof typeof RECIPES;
 
 export const RECIPE_IDS = Object.keys(RECIPES) as RecipeId[];
+
+/** La recette qu'exécute un bâtiment, ou `null` s'il n'en a pas. */
+export function recipeOf(building: BuildingId): RecipeProto | null {
+  return (Object.values(RECIPES) as RecipeProto[]).find((recipe) => recipe.building === building) ?? null;
+}
