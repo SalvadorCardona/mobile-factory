@@ -12,9 +12,9 @@
  * posée sur le casque.
  */
 
-import { PALETTE, line, pill, rect, svg } from '../data/artDirection.ts';
+import { PALETTE, pill, rect, svg } from '../data/artDirection.ts';
 import type { SpriteProto } from '../data/sprites.ts';
-import { foot, humanBody, scaledAround, type Facing } from './people.ts';
+import { hammer, foot, humanBody, scaledAround, type Facing } from './people.ts';
 import { loadParts } from './worker.ts';
 
 const W = 32;
@@ -28,7 +28,7 @@ const HAND: readonly [number, number] = [18.5, 33];
 
 const OPTIONS = { pack: false, scarf: false, cap: false } as const;
 
-const { ink, coral, yellow, orange } = PALETTE;
+const { ink, coral, yellow } = PALETTE;
 
 /** Le casque : un dôme jaune, sa visière plus sombre, un reflet en haut à gauche. */
 function helmet(facing: Facing): string {
@@ -58,18 +58,6 @@ function body(facing: Facing): string {
   return svg(W, H, scaledAround(16, GROUND, SCALE, humanBody(facing, OPTIONS) + belt(facing) + helmet(facing)));
 }
 
-/** Le marteau, tenu manche en main : la tête indigo à hauteur d'épaule. */
-function hammer(): string {
-  const [x, y] = HAND;
-
-  return (
-    line(x, y + 1, x + 2.5, y - 11, orange.shade) +
-    rect(x - 1.5, y - 16, 9, 5.5, ink.shade, 2) +
-    rect(x - 1.5, y - 16, 9, 4.2, ink.base, 2) +
-    pill(x - 0.5, y - 15.3, 3.5, 1.4, ink.light)
-  );
-}
-
 export const BUILDER = {
   width: W,
   height: H,
@@ -80,7 +68,7 @@ export const BUILDER = {
     up: body('up'),
     side: body('side'),
     foot: svg(W, H, foot(GROUND, 'ink', 0.9)),
-    hammer: svg(W, H, hammer()),
+    hammer: svg(W, H, hammer(...HAND)),
     // Le casque rehausse la tête : la charge se pose un peu plus haut.
     ...loadParts(1.5),
   },
