@@ -12,6 +12,7 @@
  * - la **frappe** (Adam contre un arbre, Ève contre un mur à réparer) l'écrase et le pousse vers ce qu'il
  *   heurte ;
  * - un **coup reçu** montre le corps « touché » un instant et le fait gicler ;
+ *   un **flash** (`flash()`) le blanchit tout entier le temps d'un éclair ;
  * - un **tir** tend l'arc puis le relâche ;
  * - une **attaque** de bête fait claquer les pinces du crabe, bondir le loup ;
  * - un ouvrier qui **porte** a sa charge sur la tête, qui suit le rebond du pas ;
@@ -25,7 +26,7 @@
  * Tout est minuteur de vue, en millisecondes d'écran : la simulation n'en sait rien.
  */
 
-import { Container, Sprite, type Texture } from 'pixi.js';
+import { ColorMatrixFilter, Container, Sprite, type Texture } from 'pixi.js';
 import { LIGHT } from '../data/artDirection.ts';
 import type { ItemId } from '../data/items.ts';
 import { SPRITES, type SpriteId, type SpriteProto } from '../data/sprites.ts';
@@ -44,6 +45,17 @@ const ACT_RATE = 0.028;
 const HURT_MS = 150;
 const SHOT_MS = 260;
 const STRIKE_MS = 240;
+const FLASH_MS = 70;
+
+/**
+ * Le flash d'un coup reçu : chaque couleur tirée aux quatre cinquièmes vers
+ * le blanc du papier (`paper.base`). Un seul filtre, partagé, posé sur la
+ * silhouette le temps du flash seulement : au repos, aucun pantin n'en a.
+ */
+const FLASH = new ColorMatrixFilter();
+
+FLASH.matrix = [0.2, 0, 0, 0, 0.8, 0, 0.2, 0, 0, 0.8, 0, 0, 0.2, 0, 0.8, 0, 0, 0, 1, 0];
+const FLASH_FILTERS = [FLASH];
 
 export interface PuppetOptions {
   /** Largeur de l'ombre portée, en pixels monde. */
@@ -82,6 +94,7 @@ export class Puppet {
   private hurt = 0;
   private shot = 0;
   private strikeLeft = 0;
+  private flashLeft = 0;
   private view: View | '' = '';
   private hurtShown = false;
   /** Le morceau qui remplace le corps, quelle que soit la direction ; `null` : le corps de la direction. */
@@ -142,6 +155,12 @@ export class Puppet {
     this.hurt = HURT_MS;
   }
 
+  /** Coup de flèche : la silhouette blanchit un éclair ; `0` l'éteint tout de suite. */
+  public flash(ms = FLASH_MS): void {
+    this.flashLeft = ms;
+    this.figure.filters = ms > 0 ? FLASH_FILTERS : null;
+  }
+
   /** Tir : l'arc se tend et se relâche. */
   public shoot(): void {
     this.shot = SHOT_MS;
@@ -176,6 +195,11 @@ export class Puppet {
     this.hurt = Math.max(0, this.hurt - deltaMs);
     this.shot = Math.max(0, this.shot - deltaMs);
     this.strikeLeft = Math.max(0, this.strikeLeft - deltaMs);
+
+    if (this.flashLeft > 0) {
+      this.flashLeft = Math.max(0, this.flashLeft - deltaMs);
+      if (this.flashLeft === 0) this.figure.filters = null;
+    }
 
     if (view !== this.view || hurting !== this.hurtShown || this.posed !== this.poseShown) {
       this.view = view;

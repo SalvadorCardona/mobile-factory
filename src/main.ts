@@ -16,7 +16,7 @@ import '@fontsource/fredoka/latin-700.css';
 import './style.css';
 import { AudioEngine } from './audio/engine.ts';
 import { assertPrototypes } from './data/validate.ts';
-import { PARTICLES, type ParticleStyle } from './data/artDirection.ts';
+import { GROUND, PARTICLES, type ParticleStyle } from './data/artDirection.ts';
 import { MENU_BUILDING_IDS } from './data/buildings.ts';
 import type { WildlifeId } from './data/enemies.ts';
 import type { ItemId } from './data/items.ts';
@@ -31,6 +31,7 @@ import { PointerRouter } from './input/pointer.ts';
 import { GameRenderer } from './render/renderer.ts';
 import { isUnlocked } from './sim/eve.ts';
 import { activePerks, harvestSeeds, plant, type Garden } from './sim/garden.ts';
+import type { Entity } from './sim/types.ts';
 import { STEP_MS, World } from './sim/world.ts';
 import { LocalGarden } from './storage/localGarden.ts';
 import { LocalSave, type LoadResult } from './storage/localSave.ts';
@@ -118,6 +119,8 @@ const BEAST_PARTICLES: Record<WildlifeId, ParticleStyle> = {
   crab: PARTICLES.claw,
   wolf: PARTICLES.fur,
 };
+/** Les éclats d'un mur frappé : ceux de la pierre, dans l'ombre de la roche. */
+const CHIP_PARTICLES: ParticleStyle = { ...PARTICLES.stone, colors: [GROUND.rock.shade] };
 
 async function main(): Promise<void> {
   // Le contrôle d'intégrité des prototypes ne tourne qu'en dev : en production
@@ -637,17 +640,32 @@ function wireParticles(world: World, renderer: GameRenderer): void {
   world.events.on('treeChopped', ({ tx, ty, remaining }) =>
     particles.burst((tx + 0.4) * TILE_SIZE, (ty + 0.8) * TILE_SIZE, PARTICLES.wood, remaining > 0 ? 3 : 8, 0.07),
   );
-  world.events.on('mutantHit', ({ x, y }) => particles.burst(x, y - 12, PARTICLES.mutant, 4));
-  world.events.on('mutantDied', ({ x, y }) => particles.burst(x, y - 12, PARTICLES.mutant, 12, 0.12));
+  // Chaque flèche qui porte ouvre un anneau blanc là où elle touche.
+  world.events.on('mutantHit', ({ x, y }) => {
+    particles.ring(x, y - 12);
+    particles.burst(x, y - 12, PARTICLES.mutant, 4);
+  });
+  world.events.on('mutantDied', ({ x, y }) => {
+    particles.ring(x, y - 12);
+    particles.burst(x, y - 12, PARTICLES.mutant, 12, 0.12);
+  });
   world.events.on('mutantFled', ({ x, y }) => particles.burst(x, y - 12, PARTICLES.mutant, 6, 0.1));
-  world.events.on('beastHit', ({ proto, x, y }) => particles.burst(x, y - 8, BEAST_PARTICLES[proto], 4));
-  world.events.on('beastDied', ({ proto, x, y }) => particles.burst(x, y - 8, BEAST_PARTICLES[proto], 10, 0.12));
+  world.events.on('beastHit', ({ proto, x, y }) => {
+    particles.ring(x, y - 8);
+    particles.burst(x, y - 8, BEAST_PARTICLES[proto], 4);
+  });
+  world.events.on('beastDied', ({ proto, x, y }) => {
+    particles.ring(x, y - 8);
+    particles.burst(x, y - 8, BEAST_PARTICLES[proto], 10, 0.12);
+  });
   world.events.on('buildingDamaged', ({ id }) => {
     const entity = world.entities.get(id);
 
-    if (entity) {
-      particles.burst((entity.tx + entity.width / 2) * TILE_SIZE, (entity.ty + entity.height) * TILE_SIZE, PARTICLES.rubble, 3);
-    }
+    if (!entity) return;
+
+    const impact = impactOn(world, entity);
+
+    particles.burst(impact.x, impact.y, CHIP_PARTICLES, 4);
   });
   world.events.on('buildingCorroded', ({ id }) => {
     const entity = world.entities.get(id);
@@ -704,6 +722,36 @@ function wireParticles(world: World, renderer: GameRenderer): void {
       particles.burst((hall.tx + i) * TILE_SIZE, hall.ty * TILE_SIZE, PARTICLES.confetti, 8, 0.16);
     }
   });
+}
+
+/**
+ * Où un bâtiment est frappé : le point de son emprise le plus proche du
+ * mutant le plus proche, un peu au-dessus du sol. Le sim ne dit pas qui
+ * frappe ; le plus proche, collé au mur, l'est presque toujours.
+ */
+function impactOn(world: World, entity: Entity): { x: number; y: number } {
+  const left = entity.tx * TILE_SIZE;
+  const top = entity.ty * TILE_SIZE;
+  const right = (entity.tx + entity.width) * TILE_SIZE;
+  const bottom = (entity.ty + entity.height) * TILE_SIZE;
+  let x = (left + right) / 2;
+  let y = bottom;
+  let best = Infinity;
+
+  for (const mobile of world.mobiles.values()) {
+    if (mobile.kind !== 'mutant') continue;
+
+    const px = Math.max(left, Math.min(right, mobile.x));
+    const py = Math.max(top, Math.min(bottom, mobile.y));
+    const distance = (px - mobile.x) ** 2 + (py - mobile.y) ** 2;
+
+    if (distance < best) {
+      best = distance;
+      x = px;
+      y = py;
+    }
+  }
+  return { x, y: y - 10 };
 }
 
 /**

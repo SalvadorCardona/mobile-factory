@@ -25,6 +25,7 @@ import { CARGO_BIKE } from '../art/cargoBike.ts';
 import { CLINIC_SPRITE } from '../art/clinic.ts';
 import { CONSTRUCTION_POST } from '../art/constructionPost.ts';
 import { CRAB } from '../art/crab.ts';
+import { CRACK } from '../art/crack.ts';
 import { DECOR_ART } from '../art/decor.ts';
 import { DRILL } from '../art/drill.ts';
 import { EX_MUTANT_SPRITE } from '../art/exMutant.ts';
@@ -99,6 +100,8 @@ export const SPRITES = {
   storeFull: STORE_FULL,
   /** Bulle « en pause » au-dessus d'un producteur que le joueur a arrêté. */
   paused: PAUSED,
+  /** La fissure d'un bâtiment sous la moitié de ses points de vie. */
+  crack: CRACK,
   /** La flaque d'où sortent les mutants d'une vague. */
   puddle: PUDDLE,
   /** Le butin qu'ils lâchent : un morceau par objet. */

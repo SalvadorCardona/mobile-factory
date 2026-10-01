@@ -378,8 +378,8 @@ export type WorldEvents = {
   mutantFled: { id: MobileId; x: number; y: number };
   /** Un arc a tiré, depuis (x, y). */
   arrowShot: { x: number; y: number };
-  /** Une flèche a touché un mutant ; `hp` est ce qui lui reste. */
-  mutantHit: { id: MobileId; hp: number; x: number; y: number };
+  /** Une flèche a touché un mutant ; `hp` est ce qui lui reste, (dx, dy) la direction du tir, de norme 1. */
+  mutantHit: { id: MobileId; hp: number; x: number; y: number; dx: number; dy: number };
   mutantDied: { id: MobileId; x: number; y: number };
   /** Un mutant a frappé un bâtiment ; `hp` est ce qui lui reste. */
   buildingDamaged: { id: EntityId; hp: number };
@@ -2710,7 +2710,7 @@ export class World {
 
           if (hit) {
             this.mobiles.delete(mobile.id);
-            if (hit.kind === 'mutant') this.hurtMutant(hit, mobile.damage);
+            if (hit.kind === 'mutant') this.hurtMutant(hit, mobile.damage, mobile.vx, mobile.vy);
             else this.hurtBeast(hit, mobile.damage);
           } else if (mobile.ttl <= 0) {
             this.mobiles.delete(mobile.id);
@@ -2795,12 +2795,15 @@ export class World {
    * Une flèche touche un mutant. À zéro, il s'évapore et lâche son butin —
    * sauf si une clinique a une place pour lui et que le sort le veut : il
    * tombe alors assommé, sans butin, mais avec une chance d'être recruté.
+   * (vx, vy) : la vitesse de la flèche, dont le rendu tire le recul.
    */
-  private hurtMutant(mutant: Mutant, damage: number): void {
+  private hurtMutant(mutant: Mutant, damage: number, vx: number, vy: number): void {
     mutant.hp -= damage;
 
     if (mutant.hp > 0) {
-      this.events.emit('mutantHit', { id: mutant.id, hp: mutant.hp, x: mutant.x, y: mutant.y });
+      const speed = Math.hypot(vx, vy) || 1;
+
+      this.events.emit('mutantHit', { id: mutant.id, hp: mutant.hp, x: mutant.x, y: mutant.y, dx: vx / speed, dy: vy / speed });
       return;
     }
     this.mobiles.delete(mutant.id);
