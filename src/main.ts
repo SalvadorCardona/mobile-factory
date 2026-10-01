@@ -145,7 +145,7 @@ async function main(): Promise<void> {
   const audio = new AudioEngine();
 
   // En dev seulement : le monde sous la main dans la console du navigateur,
-  // pour provoquer une vague ou une naissance sans attendre dix minutes.
+  // pour provoquer une vague ou une naissance sans attendre trois minutes.
   if (import.meta.env.DEV) Object.assign(window, { mobileFactory: { world } });
 
   const joystick = new Joystick();

@@ -4,6 +4,7 @@ import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
 import { ENEMIES } from '../data/enemies.ts';
 import { ITEM_IDS, type ItemId } from '../data/items.ts';
 import { DAY_CYCLE } from '../data/dayNight.ts';
+import { RECIPES } from '../data/recipes.ts';
 import { JOB_PRIORITY, WANDER } from '../data/workers.ts';
 import { doorOf } from './jobs.ts';
 import { decodeSave, encodeSave, type SavedEntity } from './save.ts';
@@ -534,11 +535,12 @@ describe('forge et nurserie ravitaillées par la ville', () => {
   });
 
   it('la nurserie affamée reçoit sa nourriture de la ville, et l’enfant naît', () => {
-    const world = colony({ hall: { food: 8 }, houses: 1, nurseries: [{}] });
+    const food = RECIPES.raiseChild.inputs.food;
+    const world = colony({ hall: { food: food * 2 }, houses: 1, nurseries: [{}] });
     const kids = (): number => [...world.mobiles.values()].filter((mobile) => mobile.kind === 'kid').length;
 
     run(world, 1500, () => {
-      expect(census(world).food + 4 * kids()).toBe(8);
+      expect(census(world).food + food * kids()).toBe(food * 2);
       expectCoveredPromises(world);
     });
 

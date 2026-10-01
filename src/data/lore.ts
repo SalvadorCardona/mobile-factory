@@ -140,10 +140,10 @@ export const LORE = {
       name: 'Nurserie',
       site: 'Des murs à monter avant d’y installer le berceau. Il lui faut du bois et de la pierre.',
       description:
-        'Un abri chauffé, des couvertures, un berceau. Toutes les dix minutes, ' +
+        'Un abri chauffé, des couvertures, un berceau. Toutes les trois minutes, ' +
         'un enfant y naît et la colonie grandit d’un survivant — s’il y a de ' +
-        'quoi le nourrir : chaque naissance mange quatre nourritures de la ferme.',
-      effect: '+1 enfant toutes les 10 min, contre 4 nourritures.',
+        'quoi le nourrir : chaque naissance mange six nourritures de la ferme.',
+      effect: '+1 enfant toutes les 3 min, contre 6 nourritures.',
     },
     builderHouse: {
       name: 'Maison des constructeurs',

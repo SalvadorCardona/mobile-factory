@@ -348,8 +348,11 @@ export type WorldEvents = {
   depositRejected: { reason: DepositRejection };
   /** Adam a jeté `amount` objets de son sac : un tas `id` à ses pieds, en (x, y). */
   itemDropped: { id: MobileId; item: ItemId; amount: number; x: number; y: number };
-  /** L'aube : la nuit `night` est survécue, les mutants restants ont fui, `reward` est entré dans le sac. */
-  dawnBroke: { night: number; reward: [ItemId, number][] };
+  /**
+   * L'aube : la nuit `night` est survécue, les mutants restants ont fui,
+   * `reward` est entré en ville ou dans le sac (`to`) ; le reste est tombé au sol en `lootDropped`.
+   */
+  dawnBroke: { night: number; reward: [ItemId, number][]; to: 'town' | 'bag' };
   /** Un mutant a fui le jour : il disparaît sans compter comme abattu. */
   mutantFled: { id: MobileId; x: number; y: number };
   /** Un arc a tiré, depuis (x, y). */
@@ -3155,7 +3158,9 @@ export class World {
 
   /**
    * L'aube : les mutants encore debout fuient le jour — une journée reste
-   * sans mutant — et la nuit survécue paie son butin, dans la limite du sac.
+   * sans mutant — et la nuit survécue paie son butin : en ville si la mairie
+   * est debout, sinon dans le sac. Ce qui n'y tient pas tombe au sol à côté
+   * d'Adam, comme le butin : rien n'est jeté.
    */
   private dawn(): void {
     for (const mobile of [...this.mobiles.values()]) {
@@ -3164,16 +3169,25 @@ export class World {
       this.events.emit('mutantFled', { id: mobile.id, x: mobile.x, y: mobile.y });
     }
 
+    const town = this.townStock();
+    const store = town ?? this.player.inventory;
+    const rewards = Object.entries(DAWN_REWARD) as [ItemId, number][];
     const reward: [ItemId, number][] = [];
 
-    for (const [item, amount] of Object.entries(DAWN_REWARD) as [ItemId, number][]) {
-      const added = this.player.inventory.add(item, amount);
+    for (const [index, [item, amount]] of rewards.entries()) {
+      const added = store.add(item, amount);
 
       if (added > 0) reward.push([item, added]);
+      if (added === amount) continue;
+
+      const x = this.player.x + (index - (rewards.length - 1) / 2) * DROP_SPACING;
+      const pickup = this.spawnPickup(item, amount - added, x, this.player.y + DROP_AHEAD, false);
+
+      this.events.emit('lootDropped', { id: pickup.id, item, x: pickup.x, y: pickup.y });
     }
     // La nuit est survécue : la mairie tient encore (`stepClock` s'arrête à la défaite).
     this.stats.nightsSurvived += 1;
-    this.events.emit('dawnBroke', { night: this.night, reward });
+    this.events.emit('dawnBroke', { night: this.night, reward, to: town ? 'town' : 'bag' });
   }
 
   /** Le point, en pixels monde, d'où surgira la prochaine vague : ce que l'annonce montre du doigt. */

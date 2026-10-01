@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { TILE_SIZE, worldToTile } from '../core/grid.ts';
 import { BUILDINGS } from '../data/buildings.ts';
 import { DAWN_REWARD, DAY_CYCLE } from '../data/dayNight.ts';
@@ -238,21 +238,57 @@ describe('vagues', () => {
     expect(mutants(world)).toHaveLength(waveSize(2, 1));
   });
 
-  it('ne verse au sac que ce qui y tient', () => {
+  it('verse le butin de l’aube en ville, même sac plein', () => {
     const world = worldWithTownHall();
     const { inventory } = world.player;
-    let reward: [string, number][] = [];
+    const town = world.townStock()!;
+    const before = town.count('wood');
+    let dawn: { reward: [ItemId, number][]; to: string } | null = null;
 
     sturdy(world);
 
     world.player.x += 60 * TILE_SIZE;
-    inventory.add('coal', inventory.freeSpace() - 2);
-    world.events.on('dawnBroke', (event) => (reward = event.reward));
+    inventory.add('coal', inventory.freeSpace());
+    const bag = inventory.toJSON();
+    world.events.on('dawnBroke', (event) => (dawn = event));
 
     for (let i = 0; i < NIGHTFALL + DAY_CYCLE.night; i += 1) world.tick();
 
-    expect(reward.reduce((total, [, amount]) => total + amount, 0)).toBe(2);
+    expect(dawn).toEqual({ night: 1, reward: Object.entries(DAWN_REWARD), to: 'town' });
+    expect(town.count('wood')).toBe(before + DAWN_REWARD.wood);
+    expect(inventory.toJSON()).toEqual(bag);
+  });
+
+  it('sans mairie, verse au sac ce qui y tient et pose le reste au sol', () => {
+    const world = worldWithTownHall();
+    const { inventory } = world.player;
+    let dawn: { reward: [ItemId, number][]; to: string } | null = null;
+
+    sturdy(world);
+
+    world.player.x += 60 * TILE_SIZE;
+    withoutWildlife(world);
+    world.events.on('dawnBroke', (event) => (dawn = event));
+
+    while (world.tickCount < world.cycleStartTick + NIGHTFALL + DAY_CYCLE.night - 1) world.tick();
+    expect(world.clock()?.phase).toBe('night');
+
+    // Pas de ville au moment de l'aube : le sac, plein à deux places près.
+    vi.spyOn(world, 'townStock').mockReturnValue(null);
+    for (const mobile of [...world.mobiles.values()]) if (mobile.kind === 'pickup') world.mobiles.delete(mobile.id);
+    inventory.add('coal', inventory.freeSpace() - 2);
+    world.tick();
+
+    const total = Object.values(DAWN_REWARD).reduce((sum, amount) => sum + amount, 0);
+    const ground = [...world.mobiles.values()].filter((mobile): mobile is Pickup => mobile.kind === 'pickup');
+
+    expect(dawn!.to).toBe('bag');
+    expect(dawn!.reward.reduce((sum, [, amount]) => sum + amount, 0)).toBe(2);
     expect(inventory.freeSpace()).toBe(0);
+    expect(ground.reduce((sum, pickup) => sum + pickup.amount, 0)).toBe(total - 2);
+    for (const pickup of ground) {
+      expect(Math.hypot(pickup.x - world.player.x, pickup.y - world.player.y)).toBeLessThan(2 * TILE_SIZE);
+    }
   });
 
   it('fait apparaître les mutants à distance de la mairie, jamais sur elle', () => {
@@ -693,7 +729,28 @@ describe('tour de guet', () => {
 });
 
 describe('nurserie', () => {
-  it('fait naître un enfant toutes les dix minutes, qui reste près de chez lui', () => {
+  it('nourrie de six nourritures, fait naître un enfant 3 600 ticks après son achèvement', () => {
+    const world = new World(7);
+    let builtTick = 0;
+    let birthTick = 0;
+
+    world.events.on('buildingCompleted', () => (builtTick = world.tickCount));
+    world.events.on('childBorn', () => (birthTick = world.tickCount));
+
+    const nursery = build(world, 'nursery');
+
+    if (nursery.kind !== 'nursery') throw new Error('pas une nurserie');
+
+    world.player.inventory.add('food', 6);
+    world.push({ type: 'supplyBuilding', id: nursery.id });
+
+    while (birthTick === 0 && world.tickCount < builtTick + 4000) world.tick();
+
+    expect(birthTick - builtTick).toBeGreaterThanOrEqual(3600 - 1);
+    expect(birthTick - builtTick).toBeLessThanOrEqual(3600 + 1);
+  });
+
+  it('fait naître un enfant toutes les trois minutes, qui reste près de chez lui', () => {
     const world = new World(7);
     const nursery = build(world, 'nursery');
     const born: number[] = [];

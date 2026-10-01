@@ -56,7 +56,7 @@ export const NIGHT_TINT = {
   haloStrength: 0.6,
 } as const;
 
-/** Le butin de l'aube, ajouté au sac d'Adam quand la mairie a tenu la nuit. */
+/** Le butin de l'aube quand la mairie a tenu la nuit : en ville, sinon dans le sac, le surplus au sol. */
 export const DAWN_REWARD = {
   wood: 5,
   stone: 5,
