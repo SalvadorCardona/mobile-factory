@@ -40,7 +40,7 @@ jouable dans le navigateur, sur téléphone :
   troncs, une forêt n'est jamais un mur ; il livre le chantier de la mairie
   en le heurtant ;
 - une fenêtre d'inspection au tap sur un chantier ou un bâtiment ;
-- une **nurserie** qui fait naître un enfant toutes les dix minutes, et une
+- une **nurserie** qui fait naître un enfant toutes les trois minutes, et une
   **tour de guet** qui tire seule ;
 - des **mutants radioactifs** par vagues, dès que la mairie est debout : ils
   marchent droit sur elle et cassent ce qui les bloque ; l'arc d'Adam tire

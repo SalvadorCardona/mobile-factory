@@ -93,7 +93,7 @@ export interface TownHall extends Built {
   kind: 'townHall';
 }
 
-/** La nurserie : un enfant toutes les dix minutes, s'il y a de quoi le nourrir. */
+/** La nurserie : un enfant toutes les trois minutes, s'il y a de quoi le nourrir. */
 export interface Nursery extends Built {
   kind: 'nursery';
   /** Tick de la prochaine naissance — la fenêtre d'inspection affiche le compte à rebours. */

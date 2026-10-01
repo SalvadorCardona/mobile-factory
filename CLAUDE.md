@@ -132,7 +132,7 @@ ville ; `REPAIR`, `src/data/buildings.ts`). Frappée hors écran, la mairie
 sonne l'alarme : bord rouge, repère qui clignote, vibration.
 `src/sim/defense.test.ts` mesure l'équilibre (Adam immobile, Ève qui répare :
 une tour passe la nuit 10, sans tour la mairie tombe aux nuits 8–10).
-La **nurserie** fait naître un enfant toutes les dix minutes, contre quatre
+La **nurserie** fait naître un enfant toutes les trois minutes, contre six
 nourritures (recette `raiseChild`) : sans elles, elle attend.
 
 **Clinique** (`src/data/clinic.ts`, débloquée après la vague 1) — tant

@@ -471,6 +471,18 @@ describe('World', () => {
    * Si `pendingWakes()` ne retombe pas à zéro, c'est qu'elle continue à se
    * replanifier dans le vide — le piège numéro un du projet.
    */
+  it('extrait 15 minerais par minute, dans un coffre de 20', () => {
+    const { world, spot } = worldWithOre();
+    const drill = buildDrill(world, spot);
+
+    if (drill.kind !== 'drill') throw new Error('pas une foreuse');
+
+    expect(DRILL.storage).toBe(20);
+    for (let i = 0; i < 1200; i += 1) world.tick();
+
+    expect(drill.store.total()).toBe(15);
+  });
+
   it('cesse de planifier une foreuse dont le coffre est plein', () => {
     const { world, spot } = worldWithOre();
     const drill = buildDrill(world, spot);

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { TILE_SIZE, worldToTile } from '../core/grid.ts';
 import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
+import { RECIPES } from '../data/recipes.ts';
 import type { Command } from './commands.ts';
 import { BUILD_REACH_TILES } from './player.ts';
 import { SAVE_VERSION, decodeSave, deserialize, encodeSave, serialize } from './save.ts';
@@ -119,7 +120,7 @@ function playedWorld(): World {
 
   // Adam passe entre les arbres et se promène loin d'elle : elle doit tenir sans lui.
   nursery.hp = 1_000_000;
-  world.player.inventory.add('food', 4);
+  world.player.inventory.add('food', RECIPES.raiseChild.inputs.food);
   world.push({ type: 'supplyBuilding', id: nursery.id });
   world.tick();
 

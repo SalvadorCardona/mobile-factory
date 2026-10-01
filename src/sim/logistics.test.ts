@@ -221,8 +221,8 @@ describe('poste de logistique', () => {
   it('vide les producteurs du rayon sans rien perdre ni dupliquer, et sans jamais promettre deux fois', () => {
     const world = colony({}, [
       DEPOT,
-      { proto: 'drill', ...NEAR_A, store: { ironOre: 50 } },
-      { proto: 'drill', ...NEAR_B, store: { ironOre: 23, coal: 4 } },
+      { proto: 'drill', ...NEAR_A, store: { ironOre: 20 } },
+      { proto: 'drill', ...NEAR_B, store: { ironOre: 13, coal: 4 } },
     ]);
     const before = census(world);
 
@@ -231,7 +231,7 @@ describe('poste de logistique', () => {
       expectCoveredPromises(world);
     });
 
-    expect(hallOf(world).store.count('ironOre')).toBe(73);
+    expect(hallOf(world).store.count('ironOre')).toBe(33);
     expect(hallOf(world).store.count('coal')).toBe(4);
     expect(count(at(world, NEAR_A), 'ironOre') + count(at(world, NEAR_B), 'ironOre')).toBe(0);
   });
@@ -240,7 +240,7 @@ describe('poste de logistique', () => {
     const world = colony({}, [
       DEPOT,
       { proto: 'drill', ...NEAR_A, store: { ironOre: 12 } },
-      { proto: 'drill', ...NEAR_B, store: { ironOre: 50 } },
+      { proto: 'drill', ...NEAR_B, store: { ironOre: 20 } },
     ]);
     const full = at(world, NEAR_B);
     const depot = depotOf(world);
@@ -279,8 +279,8 @@ describe('poste de logistique', () => {
     const world = colony({}, [
       { proto: 'builderHouse', dx: -6, dy: 5 },
       DEPOT,
-      { proto: 'drill', ...NEAR_A, store: { ironOre: 30 } },
-      { proto: 'drill', ...FAR, store: { coal: 30 } },
+      { proto: 'drill', ...NEAR_A, store: { ironOre: 20 } },
+      { proto: 'drill', ...FAR, store: { coal: 20 } },
     ]);
     const near = at(world, NEAR_A);
     const far = at(world, FAR);
@@ -291,15 +291,15 @@ describe('poste de logistique', () => {
     });
 
     // Chacun a fait sa part : tout est à la mairie.
-    expect(hallOf(world).store.count('ironOre')).toBe(30);
-    expect(hallOf(world).store.count('coal')).toBe(30);
+    expect(hallOf(world).store.count('ironOre')).toBe(20);
+    expect(hallOf(world).store.count('coal')).toBe(20);
   });
 
   it('les porteurs livrent toujours les chantiers, un poste à côté', () => {
     const world = colony({ wood: 40, stone: 40 }, [
       { proto: 'builderHouse', dx: -6, dy: 5 },
       DEPOT,
-      { proto: 'drill', ...NEAR_A, store: { ironOre: 30 } },
+      { proto: 'drill', ...NEAR_A, store: { ironOre: 20 } },
       // Le chantier est dans le rayon du poste : ce n'est pas l'affaire des logisticiens.
       { proto: 'farm', dx: 7, dy: 8, site: true },
     ]);
@@ -311,11 +311,11 @@ describe('poste de logistique', () => {
     });
 
     expect(world.entities.get(farm!.id)?.kind).toBe('farm');
-    expect(hallOf(world).store.count('ironOre')).toBe(30);
+    expect(hallOf(world).store.count('ironOre')).toBe(20);
   });
 
   it('rien à transporter : ils flânent autour du poste ; pendant une vague, ils rentrent avec leur charge', () => {
-    const world = colony({}, [DEPOT, { proto: 'drill', ...NEAR_A, store: { ironOre: 50 } }]);
+    const world = colony({}, [DEPOT, { proto: 'drill', ...NEAR_A, store: { ironOre: 20 } }]);
     const hall = hallOf(world);
 
     run(world, 60);
@@ -347,7 +347,7 @@ describe('poste de logistique', () => {
 
     world.mobiles.delete(9999);
     run(world, 3000);
-    expect(hallOf(world).store.count('ironOre')).toBe(50);
+    expect(hallOf(world).store.count('ironOre')).toBe(20);
     // Plus rien à porter : ils sont dehors, à deux pas de leur porte.
     run(world, 300);
 
@@ -358,7 +358,7 @@ describe('poste de logistique', () => {
   });
 
   it('un poste tombé : ses logisticiens posent leur charge à la mairie, puis quittent la colonie', () => {
-    const world = colony({}, [DEPOT, { proto: 'drill', ...NEAR_A, store: { ironOre: 50 } }]);
+    const world = colony({}, [DEPOT, { proto: 'drill', ...NEAR_A, store: { ironOre: 20 } }]);
     const before = census(world);
 
     run(world, 60);
@@ -373,8 +373,8 @@ describe('poste de logistique', () => {
   it('une sauvegarde en plein transport se recharge avec ses réservations, et la suite est identique', () => {
     const world = colony({}, [
       DEPOT,
-      { proto: 'drill', ...NEAR_A, store: { ironOre: 50 } },
-      { proto: 'drill', ...NEAR_B, store: { ironOre: 20 } },
+      { proto: 'drill', ...NEAR_A, store: { ironOre: 20 } },
+      { proto: 'drill', ...NEAR_B, store: { ironOre: 12 } },
     ]);
 
     // Un instant où l'un porte sa charge pendant qu'un autre va chercher la sienne.
@@ -398,11 +398,11 @@ describe('poste de logistique', () => {
     run(world, 2000);
     run(copy, 2000, () => expectCoveredPromises(copy));
     expect(copy.snapshot()).toEqual(world.snapshot());
-    expect(hallOf(copy).store.count('ironOre')).toBe(70);
+    expect(hallOf(copy).store.count('ironOre')).toBe(32);
   });
 
   it('même seed, même colonie : la même journée de logisticien', () => {
-    const layout: Placement[] = [DEPOT, { proto: 'lumberCamp', ...NEAR_A, store: { wood: 18 } }, { proto: 'drill', ...NEAR_B, store: { ironOre: 40 } }];
+    const layout: Placement[] = [DEPOT, { proto: 'lumberCamp', ...NEAR_A, store: { wood: 18 } }, { proto: 'drill', ...NEAR_B, store: { ironOre: 20 } }];
     const a = colony({}, layout);
     const b = colony({}, layout);
 
@@ -430,7 +430,7 @@ describe('poste de logistique', () => {
   });
 
   it('JobBoard : sans poste pour lui, un logisticien ne se voit rien proposer hors de son rayon', () => {
-    const world = colony({}, [DEPOT, { proto: 'drill', ...FAR, store: { ironOre: 50 } }]);
+    const world = colony({}, [DEPOT, { proto: 'drill', ...FAR, store: { ironOre: 20 } }]);
     const board = new JobBoard();
     const depot = depotOf(world);
     const door = doorOf(depot);

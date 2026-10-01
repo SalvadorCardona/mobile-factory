@@ -37,7 +37,7 @@ export const RECIPES = {
   mineOre: {
     label: 'Extraction',
     building: 'drill',
-    duration: 40,
+    duration: 80,
     inputs: {},
     outputs: { ironOre: 1 },
   },
@@ -58,8 +58,8 @@ export const RECIPES = {
   raiseChild: {
     label: 'Naissance',
     building: 'nursery',
-    duration: 20 * 60 * 10,
-    inputs: { food: 4 },
+    duration: 20 * 60 * 3,
+    inputs: { food: 6 },
     outputs: {},
   },
   smeltPlate: {
