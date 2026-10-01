@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { TILE_SIZE } from '../core/grid.ts';
 import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
+import { RECIPES } from '../data/recipes.ts';
 import { FLOW_SAMPLE_TICKS, FLOW_SAMPLES, MAX_ALERTS } from './flows.ts';
 import { decodeSave, encodeSave, type SavedEntity } from './save.ts';
 import { isWalkable, terrainAt } from './terrain.ts';
@@ -11,6 +12,9 @@ import { TICKS_PER_SECOND, World } from './world.ts';
 type Stock = Partial<Record<ItemId, number>>;
 
 const MINUTE = 60 * TICKS_PER_SECOND;
+
+/** Ce qu'une foreuse sort par minute : la cadence de sa recette (15 depuis l'équilibrage #65). */
+const DRILL_PER_MINUTE = (MINUTE / RECIPES.mineOre.duration) * RECIPES.mineOre.outputs.ironOre;
 
 interface Layout {
   hall: Stock;
@@ -88,7 +92,7 @@ function idOf(world: World, kind: string): EntityId {
 }
 
 describe('débit de la ville', () => {
-  it('une foreuse seule, vidée par les porteurs : +30 minerais de fer par minute', () => {
+  it('une foreuse seule, vidée par les porteurs : la ville reçoit sa cadence, à 10 % près', () => {
     const world = colony({ hall: {}, houses: 1, drills: 1 });
 
     // Le temps que les porteurs prennent leur rythme, puis deux minutes de mesure.
@@ -96,8 +100,8 @@ describe('débit de la ville', () => {
 
     const rate = world.flows.netRate('ironOre');
 
-    expect(rate).toBeGreaterThanOrEqual(27);
-    expect(rate).toBeLessThanOrEqual(33);
+    expect(rate).toBeGreaterThanOrEqual(DRILL_PER_MINUTE * 0.9);
+    expect(rate).toBeLessThanOrEqual(DRILL_PER_MINUTE * 1.1);
     expect(world.flows.netRate('wood')).toBe(0);
   });
 
