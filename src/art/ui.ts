@@ -24,7 +24,10 @@ import {
   shape,
   svg,
   windowPane,
+  type Color,
+  type Tone,
 } from '../data/artDirection.ts';
+import type { DAY_CYCLE } from '../data/dayNight.ts';
 
 const S = 24;
 const { ink, coral, paper, yellow, orange, toxic, cyan, mint, violet } = PALETTE;
@@ -104,6 +107,76 @@ function arrow(down: boolean, color: (typeof PALETTE)[keyof typeof PALETTE]['bas
   const back = down ? 11 : 13;
 
   return rect(9.5, down ? 3 : 10, 5, 11, color, 2.5) + polygon([3.5, back, 20.5, back, 12, tip], color);
+}
+
+/** Une bande d'anneau de la part `from` à la part `to` du tour, partie d'en haut, dans le sens des aiguilles. */
+function arcBand(cx: number, cy: number, outer: number, inner: number, from: number, to: number, color: Color): string {
+  const angle = (part: number): number => (part - 0.25) * 2 * Math.PI;
+  const at = (radius: number, part: number): string =>
+    `${round(cx + radius * Math.cos(angle(part)))} ${round(cy + radius * Math.sin(angle(part)))}`;
+  const large = to - from > 0.5 ? 1 : 0;
+
+  return shape(
+    `M${at(outer, from)}A${outer} ${outer} 0 ${large} 1 ${at(outer, to)}` +
+      `L${at(inner, to)}A${inner} ${inner} 0 ${large} 0 ${at(inner, from)}Z`,
+    color,
+  );
+}
+
+export type DialPhase = keyof typeof DAY_CYCLE;
+
+/** La teinte de chaque phase sur le cadran : l'aube rose, le jour jaune, le crépuscule orange, la nuit indigo. */
+const DIAL_TONES = {
+  dawn: 'coral',
+  day: 'yellow',
+  dusk: 'orange',
+  night: 'ink',
+} as const satisfies Record<DialPhase, Tone>;
+
+/** Le côté du cadran de l'horloge, en pixels (le HUD le réduit à sa taille). */
+const DIAL_SIZE = 32;
+
+/**
+ * Le cadran de l'horloge du HUD : un disque de papier, l'anneau des phases à
+ * leurs vraies durées (cf. `DIAL_ARCS`, `sim/dayNight.ts`), et l'aiguille au
+ * trait qui porte le soleil — la lune la nuit, le soleil corail quand la
+ * nuit approche. `progress` va de 0 (l'aube, en haut) à 1.
+ */
+export function dayDialSvg(
+  arcs: readonly { phase: DialPhase; from: number; to: number }[],
+  progress: number,
+  night: boolean,
+  warning: boolean,
+): string {
+  const c = DIAL_SIZE / 2;
+  const cy = c - 0.5;
+  const outer = 14;
+  const inner = 9;
+  const angle = (progress - 0.25) * 2 * Math.PI;
+  const reach = (outer + inner) / 2;
+  const x = round(c + reach * Math.cos(angle));
+  const y = round(cy + reach * Math.sin(angle));
+  const tip = 3.8;
+
+  const marker = night
+    ? circle(x + 0.4, y + 0.6, tip, paper.shade) +
+      circle(x, y, tip, paper.base) +
+      // La lune : le disque mordu par la nuit, en haut à droite.
+      circle(x + 1.6, y - 1.2, tip * 0.68, ink.base)
+    : shadedCircle(x, y, tip, warning ? 'coral' : 'yellow');
+
+  return svg(
+    DIAL_SIZE,
+    DIAL_SIZE,
+    circle(c, cy + 1, 15, paper.shade),
+    circle(c, cy, 15, paper.base),
+    ...arcs.map(({ phase, from, to }) => arcBand(c, cy + 0.8, outer, inner, from, to, PALETTE[DIAL_TONES[phase]].shade)),
+    ...arcs.map(({ phase, from, to }) => arcBand(c, cy, outer, inner + 0.8, from, to, PALETTE[DIAL_TONES[phase]].base)),
+    pill(c - 6, cy - 4.5, 4, 2, paper.shade),
+    line(c, cy, round(c + (reach - tip) * Math.cos(angle)), round(cy + (reach - tip) * Math.sin(angle)), ink.base),
+    circle(c, cy, 2.4, ink.base),
+    marker,
+  );
 }
 
 function round(value: number): number {

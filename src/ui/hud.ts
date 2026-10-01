@@ -64,19 +64,19 @@ import { seedsFor } from '../data/perks.ts';
 import { QUESTS, TOOLS, type QuestReward } from '../data/quests.ts';
 import { RESEARCH } from '../data/research.ts';
 import { WEATHER, WEATHER_CALENDAR } from '../data/weather.ts';
-import type { UiIcon } from '../art/ui.ts';
+import { dayDialSvg, type UiIcon } from '../art/ui.ts';
 import type { AtlasStats } from '../render/spriteLibrary.ts';
 import type { WaterStats } from '../render/waterLayer.ts';
 import type { PlacementRejection, RepairRejection, RoadRejection } from '../sim/commands.ts';
 import type { Compass } from '../sim/enemies.ts';
 import { nameOf } from '../sim/inhabitants.ts';
 import type { Entity, Mobile, MobileId } from '../sim/types.ts';
-import { ticksToNight } from '../sim/dayNight.ts';
+import { DIAL_ARCS } from '../sim/dayNight.ts';
 import { currentQuest, questProgress } from '../sim/eve.ts';
 import { currentObjective, goalProgress, goalWait, type GoalWait } from '../sim/objectives.ts';
 import { TICKS_PER_SECOND, type Inhabitant, type Workforce, type World } from '../sim/world.ts';
 import { carriesWanted, harvestRefusedText, tutorialAdvice, type Advice } from './hint.ts';
-import { buildingIcon, itemAmount, itemIcon, uiIcon } from './icons.ts';
+import { buildingIcon, dayDialUrl, itemAmount, itemIcon, uiIcon } from './icons.ts';
 import { effectLine } from './researchText.ts';
 import { personText } from './personText.ts';
 import { mapUrl, seedLine } from './seed.ts';
@@ -149,6 +149,15 @@ const CREW_FOLD_TICKS = 5 * TICKS_PER_SECOND;
  * abîmée), au bout du second. Comptés en ticks comme le conseil.
  */
 const QUEST_TAP_TICKS = 6 * TICKS_PER_SECOND;
+
+/** Le détail de l'horloge (« Jour 2 · nuit dans 1:31 ») reste affiché ce temps-là après un tap. */
+const CLOCK_TIP_TICKS = 4 * TICKS_PER_SECOND;
+
+/** Le cadran de l'horloge à l'écran, en pixels CSS : il déborde à peine de la ligne de 24 px. */
+const CLOCK_SIZE = 28;
+
+/** Crans de l'aiguille sur un tour : le cadran ne se redessine qu'en changeant de cran. */
+const DIAL_STEPS = 240;
 const QUEST_ALERT_TICKS = 4 * TICKS_PER_SECOND;
 
 /** Sous cette part de ses PV, la mairie déplie la quête repliée. */
@@ -163,9 +172,6 @@ const CELEBRATION_GAP = 8;
 const CONFETTI: readonly UiIcon[] = ['leafMint', 'leafMint', 'leafYellow', 'petal'];
 const CONFETTI_COUNT = 36;
 const CONFETTI_MS = 3200;
-
-/** Sous ce seuil, le compte à rebours de la nuit passe au rouge — le crépuscule y est déjà. */
-const WAVE_WARNING_SECONDS = 10;
 
 /** D'où vient une vague, dit comme on le dirait. */
 const FROM_LABELS: Record<Compass, string> = {
@@ -204,6 +210,13 @@ export class Hud {
   private readonly hint: HTMLElement;
   private readonly hintText: HTMLElement;
   private readonly hintBulb: HTMLButtonElement;
+  /** L'horloge du jour et de la nuit, dans la tête de la quête : cadran, numéro du jour, détail au tap. */
+  private readonly dayClock: HTMLButtonElement;
+  private readonly dayClockDial: HTMLImageElement;
+  private readonly dayClockDay: HTMLElement;
+  private readonly dayClockTip: HTMLElement;
+  private lastClock = '';
+  private clockTipUntil = 0;
   /** Le sac, compact : un bouton qui ouvre le panneau inventaire. */
   public readonly bag: HTMLButtonElement;
   /** Le stock de la ville, compact. */
@@ -310,9 +323,26 @@ export class Hud {
     // Sur un téléphone, la tête de la quête se tape : elle déplie la carte, ou la replie.
     const head = element('div', 'hud-quest-head');
 
-    head.append(this.questTitle, this.questStrip, this.hintBulb);
+    // L'horloge : un tap dit l'heure en toutes lettres, sans déplier la quête.
+    this.dayClock = element('button', 'hud-clock');
+    this.dayClock.type = 'button';
+    this.dayClock.hidden = true;
+    this.dayClockDial = element('img', 'hud-clock-dial');
+    this.dayClockDial.width = this.dayClockDial.height = CLOCK_SIZE;
+    this.dayClockDial.alt = '';
+    this.dayClockDial.draggable = false;
+    this.dayClockDay = text('hud-clock-day', '');
+    this.dayClockTip = text('hud-clock-tip', '');
+    this.dayClockTip.setAttribute('aria-hidden', 'true');
+    this.dayClock.append(this.dayClockDial, this.dayClockDay, this.dayClockTip);
+    this.dayClock.addEventListener('click', () => {
+      this.clockTipUntil = this.world.tickCount < this.clockTipUntil ? 0 : this.world.tickCount + CLOCK_TIP_TICKS;
+      this.updateClock();
+    });
+
+    head.append(this.questTitle, this.questStrip, this.dayClock, this.hintBulb);
     head.addEventListener('click', (event) => {
-      if (event.target instanceof Element && event.target.closest('.hud-hint-bulb')) return;
+      if (event.target instanceof Element && event.target.closest('.hud-hint-bulb, .hud-clock')) return;
       this.questOpenUntil = this.quest.dataset['folded'] === 'false' ? 0 : this.world.tickCount + QUEST_TAP_TICKS;
       this.updateFold();
     });
@@ -1055,6 +1085,7 @@ export class Hud {
   /** `fps`, `chunks`, `atlas` et `water` viennent du renderer : le monde ne les connaît pas. */
   public update(fps: number, chunks: number, atlas: AtlasStats, water: WaterStats, weatherParticles = 0): void {
     this.updateQuest();
+    this.updateClock();
     this.updateFold();
     this.updateHint();
     this.updateBag();
@@ -1128,22 +1159,13 @@ export class Hud {
     this.hallLow = hall.hp / max < QUEST_ALERT_HP;
 
     const mutants = this.mutantCount();
-    const time = world.clock();
-    const dark = time?.phase === 'night';
     const { adults, children, workers } = world.population();
     const people = adults + children;
     const crew = world.workforce();
-    // Pendant la nuit, le temps qu'il reste avant l'aube ; sinon, avant la prochaine nuit.
-    const seconds = time ? Math.ceil((dark ? time.left : ticksToNight(time)) / TICKS_PER_SECOND) : 0;
-    const next = time ? time.cycle + (time.phase === 'dawn' ? 1 : 0) : 1;
     if (this.crewOpen && world.tickCount - this.crewSince >= CREW_FOLD_TICKS) this.crewOpen = false;
 
-    const status =
-      mutants > 0
-        ? `Nuit ${world.night} · ${mutants} mutant${mutants > 1 ? 's' : ''}`
-        : dark
-          ? `Nuit ${world.night} · aube dans ${clock(seconds)}`
-          : `Nuit ${next} dans ${clock(seconds)}`;
+    // L'heure est à l'horloge de la tête ; la ligne ne parle que de l'attaque.
+    const status = mutants > 0 ? `Nuit ${world.night} · ${mutants} mutant${mutants > 1 ? 's' : ''}` : '';
 
     const quest = world.eve()?.state === 'idle' || world.eve()?.state === 'repair' ? currentQuest(world.questsDone) : null;
     const progress = quest ? questProgress(quest, world.entities.values()) : null;
@@ -1176,15 +1198,11 @@ export class Hud {
     hp.append(hpLabel, hpBar, hpValue);
 
     const line = element('div', 'hud-quest-line');
-    const wave = text('hud-quest-wave', status);
-
-    const urgent = String(mutants > 0 || dark || seconds <= WAVE_WARNING_SECONDS);
-
-    wave.dataset['urgent'] = urgent;
     const chips = element('div', 'hud-quest-chips');
 
     chips.append(chip('people', people + workers, 'Habitants'), this.crewChip(crew.total), chip('mutant', world.kills, 'Mutants abattus'));
-    line.append(wave, chips);
+    if (status) line.append(text('hud-quest-wave', status));
+    line.append(chips);
     this.questBody.replaceChildren(goal, ...meters, hp, line);
     if (this.crewOpen) this.questBody.append(crewDetail(crew));
 
@@ -1201,12 +1219,10 @@ export class Hud {
     // Une naissance qui se fait attendre prend la place du titre et du « 0/1 » : la ligne n'a pas la place des deux.
     const stripWait = condition?.type === 'births' && mutants === 0 ? stripTitle(condition, waits[shown]!, waiting[shown]!) : null;
     const stripHp = element('div', 'hud-strip-hp');
-    const stripClock = text('hud-strip-clock', time ? clock(seconds) : '');
 
     stripHp.append(bar(hall.hp / max));
     stripHp.title = `${name} ${hall.hp}/${max}`;
     stripHp.dataset['low'] = hp.dataset['low'];
-    stripClock.dataset['urgent'] = urgent;
     this.questStrip.dataset['urgent'] = String(mutants > 0);
     this.questStrip.replaceChildren(
       mutants > 0 ? uiIcon('mutant', 20) : condition ? goalIcon(condition) : uiIcon('goal', 20),
@@ -1217,8 +1233,40 @@ export class Hud {
             ...(condition && mutants === 0 ? [text('hud-strip-value', `${reached[shown]!.have}/${reached[shown]!.need}`)] : []),
           ]),
       stripHp,
-      stripClock,
     );
+  }
+
+  /**
+   * L'horloge : le cadran (`World.dayDial`) et « J2 » d'un coup d'œil, le
+   * détail en toutes lettres au tap et pour les lecteurs d'écran. Cachée tant
+   * que la mairie est en chantier — le cycle n'a pas commencé.
+   */
+  private updateClock(): void {
+    const dial = this.world.dayDial();
+
+    if (this.dayClock.hidden !== !dial) this.dayClock.hidden = !dial;
+    if (!dial) return;
+
+    const left = clock(Math.ceil(dial.left / TICKS_PER_SECOND));
+    const detail = dial.night ? `Nuit ${dial.day} · aube dans ${left}` : `Jour ${dial.day} · nuit dans ${left}`;
+    const tip = this.world.tickCount < this.clockTipUntil;
+    const step = Math.round(dial.progress * DIAL_STEPS) % DIAL_STEPS;
+    const key = `${step}:${dial.night}:${dial.warning}:${detail}:${tip}`;
+
+    if (key === this.lastClock) return;
+
+    const [lastStep, lastNight, lastWarning] = this.lastClock.split(':');
+
+    this.lastClock = key;
+    if (String(step) !== lastStep || String(dial.night) !== lastNight || String(dial.warning) !== lastWarning) {
+      this.dayClockDial.src = dayDialUrl(dayDialSvg(DIAL_ARCS, step / DIAL_STEPS, dial.night, dial.warning));
+    }
+    this.dayClockDay.textContent = `J${dial.day}`;
+    this.dayClockTip.textContent = detail;
+    this.dayClock.dataset['phase'] = dial.phase;
+    this.dayClock.dataset['warning'] = String(dial.warning);
+    this.dayClock.dataset['tip'] = String(tip);
+    this.dayClock.setAttribute('aria-label', detail);
   }
 
   /** Déplie la quête repliée pour `ticks`, sans raccourcir un dépliage plus long. */
@@ -1642,7 +1690,9 @@ function goalMeter(goal: Goal, have: number, need: number, wait: GoalWait | null
   row.dataset['done'] = String(have >= need);
   row.dataset['blocked'] = String(wait?.blockedBy != null);
   row.append(goalIcon(goal), bar((have + running) / need), text('hud-meter-value', `${have}/${need}`));
-  if (wait) row.append(text('hud-meter-wait', waitLabel(goal, wait)));
+  const label = waitLabel(goal, wait);
+
+  if (label) row.append(text('hud-meter-wait', label));
   return row;
 }
 
@@ -1663,7 +1713,11 @@ function stripTitle(goal: Goal, wait: GoalWait | null, label: string): HTMLEleme
   return node;
 }
 
-/** « bébé dans 2:41 », « prochaine dans 1:12 », « la nurserie attend 2 nourritures » — vide sans attente. */
+/**
+ * « bébé dans 2:41 », « la nurserie attend 2 nourritures » — vide sans
+ * attente. Une nuit à tenir ne dit rien : l'horloge de la tête montre déjà
+ * l'aube qui vient, et sa barre avance avec elle.
+ */
 function waitLabel(goal: Goal, wait: GoalWait | null): string {
   if (!wait) return '';
 
@@ -1676,9 +1730,7 @@ function waitLabel(goal: Goal, wait: GoalWait | null): string {
     return `la ${nursery} attend ${wait.missing} ${label}${wait.missing > 1 ? 's' : ''}`;
   }
 
-  const left = clock(Math.ceil(wait.remainingTicks / TICKS_PER_SECOND));
-
-  return goal.type === 'births' ? `bébé dans ${left}` : `prochaine dans ${left}`;
+  return goal.type === 'births' ? `bébé dans ${clock(Math.ceil(wait.remainingTicks / TICKS_PER_SECOND))}` : '';
 }
 
 /** Ce que compte une condition d'objectif, en icône. */

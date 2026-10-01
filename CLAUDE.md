@@ -147,7 +147,12 @@ journée sans mutant (~3 min), un crépuscule (carte teintée indigo, lampions
 allumés, « La nuit tombe — rentrez »), une nuit de trois vagues (~100 s, la première 15 s après la tombée), puis
 l'aube : les mutants restants fuient et le butin tombe dans le sac. Le rendu
 (`render/nightLayer.ts`) n'applique que la teinte : un quad `multiply` et des
-lueurs `add`, pas de filtre.
+lueurs `add`, pas de filtre. Le HUD l'affiche en **horloge** au bout de la tête
+de la quête (`World.dayDial`, `DIAL_ARCS` : aube, jour, crépuscule, nuit à
+leurs vraies durées ; cadran `dayDialSvg` de `art/ui.ts`) : l'aiguille porte
+le soleil, la lune la nuit, « J2 » à côté (un de plus à chaque aube) ; à
+`DAY_DIAL.nightWarning` de la nuit, elle bat en corail ; un tap dit « Jour 2 ·
+nuit dans 1:31 » (c'est aussi son `aria-label`).
 
 **Menace** — la nuit, des **mutants** arrivent par
 vagues (`src/data/enemies.ts`) et marchent droit sur la cible de leur vague

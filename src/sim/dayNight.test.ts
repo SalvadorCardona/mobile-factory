@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { DAY_CYCLE } from '../data/dayNight.ts';
+import { DAY_CYCLE, DAY_DIAL } from '../data/dayNight.ts';
 import { WAVES } from '../data/enemies.ts';
-import { CYCLE_TICKS, clockAt, darkness, isWaveTick, ticksToNextWave, ticksToNight } from './dayNight.ts';
+import { CYCLE_TICKS, DIAL_ARCS, clockAt, darkness, dayDial, isWaveTick, ticksToNextWave, ticksToNight } from './dayNight.ts';
 
 const NIGHTFALL = DAY_CYCLE.day + DAY_CYCLE.dusk;
 
@@ -45,5 +45,53 @@ describe('horloge du jour et de la nuit', () => {
     expect(ticksToNight(clockAt(0))).toBe(NIGHTFALL);
     expect(ticksToNight(clockAt(NIGHTFALL + 1))).toBe(0);
     expect(ticksToNight(clockAt(CYCLE_TICKS - 1))).toBe(NIGHTFALL + 1);
+  });
+});
+
+describe('cadran de l’horloge du HUD', () => {
+  const DAWN = NIGHTFALL + DAY_CYCLE.night;
+
+  it('partage le cadran selon les vraies durées des phases, en partant de l’aube', () => {
+    expect(DIAL_ARCS.map(({ phase }) => phase)).toEqual(['dawn', 'day', 'dusk', 'night']);
+    expect(DIAL_ARCS[0]!.from).toBe(0);
+    expect(DIAL_ARCS.at(-1)!.to).toBeCloseTo(1);
+    for (const arc of DIAL_ARCS) expect(arc.to - arc.from).toBeCloseTo(DAY_CYCLE[arc.phase] / CYCLE_TICKS);
+    for (let i = 1; i < DIAL_ARCS.length; i += 1) expect(DIAL_ARCS[i]!.from).toBe(DIAL_ARCS[i - 1]!.to);
+  });
+
+  it('place l’aiguille dans l’arc de la phase en cours, et la fait avancer', () => {
+    let last = -1;
+
+    for (let tick = 0; tick < CYCLE_TICKS; tick += 50) {
+      const clock = clockAt(tick);
+      const dial = dayDial(clock);
+      const arc = DIAL_ARCS.find(({ phase }) => phase === clock.phase)!;
+
+      expect(dial.phase).toBe(clock.phase);
+      expect(dial.progress).toBeGreaterThanOrEqual(arc.from);
+      expect(dial.progress).toBeLessThan(arc.to);
+      // L'aiguille ne recule qu'en repassant en haut, à l'aube.
+      if (clock.phase !== 'dawn' || last < DIAL_ARCS[0]!.to) expect(dial.progress).toBeGreaterThan(last);
+      last = dial.progress;
+    }
+    expect(dayDial(clockAt(DAWN)).progress).toBe(0);
+  });
+
+  it('numérote le jour, un de plus à chaque aube', () => {
+    expect(dayDial(clockAt(0)).day).toBe(1);
+    expect(dayDial(clockAt(NIGHTFALL)).day).toBe(1);
+    expect(dayDial(clockAt(DAWN - 1)).day).toBe(1);
+    expect(dayDial(clockAt(DAWN)).day).toBe(2);
+    expect(dayDial(clockAt(CYCLE_TICKS)).day).toBe(2);
+    expect(dayDial(clockAt(CYCLE_TICKS + DAWN)).day).toBe(3);
+  });
+
+  it('compte jusqu’à la nuit le jour, jusqu’à l’aube la nuit, et prévient avant la tombée', () => {
+    expect(dayDial(clockAt(0))).toMatchObject({ night: false, left: NIGHTFALL, warning: false });
+    expect(dayDial(clockAt(NIGHTFALL - DAY_DIAL.nightWarning - 1)).warning).toBe(false);
+    expect(dayDial(clockAt(NIGHTFALL - DAY_DIAL.nightWarning))).toMatchObject({ warning: true, left: DAY_DIAL.nightWarning });
+    expect(dayDial(clockAt(DAY_CYCLE.day))).toMatchObject({ phase: 'dusk', night: false, warning: true });
+    expect(dayDial(clockAt(NIGHTFALL + 20))).toMatchObject({ night: true, left: DAY_CYCLE.night - 20, warning: false });
+    expect(dayDial(clockAt(DAWN))).toMatchObject({ night: false, left: DAY_CYCLE.dawn + NIGHTFALL });
   });
 });

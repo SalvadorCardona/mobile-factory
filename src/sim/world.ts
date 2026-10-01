@@ -92,7 +92,7 @@ import { ChunkIndex } from './chunk.ts';
 import { floorCost, floorMissing, floorNeeds, floorWants } from './antenna.ts';
 import { consumerRecipe, consumerRoom, consumerWants, forgeRecipe, isConsumer } from './consumers.ts';
 import { NO_WIND, nearestFoe, shoot, stepArrow, type Wind } from './combat.ts';
-import { clockAt, nextWave, ticksToWave, waveAt, type DayClock } from './dayNight.ts';
+import { clockAt, dayDial, nextWave, ticksToWave, waveAt, type DayClock, type DayDial } from './dayNight.ts';
 import type {
   Command,
   CommandLogEntry,
@@ -3809,6 +3809,13 @@ export class World {
   /** L'heure qu'il est, ou `null` tant que la mairie est en chantier : le cycle n'a pas commencé. */
   public clock(): DayClock | null {
     return this.cycleStartTick === 0 ? null : clockAt(this.tickCount - this.cycleStartTick);
+  }
+
+  /** Ce que montre l'horloge du HUD — phase, aiguille, numéro du jour —, ou `null` avant la mairie. */
+  public dayDial(): DayDial | null {
+    const clock = this.clock();
+
+    return clock && dayDial(clock);
   }
 
   /** Les changements de phase, le compte à rebours et les vagues de la nuit. */
