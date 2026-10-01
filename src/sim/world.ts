@@ -243,6 +243,9 @@ export interface PlacementBlock {
   tiles: TileCoord[];
 }
 
+/** D'où « Transférer » tirerait de quoi achever un chantier, lu par sa fenêtre. */
+export type SiteCoverage = 'bag' | 'town' | 'both' | 'short';
+
 /**
  * Les ouvriers de la ville, lus par le HUD : le total, bâtiment par
  * bâtiment, et ce que font les porteurs sur pied.
@@ -1090,18 +1093,36 @@ export class World {
 
   /** Ce qui manquerait encore au chantier après « Transférer » : ni dans le sac, ni dans la ville à sa portée. */
   public shortfall(site: Site): number {
-    const town = this.townStockFor(site);
-    let short = 0;
+    return this.transferPlan(site).short;
+  }
 
-    // Le même calcul que `transferFrom`, sac puis ville, sans rien déplacer.
+  /**
+   * D'où viendrait ce que « Transférer » poserait : le sac seul, la ville
+   * seule, les deux — ou `short` s'il manque encore de quoi l'achever.
+   */
+  public siteCoverage(site: Site): SiteCoverage {
+    const { fromBag, fromTown, short } = this.transferPlan(site);
+
+    if (short > 0) return 'short';
+    if (fromBag > 0 && fromTown > 0) return 'both';
+    return fromTown > 0 ? 'town' : 'bag';
+  }
+
+  /** Le même calcul que `transferFrom`, sac puis ville, sans rien déplacer. */
+  private transferPlan(site: Site): { fromBag: number; fromTown: number; short: number } {
+    const town = this.townStockFor(site);
+    const plan = { fromBag: 0, fromTown: 0, short: 0 };
+
     for (const item of Object.keys(BUILDINGS[site.proto].cost) as ItemId[]) {
       const needed = this.siteNeeds(site, item, 'bag');
       const fromBag = Math.min(needed, this.player.inventory.available(item));
       const fromTown = Math.min(Math.max(0, this.siteNeeds(site, item, 'town') - fromBag), town?.available(item) ?? 0);
 
-      short += needed - fromBag - fromTown;
+      plan.fromBag += fromBag;
+      plan.fromTown += fromTown;
+      plan.short += needed - fromBag - fromTown;
     }
-    return short;
+    return plan;
   }
 
   /** Adam peut-il déposer en ville d'ici ? La mairie doit être debout et à portée. */

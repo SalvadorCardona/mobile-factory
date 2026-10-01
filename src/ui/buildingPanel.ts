@@ -48,7 +48,7 @@ import { WEAPONS } from '../data/weapons.ts';
 import { BUILDERS, LOGISTICIANS, LUMBERJACKS } from '../data/workers.ts';
 import { canPause } from '../sim/staffing.ts';
 import type { Building, Entity, EntityId, Forge, Nursery } from '../sim/types.ts';
-import { TICKS_PER_SECOND, repairCost, siteMissing, type World } from '../sim/world.ts';
+import { TICKS_PER_SECOND, repairCost, siteMissing, type SiteCoverage, type World } from '../sim/world.ts';
 import { itemAmount, uiIcon } from './icons.ts';
 import { ResearchPanel } from './researchPanel.ts';
 
@@ -350,9 +350,7 @@ export class BuildingPanel {
               ? 'Chantier en cours — rapprochez-vous pour livrer.'
               : !fromTown
                 ? 'Chantier en cours — transférez le sac, ou heurtez-le.'
-                : this.world.shortfall(entity) === 0
-                  ? 'Le stock de la ville couvre le reste : transférez pour l’achever.'
-                  : 'Chantier en cours — transférez le sac et la ville, ou heurtez-le.',
+                : siteCoverageText(this.world.siteCoverage(entity)),
         );
       }
       if (proto.workers > 0) lines.push(`Emploiera ${proto.workers} ouvriers.`);
@@ -727,6 +725,20 @@ function crewButton(label: string, title: string, onClick: () => void): HTMLButt
 /** Texte d'inspection : celui du chantier tant qu'il en est un, celui du bâtiment à son niveau ensuite. */
 export function panelDescription(entity: Entity): string {
   return entity.kind === 'site' ? BUILDINGS[entity.proto].siteDescription : buildingLevel(entity.proto, entity.level).description;
+}
+
+/** Ce que « Transférer » ferait d'un chantier à portée de la ville, en disant d'où vient la matière. */
+export function siteCoverageText(coverage: SiteCoverage): string {
+  switch (coverage) {
+    case 'bag':
+      return 'Votre sac suffit : transférez pour l’achever.';
+    case 'town':
+      return 'Le stock de la ville couvre le reste : transférez pour l’achever.';
+    case 'both':
+      return 'Sac et ville couvrent le reste : transférez pour l’achever.';
+    case 'short':
+      return 'Chantier en cours — transférez le sac et la ville, ou heurtez-le.';
+  }
 }
 
 /** Ce qu'apporte un niveau : « PV 60 → 90, portée 8 → 10, cadence +29 % ». */

@@ -1474,6 +1474,31 @@ describe('la mairie, entrepôt de la colonie', () => {
     expect(stock.available('stone')).toBe(0);
   });
 
+  it('dit d’où viendrait ce que « Transférer » poserait : sac, ville, les deux, ou pas assez', () => {
+    const coverage = (bag: number, town: number): string => {
+      const world = new World(7);
+
+      completeSite(world, world.townHallId);
+
+      const stock = world.warehouse()!.store;
+      const id = openSiteAround(world, 'farm', 4, BUILDINGS.townHall.logisticRadius);
+      const site = world.entities.get(id);
+
+      if (site?.kind !== 'site') throw new Error('pas un chantier');
+      for (const [item, amount] of Object.entries(BUILDINGS.farm.cost) as [ItemId, number][]) {
+        world.player.inventory.add(item, Math.round(amount * bag));
+        stock.add(item, Math.round(amount * town));
+      }
+      return world.siteCoverage(site);
+    };
+
+    // Ville vide, sac qui couvre : le texte ne parle pas de la ville.
+    expect(coverage(1, 0)).toBe('bag');
+    expect(coverage(0, 1)).toBe('town');
+    expect(coverage(0.5, 0.5)).toBe('both');
+    expect(coverage(0.5, 0)).toBe('short');
+  });
+
   it('laisse les chantiers hors de son rayon à livrer à la main', () => {
     const world = new World(7);
     const rejected: string[] = [];
