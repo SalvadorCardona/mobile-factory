@@ -1,10 +1,11 @@
 /**
  * Les mutants : une intelligence artificielle en une phrase.
  *
- * Un mutant marche droit sur la mairie. Il traverse l'eau, les arbres et les
- * rochers — c'est un mutant, il ne contourne rien — et seul le bâti l'arrête.
- * Ce qui le bloque, il le casse : un mur de foreuses ralentit une vague, il
- * ne la détourne pas. Quand il atteint la mairie, il la casse aussi.
+ * Un mutant marche droit sur la cible de sa vague — la mairie, ou un
+ * bâtiment de l'usine. Il traverse l'eau, les arbres et les rochers — c'est
+ * un mutant, il ne contourne rien — et seul le bâti l'arrête. Ce qui le
+ * bloque, il le casse : un mur de foreuses ralentit une vague, il ne la
+ * détourne pas. Quand il atteint sa cible, il la casse aussi.
  *
  * Pas de pathfinding : un mutant qui devrait chercher un chemin pour
  * contourner un bâtiment est un mutant qu'on peut piéger. Celui-ci ne se
@@ -25,7 +26,7 @@ export interface MutantStep {
 }
 
 /**
- * Un tick de mutant. `occupantAt` dit quel bâtiment occupe une tuile, s'il y
+ * Un tick de mutant, qui marche vers `target`. `occupantAt` dit quel bâtiment occupe une tuile, s'il y
  * en a un : c'est la seule chose qui bloque un mutant.
  *
  * Par coup de vent, `downwind` est son bonus de vitesse quand il marche dans

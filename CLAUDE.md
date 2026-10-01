@@ -123,15 +123,19 @@ le soir (crépuscule, nuit) ou pendant une vague.
 **Jour et nuit** — dès que la mairie est debout, le cycle démarre
 (`src/data/dayNight.ts`, horloge pure dans `src/sim/dayNight.ts`) : une
 journée sans mutant (~3 min), un crépuscule (carte teintée indigo, lampions
-allumés, « La nuit tombe — rentrez »), une nuit de vagues (~1 min), puis
+allumés, « La nuit tombe — rentrez »), une nuit de trois vagues (~100 s, la première 15 s après la tombée), puis
 l'aube : les mutants restants fuient et le butin tombe dans le sac. Le rendu
 (`render/nightLayer.ts`) n'applique que la teinte : un quad `multiply` et des
 lueurs `add`, pas de filtre.
 
 **Menace** — la nuit, des **mutants** arrivent par
-vagues (`src/data/enemies.ts`) et marchent droit sur la mairie ; ils traversent
-tout sauf le bâti, qu'ils cassent. Une vague s'annonce trois secondes avant
-(bandeau avec sa direction, cor grave, léger recul de caméra vers elle —
+vagues (`src/data/enemies.ts`) et marchent droit sur la cible de leur vague
+(`Mutant.target`, sauvegardée) : une fois sur deux le bâtiment de l'usine
+fini le plus proche de leur apparition (`WAVES.targets` : foreuse, ferme,
+carrière, cabane, forge), sinon la mairie, qui reprend la main si la cible
+tombe ; ils traversent tout sauf le bâti, qu'ils cassent. Un bâtiment de
+l'usine abattu redevient son chantier, à moitié livré (`RUIN`). Une vague
+s'annonce trois secondes avant (bandeau avec sa direction et sa cible, cor grave, léger recul de caméra vers elle —
 pas si un bâtiment est armé ou une fenêtre ouverte, et un tap n'ouvre rien
 pendant que la carte glisse),
 surgit dans le champ d'une flaque vert fluo — un mutant qui émerge
@@ -141,13 +145,14 @@ tout ennemi abattu (mutant, crabe, loup) lâche au sol le butin de sa table
 ramasse en marchant dessus — sac plein, il reste au sol. L'arc d'Adam et la tour de guet
 (`src/data/weapons.ts`) tirent seuls. La mairie à zéro = partie perdue.
 La courbe est une table, nuit par nuit (`NIGHT_PLAN`) : pic à la nuit 3,
-répit après chaque grosse nuit, un **gros mutant** (`brute`) toutes les cinq ;
+répit après chaque grosse nuit, un **gros mutant** (`brute`) dès la nuit 5 ;
 au-delà, les cinq dernières se répètent en plus gros. Adam **répare** un
 bâtiment abîmé en le heurtant avec du bois, ou via « Réparer » (sac puis
 ville ; `REPAIR`, `src/data/buildings.ts`). Frappée hors écran, la mairie
 sonne l'alarme : bord rouge, repère qui clignote, vibration.
 `src/sim/defense.test.ts` mesure l'équilibre (Adam immobile, Ève qui répare :
-une tour passe la nuit 10, sans tour la mairie tombe aux nuits 8–10).
+deux tours passent la nuit 10, une seule tombe aux nuits 8–10 ; l'usine
+isolée, AFK, y laisse des plumes en six nuits, deux tours par bâtiment la sauvent).
 La **nurserie** fait naître un enfant toutes les trois minutes, contre six
 nourritures (recette `raiseChild`) : sans elles, elle attend.
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_SIZE } from '../core/grid.ts';
-import { BUILDINGS, REPAIR, buildingLevel } from '../data/buildings.ts';
+import { BUILDINGS, REPAIR, buildingLevel, type BuildingId } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
 import type { Building, EntityId } from './types.ts';
 import { World, repairCost } from './world.ts';
@@ -50,6 +50,32 @@ function worldWithTownHall(seed: number): World {
   return world;
 }
 
+/** Pose et achève `building` en (tx, ty), Adam à portée le temps de poser ; `null` si la case est refusée. */
+function placeAt(world: World, building: BuildingId, tx: number, ty: number): Building | null {
+  const { x, y } = world.player;
+
+  // À portée le temps de poser.
+  world.player.x = (tx + 0.5) * TILE_SIZE;
+  world.player.y = (ty + 3.5) * TILE_SIZE;
+  if (world.canPlace(building, tx, ty) !== null) {
+    world.player.x = x;
+    world.player.y = y;
+    return null;
+  }
+
+  const before = new Set(world.entities.keys());
+
+  world.push({ type: 'placeBuilding', building, tx, ty });
+  world.tick();
+  world.player.x = world.player.prevX = x;
+  world.player.y = world.player.prevY = y;
+
+  const id = [...world.entities.keys()].find((key) => !before.has(key));
+
+  if (id === undefined) throw new Error('le chantier n’a pas été ouvert');
+  return finish(world, id);
+}
+
 /**
  * Pose `count` tours de guet au plus près de la mairie, en laissant libre
  * l'anneau autour d'elle où se tient Adam.
@@ -70,32 +96,39 @@ function addTowers(world: World, count: number): void {
   for (const [tx, ty] of spots) {
     if (placed === count) return;
     if (tx >= hall.tx - 2 && tx <= hall.tx + hall.width && ty >= hall.ty - 2 && ty <= hall.ty + hall.height + 1) continue;
-
-    const { x, y } = world.player;
-
-    // À portée le temps de poser.
-    world.player.x = (tx + 0.5) * TILE_SIZE;
-    world.player.y = (ty + 3.5) * TILE_SIZE;
-    if (world.canPlace('watchtower', tx, ty) !== null) {
-      world.player.x = x;
-      world.player.y = y;
-      continue;
-    }
-
-    const before = new Set(world.entities.keys());
-
-    world.push({ type: 'placeBuilding', building: 'watchtower', tx, ty });
-    world.tick();
-    world.player.x = world.player.prevX = x;
-    world.player.y = world.player.prevY = y;
-
-    const id = [...world.entities.keys()].find((key) => !before.has(key));
-
-    if (id === undefined) throw new Error('le chantier n’a pas été ouvert');
-    finish(world, id);
-    placed += 1;
+    if (placeAt(world, 'watchtower', tx, ty)) placed += 1;
   }
   if (placed < count) throw new Error('pas assez de place pour les tours');
+}
+
+/**
+ * L'usine isolée du playtest : une ferme et une carrière posées à l'écart
+ * de la mairie, de part et d'autre, là où rien ne les défend.
+ */
+function addFactory(world: World): Building[] {
+  const hall = hallOf(world);
+  const factory: Building[] = [];
+
+  for (const [building, side] of [['farm', 1], ['quarry', -1]] as const) {
+    let built: Building | null = null;
+
+    for (let distance = 9; distance <= 14 && !built; distance += 1) {
+      for (let dy = -4; dy <= 4 && !built; dy += 1) built = placeAt(world, building, hall.tx + side * distance, hall.ty + dy);
+    }
+    if (!built) throw new Error(`pas de place pour : ${building}`);
+    factory.push(built);
+  }
+  return factory;
+}
+
+/** Une tour de guet collée à ce bâtiment : sous la mairie, ou à côté sinon. */
+function guard(world: World, building: Building, count: number): void {
+  let placed = 0;
+
+  for (const [dx, dy] of [[0, 2], [0, -2], [2, 0], [-2, 0], [2, 2], [-2, 2], [2, -2], [-2, -2]] as const) {
+    if (placed < count && placeAt(world, 'watchtower', building.tx + dx, building.ty + dy)) placed += 1;
+  }
+  if (placed < count) throw new Error(`pas de place pour garder #${building.id}`);
 }
 
 /** Joue jusqu'à l'aube de la nuit `night`, ou jusqu'à la défaite. */
@@ -195,19 +228,20 @@ describe('réparer', () => {
 describe('courbe des nuits', () => {
   const SEEDS = [7, 42, 99];
 
-  it.each(SEEDS)('seed %i : Adam immobile et une tour passent la nuit 10', (seed) => {
+  it.each(SEEDS)('seed %i : Adam immobile et deux tours passent la nuit 10', (seed) => {
     const world = worldWithTownHall(seed);
 
-    addTowers(world, 1);
+    addTowers(world, 2);
     playThroughNight(world, 10);
 
     expect(world.defeated).toBe(false);
     expect(world.night).toBe(10);
   }, 60_000);
 
-  it.each(SEEDS)('seed %i : sans tour, la mairie tient les premières nuits mais tombe avant l’aube de la nuit 10', (seed) => {
+  it.each(SEEDS)('seed %i : une seule tour tient les premières nuits, mais la mairie tombe avant l’aube de la nuit 10', (seed) => {
     const world = worldWithTownHall(seed);
 
+    addTowers(world, 1);
     playThroughNight(world, 10);
 
     expect(world.defeated).toBe(true);
@@ -229,5 +263,45 @@ describe('courbe des nuits', () => {
     expect(world.defeated).toBe(false);
     expect(world.night).toBe(10);
     expect(lowest).toBeGreaterThan(BUILDINGS.townHall.hp / 3);
+  }, 60_000);
+});
+
+/*
+ * Le test « AFK » du playtest : la mairie, une tour, une ferme et une
+ * carrière à l'écart, Adam qui ne bouge pas. Les vagues visent aussi
+ * l'usine : six nuits ne passent plus sans y laisser des plumes. Bien
+ * gardée, elle tient.
+ */
+describe('l’usine la nuit', () => {
+  it('AFK — seed 42 : mairie, une tour, six nuits sans bouger, et l’usine ou la mairie y laisse des plumes', () => {
+    const world = worldWithTownHall(42);
+    const hall = hallOf(world);
+    const factory = addFactory(world);
+    const hurt = new Set<BuildingId>();
+    let lowest = hall.hp;
+
+    addTowers(world, 1);
+    world.events.on('buildingDamaged', ({ id }) => {
+      const building = factory.find((entity) => entity.id === id);
+
+      if (building) hurt.add(building.proto);
+    });
+    playThroughNight(world, 6, () => (lowest = Math.min(lowest, hall.hp)));
+
+    expect(world.night).toBe(6);
+    expect(hurt.size > 0 || lowest < 0.6 * BUILDINGS.townHall.hp).toBe(true);
+  }, 60_000);
+
+  it('seed 42 : quatre tours bien placées — deux par bâtiment isolé — et rien n’est détruit en six nuits', () => {
+    const world = worldWithTownHall(42);
+    const destroyed: BuildingId[] = [];
+
+    for (const building of addFactory(world)) guard(world, building, 2);
+    world.events.on('buildingDestroyed', ({ proto }) => destroyed.push(proto));
+    playThroughNight(world, 6);
+
+    expect(world.defeated).toBe(false);
+    expect(world.night).toBe(6);
+    expect(destroyed).toEqual([]);
   }, 60_000);
 });

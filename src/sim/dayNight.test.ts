@@ -31,7 +31,7 @@ describe('horloge du jour et de la nuit', () => {
       if (isWaveTick(clockAt(tick))) waveTicks.push(tick);
     }
 
-    const perCycle = Array.from({ length: WAVES.perNight }, (_, k) => NIGHTFALL + k * WAVES.interval);
+    const perCycle = Array.from({ length: WAVES.perNight }, (_, k) => NIGHTFALL + WAVES.firstAt + k * WAVES.interval);
 
     expect(waveTicks).toEqual([...perCycle, ...perCycle.map((tick) => tick + CYCLE_TICKS)]);
 

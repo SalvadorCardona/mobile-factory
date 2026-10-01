@@ -84,6 +84,8 @@ export interface WorldState {
   cycleStartTick: number;
   /** Direction, en radians, d'où viendra la prochaine vague. */
   nextWaveHeading: number;
+  /** Le bâtiment que vise la prochaine vague, une fois annoncée. Absent : pas encore tirée. */
+  nextWaveTarget?: EntityId;
   kills: number;
   defeated: boolean;
   defeatTick: number;
@@ -276,6 +278,7 @@ function parseState(raw: unknown): WorldState {
     night: int(state['night']),
     cycleStartTick: int(state['cycleStartTick']),
     nextWaveHeading: finite(state['nextWaveHeading']),
+    ...(state['nextWaveTarget'] !== undefined && { nextWaveTarget: int(state['nextWaveTarget']) }),
     kills: int(state['kills']),
     defeated: bool(state['defeated']),
     defeatTick: int(state['defeatTick']),
@@ -459,6 +462,8 @@ function parseMobile(raw: unknown): Mobile {
         hp: finite(mobile['hp']),
         attackCooldown: int(mobile['attackCooldown']),
         emerge: int(mobile['emerge']),
+        // Absente d'une sauvegarde d'avant les cibles de vague : la mairie.
+        ...(mobile['target'] !== undefined && { target: int(mobile['target']) }),
       };
     case 'beast': {
       const state = mobile['state'];

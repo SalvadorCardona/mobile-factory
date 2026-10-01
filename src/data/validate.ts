@@ -15,7 +15,7 @@
 
 import { TILE_SIZE } from '../core/grid.ts';
 import { auditSvg } from './artDirection.ts';
-import { BUILDINGS, type BuildingProto } from './buildings.ts';
+import { BUILDINGS, RUIN, type BuildingProto } from './buildings.ts';
 import { DAWN_REWARD, DAY_CYCLE } from './dayNight.ts';
 import { ENEMIES, LOOT_DROPS, NIGHT_PLAN, WAVES, WILDLIFE, WILDLIFE_SPAWN, type LootTable, type WaveSpec, type WildlifeProto } from './enemies.ts';
 import { EVE } from './eve.ts';
@@ -332,7 +332,7 @@ export function validatePrototypes(): string[] {
     errors.push('LOOT_DROPS : durée, rayons, vitesse, dispersion ou plafond incohérents');
   }
 
-  if (WAVES.minDistance > WAVES.maxDistance || WAVES.perNight <= 0 || WAVES.interval <= 0) {
+  if (WAVES.minDistance > WAVES.maxDistance || WAVES.perNight <= 0 || WAVES.interval <= 0 || WAVES.firstAt < 0) {
     errors.push('WAVES : distances ou délais incohérents');
   }
   if (WAVES.cycle <= 0 || WAVES.cycle > NIGHT_PLAN.length || WAVES.growPerCycle < 0) {
@@ -383,7 +383,10 @@ export function validatePrototypes(): string[] {
   }
 
   // Toutes les vagues d'une nuit tombent avant l'aube : une journée reste sans mutant.
-  if ((WAVES.perNight - 1) * WAVES.interval >= DAY_CYCLE.night) {
+  if (WAVES.targetChance < 0 || WAVES.targetChance > 1) errors.push('WAVES.targetChance : une probabilité, entre 0 et 1');
+  if (RUIN.delivered < 0 || RUIN.delivered >= 1) errors.push('RUIN.delivered : une part du coût, de 0 à moins de 1');
+
+  if (WAVES.firstAt + (WAVES.perNight - 1) * WAVES.interval >= DAY_CYCLE.night) {
     errors.push('WAVES : la dernière vague de la nuit tomberait après l’aube');
   }
 

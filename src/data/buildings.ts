@@ -484,3 +484,12 @@ export const REPAIR = {
   item: 'wood',
   hp: 10,
 } as const satisfies { item: ItemId; hp: number };
+
+/**
+ * Un bâtiment de l'usine que les mutants abattent (`WAVES.targets`) ne
+ * laisse pas un trou : il redevient son chantier, `delivered` de son coût
+ * déjà livré (arrondi en dessous). Perdre fait mal, sans tout reprendre.
+ */
+export const RUIN = {
+  delivered: 0.5,
+} as const;

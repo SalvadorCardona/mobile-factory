@@ -68,23 +68,39 @@ export function darkness(clock: DayClock): number {
   }
 }
 
-/** Vrai si une vague part à ce tick : la nuit, toutes les `WAVES.interval`, `WAVES.perNight` fois. */
+/**
+ * La vague qui part à ce tick, la première valant 1 ; 0 si aucune. La nuit,
+ * `WAVES.firstAt` après sa tombée, puis toutes les `WAVES.interval`,
+ * `WAVES.perNight` fois.
+ */
+export function waveAt(clock: DayClock): number {
+  const since = clock.elapsed - WAVES.firstAt;
+
+  if (clock.phase !== 'night' || since < 0 || since % WAVES.interval !== 0) return 0;
+
+  const wave = since / WAVES.interval + 1;
+
+  return wave <= WAVES.perNight ? wave : 0;
+}
+
+/** Vrai si une vague part à ce tick. */
 export function isWaveTick(clock: DayClock): boolean {
-  return (
-    clock.phase === 'night' &&
-    clock.elapsed % WAVES.interval === 0 &&
-    clock.elapsed / WAVES.interval < WAVES.perNight
-  );
+  return waveAt(clock) > 0;
+}
+
+/** La prochaine vague, de cette nuit ou de la suivante : son rang dans sa nuit, et les ticks avant elle (0 si elle part à ce tick). */
+export function nextWave(clock: DayClock): { wave: number; ticks: number } {
+  for (let wave = 1; wave <= WAVES.perNight; wave += 1) {
+    const at = NIGHT_OFFSET + WAVES.firstAt + (wave - 1) * WAVES.interval;
+
+    if (at >= clock.offset) return { wave, ticks: at - clock.offset };
+  }
+  return { wave: 1, ticks: CYCLE_TICKS - clock.offset + NIGHT_OFFSET + WAVES.firstAt };
 }
 
 /** Ticks avant la prochaine vague, de cette nuit ou de la suivante ; 0 si elle part à ce tick. */
 export function ticksToNextWave(clock: DayClock): number {
-  for (let wave = 0; wave < WAVES.perNight; wave += 1) {
-    const at = NIGHT_OFFSET + wave * WAVES.interval;
-
-    if (at >= clock.offset) return at - clock.offset;
-  }
-  return CYCLE_TICKS - clock.offset + NIGHT_OFFSET;
+  return nextWave(clock).ticks;
 }
 
 /** Ticks avant la tombée de la prochaine nuit ; 0 pendant la nuit. */
