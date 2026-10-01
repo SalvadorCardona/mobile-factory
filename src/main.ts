@@ -174,11 +174,15 @@ async function main(): Promise<void> {
     trade.close();
     audio.play('open');
   });
-  const inventory = new InventoryPanel(world, () => {
-    panel.close();
-    trade.close();
-    audio.play('open');
-  });
+  const inventory = new InventoryPanel(
+    world,
+    () => {
+      panel.close();
+      trade.close();
+      audio.play('open');
+    },
+    (alert) => renderer.pointTo(alert.target, alert.item),
+  );
   const trade = new CaravanPanel(world, () => {
     panel.close();
     inventory.close();

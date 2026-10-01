@@ -144,6 +144,7 @@ import {
   researchBonus,
   researchCost,
 } from './research.ts';
+import { TownFlows } from './flows.ts';
 import { ResourceIndex } from './resources.ts';
 import { RoadNetwork } from './roads.ts';
 import type { SavedEntity, WorldState } from './save.ts';
@@ -488,6 +489,9 @@ export class World {
   public readonly events = new Emitter<WorldEvents>();
   public readonly player: Player;
 
+  /** Ce qui entre et sort de la ville, sur les deux dernières minutes : vue, pas état — jamais sauvegardé. */
+  public readonly flows = new TownFlows();
+
   /** Le chantier puis la mairie : l'objectif de départ, et la cible des mutants. */
   public readonly townHallId: EntityId;
 
@@ -815,6 +819,7 @@ export class World {
     }
 
     this.checkObjectives();
+    this.flows.observe(this.tickCount, this.townStock());
   }
 
   private drainCommands(): void {

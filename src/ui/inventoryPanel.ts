@@ -5,6 +5,13 @@
  * détail que le HUD, compact, ne montre pas : chaque objet porté avec sa
  * quantité, la place qui reste, et le stock de la ville.
  *
+ * La ville y est un petit tableau de bord (`sim/flows.ts`) : à côté de chaque
+ * objet, son débit net sur les deux dernières minutes (« +28/min » en menthe,
+ * « −4/min » en corail, rien s'il ne bouge pas), et au-dessus, au plus deux
+ * alertes — ce qu'une recette attend et que la ville n'a pas, ce qui
+ * s'empile sans que personne ne l'utilise. Taper une alerte ferme le
+ * panneau et fait pointer un repère de bord vers le bâtiment en cause.
+ *
  * Il sert à vider le sac. Près de la mairie, chaque ligne a « Déposer » et
  * le bas du panneau « Déposer en ville » : le sac passe dans le stock de la
  * ville. Ailleurs, « Jeter » et « Tout jeter » : ce qu'Adam porte tombe à
@@ -17,6 +24,7 @@
  */
 
 import { ITEMS, type ItemId } from '../data/items.ts';
+import { formatRate, type FlowAlert } from '../sim/flows.ts';
 import type { World } from '../sim/world.ts';
 import { itemAmount, itemIcon, uiIcon } from './icons.ts';
 
@@ -29,16 +37,19 @@ export class InventoryPanel {
   private readonly list: HTMLElement;
   private readonly town: HTMLElement;
   private readonly townItems: HTMLElement;
+  private readonly townAlerts: HTMLElement;
   private readonly allButton: HTMLButtonElement;
   private last = '';
   private shown = false;
 
   private readonly world: World;
   private readonly onOpen: () => void;
+  private readonly onAlert: (alert: FlowAlert) => void;
 
-  public constructor(world: World, onOpen: () => void = () => {}) {
+  public constructor(world: World, onOpen: () => void = () => {}, onAlert: (alert: FlowAlert) => void = () => {}) {
     this.world = world;
     this.onOpen = onOpen;
+    this.onAlert = onAlert;
 
     this.root = element('section', 'panel building-panel inventory-panel');
     this.root.hidden = true;
@@ -71,8 +82,9 @@ export class InventoryPanel {
     const townTitle = element('div', 'inventory-town-title');
 
     townTitle.append(uiIcon('town', 20), 'Ville');
+    this.townAlerts = element('ul', 'inventory-alerts');
     this.townItems = element('div', 'building-panel-items');
-    this.town.append(townTitle, this.townItems);
+    this.town.append(townTitle, this.townAlerts, this.townItems);
 
     const actions = element('div', 'building-panel-actions');
 
@@ -115,11 +127,15 @@ export class InventoryPanel {
     const entries = inventory.entries();
     const town = world.townStock();
     const near = world.nearTown();
+    const rates = town ? town.entries().map(([item]) => Math.round(world.flows.netRate(item))) : [];
+    const alerts = town ? world.flows.alerts(world) : [];
     const key = [
       near,
       inventory.capacity,
       entries.map(([item, amount]) => `${item}:${amount}`).join(','),
       town ? town.entries().map(([item, amount]) => `${item}:${amount}`).join(',') : 'none',
+      rates.join(','),
+      alerts.map((alert) => `${alert.text}@${alert.target}`).join(','),
     ].join('|');
 
     if (key === this.last) return;
@@ -150,9 +166,13 @@ export class InventoryPanel {
       const stock = town.entries();
 
       this.townItems.replaceChildren(
-        ...(stock.length === 0 ? [element('span', 'inventory-empty', 'Rien en stock pour l’instant.')] : stock.map(([item, amount]) => itemAmount(item, amount))),
+        ...(stock.length === 0
+          ? [element('span', 'inventory-empty', 'Rien en stock pour l’instant.')]
+          : stock.map(([item, amount], index) => this.stockEntry(item, amount, rates[index]!))),
       );
       this.townItems.hidden = false;
+      this.townAlerts.replaceChildren(...alerts.map((alert) => this.alertRow(alert)));
+      this.townAlerts.hidden = alerts.length === 0;
     }
   }
 
@@ -170,6 +190,36 @@ export class InventoryPanel {
       this.world.push(this.world.nearTown() ? { type: 'depositToTown', item } : { type: 'dropItem', item }),
     );
     row.append(itemIcon(item, 28), name, count, button);
+    return row;
+  }
+
+  /** Un objet de la ville : sa quantité, et son débit net s'il bouge. */
+  private stockEntry(item: ItemId, amount: number, rate: number): HTMLElement {
+    const entry = element('span', 'inventory-stock');
+
+    entry.append(itemAmount(item, amount));
+    if (rate !== 0) {
+      const trend = element('span', 'inventory-rate', `${formatRate(rate)}/min`);
+
+      trend.dataset['trend'] = rate > 0 ? 'up' : 'down';
+      entry.append(trend);
+    }
+    return entry;
+  }
+
+  /** Une alerte de la ville : la taper ferme le panneau et montre le bâtiment en cause. */
+  private alertRow(alert: FlowAlert): HTMLElement {
+    const row = element('li', '');
+    const button = element('button', 'inventory-alert');
+
+    button.type = 'button';
+    button.dataset['kind'] = alert.kind;
+    button.append(itemIcon(alert.item, 22), element('span', '', alert.text));
+    button.addEventListener('click', () => {
+      this.close();
+      this.onAlert(alert);
+    });
+    row.append(button);
     return row;
   }
 

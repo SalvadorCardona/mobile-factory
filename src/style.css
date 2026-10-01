@@ -974,6 +974,82 @@ button.hud-stock:active {
   color: var(--yellow-shade);
 }
 
+/* Un objet de la ville et son débit : menthe s'il monte, corail s'il baisse. */
+.inventory-stock {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.inventory-rate {
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.inventory-rate[data-trend='up'] {
+  color: var(--good);
+}
+
+.inventory-rate[data-trend='down'] {
+  color: var(--danger);
+}
+
+/* Les alertes de la ville : des capsules qui se tapent, corail pour ce qui manque, jaune pour ce qui s'empile. */
+.inventory-alerts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.inventory-alerts[hidden] {
+  display: none;
+}
+
+.inventory-alert {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: left;
+  color: var(--paper);
+  background: var(--coral);
+  box-shadow: 0 4px 0 var(--coral-shade);
+}
+
+.inventory-alert[data-kind='surplus'] {
+  color: var(--ink);
+  background: var(--yellow);
+  box-shadow: 0 4px 0 var(--yellow-shade);
+}
+
+.inventory-alert .icon {
+  flex: none;
+  padding: 2px;
+  border-radius: 50%;
+  background: var(--paper);
+}
+
+.inventory-alert:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--coral-shade);
+}
+
+.inventory-alert[data-kind='surplus']:active {
+  box-shadow: 0 1px 0 var(--yellow-shade);
+}
+
 /* ----------------------------------------------------------------- météo */
 
 /* Une capsule sous la quête : ce qui arrive, puis ce qui tombe. */
