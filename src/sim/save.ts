@@ -16,6 +16,7 @@
  */
 
 import { BUILDINGS, maxLevel, type BuildingId } from '../data/buildings.ts';
+import { RARE_OFFERS, type RareOfferId } from '../data/caravan.ts';
 import { ENEMIES, WILDLIFE, type EnemyId, type WildlifeId } from '../data/enemies.ts';
 import { ITEMS, type ItemId } from '../data/items.ts';
 import { OBJECTIVES } from '../data/objectives.ts';
@@ -27,6 +28,7 @@ import { canPause, clampStaff } from './staffing.ts';
 import type { Store, StoreSnapshot } from './store.ts';
 import type {
   BeastState,
+  CaravanState,
   Entity,
   EntityId,
   EveState,
@@ -36,6 +38,7 @@ import type {
   Mobile,
   PatientState,
   Player,
+  TradeOffer,
   Wandering,
   WorldStats,
 } from './types.ts';
@@ -91,6 +94,8 @@ export interface WorldState {
   giftedSites: BuildingId[];
   /** Recherches finies, dans l'ordre. Absent des sauvegardes d'avant le labo : aucune. */
   researchDone: ResearchId[];
+  /** Offres rares de la caravane déjà prises, par offre. Absent des sauvegardes d'avant elle : aucune. */
+  rareTrades: Partial<Record<RareOfferId, number>>;
   /** Index de l'objectif en cours ; `OBJECTIVES.length` une fois la chaîne bouclée. */
   objective: number;
   victory: boolean;
@@ -246,6 +251,10 @@ const EVE_STATES: readonly EveState[] = ['arriving', 'idle', 'repair'];
 
 const PATIENT_STATES: readonly PatientState[] = ['stunned', 'following', 'care'];
 
+const CARAVAN_STATES: readonly CaravanState[] = ['arriving', 'parked', 'leaving'];
+
+const TRADE_KINDS: readonly TradeOffer['kind'][] = ['surplus', 'loot', 'rare'];
+
 const LUMBERJACK_STATES: readonly LumberjackState[] = ['idle', 'toTree', 'chop', 'toCamp', 'wait'];
 
 function parseState(raw: unknown): WorldState {
@@ -272,6 +281,7 @@ function parseState(raw: unknown): WorldState {
     perks: array(state['perks'] ?? []).map((id) => oneOf(id, PERKS) as PerkId),
     giftedSites: array(state['giftedSites'] ?? []).map((id) => oneOf(id, BUILDINGS) as BuildingId),
     researchDone: [...new Set(array(state['researchDone'] ?? []).map((id) => oneOf(id, RESEARCH) as ResearchId))],
+    rareTrades: parseRareTrades(state['rareTrades'] ?? {}),
     ...parseObjectives(state),
     player: parsePlayer(state['player']),
     resources: parseResources(state['resources']),
@@ -539,6 +549,24 @@ function parseMobile(raw: unknown): Mobile {
       if (!PATIENT_STATES.includes(state as PatientState)) throw new SaveError(`patient inconnu : ${String(state)}`);
       return { ...base, kind: 'patient', state: state as PatientState, clinicId: int(mobile['clinicId']), ticks: int(mobile['ticks']) };
     }
+    case 'caravan': {
+      const state = mobile['state'];
+
+      if (!CARAVAN_STATES.includes(state as CaravanState)) throw new SaveError(`caravane : ${String(state)}`);
+      return {
+        ...base,
+        kind: 'caravan',
+        state: state as CaravanState,
+        day: int(mobile['day']),
+        parkX: finite(mobile['parkX']),
+        parkY: finite(mobile['parkY']),
+        fromX: finite(mobile['fromX']),
+        fromY: finite(mobile['fromY']),
+        leaveTick: int(mobile['leaveTick']),
+        offers: array(mobile['offers']).map(parseTrade),
+        met: bool(mobile['met']),
+      };
+    }
     default:
       throw new SaveError(`mobile inconnu : ${String(mobile['kind'])}`);
   }
@@ -548,6 +576,35 @@ function parseMobile(raw: unknown): Mobile {
 function wandering(raw: Json, at: { x: number; y: number }): Wandering {
   if (raw['wanderX'] === undefined) return { wanderX: at.x, wanderY: at.y, wanderTicks: 0 };
   return { wanderX: finite(raw['wanderX']), wanderY: finite(raw['wanderY']), wanderTicks: int(raw['wanderTicks']) };
+}
+
+/** Un échange de la caravane : ce qu'il coûte, ce qu'il rapporte, et s'il est fait. */
+function parseTrade(raw: unknown): TradeOffer {
+  const trade = record(raw);
+  const kind = trade['kind'];
+
+  if (!TRADE_KINDS.includes(kind as TradeOffer['kind'])) throw new SaveError(`échange inconnu : ${String(kind)}`);
+
+  return {
+    kind: kind as TradeOffer['kind'],
+    cost: stock(trade['cost']),
+    items: stock(trade['items']),
+    bag: int(trade['bag']),
+    rare: trade['rare'] === null ? null : (oneOf(trade['rare'], RARE_OFFERS) as RareOfferId),
+    done: bool(trade['done']),
+  };
+}
+
+function parseRareTrades(raw: unknown): Partial<Record<RareOfferId, number>> {
+  const result: Partial<Record<RareOfferId, number>> = {};
+
+  for (const [id, count] of Object.entries(record(raw))) {
+    const taken = int(count);
+
+    if (taken < 0) throw new SaveError(`offre rare négative : ${id}`);
+    result[oneOf(id, RARE_OFFERS) as RareOfferId] = taken;
+  }
+  return result;
 }
 
 function parseDen(raw: unknown): SavedDen {

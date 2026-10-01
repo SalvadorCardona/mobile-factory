@@ -72,6 +72,8 @@ export const EVE_LINES = {
     'Si ça grince, je répare. Si ça ne grince pas, j’améliore.',
     'Tu parles pas beaucoup, toi. Ça me va, je parle pour deux.',
   ],
+  /** Une caravane de troc arrive au bord de la clairière (`data/caravan.ts`). */
+  caravan: 'Une caravane ! Va voir ce qu’il propose.',
   /** Tapée pendant une attaque. */
   busy: 'Pas maintenant, Adam, ils arrivent !',
   /** Toutes les quêtes finies. */

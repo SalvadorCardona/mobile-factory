@@ -27,3 +27,10 @@ export function inLogisticRange(hub: Entity, entity: Entity): boolean {
   // `Infinity * Infinity` reste `Infinity` : un rayon infini couvre tout.
   return distanceSq(hubX, hubY, x, y) <= radius * radius;
 }
+
+/** Le point (x, y), en pixels monde, est-il dans le rayon logistique de `hub` ? Pour ce qui n'a pas d'emprise : la caravane. */
+export function pointInLogisticRange(hub: Entity, x: number, y: number): boolean {
+  const radius = BUILDINGS[hub.proto].logisticRadius * TILE_SIZE;
+
+  return distanceSq((hub.tx + hub.width / 2) * TILE_SIZE, (hub.ty + hub.height / 2) * TILE_SIZE, x, y) <= radius * radius;
+}

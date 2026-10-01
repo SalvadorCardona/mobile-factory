@@ -12,7 +12,7 @@ import type { BuildingId } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
 import type { PerkId } from '../data/perks.ts';
 import type { ResearchId } from '../data/research.ts';
-import type { EntityId } from './types.ts';
+import type { EntityId, MobileId } from './types.ts';
 
 export type Command =
   /** Axe analogique du joystick, dans [-1, 1]. Remplace la valeur précédente. */
@@ -102,6 +102,13 @@ export type Command =
    */
   | { type: 'cancelSite'; id: EntityId }
   /**
+   * Fait l'échange `offer` (son rang dans `Caravan.offers`) avec la
+   * caravane garée : son coût est payé comme un « Transférer », le sac
+   * d'abord, puis la ville si la caravane est dans son rayon. Tout ou rien,
+   * et une seule fois. Les boutons « Échanger » de la fenêtre Troc.
+   */
+  | { type: 'trade'; caravan: MobileId; offer: number }
+  /**
    * Les bonus plantés au jardin des souvenirs, au départ d'une nouvelle
    * colonie. Poussée avant le premier tick ; ignorée ensuite.
    */
@@ -159,6 +166,17 @@ export type DepositRejection =
   | 'outOfReach'
   /** Rien à déposer : le sac est vide, ou ne contient pas cet objet. */
   | 'empty';
+
+/** Motif de refus d'un échange avec la caravane. */
+export type TradeRejection =
+  /** La caravane est repartie, n'est pas encore garée, ou n'a pas cet échange. */
+  | 'missing'
+  /** Adam est trop loin de la charrette. */
+  | 'outOfReach'
+  /** L'échange est déjà fait — ou l'offre rare a atteint son plafond sur la partie. */
+  | 'done'
+  /** Ni le sac, ni la ville à portée n'ont tout le coût. */
+  | 'missingItems';
 
 /** Motif de refus d'une amélioration. */
 /** Motif de refus d'une réparation — remonté à l'UI par un événement. */

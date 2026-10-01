@@ -155,6 +155,14 @@ jamais bloquante). Elle porte la chaîne de quêtes (`src/data/quests.ts`) :
 chaque quête récompense un **plan** (un bâtiment `plan: true` n'entre au
 menu qu'une fois donné) ou un **outil**. Seul `questsDone` est de l'état.
 
+**Caravane de troc** (`src/data/caravan.ts`, `src/sim/caravan.ts`) — à
+partir du jour 4, un jour sur deux, 30 s après l'aube, une charrette (mobile
+`caravan`, sauvegardé) se gare à 8 cases de la mairie pour 90 s. Au
+contact, la fenêtre Troc (`ui/caravanPanel.ts`) propose ses échanges, tirés
+de la seed et du jour : surplus de la ville → ce qui lui manque (5 pour 1),
+butin → plaque de fer, une offre rare plafonnée sur la partie
+(`rareTrades`). Commande `trade`, une fois par échange, payée sac puis ville.
+
 **Labo de recherche** (`src/data/research.ts`, `src/sim/research.ts`, un
 seul par colonie : `unique`) — on y choisit une recherche, on dépose son coût
 (sac, ville dans le rayon, porteurs, ou en le heurtant), puis le compte à

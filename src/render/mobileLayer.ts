@@ -22,6 +22,9 @@
  * roues qui tournent et cadre qui cahote ; à pied, c'est son pantin, qui
  * frappe le mur qu'elle répare.
  *
+ * La caravane de troc est une charrette tirée par son marchand : elle cahote
+ * et sa roue tourne tant qu'elle roule ; garée, elle se tient immobile.
+ *
  * Le butin qu'un ennemi lâche saute hors de lui, puis sautille au-dessus de
  * son ombre en attendant Adam, une étincelle éclosant de temps en temps à
  * son coin pour qu'il se repère ; il clignote quand il va disparaître.
@@ -92,7 +95,7 @@ const STARS_HURRY_TICKS = 20 * 3;
 
 /** Le pantin de chaque marcheur : sprite, ombre, écart des pieds, allure. */
 function puppetOf(
-  mobile: Exclude<Mobile, { kind: 'arrow' | 'pickup' }>,
+  mobile: Exclude<Mobile, { kind: 'arrow' | 'pickup' | 'caravan' }>,
 ): { id: PuppetId; shadowWidth: number; stride: number; gait?: 'scuttle' | 'limp' } {
   switch (mobile.kind) {
     case 'mutant':
@@ -128,13 +131,13 @@ interface MobileView {
   age: number;
   /** Tuile sous les pieds : l'ombre ne change de teinte qu'en changeant de sol. */
   tile: string;
-  /** Le vélo-cargo d'Ève, montré tant qu'elle roule. */
+  /** Le vélo-cargo d'Ève, montré tant qu'elle roule — ou la charrette de la caravane. */
   bike: BikeView | null;
   /** Les étoiles d'un patient : la ronde (aplatie) et l'étoile qui y tourne. */
   stars: { orbit: Container; spin: Sprite } | null;
 }
 
-/** Le vélo-cargo : une ombre, le cadre avec Ève en selle, deux roues qui tournent. */
+/** Le vélo-cargo — une ombre, le cadre avec Ève en selle, deux roues qui tournent — ou la charrette du marchand. */
 interface BikeView {
   root: Container;
   shadow: Sprite;
@@ -246,6 +249,16 @@ export class MobileLayer {
         case 'pickup':
           this.bob(view, mobile, y, deltaMs);
           break;
+
+        case 'caravan': {
+          const cart = view.bike!;
+
+          view.root.zIndex = y + 6;
+          this.ground(view, x, y);
+          if (mobile.moving) rideBike(cart, mobile.facing === 'left', deltaMs);
+          else cart.figure.y = 0;
+          break;
+        }
 
         case 'patient': {
           const puppet = view.puppet!;
@@ -492,6 +505,13 @@ export class MobileLayer {
       const fresh = LOOT_DROPS.lifetimeTicks - mobile.ttl < 20;
 
       view = { root, puppet: null, hp: null, lastHp: 0, age: fresh ? 0 : LOOT_DROP_MS, tile: '', bike: null, stars: null };
+    } else if (mobile.kind === 'caravan') {
+      const cart = this.cart(this.tiles.shadow('grass'));
+
+      // Rechargée garée, elle garde le sens où elle roulait.
+      cart.figure.scale.x = mobile.facing === 'left' ? -1 : 1;
+      root.addChild(cart.root);
+      view = { root, puppet: null, hp: null, lastHp: 0, age: SPAWN_MS, tile: '', bike: cart, stars: null };
     } else {
       const foe = mobile.kind === 'mutant' || mobile.kind === 'beast';
       const { id, ...options } = puppetOf(mobile);
@@ -534,9 +554,9 @@ export class MobileLayer {
     const ty = floorDiv(y, TILE_SIZE);
     const key = `${tx},${ty}`;
 
-    if (key === view.tile || !view.puppet) return;
+    if (key === view.tile || (!view.puppet && !view.bike)) return;
     view.tile = key;
-    view.puppet.setShadow(this.tiles.shadow(terrainAt(this.world.seed, tx, ty)));
+    view.puppet?.setShadow(this.tiles.shadow(terrainAt(this.world.seed, tx, ty)));
     if (view.bike) view.bike.shadow.texture = this.tiles.shadow(terrainAt(this.world.seed, tx, ty));
   }
 
@@ -578,6 +598,28 @@ export class MobileLayer {
     figure.addChild(...wheels, frame);
     root.addChild(shadow, figure);
     return { root, shadow, figure, wheels, clock: 0 };
+  }
+
+  /** La charrette du marchand : son ombre, la caisse et le marchand, la roue qui tourne. */
+  private cart(shadowTexture: Texture): BikeView {
+    const { width, height, anchorX, anchorY, pivots } = SPRITES.caravan;
+    const root = new Container();
+    const figure = new Container();
+    const shadow = new Sprite(shadowTexture);
+    const body = new Sprite(this.library.part('caravan', 'cart'));
+    const wheel = new Sprite(this.library.part('caravan', 'wheel'));
+    const [px, py] = pivots.wheel;
+
+    wheel.anchor.set(px / width, py / height);
+    wheel.position.set(px - anchorX * width, py - anchorY * height);
+    shadow.anchor.set(0.5);
+    shadow.width = 70;
+    shadow.height = 12;
+    shadow.position.set(2, 1);
+    body.anchor.set(anchorX, anchorY);
+    figure.addChild(body, wheel);
+    root.addChild(shadow, figure);
+    return { root, shadow, figure, wheels: [wheel], clock: 0 };
   }
 
   /** Les morts s'aplatissent comme une flaque, puis s'effacent. */
