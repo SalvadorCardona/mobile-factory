@@ -102,15 +102,33 @@ Les sols (`GROUND`) ont leur propre jeu : `base` et `alt` pour le damier doux,
 L'eau a trois profondeurs, la même teinte glissant vers le bleu : `base` au
 bord, `alt` au large (à deux tuiles de la rive), `deep` (`#35bdf4`) au milieu
 des grands lacs ; chaque palier a les coins arrondis des autres sols. Le long
-des rives, un liseré d'écume en capsules `light` avec un reflet blanc ; au
-large, des reflets en capsule `light`. L'écume et une partie des reflets sont
-des sprites animés au-dessus du sol baké (`render/waterLayer.ts`) : l'écume
-respire, les reflets glissent et s'allongent — lentement, sans transparence ni
-clignotement, et figés sous `prefers-reduced-motion`.
+des rives, une écume en bulles `light` de tailles mêlées, un reflet blanc
+dans la plus grosse ; au large, des vaguelettes : des croissants `light` à
+point blanc. Aucun reflet n'est baké dans le sol : figé, une capsule claire
+se lit comme un tiret peint sur l'eau (« marquage routier »). Écume et
+vaguelettes sont des sprites animés au-dessus du sol baké
+(`render/waterLayer.ts`), et rien n'y glisse ni ne s'allume — tout vit par la
+taille, sans transparence ni clignotement, figé sous `prefers-reduced-motion` :
+
+- le **ressac** : l'écume gonfle et monte d'un pas sur la rive, puis se
+  retire, la vague courant le long du bord ;
+- les **vaguelettes** naissent d'un point, dérivent de quelques pixels avec
+  le vent en grandissant, puis se résorbent et renaissent ailleurs, chacune
+  à son rythme.
 
 | Avant / après, sur la rive | Avant / après, au milieu d'un lac | L'eau animée |
 | --- | --- | --- |
 | ![La rive avant et après](art-direction/eau-avant-apres.png) | ![Le lac avant et après](art-direction/eau-lac-avant-apres.png) | ![L'eau animée](art-direction/eau-animee.gif) |
+
+L'animation a été retravaillée : avant, l'écume en capsules avançait d'un
+pixel et les reflets glissaient — des tirets. Trois pistes ont été
+comparées ; on a gardé les vaguelettes au large et le ressac sur la rive.
+Les étoiles qui scintillent, trop rares, n'animent pas un lac, et plus
+nombreuses elles clignotent.
+
+| Avant | Piste : vaguelettes | Piste : ressac | Piste : scintillements |
+| --- | --- | --- | --- |
+| ![L'eau animée, avant](art-direction/eau-animee-avant.gif) | ![Vaguelettes](art-direction/eau-piste-vaguelettes.gif) | ![Ressac](art-direction/eau-piste-ressac.gif) | ![Scintillements](art-direction/eau-piste-scintillements.gif) |
 
 ### Couleurs réservées
 
@@ -249,11 +267,11 @@ par chunk, quatre chunks au plus gardés, soit au plus ~800 sprites et autant
 d'ombres — tous sur la même page d'atlas, donc un ou deux appels de dessin.
 À surveiller si la densité des forêts augmente : c'est le premier poste à
 découper plus finement (par blocs, comme le sol) avant d'ajouter du culling.
-L'eau animée : ~50 à 70 sprites à l'écran (écume des rives, un reflet sur
-six tuiles du large), rangés par blocs de 16 × 16 tuiles comme le sol ; un
-bloc ou un sprite hors de l'écran est caché et n'est pas animé. Coût mesuré :
-moins d'un demi-milliseconde de JS par cadre avec le CPU bridé ×4, un appel
-de dessin.
+L'eau animée : ~50 à 70 sprites à l'écran (écume des rives, une vaguelette
+sur huit tuiles du large, cachée entre deux vies), rangés par blocs de
+16 × 16 tuiles comme le sol ; un bloc ou un sprite hors de l'écran est caché
+et n'est pas animé. Coût mesuré : moins d'un dixième de milliseconde de JS
+par cadre avec le CPU bridé ×4, un appel de dessin.
 
 ## Exemples
 

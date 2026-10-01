@@ -139,7 +139,7 @@ export class TerrainTiles {
     return this.library.texture(`terrain.corner.${color}.${corner}`);
   }
 
-  /** Un sprite animé de l'eau : écume des rives ou reflet du large. */
+  /** Un sprite animé de l'eau : écume des rives ou vaguelette du large. */
   public water(name: WaterSprite): Texture {
     return this.library.texture(`terrain.${name}`);
   }
