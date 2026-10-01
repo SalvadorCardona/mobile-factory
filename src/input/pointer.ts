@@ -4,8 +4,9 @@
  * On n'utilise pas le système d'événements de Pixi ici. Il est fait pour du
  * hit-testing sur des objets de la scène ; nous, on veut savoir *quel doigt*
  * fait quoi, et garder le multitouch propre : un doigt vise un bâtiment
- * pendant que l'autre en déplace le fantôme. (Le joystick n'en est pas : il
- * est dans le DOM, au-dessus du canvas — `ui/joystick.ts`.)
+ * pendant que l'autre en déplace le fantôme. (Le joystick est dans le DOM,
+ * au-dessus du canvas — `ui/joystick.ts` ; seul un pouce qui rate son
+ * anneau passe par ici, `StickCapture`.)
  *
  * Chaque doigt est attribué à un seul consommateur au `pointerdown`, et lui
  * reste attribué jusqu'au `pointerup`. Un consommateur ne voit donc jamais les
