@@ -27,7 +27,9 @@
  * de son niveau (`BUILDINGS[proto].upgrades`), et il rebondit comme à l'achèvement.
  *
  * Le ressenti : un bâtiment achevé fait « pop » (écrasé, étiré, posé, ancré au pied),
- * un bâtiment frappé rougit et tremble. Les deux sont des minuteurs de vue,
+ * un bâtiment frappé rougit et tremble ; sous la moitié de ses points de vie,
+ * une fissure barre sa façade jusqu'à la réparation. Une tour qui tire
+ * s'enfonce d'un pixel, le recul. Ce sont des minuteurs de vue,
  * en millisecondes d'écran — la simulation n'en sait rien.
  */
 
@@ -68,9 +70,18 @@ const POP_KEYS: readonly (readonly [at: number, x: number, y: number])[] = [
   [2 / 3, 0.95, 1.08],
   [1, 1, 1],
 ];
-/** Durée de la secousse d'un bâtiment frappé. */
-const HIT_MS = 220;
+/** Durée du tremblement (± `HIT_PX`, à l'horizontale) d'un bâtiment frappé. */
+const HIT_MS = 150;
+const HIT_PX = 2;
 const HIT_TINT = hex(PALETTE.coral.light);
+
+/** Le recul d'une tour qui tire : elle s'enfonce de `SINK_PX` pendant `SINK_MS`. */
+const SINK_MS = 90;
+const SINK_PX = 1;
+
+/** La fissure, sur la façade : à cette part de la largeur, son pied à autant de px au-dessus du pied de l'emprise. */
+const CRACK_AT = 0.25;
+const CRACK_RISE = 12;
 
 /** Un producteur à l'arrêt pâlit, comme délavé : lavande, la couleur des faces de l'interface. */
 const PAUSED_TINT = hex(PALETTE.paper.shade);
@@ -100,14 +111,17 @@ interface EntityView {
   full: Sprite | null;
   /** Bulle « pause » d'un producteur, visible quand il est à l'arrêt. */
   pause: Sprite | null;
+  /** La fissure d'un bâtiment sous la moitié de ses points de vie. */
+  crack: Sprite | null;
   /** Teinte de repos du sprite, à laquelle il revient après un coup : blanc, ou pâli à l'arrêt. */
   tint: number;
   shadow: Sprite;
   /** Barre d'avancement d'un chantier, ou barre de vie d'un bâtiment entamé. */
   bar: Graphics;
-  /** Millisecondes restantes de rebond et de secousse. */
+  /** Millisecondes restantes de rebond, de secousse et de recul. */
   pop: number;
   hit: number;
+  sink: number;
   /** Position de repos du pied de l'emprise, en pixels monde. */
   baseX: number;
   /** Morceau affiché (`built`, `damaged`…) : ne change la texture que s'il change. */
@@ -172,7 +186,14 @@ export class EntityLayer {
 
       if (Math.abs(x - player.x) < SHOOTER_EPSILON && Math.abs(y - (player.y - BOW_RISE)) < SHOOTER_EPSILON) {
         this.adam.shoot();
+        return;
       }
+
+      // Une tour tire du centre de son emprise.
+      const id = world.chunks.occupantAt(floorDiv(x, TILE_SIZE), floorDiv(y, TILE_SIZE));
+      const view = id === undefined ? undefined : this.views.get(id);
+
+      if (view && world.entities.get(id!)?.kind === 'tower') view.sink = SINK_MS;
     });
     for (const id of world.entities.keys()) this.add(id);
   }
@@ -269,17 +290,30 @@ export class EntityLayer {
       root.addChild(pause);
     }
 
+    let crack: Sprite | null = null;
+
+    if (entity.kind !== 'site') {
+      crack = new Sprite(this.library.part('crack', 'zigzag'));
+      crack.anchor.set(SPRITES.crack.anchorX, SPRITES.crack.anchorY);
+      crack.position.set(entity.width * TILE_SIZE * CRACK_AT, entity.height * TILE_SIZE - CRACK_RISE);
+      crack.visible = shown === 'damaged';
+      // Juste au-dessus du bâtiment, sous la barre et les bulles.
+      root.addChildAt(crack, root.getChildIndex(main) + 1);
+    }
+
     return {
       root,
       main,
       moving: movingSprite,
       full,
       pause,
+      crack,
       tint: 0xffffff,
       shadow,
       bar,
       pop: 0,
       hit: 0,
+      sink: 0,
       baseX: 0,
       shown,
       barKey: '',
@@ -367,6 +401,7 @@ export class EntityLayer {
         if (face !== view.shown) {
           view.shown = face;
           view.main.texture = this.library.texture(`${spriteOf(entity)}.${face}`);
+          if (view.crack) view.crack.visible = face === 'damaged';
         }
       }
 
@@ -474,11 +509,16 @@ export class EntityLayer {
 
       const strength = view.hit / HIT_MS;
 
-      root.x = view.baseX + Math.sin(view.hit * 0.25) * 3 * strength;
+      root.x = view.baseX + Math.sign(Math.sin(view.hit * 0.25)) * HIT_PX;
       view.main.tint = strength > 0.35 ? HIT_TINT : view.tint;
     } else if (root.x !== view.baseX) {
       root.x = view.baseX;
       view.main.tint = view.tint;
+    }
+
+    if (view.sink > 0) {
+      view.sink = Math.max(0, view.sink - deltaMs);
+      view.main.y = view.root.pivot.y + (view.sink > 0 ? SINK_PX : 0);
     }
   }
 

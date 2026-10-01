@@ -11,10 +11,15 @@
  * qui contourne la mairie passe derrière elle quand il est au-dessus, devant
  * quand il est en dessous — comme Adam.
  *
- * Un mutant touché fait la grimace (yeux en croix) et gicle ; un mutant de
+ * Une flèche traîne derrière elle trois segments blancs de plus en plus
+ * effacés : on voit qui tire sur qui.
+ *
+ * Un mutant touché blanchit un éclair, recule dans l'axe du tir en
+ * s'écrasant, fait la grimace (yeux en croix) et gicle ; un mutant de
  * vague sort d'une flaque vert fluo qui bouillonne, se hisse hors d'elle à
  * la fin de son émergence, et la flaque se résorbe derrière lui ; un mutant
- * qui meurt — ou qui fuit le jour, à l'aube — s'écrase comme une flaque et s'efface. Ce sont des minuteurs de vue : la simulation ne
+ * qui meurt se tasse d'un coup et devient une flaque, qui se résorbe ; un
+ * mutant qui fuit le jour, à l'aube, s'écrase et s'efface. Ce sont des minuteurs de vue : la simulation ne
  * connaît que ses points de vie. Crabes et loups font de même, et frappent
  * (pinces qui claquent, bond) quand ils touchent Adam.
  *
@@ -60,6 +65,22 @@ const HP_FG = hex(PALETTE.coral.base);
 
 const SPAWN_MS = 500;
 const DEATH_MS = 520;
+/** Un mort se tasse (hauteur à `DEATH_FLAT`) en autant de ms, puis s'efface à plat. */
+const DEATH_SQUASH_MS = 200;
+const DEATH_FLAT = 0.2;
+/** La flaque d'un mutant mort reste autant de ms avant de se résorber, à cette taille du vivant. */
+const DEATH_PUDDLE_MS = 700;
+const DEATH_PUDDLE_SIZE = 0.7;
+
+/** La traînée d'une flèche : un segment tous les `TRAIL_STEP` px derrière l'empennage, de plus en plus effacé. */
+const TRAIL_ALPHAS = [0.6, 0.35, 0.15] as const;
+const TRAIL_FROM = -15;
+const TRAIL_STEP = -7;
+
+/** Un mutant touché recule de `RECOIL_PX` dans l'axe du tir et s'écrase (`RECOIL_SQUASH`), puis revient en `RECOIL_MS`. */
+const RECOIL_MS = 140;
+const RECOIL_PX = 3;
+const RECOIL_SQUASH = 0.1;
 
 /** Derniers ticks de l'émergence : le mutant se hisse hors de la flaque. */
 const RISE_TICKS = 14;
@@ -135,6 +156,10 @@ interface MobileView {
   bike: BikeView | null;
   /** Les étoiles d'un patient : la ronde (aplatie) et l'étoile qui y tourne. */
   stars: { orbit: Container; spin: Sprite } | null;
+  /** Taille du pantin : le gros mutant est un mutant en plus grand. */
+  size: number;
+  /** Le recul d'un mutant touché : direction du tir, ms restantes. */
+  recoil: { dx: number; dy: number; left: number } | null;
 }
 
 /** Le vélo-cargo — une ombre, le cadre avec Ève en selle, deux roues qui tournent — ou la charrette du marchand. */
@@ -151,9 +176,13 @@ interface Puddle {
   root: Container;
   pool: Sprite;
   bubbles: Sprite[];
-  /** Le mutant qui en sort. */
+  /** Taille de la mare : 1 pour une vague, plus petite sous un mort. */
+  size: number;
+  /** Le mutant qui en sort — ou qui y est mort. */
   mutant: MobileId;
   age: number;
+  /** Ms pendant lesquelles elle tient avant de se résorber : celle d'un mort reste un moment. */
+  hold: number;
   /** Ms restantes avant de disparaître, une fois le mutant sorti ; `null` tant qu'il émerge. */
   fading: number | null;
 }
@@ -203,15 +232,30 @@ export class MobileLayer {
         this.views.delete(id);
         view.hp?.destroy();
         view.root.destroy();
+        // Un corps ne s'anime plus : son flash s'éteint ici, pas au prochain cadre.
+        view.puppet.flash(0);
         view.puppet.root.position.set(x, y);
         view.puppet.root.zIndex = y;
         this.container.addChild(view.puppet.root);
-        this.corpses.push({ puppet: view.puppet, left: DEATH_MS, scale: view.puppet.root.scale.x });
+        this.corpses.push({ puppet: view.puppet, left: DEATH_MS, scale: view.size });
       }
     };
 
-    world.events.on('mutantDied', fall);
+    world.events.on('mutantDied', (event) => {
+      const size = this.views.get(event.id)?.size ?? 1;
+
+      fall(event);
+      // Le mort devient une flaque, sous lui, qui se résorbe après lui.
+      this.spill(event, { size: size * DEATH_PUDDLE_SIZE });
+    });
     world.events.on('mutantFled', fall);
+    world.events.on('mutantHit', ({ id, dx, dy }) => {
+      const view = this.views.get(id);
+
+      if (!view?.puppet) return;
+      view.puppet.flash();
+      view.recoil = { dx, dy, left: RECOIL_MS };
+    });
     world.events.on('beastDied', fall);
     world.events.on('playerHurt', ({ by }) => this.views.get(by)?.puppet?.strike());
   }
@@ -320,6 +364,8 @@ export class MobileLayer {
             }
           }
 
+          if (mobile.kind === 'mutant') this.recoil(view, deltaMs);
+
           // Un bâtisseur arrivé au chantier tape du marteau.
           const hammering = mobile.kind === 'worker' && mobile.build !== null && !mobile.moving;
 
@@ -354,6 +400,23 @@ export class MobileLayer {
     view.age = SPAWN_MS;
     view.root.alpha = t;
     view.root.scale.set(0.7 + t * 0.3, 0.25 + t * 0.75);
+  }
+
+  /** Un mutant touché : repoussé dans l'axe du tir et écrasé, puis il revient. */
+  private recoil(view: MobileView, deltaMs: number): void {
+    const recoil = view.recoil;
+    const root = view.puppet!.root;
+
+    if (!recoil) return;
+
+    recoil.left = Math.max(0, recoil.left - deltaMs);
+
+    const t = recoil.left / RECOIL_MS;
+    const size = view.size;
+
+    root.position.set(recoil.dx * RECOIL_PX * t, recoil.dy * RECOIL_PX * t);
+    root.scale.set(size * (1 + RECOIL_SQUASH * t), size * (1 - RECOIL_SQUASH * t));
+    if (recoil.left === 0) view.recoil = null;
   }
 
   /**
@@ -392,7 +455,9 @@ export class MobileLayer {
 
       puddle.age += deltaMs;
 
-      if (puddle.fading === null && (mutant?.kind !== 'mutant' || mutant.emerge <= 0)) puddle.fading = PUDDLE_FADE_MS;
+      if (puddle.fading === null && puddle.age >= puddle.hold && (mutant?.kind !== 'mutant' || mutant.emerge <= 0)) {
+        puddle.fading = PUDDLE_FADE_MS;
+      }
 
       const grow = Math.min(1, puddle.age / PUDDLE_GROW_MS);
       let size = 1 - (1 - grow) * (1 - grow);
@@ -405,7 +470,7 @@ export class MobileLayer {
       // La mare respire un peu : elle bout.
       const breath = 1 + Math.sin(puddle.age / 110) * 0.04;
 
-      puddle.pool.scale.set(size * breath, size * (2 - breath));
+      puddle.pool.scale.set(size * breath * puddle.size, size * (2 - breath) * puddle.size);
 
       for (const [k, bubble] of puddle.bubbles.entries()) {
         const phase = ((puddle.age + (k * BUBBLE_MS) / BUBBLES) % BUBBLE_MS) / BUBBLE_MS;
@@ -424,8 +489,11 @@ export class MobileLayer {
     }
   }
 
-  /** Une flaque sous un mutant qui sort de terre, à l'endroit où il sort. */
-  private spill(mutant: Mutant): void {
+  /**
+   * Une flaque sous un mutant qui sort de terre, à l'endroit où il sort ; ou,
+   * sans bulles, sous un mutant mort, qui reste un moment avant de se résorber.
+   */
+  private spill(mutant: { id: MobileId; x: number; y: number }, death?: { size: number }): void {
     const root = new Container();
     const pool = new Sprite(this.library.part('puddle', 'pool'));
     const bubbles: Sprite[] = [];
@@ -434,7 +502,7 @@ export class MobileLayer {
     pool.scale.set(0);
     root.addChild(pool);
 
-    for (let k = 0; k < BUBBLES; k += 1) {
+    for (let k = 0; k < (death ? 0 : BUBBLES); k += 1) {
       const bubble = new Sprite(this.library.part('puddle', 'bubble'));
 
       bubble.anchor.set(0.5);
@@ -447,7 +515,16 @@ export class MobileLayer {
     // Au sol : sous le mutant qui en sort, sous tout ce qui passe devant.
     root.zIndex = mutant.y - 16;
     this.container.addChild(root);
-    this.puddles.push({ root, pool, bubbles, mutant: mutant.id, age: 0, fading: null });
+    this.puddles.push({
+      root,
+      pool,
+      bubbles,
+      mutant: mutant.id,
+      age: 0,
+      hold: death ? DEATH_PUDDLE_MS : 0,
+      size: death?.size ?? 1,
+      fading: null,
+    });
   }
 
   /** Pose le marqueur sur la cible de l'arc d'Adam, et le fait respirer. */
@@ -483,9 +560,18 @@ export class MobileLayer {
     if (mobile.kind === 'arrow') {
       const sprite = new Sprite(this.library.part('arrow', 'fly'));
 
+      // La traînée, de l'empennage vers l'arrière : la flèche tourne, elle suit.
+      for (const [k, alpha] of TRAIL_ALPHAS.entries()) {
+        const trail = new Sprite(this.library.part('arrow', 'trail'));
+
+        trail.anchor.set(SPRITES.arrow.anchorX, SPRITES.arrow.anchorY);
+        trail.x = TRAIL_FROM + k * TRAIL_STEP;
+        trail.alpha = alpha;
+        root.addChild(trail);
+      }
       sprite.anchor.set(SPRITES.arrow.anchorX, SPRITES.arrow.anchorY);
       root.addChild(sprite);
-      view = { root, puppet: null, hp: null, lastHp: 0, age: SPAWN_MS, tile: '', bike: null, stars: null };
+      view = { root, puppet: null, hp: null, lastHp: 0, age: SPAWN_MS, tile: '', bike: null, stars: null, size: 1, recoil: null };
     } else if (mobile.kind === 'pickup') {
       const tx = floorDiv(mobile.x, TILE_SIZE);
       const ty = floorDiv(mobile.y, TILE_SIZE);
@@ -504,14 +590,14 @@ export class MobileLayer {
       // Butin rechargé d'une sauvegarde : déjà posé, pas de saut.
       const fresh = LOOT_DROPS.lifetimeTicks - mobile.ttl < 20;
 
-      view = { root, puppet: null, hp: null, lastHp: 0, age: fresh ? 0 : LOOT_DROP_MS, tile: '', bike: null, stars: null };
+      view = { root, puppet: null, hp: null, lastHp: 0, age: fresh ? 0 : LOOT_DROP_MS, tile: '', bike: null, stars: null, size: 1, recoil: null };
     } else if (mobile.kind === 'caravan') {
       const cart = this.cart(this.tiles.shadow('grass'));
 
       // Rechargée garée, elle garde le sens où elle roulait.
       cart.figure.scale.x = mobile.facing === 'left' ? -1 : 1;
       root.addChild(cart.root);
-      view = { root, puppet: null, hp: null, lastHp: 0, age: SPAWN_MS, tile: '', bike: cart, stars: null };
+      view = { root, puppet: null, hp: null, lastHp: 0, age: SPAWN_MS, tile: '', bike: cart, stars: null, size: 1, recoil: null };
     } else {
       const foe = mobile.kind === 'mutant' || mobile.kind === 'beast';
       const { id, ...options } = puppetOf(mobile);
@@ -539,7 +625,7 @@ export class MobileLayer {
       const stars = mobile.kind === 'patient' ? this.stars() : null;
 
       if (stars) root.addChild(stars.orbit);
-      view = { root, puppet, hp, lastHp: foe ? mobile.hp : 0, age: foe ? 0 : SPAWN_MS, tile: '', bike, stars };
+      view = { root, puppet, hp, lastHp: foe ? mobile.hp : 0, age: foe ? 0 : SPAWN_MS, tile: '', bike, stars, size: scale, recoil: null };
       if (mobile.kind === 'mutant' && mobile.emerge > 0) this.spill(mobile);
     }
 
@@ -622,18 +708,20 @@ export class MobileLayer {
     return { root, shadow, figure, wheels: [wheel], clock: 0 };
   }
 
-  /** Les morts s'aplatissent comme une flaque, puis s'effacent. */
+  /** Les morts se tassent en `DEATH_SQUASH_MS`, puis s'effacent à plat. */
   private bury(deltaMs: number): void {
     for (let i = this.corpses.length - 1; i >= 0; i -= 1) {
       const corpse = this.corpses[i]!;
 
       corpse.left = Math.max(0, corpse.left - deltaMs);
 
-      const t = 1 - corpse.left / DEATH_MS;
+      // Il se tasse d'un coup, puis s'efface à plat.
+      const elapsed = DEATH_MS - corpse.left;
+      const flat = Math.min(1, elapsed / DEATH_SQUASH_MS);
       const root = corpse.puppet.root;
 
-      root.scale.set(corpse.scale * (1 + t * 0.5), corpse.scale * Math.max(0.12, 1 - t * 1.2));
-      root.alpha = t < 0.5 ? 1 : 1 - (t - 0.5) * 2;
+      root.scale.set(corpse.scale * (1 + flat * 0.5), corpse.scale * (1 - flat * (1 - DEATH_FLAT)));
+      root.alpha = flat < 1 ? 1 : corpse.left / (DEATH_MS - DEATH_SQUASH_MS);
 
       if (corpse.left === 0) {
         corpse.puppet.destroy();

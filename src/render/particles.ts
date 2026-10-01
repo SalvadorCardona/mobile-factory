@@ -14,6 +14,10 @@
  * violette la suit au sol. Une goutte de mutant posée laisse une flaque qui
  * s'efface en 1,5 s. Un bâtiment achevé lâche un anneau de poussière.
  *
+ * L'anneau d'impact est un cercle blanc au trait, qui s'ouvre et s'efface
+ * en un éclair là où la flèche a touché : on voit chaque coup porter. Un
+ * seul `Graphics`, redessiné tant qu'il en reste ; plafonné lui aussi.
+ *
  * Plafond : `MAX_PARTICLES` vivantes. Au-delà, la plus vieille est recyclée
  * — 80 mutants touchés d'un coup ne font pas tomber l'image. Les sprites
  * viennent d'une réserve : rien n'est alloué une fois la partie lancée.
@@ -22,8 +26,8 @@
  * voit jamais.
  */
 
-import { Container, Sprite, type Texture } from 'pixi.js';
-import { DUST, PARTICLE_SHADOW, hex, type ParticleShape, type ParticleStyle } from '../data/artDirection.ts';
+import { Container, Graphics, Sprite, type Texture } from 'pixi.js';
+import { DUST, PALETTE, PARTICLE_SHADOW, STROKE, hex, type ParticleShape, type ParticleStyle } from '../data/artDirection.ts';
 import { SPRITES } from '../data/sprites.ts';
 import type { SpriteLibrary } from './spriteLibrary.ts';
 
@@ -31,6 +35,7 @@ import type { SpriteLibrary } from './spriteLibrary.ts';
 export const MAX_PARTICLES = 300;
 const MAX_PUDDLES = 24;
 const MAX_RINGS = 8;
+const MAX_IMPACTS = 32;
 
 /** Hauteur, en pixels monde, d'où part un éclat au-dessus de son sol. */
 const LIFT = 10;
@@ -49,6 +54,12 @@ const RING_MS = 450;
 const RING_FROM = 0.5;
 const RING_TO = 1.6;
 const RING_ALPHA = 0.9;
+
+/** L'anneau d'impact s'ouvre de `IMPACT_FROM` à `IMPACT_TO` px de rayon en `IMPACT_MS`. */
+const IMPACT_MS = 120;
+const IMPACT_FROM = 4;
+const IMPACT_TO = 14;
+const IMPACT_COLOR = hex(PALETTE.paper.base);
 
 interface Particle {
   sprite: Sprite;
@@ -81,6 +92,13 @@ interface Fade {
   width: number;
 }
 
+/** Un anneau d'impact : centre, et millisecondes écoulées. */
+interface Impact {
+  x: number;
+  y: number;
+  age: number;
+}
+
 export class ParticleLayer {
   /** Au-dessus de tout ce qui a des coordonnées monde. */
   public readonly container = new Container();
@@ -93,6 +111,8 @@ export class ParticleLayer {
   private readonly spare: Particle[] = [];
   private readonly puddles: Fade[] = [];
   private readonly rings: Fade[] = [];
+  private readonly impactGraphics = new Graphics();
+  private readonly impacts: Impact[] = [];
   /** Les couleurs d'une famille, converties une fois pour Pixi. */
   private readonly tints = new Map<ParticleStyle, readonly number[]>();
   private readonly shadowTint = hex(PARTICLE_SHADOW);
@@ -109,6 +129,7 @@ export class ParticleLayer {
       puddle: library.part('particles', 'puddle'),
     };
     this.ringTexture = library.part('dustRing', 'ring');
+    this.container.addChild(this.impactGraphics);
     this.container.zIndex = Number.MAX_SAFE_INTEGER;
   }
 
@@ -162,6 +183,12 @@ export class ParticleLayer {
     this.drawRing(this.rings[this.rings.length - 1]!);
   }
 
+  /** Un anneau d'impact qui s'ouvre en (x, y). */
+  public ring(x: number, y: number): void {
+    if (this.impacts.length >= MAX_IMPACTS) this.impacts.shift();
+    this.impacts.push({ x, y, age: 0 });
+  }
+
   public update(deltaMs: number): void {
     for (let i = 0; i < this.live.length; i += 1) {
       const particle = this.live[i]!;
@@ -178,6 +205,34 @@ export class ParticleLayer {
 
     this.fadePuddles(deltaMs);
     this.fadeRings(deltaMs);
+    this.drawImpacts(deltaMs);
+  }
+
+  private drawImpacts(deltaMs: number): void {
+    const graphics = this.impactGraphics;
+
+    if (this.impacts.length === 0 && graphics.visible === false) return;
+    graphics.clear();
+
+    for (let i = this.impacts.length - 1; i >= 0; i -= 1) {
+      const impact = this.impacts[i]!;
+
+      impact.age += deltaMs;
+
+      if (impact.age >= IMPACT_MS) {
+        this.impacts.splice(i, 1);
+        continue;
+      }
+
+      // Il s'ouvre vite puis ralentit, et s'efface en s'ouvrant.
+      const t = impact.age / IMPACT_MS;
+      const open = 1 - (1 - t) * (1 - t);
+
+      graphics
+        .circle(impact.x, impact.y, IMPACT_FROM + (IMPACT_TO - IMPACT_FROM) * open)
+        .stroke({ width: STROKE.width, color: IMPACT_COLOR, alpha: 1 - t });
+    }
+    graphics.visible = this.impacts.length > 0;
   }
 
   private move(particle: Particle, deltaMs: number): void {
