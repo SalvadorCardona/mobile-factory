@@ -124,6 +124,14 @@ tout ennemi abattu (mutant, crabe, loup) lâche au sol le butin de sa table
 (`loot`, tirée du PRNG du monde ; `LOOT_DROPS`, `src/sim/loot.ts`) qu'Adam
 ramasse en marchant dessus — sac plein, il reste au sol. L'arc d'Adam et la tour de guet
 (`src/data/weapons.ts`) tirent seuls. La mairie à zéro = partie perdue.
+La courbe est une table, nuit par nuit (`NIGHT_PLAN`) : pic à la nuit 3,
+répit après chaque grosse nuit, un **gros mutant** (`brute`) toutes les cinq ;
+au-delà, les cinq dernières se répètent en plus gros. Adam **répare** un
+bâtiment abîmé en le heurtant avec du bois, ou via « Réparer » (sac puis
+ville ; `REPAIR`, `src/data/buildings.ts`). Frappée hors écran, la mairie
+sonne l'alarme : bord rouge, repère qui clignote, vibration.
+`src/sim/defense.test.ts` mesure l'équilibre (Adam immobile, Ève qui répare :
+une tour passe la nuit 10, sans tour la mairie tombe aux nuits 8–10).
 La **nurserie** fait naître un enfant toutes les dix minutes, contre quatre
 nourritures (recette `raiseChild`) : sans elles, elle attend.
 

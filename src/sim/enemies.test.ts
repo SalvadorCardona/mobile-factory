@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { TILE_SIZE, worldToTile } from '../core/grid.ts';
 import { BUILDINGS } from '../data/buildings.ts';
 import { DAWN_REWARD, DAY_CYCLE } from '../data/dayNight.ts';
-import { ENEMIES, LOOT_DROPS, WAVES, waveSize } from '../data/enemies.ts';
+import { ENEMIES, LOOT_DROPS, NIGHT_PLAN, WAVES, isBossWave, waveSize, waveSpec } from '../data/enemies.ts';
 import type { ItemId } from '../data/items.ts';
 import { RECIPES } from '../data/recipes.ts';
 import { WEAPONS } from '../data/weapons.ts';
@@ -188,11 +188,11 @@ describe('vagues', () => {
     world.tick();
     expect(world.clock()?.phase).toBe('night');
     expect(world.night).toBe(1);
-    expect(mutants(world)).toHaveLength(waveSize(1));
+    expect(mutants(world)).toHaveLength(waveSize(1, 1));
 
     for (let i = 0; i < WAVES.interval; i += 1) world.tick();
     expect(waves).toEqual(
-      Array.from({ length: Math.min(2, WAVES.perNight) }, (_, k) => `${NIGHTFALL + k * WAVES.interval}:1.${k + 1}:${waveSize(1)}`),
+      Array.from({ length: Math.min(2, WAVES.perNight) }, (_, k) => `${NIGHTFALL + k * WAVES.interval}:1.${k + 1}:${waveSize(1, k + 1)}`),
     );
   });
 
@@ -235,7 +235,7 @@ describe('vagues', () => {
 
     world.tick();
     expect(world.night).toBe(2);
-    expect(mutants(world)).toHaveLength(waveSize(2));
+    expect(mutants(world)).toHaveLength(waveSize(2, 1));
   });
 
   it('ne verse au sac que ce qui y tient', () => {
@@ -269,10 +269,51 @@ describe('vagues', () => {
     }
   });
 
-  it('grossit l’effectif avec les nuits, jusqu’au plafond', () => {
-    expect(waveSize(1)).toBe(1);
-    expect(waveSize(1 + WAVES.growEvery)).toBe(2);
-    expect(waveSize(1000)).toBe(WAVES.maxSize);
+  it('suit la courbe en dents de scie : pic à la nuit 3, répit ensuite, un gros mutant toutes les cinq nuits', () => {
+    const total = (night: number): number => waveSize(night, 1) + waveSize(night, 2);
+
+    expect(total(3)).toBeGreaterThan(total(2));
+    expect(total(4)).toBeLessThan(total(3));
+    for (let night = 1; night <= 30; night += 1) {
+      const boss = isBossWave(night, 1) || isBossWave(night, 2);
+
+      expect(boss, `nuit ${night}`).toBe(night % 5 === 0);
+    }
+  });
+
+  it('au-delà de la table, répète ses dernières nuits avec des mutants en plus', () => {
+    const last = NIGHT_PLAN.length;
+
+    for (let k = 1; k <= WAVES.cycle; k += 1) {
+      for (let wave = 1; wave <= WAVES.perNight; wave += 1) {
+        const base = waveSpec(last - WAVES.cycle + k, wave);
+        const next = waveSpec(last + k, wave);
+
+        expect(next.brute ?? 0).toBe(base.brute ?? 0);
+        expect(next.mutant).toBe((base.mutant ?? 0) + WAVES.growPerCycle);
+        expect(waveSpec(last + WAVES.cycle + k, wave).mutant).toBe((base.mutant ?? 0) + 2 * WAVES.growPerCycle);
+      }
+    }
+  });
+
+  it('fait sortir le gros mutant avec la vague qui l’annonce', () => {
+    const world = worldWithTownHall();
+    const night = NIGHT_PLAN.findIndex((waves) => waves.some((wave) => 'brute' in wave)) + 1;
+    const wave = NIGHT_PLAN[night - 1]!.findIndex((spec) => 'brute' in spec) + 1;
+    const started: { boss: boolean; count: number }[] = [];
+
+    sturdy(world);
+    world.player.x += 60 * TILE_SIZE;
+    world.events.on('waveStarted', (event) => {
+      if (event.night === night && event.wave === wave) started.push(event);
+    });
+    for (let i = 0; i < (night + 1) * CYCLE_TICKS && started.length === 0; i += 1) world.tick();
+
+    expect(started).toEqual([expect.objectContaining({ boss: true, count: waveSize(night, wave) })]);
+    const brutes = mutants(world).filter((mutant) => mutant.proto === 'brute');
+
+    expect(brutes.length).toBe(waveSpec(night, wave).brute);
+    expect(brutes[0]!.hp).toBe(ENEMIES.brute.hp);
   });
 });
 
@@ -281,7 +322,8 @@ describe('mise en scène des vagues', () => {
     const world = worldWithTownHall();
     const center = townHallCenter(world);
     const heading = world.nextWaveHeading;
-    const announces: { seconds: number; night: number; wave: number; count: number; from: string; x: number; y: number }[] = [];
+    const announces: { seconds: number; night: number; wave: number; count: number; boss: boolean; from: string; x: number; y: number }[] =
+      [];
 
     world.events.on('waveCountdown', (event) => announces.push(event));
     world.player.x += 60 * TILE_SIZE;
@@ -290,7 +332,7 @@ describe('mise en scène des vagues', () => {
 
     expect(announces.map(({ seconds }) => seconds)).toEqual([3, 2, 1]);
     for (const announce of announces) {
-      expect(announce).toMatchObject({ night: 1, wave: 1, count: waveSize(1), from: compassOf(heading) });
+      expect(announce).toMatchObject({ night: 1, wave: 1, count: waveSize(1, 1), boss: false, from: compassOf(heading) });
     }
     expect(Math.atan2(announces[0]!.y - center.y, announces[0]!.x - center.x)).toBeCloseTo(
       Math.atan2(Math.sin(heading), Math.cos(heading)),
@@ -312,8 +354,8 @@ describe('mise en scène des vagues', () => {
     const world = worldWithTownHall();
     let shots = 0;
 
-    // Une vague de trois : on attend la nuit qui les envoie, la mairie tient d'ici là.
-    const night = 1 + 2 * WAVES.growEvery;
+    // Une première vague de trois : on attend la nuit qui l'envoie, la mairie tient d'ici là.
+    const night = NIGHT_PLAN.findIndex((_, index) => waveSize(index + 1, 1) === 3) + 1;
 
     sturdy(world);
     world.player.x += 60 * TILE_SIZE;

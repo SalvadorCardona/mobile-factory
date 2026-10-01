@@ -75,6 +75,12 @@ export type Command =
    */
   | { type: 'upgradeBuilding'; id: EntityId }
   /**
+   * Répare un bâtiment abîmé au bois (`REPAIR`) : ce qu'il faut pour le
+   * remettre à neuf, le sac d'abord, puis la ville dans son rayon. Le bouton
+   * « Réparer » de sa fenêtre.
+   */
+  | { type: 'repairBuilding'; id: EntityId }
+  /**
    * Met en pause un bâtiment producteur (`paused: true`), ou le relance. En
    * pause, il ne produit ni ne consomme ; ses ouvriers finissent leur geste
    * puis flânent, et les porteurs vident toujours son coffre. Le bouton
@@ -155,6 +161,17 @@ export type DepositRejection =
   | 'empty';
 
 /** Motif de refus d'une amélioration. */
+/** Motif de refus d'une réparation — remonté à l'UI par un événement. */
+export type RepairRejection =
+  /** Le bâtiment n'existe plus, ou n'est encore qu'un chantier. */
+  | 'missing'
+  /** Adam est trop loin de l'emprise. */
+  | 'outOfReach'
+  /** Le bâtiment n'a rien à réparer. */
+  | 'intact'
+  /** Ni le sac, ni la ville à portée n'ont de quoi réparer. */
+  | 'noMaterial';
+
 export type UpgradeRejection =
   /** Le bâtiment n'existe plus, ou n'est encore qu'un chantier. */
   | 'missing'

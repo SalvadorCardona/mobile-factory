@@ -22,6 +22,8 @@ export interface EnemyProto {
   damage: number;
   attackTicks: number;
   sprite: SpriteId;
+  /** Taille du sprite à l'écran : 1 pour un mutant ordinaire. */
+  scale: number;
   /** Demi-largeur et demi-hauteur de la boîte de collision, en pixels monde. */
   halfW: number;
   halfH: number;
@@ -37,6 +39,7 @@ export const ENEMIES = {
     damage: 4,
     attackTicks: 20,
     sprite: 'mutant',
+    scale: 1,
     halfW: 8,
     halfH: 6,
     // De la ferraille à coup sûr, parfois un bout de charbon, rarement une plaque encore droite.
@@ -48,9 +51,38 @@ export const ENEMIES = {
       { item: 'mutantGoo', min: 1, max: 1, chance: 0.5 },
     ],
   },
+  /**
+   * Le « boss » des nuits spéciales : un mutant qui a trop poussé. Lent,
+   * coriace, il cogne fort — c'est lui que les tours doivent user avant
+   * qu'il atteigne la mairie.
+   */
+  brute: {
+    label: 'Gros mutant',
+    hp: 10,
+    speed: 0.8,
+    damage: 8,
+    attackTicks: 24,
+    sprite: 'mutant',
+    scale: 1.5,
+    halfW: 12,
+    halfH: 8,
+    // Plus gros, plus de ferraille, et sa gelée à coup sûr.
+    loot: [
+      { item: 'ironOre', min: 3, max: 5, chance: 1 },
+      { item: 'coal', min: 1, max: 2, chance: 0.6 },
+      { item: 'ironPlate', min: 1, max: 1, chance: 0.3 },
+      { item: 'mutantGoo', min: 1, max: 2, chance: 1 },
+    ],
+  },
 } as const satisfies Record<string, EnemyProto>;
 
 export type EnemyId = keyof typeof ENEMIES;
+
+/** Les espèces, dans l'ordre où une vague les fait sortir. */
+export const ENEMY_IDS = Object.keys(ENEMIES) as EnemyId[];
+
+/** Une vague : son effectif par espèce de mutant. */
+export type WaveSpec = Partial<Record<EnemyId, number>>;
 
 /**
  * Les vagues.
@@ -59,8 +91,9 @@ export type EnemyId = keyof typeof ENEMIES;
  * récolter et à livrer en paix. Une fois le toit posé, le cycle jour / nuit
  * démarre (`data/dayNight.ts`) : les mutants ne sortent que la nuit, en
  * `perNight` vagues espacées de `interval`, la première à la tombée de la
- * nuit. L'effectif grossit d'un mutant toutes les `growEvery` nuits, jusqu'à
- * `maxSize`.
+ * nuit. Leur effectif suit `NIGHT_PLAN` ; au-delà, ses `cycle` dernières
+ * nuits se répètent, avec `growPerCycle` mutants de plus par vague à chaque
+ * tour.
  *
  * Une vague se voit : elle vient d'**une** direction, tirée dès que la
  * précédente est partie pour que l'annonce la donne, et elle surgit **dans le champ**
@@ -72,8 +105,8 @@ export type EnemyId = keyof typeof ENEMIES;
 export const WAVES = {
   perNight: 2,
   interval: 20 * 30,
-  growEvery: 1,
-  maxSize: 8,
+  cycle: 5,
+  growPerCycle: 2,
   /** Distance d'apparition depuis le centre de la mairie, en tuiles. */
   minDistance: 6,
   maxDistance: 7.5,
@@ -129,9 +162,54 @@ export const LOOT_DROPS = {
   cap: 40,
 } as const;
 
-/** Effectif d'une vague de la nuit numéro `night` (la première vaut 1). */
-export function waveSize(night: number): number {
-  return Math.min(WAVES.maxSize, 1 + Math.floor((night - 1) / WAVES.growEvery));
+/**
+ * La courbe, nuit par nuit — c'est ici qu'on la retouche. Une ligne par
+ * nuit, une entrée par vague (`WAVES.perNight`).
+ *
+ * Des dents de scie plutôt qu'une rampe : un premier pic dès la nuit 3,
+ * la dernière avant qu'Ève n'arrive réparer ; un répit net après chaque
+ * grosse nuit ; un gros mutant toutes les cinq nuits. Entre deux, Adam
+ * répare au bois (`REPAIR`, `data/buildings.ts`), puis Ève.
+ */
+export const NIGHT_PLAN = [
+  [{ mutant: 1 }, { mutant: 2 }],
+  [{ mutant: 2 }, { mutant: 2 }],
+  /** Premier pic. */
+  [{ mutant: 2 }, { mutant: 4 }],
+  /** Répit : Ève arrive, la mairie se refait. */
+  [{ mutant: 2 }, { mutant: 3 }],
+  /** Premier gros mutant. */
+  [{ mutant: 3 }, { mutant: 2, brute: 1 }],
+  [{ mutant: 3 }, { mutant: 3 }],
+  [{ mutant: 4 }, { mutant: 5 }],
+  [{ mutant: 3 }, { mutant: 3 }],
+  [{ mutant: 5 }, { mutant: 5 }],
+  /** Deux gros mutants : sans tour, la mairie ne passe pas cette nuit-là. */
+  [{ mutant: 3 }, { mutant: 3, brute: 2 }],
+] as const satisfies readonly (readonly WaveSpec[])[];
+
+/** La vague numéro `wave` (la première vaut 1) de la nuit numéro `night` (la première vaut 1). */
+export function waveSpec(night: number, wave: number): WaveSpec {
+  const index = Math.max(0, night - 1);
+  const slot = Math.min(Math.max(0, wave - 1), WAVES.perNight - 1);
+
+  if (index < NIGHT_PLAN.length) return NIGHT_PLAN[index]![slot]!;
+
+  const past = index - NIGHT_PLAN.length;
+  const base: WaveSpec = NIGHT_PLAN[NIGHT_PLAN.length - WAVES.cycle + (past % WAVES.cycle)]![slot]!;
+  const extra = (Math.floor(past / WAVES.cycle) + 1) * WAVES.growPerCycle;
+
+  return { ...base, mutant: (base.mutant ?? 0) + extra };
+}
+
+/** Effectif total d'une vague. */
+export function waveSize(night: number, wave: number): number {
+  return Object.values(waveSpec(night, wave)).reduce((sum, count) => sum + count, 0);
+}
+
+/** Vrai si la vague amène un gros mutant : le bandeau l'annonce autrement. */
+export function isBossWave(night: number, wave: number): boolean {
+  return (waveSpec(night, wave).brute ?? 0) > 0;
 }
 
 /* ------------------------------------------------------------------ faune */

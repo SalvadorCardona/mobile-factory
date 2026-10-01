@@ -15,9 +15,12 @@
  * mairie montre le stock de la ville, et « Déposer le sac » l'y vide. Sur une
  * foreuse, une ferme ou une forge, « Prendre » vide son coffre dans le sac,
  * dans la limite de la place. Sur une nurserie ou une forge, « Transférer le
- * sac » y verse ce que sa recette consomme. La fenêtre ne modifie rien
+ * sac » y verse ce que sa recette consomme. Sur un bâtiment abîmé,
+ * « Réparer » y pose le bois qu'il faut (`REPAIR`), le sac puis la ville, et
+ * une ligne dit qu'on peut aussi le heurter. La fenêtre ne modifie rien
  * elle-même : chaque bouton pousse une commande (`transferToSite`,
- * `takeFromBuilding`, `supplyBuilding`, `depositToTown`) que le tick consomme.
+ * `takeFromBuilding`, `supplyBuilding`, `depositToTown`, `repairBuilding`)
+ * que le tick consomme.
  *
  * Sur le labo de recherche, la fenêtre devient le panneau Recherche
  * (`researchPanel.ts`) : la recherche en cours et la liste des recherches.
@@ -37,7 +40,7 @@
  * seule si l'entité disparaît — rasée par un mutant, par exemple.
  */
 
-import { BUILDINGS, buildingLevel, nextUpgrade, type BuildingLevel } from '../data/buildings.ts';
+import { BUILDINGS, REPAIR, buildingLevel, nextUpgrade, type BuildingLevel } from '../data/buildings.ts';
 import { CLINIC } from '../data/clinic.ts';
 import { ITEMS, type ItemId } from '../data/items.ts';
 import { RECIPES, type RecipeProto } from '../data/recipes.ts';
@@ -45,7 +48,7 @@ import { WEAPONS } from '../data/weapons.ts';
 import { BUILDERS, LOGISTICIANS, LUMBERJACKS } from '../data/workers.ts';
 import { canPause } from '../sim/staffing.ts';
 import type { Building, Entity, EntityId, Forge, Nursery } from '../sim/types.ts';
-import { TICKS_PER_SECOND, siteMissing, type World } from '../sim/world.ts';
+import { TICKS_PER_SECOND, repairCost, siteMissing, type World } from '../sim/world.ts';
 import { itemAmount, uiIcon } from './icons.ts';
 import { ResearchPanel } from './researchPanel.ts';
 
@@ -68,6 +71,7 @@ export class BuildingPanel {
   private readonly transferButton: HTMLButtonElement;
   private readonly takeButton: HTMLButtonElement;
   private readonly depositButton: HTMLButtonElement;
+  private readonly repairButton: HTMLButtonElement;
   private readonly pauseButton: HTMLButtonElement;
   /** « Annuler le chantier » : un premier tap arme, le second annule. */
   private readonly cancelButton: HTMLButtonElement;
@@ -160,6 +164,13 @@ export class BuildingPanel {
       if (this.entityId !== null) this.world.push({ type: 'depositToTown' });
     });
 
+    this.repairButton = document.createElement('button');
+    this.repairButton.type = 'button';
+    this.repairButton.dataset['tone'] = 'upgrade';
+    this.repairButton.addEventListener('click', () => {
+      if (this.entityId !== null) this.world.push({ type: 'repairBuilding', id: this.entityId });
+    });
+
     this.pauseButton = document.createElement('button');
     this.pauseButton.type = 'button';
     this.pauseButton.className = 'building-panel-pause';
@@ -181,7 +192,14 @@ export class BuildingPanel {
       this.world.push({ type: 'cancelSite', id: this.entityId });
     });
 
-    this.actions.append(this.pauseButton, this.transferButton, this.takeButton, this.depositButton, this.cancelButton);
+    this.actions.append(
+      this.pauseButton,
+      this.repairButton,
+      this.transferButton,
+      this.takeButton,
+      this.depositButton,
+      this.cancelButton,
+    );
 
     this.crew = document.createElement('div');
     this.crew.className = 'building-panel-crew';
@@ -354,6 +372,7 @@ export class BuildingPanel {
       this.cancelButton.textContent = this.cancelArmed ? 'Vraiment annuler ?' : 'Annuler le chantier';
       this.takeButton.hidden = true;
       this.depositButton.hidden = true;
+      this.repairButton.hidden = true;
       this.pauseButton.hidden = true;
       this.crew.hidden = true;
       this.upgrade.hidden = true;
@@ -377,7 +396,25 @@ export class BuildingPanel {
       // Une nurserie ou une forge consomme : Adam vient la remplir.
       const consumer = entity.kind === 'nursery' || entity.kind === 'forge';
 
-      this.actions.hidden = !producer && !consumer && !pausable;
+      // Abîmé : le bouton dit ce que coûte la remise à neuf, la ligne dit comment s'en passer.
+      const cost = repairCost(entity);
+      const stock = this.world.repairStock(entity);
+      const material = ITEMS[REPAIR.item].label.toLowerCase();
+
+      if (cost > 0) {
+        lines.push(
+          stock === 0
+            ? `Abîmé — rapportez du ${material} pour le réparer (1 = ${REPAIR.hp} PV).`
+            : `Abîmé — réparez-le, ou heurtez-le avec du ${material} dans le sac (1 = ${REPAIR.hp} PV).`,
+        );
+      }
+      this.repairButton.hidden = cost === 0;
+      this.repairButton.disabled = !inReach || stock === 0;
+      const repairLabel = `Réparer (${stock > 0 ? Math.min(cost, stock) : cost} ${material})`;
+
+      if (this.repairButton.textContent !== repairLabel) this.repairButton.textContent = repairLabel;
+
+      this.actions.hidden = !producer && !consumer && !pausable && cost === 0;
       this.pauseButton.hidden = !pausable;
       this.pauseButton.textContent = entity.paused ? 'Reprendre' : 'Pause';
       this.pauseButton.dataset['tone'] = entity.paused ? 'resume' : 'pause';

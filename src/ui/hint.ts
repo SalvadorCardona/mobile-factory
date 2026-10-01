@@ -11,7 +11,7 @@
  * Fonction pure, sans DOM : `hud.ts` l'affiche, les tests la lisent.
  */
 
-import { BUILDINGS } from '../data/buildings.ts';
+import { BUILDINGS, REPAIR, buildingLevel } from '../data/buildings.ts';
 import { EVE, EVE_LINES } from '../data/eve.ts';
 import { ITEMS, type ItemId } from '../data/items.ts';
 import type { World } from '../sim/world.ts';
@@ -21,6 +21,8 @@ export interface HintProgress {
   harvestedWood: boolean;
   harvestedStone: boolean;
   delivered: boolean;
+  /** Adam a déjà réparé un bâtiment : il sait faire. */
+  repaired: boolean;
 }
 
 /** Un conseil, et la ressource qu'il envoie chercher : le repère d'objectif y mène. */
@@ -95,6 +97,11 @@ export function tutorialAdvice(world: World, progress: HintProgress, towers: boo
 
   if (world.night === 0 && !towers) return say(lines.tower);
   if (mutants > 0 && world.night <= 2) return say(lines.bow);
+
+  // Entre deux vagues, la mairie entamée d'au moins un bois, et Ève pas encore là pour la réparer : à Adam de le faire.
+  if (mutants === 0 && !progress.repaired && !world.eve() && hall.hp <= buildingLevel(hall.proto, hall.level).hp - REPAIR.hp) {
+    return world.repairStock(hall) > 0 ? say(lines.repair) : say(lines.repairFetch, REPAIR.item);
+  }
 
   // La pierre manque en ville, et rien n'en produit : la carrière, avant que les rochers ne soient vidés.
   const quarried = [...world.entities.values()].some((entity) => BUILDINGS[entity.proto].kind === 'quarry');

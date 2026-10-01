@@ -48,6 +48,9 @@ export const EVE_LINES = {
     deliver: 'Pose tout ça : marche contre le chantier, ou tape-le.',
     tower: 'Les mutants sortent la nuit ! Une tour de guet, vite.',
     bow: 'Reste près d’eux : ton arc tire tout seul.',
+    /** Entre deux nuits, la mairie entamée et Ève pas encore là : Adam apprend à la réparer, bois sous la main ou pas. */
+    repair: 'La mairie est abîmée ! Fonce dedans avec du bois, ou tape-la puis « Réparer ».',
+    repairFetch: 'La mairie est abîmée ! Rapporte du bois et fonce dedans : ça la répare.',
     /** Plus de pierre en ville et pas de carrière : la source qui ne s'épuise pas. */
     quarry: 'Plus de pierre en ville ? Pose une carrière : ses ouvriers la taillent dans les ruines.',
     /** Par radio, entre deux nuits, tant qu'elle n'est pas là. `{n}` : nuits restantes. */

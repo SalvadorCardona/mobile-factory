@@ -36,7 +36,9 @@
  * - le **bandeau** des vagues : « Nuit 4 — 2 mutants arrivent par l'est ! »
  *   (« Renforts » pour les vagues suivantes de la nuit) trois secondes avant,
  *   avec une flèche tournée vers leur point d'apparition, puis « Nuit 4 —
- *   vague repoussée ! » quand le dernier tombe ;
+ *   vague repoussée ! » quand le dernier tombe ; un gros mutant s'annonce à part ;
+ * - l'**alarme** quand la mairie est frappée hors de l'écran : bord rouge
+ *   qui clignote, et vibration du téléphone s'il en a une ;
  * - l'écran de **défaite**, avec le bilan de la partie et les graines qu'elle
  *   laisse au jardin des souvenirs ;
  * - les statistiques de debug, seulement avec `?debug` (ou la touche `²`/`` ` ``).
@@ -53,7 +55,7 @@ import { RESEARCH } from '../data/research.ts';
 import { WEATHER, WEATHER_CALENDAR } from '../data/weather.ts';
 import type { AtlasStats } from '../render/spriteLibrary.ts';
 import type { WaterStats } from '../render/waterLayer.ts';
-import type { PlacementRejection } from '../sim/commands.ts';
+import type { PlacementRejection, RepairRejection } from '../sim/commands.ts';
 import type { Compass } from '../sim/enemies.ts';
 import type { Entity } from '../sim/types.ts';
 import { ticksToNight } from '../sim/dayNight.ts';
@@ -74,6 +76,20 @@ const REJECTION_LABELS: Record<PlacementRejection, string> = {
   locked: 'Pas encore débloqué — il faut son plan, ou tenir encore une nuit',
   unique: 'Un seul par colonie — il y en a déjà un',
 };
+
+const REPAIR_LABELS: Record<RepairRejection, string | null> = {
+  missing: null,
+  outOfReach: 'Trop loin — rapprochez-vous',
+  intact: 'Rien à réparer',
+  noMaterial: 'Il faut du bois pour réparer — ni dans le sac, ni en ville',
+};
+
+/** Durée de l'alarme après le dernier coup reçu par la mairie hors de l'écran, en ms. */
+const ALARM_MS = 2500;
+
+/** Motif de vibration de l'alarme, et le délai minimal entre deux vibrations, en ms. */
+const ALARM_VIBRATION = [140, 80, 140];
+const ALARM_VIBRATION_EVERY_MS = 4000;
 
 /** Durée de vie d'un gain flottant, en ms (cf. `hud-float-up` dans le CSS). */
 const FLOAT_MS = 1000;
@@ -190,6 +206,11 @@ export class Hud {
   private harvestedWood = false;
   private harvestedStone = false;
   private delivered = false;
+  private repaired = false;
+
+  /** Fin de l'alarme en cours, et dernière vibration, en ms (`performance.now()`). */
+  private alarmUntil = 0;
+  private lastVibration = -Infinity;
 
   private project: Projector = (x, y) => ({ x, y });
 
@@ -373,13 +394,25 @@ export class Hud {
       if (reason === 'outOfReach') this.notify(REJECTION_LABELS.outOfReach, 'bad');
       if (reason === 'missingItems') this.notify('Il manque de quoi payer — ni dans le sac, ni en ville', 'bad');
     });
-    world.events.on('waveCountdown', ({ seconds, night, wave, count, from, x, y }) => {
+    world.events.on('playerRepaired', ({ item, amount, fromBag }) => {
+      this.repaired = true;
+      if (fromBag > 0) this.float(item, -fromBag);
+      if (amount > fromBag) this.notify(`Réparé avec ${amount - fromBag} ${ITEMS[item].label.toLowerCase()} de la ville`, 'good');
+    });
+    world.events.on('repairRejected', ({ reason }) => {
+      const label = REPAIR_LABELS[reason];
+
+      if (label) this.notify(label, 'bad');
+    });
+    world.events.on('waveCountdown', ({ seconds, night, wave, count, boss, from, x, y }) => {
       this.showCountdown(String(seconds));
-      this.announce(night, wave, count, from, { x, y });
+      this.announce(night, wave, count, boss, from, { x, y });
     });
     world.events.on('duskFell', () => this.notify('La nuit tombe — rentrez !', 'bad'));
     // Une vague qui n'a pas eu son compte à rebours (partie reprise pile avant) s'annonce quand même.
-    world.events.on('waveStarted', ({ night, wave, count, from, x, y }) => this.announce(night, wave, count, from, { x, y }));
+    world.events.on('waveStarted', ({ night, wave, count, boss, from, x, y }) =>
+      this.announce(night, wave, count, boss, from, { x, y }),
+    );
     world.events.on('waveCleared', ({ night }) =>
       this.showBanner('cleared', `Nuit ${night} — vague repoussée !`, 'Ramassez ce que les mutants ont lâché', null, BANNER_CLEARED_MS),
     );
@@ -553,8 +586,8 @@ export class Hud {
     }, TOAST_MS);
   }
 
-  /** Le bandeau d'une vague, une seule fois par vague. */
-  private announce(night: number, wave: number, count: number, from: Compass, origin: { x: number; y: number }): void {
+  /** Le bandeau d'une vague, une seule fois par vague ; `boss` : un gros mutant mène la charge. */
+  private announce(night: number, wave: number, count: number, boss: boolean, from: Compass, origin: { x: number; y: number }): void {
     const key = `${night}:${wave}`;
 
     if (key === this.announced) return;
@@ -565,10 +598,34 @@ export class Hud {
     this.showBanner(
       'wave',
       wave === 1 ? `Nuit ${night}` : 'Renforts',
-      `${count} mutant${plural ? 's' : ''} arrive${plural ? 'nt' : ''} ${FROM_LABELS[from]} !`,
+      boss
+        ? `Un gros mutant mène la charge ${FROM_LABELS[from]} !`
+        : `${count} mutant${plural ? 's' : ''} arrive${plural ? 'nt' : ''} ${FROM_LABELS[from]} !`,
       origin,
       BANNER_WAVE_MS,
     );
+  }
+
+  /**
+   * La mairie vient d'être frappée hors de l'écran : bord rouge qui clignote
+   * tant que les coups continuent, et une vibration de temps en temps — pas
+   * à chaque coup, un téléphone qui vibre sans arrêt se pose sur la table.
+   */
+  public alarm(): void {
+    const now = performance.now();
+
+    this.alarmUntil = now + ALARM_MS;
+    this.root.dataset['alarm'] = 'true';
+
+    if (now - this.lastVibration < ALARM_VIBRATION_EVERY_MS) return;
+    this.lastVibration = now;
+
+    // Absente sur iOS et sur ordinateur : l'alarme visuelle suffit alors.
+    try {
+      navigator.vibrate?.(ALARM_VIBRATION);
+    } catch {
+      // Refusée par le navigateur : rien à faire.
+    }
   }
 
   /** Le bandeau, au-dessus du compte à rebours ; sa flèche suit `target` tant qu'il est là. */
@@ -668,6 +725,9 @@ export class Hud {
     this.updateWeather();
     this.root.dataset['danger'] = String(this.mutantCount() > 0 && !this.world.defeated);
     if (!this.banner.hidden) this.aimBanner();
+    if (this.root.dataset['alarm'] === 'true' && (performance.now() > this.alarmUntil || this.world.defeated)) {
+      this.root.dataset['alarm'] = 'false';
+    }
 
     if (this.debug) this.updateStats(fps, chunks, atlas, water, weatherParticles);
   }
@@ -802,6 +862,7 @@ export class Hud {
         harvestedWood: this.harvestedWood,
         harvestedStone: this.harvestedStone,
         delivered: this.delivered,
+        repaired: this.repaired,
       },
       towers,
       this.mutantCount(),

@@ -38,10 +38,22 @@
 import { Emitter } from '../core/events.ts';
 import { CHUNK_TILES, TILE_SIZE, coordKey, distanceSq, floorDiv, type TileCoord } from '../core/grid.ts';
 import { mulberry32, type StatefulRng } from '../core/rng.ts';
-import { BUILDINGS, buildingLevel, nextUpgrade, type BuildingId } from '../data/buildings.ts';
+import { BUILDINGS, REPAIR, buildingLevel, nextUpgrade, type BuildingId } from '../data/buildings.ts';
 import { CLINIC } from '../data/clinic.ts';
 import { DAWN_REWARD } from '../data/dayNight.ts';
-import { ENEMIES, LOOT_DROPS, WAVES, WILDLIFE, WILDLIFE_SPAWN, waveSize, type LootTable } from '../data/enemies.ts';
+import {
+  ENEMIES,
+  ENEMY_IDS,
+  LOOT_DROPS,
+  WAVES,
+  WILDLIFE,
+  WILDLIFE_SPAWN,
+  isBossWave,
+  waveSize,
+  waveSpec,
+  type EnemyId,
+  type LootTable,
+} from '../data/enemies.ts';
 import { EVE } from '../data/eve.ts';
 import { TOWN_PLENTY, type ItemId } from '../data/items.ts';
 import {
@@ -69,6 +81,7 @@ import type {
   CommandLogEntry,
   DepositRejection,
   PlacementRejection,
+  RepairRejection,
   ResearchRejection,
   SiteRejection,
   SupplyRejection,
@@ -295,14 +308,23 @@ export type WorldEvents = {
   harvestRefused: { tx: number; ty: number; item: ItemId; wanted: number; plenty: boolean };
   /**
    * Plus que `seconds` secondes avant la prochaine vague (3, 2, puis 1) : sa
-   * nuit, son rang dans la nuit, son effectif, d'où elle vient et le point,
-   * en pixels monde, où elle va surgir.
+   * nuit, son rang dans la nuit, son effectif, si un gros mutant la mène
+   * (`boss`), d'où elle vient et le point, en pixels monde, où elle va surgir.
    */
-  waveCountdown: { seconds: number; night: number; wave: number; count: number; from: Compass; x: number; y: number };
+  waveCountdown: {
+    seconds: number;
+    night: number;
+    wave: number;
+    count: number;
+    boss: boolean;
+    from: Compass;
+    x: number;
+    y: number;
+  };
   /** Le crépuscule commence : la nuit `night` tombe dans `DAY_CYCLE.dusk` ticks. */
   duskFell: { night: number };
   /** Une vague de mutants vient d'apparaître autour de la mairie, du côté `from` ; `wave` compte à partir de 1 dans la nuit. */
-  waveStarted: { night: number; wave: number; count: number; from: Compass; x: number; y: number };
+  waveStarted: { night: number; wave: number; count: number; boss: boolean; from: Compass; x: number; y: number };
   /** Le dernier mutant en vie vient de tomber : la vague de la nuit `night` est repoussée. */
   waveCleared: { night: number };
   /** Un mutant abattu a lâché du butin en (x, y). */
@@ -350,6 +372,13 @@ export type WorldEvents = {
   questCompleted: { quest: QuestId };
   /** Ève a rendu `hp` points de vie au bâtiment. */
   buildingRepaired: { id: EntityId; hp: number };
+  /**
+   * Adam a réparé le bâtiment avec `amount` objets `item` (`REPAIR`), dont
+   * `fromBag` sortis du sac, le reste de la ville ; `hp` est ce qu'il a maintenant.
+   */
+  playerRepaired: { id: EntityId; hp: number; item: ItemId; amount: number; fromBag: number };
+  /** Une réparation a été refusée. */
+  repairRejected: { id: EntityId; reason: RepairRejection };
   /** Un porteur a déposé sa charge : sur un chantier, ou dans la mairie. */
   porterDelivered: { workerId: MobileId; id: EntityId; item: ItemId; amount: number };
   /** Un bûcheron a donné un coup de hache : une unité de bois s'est détachée de l'arbre. `remaining` à 0 : il est tombé. */
@@ -723,6 +752,10 @@ export class World {
         this.upgrade(command.id);
         break;
 
+      case 'repairBuilding':
+        this.repairAll(command.id);
+        break;
+
       case 'applyPerks':
         this.applyPerks(command.perks);
         break;
@@ -930,6 +963,46 @@ export class World {
     this.events.emit('buildingUpgraded', { id, level: building.level, fromBag });
   }
 
+  /* ------------------------------------------------------------ réparation */
+
+  /**
+   * Ce qu'Adam peut poser sur le bâtiment pour le réparer, d'ici : le bois
+   * du sac, puis celui de la ville si le bâtiment est dans son rayon.
+   */
+  public repairStock(building: Building): number {
+    return this.player.inventory.available(REPAIR.item) + (this.townStockFor(building)?.available(REPAIR.item) ?? 0);
+  }
+
+  /** Le bouton « Réparer » : tout le bois qu'il faut, le sac d'abord, puis la ville. */
+  private repairAll(id: EntityId): void {
+    const building = this.entities.get(id);
+    const reject = (reason: RepairRejection): void => this.events.emit('repairRejected', { id, reason });
+
+    if (!building || building.kind === 'site') return reject('missing');
+    if (!this.inReach(building)) return reject('outOfReach');
+    if (repairCost(building) === 0) return reject('intact');
+    if (this.repairStock(building) === 0) return reject('noMaterial');
+    this.repair(building, this.townStockFor(building));
+  }
+
+  /**
+   * Pose sur le bâtiment le bois qu'il lui faut, dans la limite du sac puis
+   * de `town` ; chaque objet rend `REPAIR.hp` points de vie.
+   */
+  private repair(building: Building, town: Store | null): void {
+    const cost = repairCost(building);
+    const fromBag = Math.min(cost, this.player.inventory.available(REPAIR.item));
+    const fromTown = Math.min(cost - fromBag, town?.available(REPAIR.item) ?? 0);
+    const amount = fromBag + fromTown;
+
+    if (amount <= 0) return;
+    if (fromBag > 0) this.player.inventory.remove(REPAIR.item, fromBag);
+    if (fromTown > 0) town?.remove(REPAIR.item, fromTown);
+
+    building.hp = Math.min(buildingLevel(building.proto, building.level).hp, building.hp + amount * REPAIR.hp);
+    this.events.emit('playerRepaired', { id: building.id, hp: building.hp, item: REPAIR.item, amount, fromBag });
+  }
+
   /* ------------------------------------------------------- ville et sac */
 
   /**
@@ -1103,6 +1176,9 @@ export class World {
 
     const occupant = this.chunks.occupantAt(contact.tx, contact.ty);
     const entity = occupant === undefined ? undefined : this.entities.get(occupant);
+
+    // Un bâtiment abîmé heurté avec du bois dans le sac se répare — avant que la mairie n'avale le sac.
+    if (entity && entity.kind !== 'site' && this.contactTicks % DELIVER_TICKS === 0) this.repair(entity, null);
 
     // La mairie finie heurtée avale tout le sac, une fois par contact.
     if (entity?.kind === 'townHall' && this.contactTicks === DELIVER_TICKS) {
@@ -2906,11 +2982,14 @@ export class World {
 
     if (left > 0 && left <= WAVE_COUNTDOWN_SECONDS * TICKS_PER_SECOND && left % TICKS_PER_SECOND === 0) {
       // Trois secondes avant, on est au crépuscule pour la première vague, dans la nuit pour les suivantes.
+      const wave = clock.phase === 'night' ? Math.floor(clock.elapsed / WAVES.interval) + 2 : 1;
+
       this.events.emit('waveCountdown', {
         seconds: left / TICKS_PER_SECOND,
         night: clock.cycle,
-        wave: clock.phase === 'night' ? Math.floor(clock.elapsed / WAVES.interval) + 2 : 1,
-        count: waveSize(clock.cycle),
+        wave,
+        count: waveSize(clock.cycle, wave),
+        boss: isBossWave(clock.cycle, wave),
         from: compassOf(this.nextWaveHeading),
         ...this.waveOrigin(),
       });
@@ -2920,18 +2999,26 @@ export class World {
   }
 
   /**
-   * Une vague : `waveSize(nuit)` mutants du côté annoncé, qui sortent de leur
-   * flaque l'un après l'autre, et les tours s'éveillent. Le côté de la
-   * vague suivante est tiré aussitôt, pour que son annonce puisse le donner.
+   * Une vague : les mutants de `waveSpec(nuit, vague)` du côté annoncé, qui
+   * sortent de leur flaque l'un après l'autre, et les tours s'éveillent. Le
+   * côté de la vague suivante est tiré aussitôt, pour que son annonce
+   * puisse le donner.
    */
   private spawnWave(wave: number): void {
-    const count = waveSize(this.night);
+    const spec = waveSpec(this.night, wave);
     const origin = this.waveOrigin();
     const from = compassOf(this.nextWaveHeading);
+    let count = 0;
 
-    for (let i = 0; i < count; i += 1) this.spawnMutant(WAVES.emergeTicks + i * WAVES.emergeStagger);
+    // Dans l'ordre des espèces : le tirage des points d'apparition reste rejouable.
+    for (const proto of ENEMY_IDS) {
+      for (let i = 0; i < (spec[proto] ?? 0); i += 1) {
+        this.spawnMutant(proto, WAVES.emergeTicks + count * WAVES.emergeStagger);
+        count += 1;
+      }
+    }
 
-    this.events.emit('waveStarted', { night: this.night, wave, count, from, ...origin });
+    this.events.emit('waveStarted', { night: this.night, wave, count, boss: isBossWave(this.night, wave), from, ...origin });
 
     for (const entity of this.entities.values()) {
       if (entity.kind === 'tower') this.armTower(entity, 1);
@@ -2971,7 +3058,7 @@ export class World {
     };
   }
 
-  private spawnMutant(emerge: number): void {
+  private spawnMutant(proto: EnemyId, emerge: number): void {
     let point = spawnPoint(this.rng, this.target, this.nextWaveHeading);
 
     // Pas dans un bâtiment : il y resterait coincé à le ronger de l'intérieur.
@@ -2983,14 +3070,14 @@ export class World {
     const mutant: Mutant = {
       kind: 'mutant',
       id: this.nextMobileId++,
-      proto: 'mutant',
+      proto,
       x: point.x,
       y: point.y,
       prevX: point.x,
       prevY: point.y,
       facing: 'down',
       moving: false,
-      hp: ENEMIES.mutant.hp,
+      hp: ENEMIES[proto].hp,
       attackCooldown: 0,
       emerge,
     };
@@ -4074,6 +4161,11 @@ function copyMobile(mobile: Mobile): Mobile {
   if (mobile.kind === 'worker') return { ...mobile, job: mobile.job && { ...mobile.job } };
   if (mobile.kind === 'lumberjack') return { ...mobile, tree: mobile.tree && { ...mobile.tree } };
   return { ...mobile };
+}
+
+/** Objets `REPAIR.item` qu'il faut pour remettre un bâtiment à neuf. */
+export function repairCost(building: Building): number {
+  return Math.ceil(Math.max(0, buildingLevel(building.proto, building.level).hp - building.hp) / REPAIR.hp);
 }
 
 /** Ce qu'il manque encore à un chantier, tous objets confondus. */

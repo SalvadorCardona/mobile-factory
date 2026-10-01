@@ -17,7 +17,7 @@ import { TILE_SIZE } from '../core/grid.ts';
 import { auditSvg } from './artDirection.ts';
 import { BUILDINGS, type BuildingProto } from './buildings.ts';
 import { DAWN_REWARD, DAY_CYCLE } from './dayNight.ts';
-import { ENEMIES, LOOT_DROPS, WAVES, WILDLIFE, WILDLIFE_SPAWN, type LootTable, type WildlifeProto } from './enemies.ts';
+import { ENEMIES, LOOT_DROPS, NIGHT_PLAN, WAVES, WILDLIFE, WILDLIFE_SPAWN, type LootTable, type WaveSpec, type WildlifeProto } from './enemies.ts';
 import { EVE } from './eve.ts';
 import { ICON_SIZE, ITEM_ICONS } from './icons.ts';
 import { ITEMS } from './items.ts';
@@ -331,6 +331,15 @@ export function validatePrototypes(): string[] {
   if (WAVES.minDistance > WAVES.maxDistance || WAVES.perNight <= 0 || WAVES.interval <= 0) {
     errors.push('WAVES : distances ou délais incohérents');
   }
+  if (WAVES.cycle <= 0 || WAVES.cycle > NIGHT_PLAN.length || WAVES.growPerCycle < 0) {
+    errors.push('WAVES.cycle : doit tenir dans NIGHT_PLAN');
+  }
+  NIGHT_PLAN.forEach((night: readonly WaveSpec[], index) => {
+    if (night.length !== WAVES.perNight) errors.push(`NIGHT_PLAN[${index}] : ${WAVES.perNight} vagues attendues`);
+    for (const wave of night) {
+      if (Object.values(wave).reduce((sum, count) => sum + count, 0) <= 0) errors.push(`NIGHT_PLAN[${index}] : vague vide`);
+    }
+  });
 
   if (QUEST_IDS.length < 3) errors.push('QUESTS : Ève doit donner au moins trois quêtes');
   if (EVE.arrivalNight < 1 || EVE.rideSpeed <= 0 || EVE.walkSpeed <= 0 || EVE.repairTicks <= 0 || EVE.repairAmount <= 0) {
