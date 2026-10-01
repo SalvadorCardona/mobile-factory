@@ -45,7 +45,7 @@ import { canPause } from '../sim/staffing.ts';
 import { siteMissing, type World } from '../sim/world.ts';
 import { PLAYER_MAX_HP } from '../sim/player.ts';
 import { MobileLayer, drawHp } from './mobileLayer.ts';
-import { Puppet } from './puppet.ts';
+import { type HeldTool, Puppet } from './puppet.ts';
 import type { SpriteLibrary } from './spriteLibrary.ts';
 import type { TerrainTiles } from './terrainTiles.ts';
 
@@ -181,6 +181,12 @@ export class EntityLayer {
       if (view) view.hit = HIT_MS;
     });
     world.events.on('playerHurt', () => this.adam.hit());
+    // Adam a les mains vides : l'outil découle de ce qu'il fait — la hache pour un arbre, la
+    // pioche pour un rocher (fer, charbon, pierre), le marteau pour bâtir, renforcer ou réparer.
+    world.events.on('resourceHarvested', ({ item }) => this.wieldTool(item === 'wood' ? 'axe' : 'pickaxe'));
+    world.events.on('siteDelivered', () => this.wieldTool('hammer', true));
+    world.events.on('playerRepaired', () => this.wieldTool('hammer', true));
+    world.events.on('buildingUpgraded', () => this.wieldTool('hammer', true));
     world.events.on('arrowShot', ({ x, y }) => {
       const { player } = world;
 
@@ -367,6 +373,11 @@ export class EntityLayer {
     if (fill > 0) view.bar.roundRect(x + 2, y + 2, Math.max(4, fill), 4, 2).fill(color);
   }
 
+  /** Un outil d'Adam, le temps d'un geste — sauf s'il vise : l'arc passe avant, sans clignoter. */
+  private wieldTool(tool: Exclude<HeldTool, 'bow'>, swing = false): void {
+    if (this.world.player.target === null) this.adam.wield(tool, swing);
+  }
+
   /** `alpha` est la fraction du pas de simulation déjà écoulée, dans [0, 1[. */
   public update(alpha: number, ticker: Ticker): void {
     const { player } = this.world;
@@ -375,6 +386,8 @@ export class EntityLayer {
 
     this.adam.root.position.set(x, y);
     this.adam.root.zIndex = y + PLAYER_FOOT;
+    // Un ennemi à portée : Adam le vise, l'arc en main, tant qu'il le garde en joue.
+    if (player.target !== null) this.adam.wield('bow');
     // La récolte se fait en marchant : on ne frappe qu'à l'arrêt.
     this.adam.update(ticker.deltaMS, player.facing, player.moving ? 'walk' : player.harvesting ? 'act' : 'idle');
     this.updateShadow(x, y);

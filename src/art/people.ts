@@ -24,7 +24,7 @@ export interface HumanOptions {
   cap: boolean;
 }
 
-const { ink, orange, coral, violet, skin, yellow } = PALETTE;
+const { ink, orange, coral, violet, skin, yellow, cyan } = PALETTE;
 
 /**
  * Le corps d'un humain vu dans une direction, dans un cadre 32 × 48 aux pieds
@@ -124,6 +124,46 @@ export function bow(x: number, top: number, bottom: number): string {
   const middle = (top + bottom) / 2;
 
   return curve(`M${x} ${top} Q${x + 7} ${middle} ${x} ${bottom}`, yellow.shade) + line(x, top, x, bottom, ink.light);
+}
+
+/** La hache, tenue manche en main en (x, y) : le fer cyan à hauteur d'épaule, tranchant vers l'avant. */
+export function axe(x: number, y: number): string {
+  return (
+    line(x, y + 1, x + 3.5, y - 14, orange.shade) +
+    rect(x + 1.5, y - 19, 7.5, 6, cyan.shade, 2) +
+    rect(x + 1.5, y - 19, 7.5, 4.8, cyan.base, 2) +
+    pill(x + 2.5, y - 18.2, 3.5, 1.5, cyan.light)
+  );
+}
+
+/** Le marteau, tenu manche en main en (x, y) : la tête indigo à hauteur d'épaule. */
+export function hammer(x: number, y: number): string {
+  return (
+    line(x, y + 1, x + 2.5, y - 11, orange.shade) +
+    rect(x - 1.5, y - 16, 9, 5.5, ink.shade, 2) +
+    rect(x - 1.5, y - 16, 9, 4.2, ink.base, 2) +
+    pill(x - 0.5, y - 15.3, 3.5, 1.4, ink.light)
+  );
+}
+
+/**
+ * La pioche, tenue manche en main en (x, y) : un fer cyan long et fin, en
+ * travers du manche, à deux pointes — la hache, elle, n'a qu'un tranchant carré.
+ */
+export function pickaxe(x: number, y: number): string {
+  const cx = x + 4;
+  const top = y - 15;
+
+  return (
+    line(x, y + 1, cx, top + 1, orange.shade) +
+    group(
+      `rotate(-16 ${cx} ${top})`,
+      pill(cx - 5, top - 1.8, 12.5, 3.6, cyan.shade),
+      pill(cx - 5, top - 1.8, 12.5, 2.7, cyan.base),
+      pill(cx - 3.5, top - 1.4, 4, 1.2, cyan.light),
+      circle(cx, top, 1.8, ink.base),
+    )
+  );
 }
 
 /** Réduit un corps d'adulte autour des pieds : c'est ainsi qu'on dessine un enfant. */

@@ -13,6 +13,10 @@
  *   heurte ;
  * - un **coup reçu** montre le corps « touché » un instant et le fait gicler ;
  *   un **flash** (`flash()`) le blanchit tout entier le temps d'un éclair ;
+ * - Adam a les **mains vides** : il ne sort un outil (`wield()`) que le temps
+ *   de s'en servir — l'arc pour viser, la hache, la pioche, le marteau — et le
+ *   range un instant après le dernier geste, pour qu'un geste répété ne le
+ *   fasse pas clignoter ;
  * - un **tir** tend l'arc puis le relâche ;
  * - une **attaque** de bête fait claquer les pinces du crabe, bondir le loup ;
  * - un ouvrier qui **porte** a sa charge sur la tête, qui suit le rebond du pas ;
@@ -33,6 +37,11 @@ import { SPRITES, type SpriteId, type SpriteProto } from '../data/sprites.ts';
 import type { Facing } from '../sim/types.ts';
 import type { SpriteLibrary } from './spriteLibrary.ts';
 
+/** Ce qu'Adam peut tenir en main : un seul à la fois, et seulement pendant l'action. */
+export type HeldTool = 'bow' | 'axe' | 'pickaxe' | 'hammer';
+
+const HELD_TOOLS: readonly HeldTool[] = ['bow', 'axe', 'pickaxe', 'hammer'];
+
 /** Ce que fait le pantin à cet instant. */
 export type Verb = 'idle' | 'walk' | 'act';
 
@@ -46,6 +55,12 @@ const HURT_MS = 150;
 const SHOT_MS = 260;
 const STRIKE_MS = 240;
 const FLASH_MS = 70;
+/** Le temps qu'un outil reste en main après le dernier geste : plus long qu'un passage de récolte (500 ms). */
+const HOLD_MS = 800;
+/** Un coup d'outil isolé (une réparation, une livraison) : l'abattement, puis le retour. */
+const SWING_MS = 260;
+/** De profil, la main est plus en arrière qu'à droite du corps de face. */
+const SIDE_HAND_SHIFT = -5.5;
 
 /**
  * Le flash d'un coup reçu : chaque couleur tirée aux quatre cinquièmes vers
@@ -74,7 +89,11 @@ export class Puppet {
   private readonly figure = new Container();
   private readonly body: Sprite;
   private readonly feet: [Sprite, Sprite];
-  private readonly bow: Sprite | null;
+  /** Les outils d'Adam, rangés par défaut ; `null` pour tout autre pantin. */
+  private readonly held: Record<HeldTool, Sprite> | null;
+  private wielded: HeldTool | null = null;
+  private holdLeft = 0;
+  private swingLeft = 0;
   private readonly halo: Sprite | null;
   private readonly claws: Sprite | null;
   private readonly load: Sprite | null;
@@ -117,7 +136,10 @@ export class Puppet {
     this.halo = id === 'mutant' ? this.part('halo') : null;
     this.feet = [this.part('foot'), this.part('foot')];
     this.body = this.part('down');
-    this.bow = id === 'adam' ? this.part('bow') : null;
+    this.held =
+      id === 'adam'
+        ? { bow: this.part('bow'), axe: this.part('axe'), pickaxe: this.part('pickaxe'), hammer: this.part('hammer') }
+        : null;
     this.claws = 'claws' in this.proto.parts ? this.part('claws') : null;
     this.load =
       id === 'worker' || id === 'exMutant' || id === 'lumberjack' || id === 'logistician' || id === 'builder'
@@ -128,9 +150,12 @@ export class Puppet {
 
     if (this.halo) this.halo.alpha = 0.35;
     if (this.load) this.load.visible = false;
+    if (this.held) for (const tool of HELD_TOOLS) this.held[tool].visible = false;
 
     this.figure.addChild(
-      ...[this.halo, ...this.feet, this.body, this.bow, this.tool, this.claws, this.load].filter((sprite) => sprite !== null),
+      ...[this.halo, ...this.feet, this.body, ...(this.held ? HELD_TOOLS.map((tool) => this.held![tool]) : []), this.tool, this.claws, this.load].filter(
+        (sprite) => sprite !== null,
+      ),
     );
     this.root.addChild(this.shadow, this.figure);
   }
@@ -161,9 +186,25 @@ export class Puppet {
     this.figure.filters = ms > 0 ? FLASH_FILTERS : null;
   }
 
-  /** Tir : l'arc se tend et se relâche. */
+  /** Tir : l'arc sort, se tend et se relâche. */
   public shoot(): void {
+    this.wield('bow');
     this.shot = SHOT_MS;
+  }
+
+  /**
+   * Sort un outil — ou le garde en main — pour `HOLD_MS` encore ; un autre
+   * outil est rangé. `swing` : un coup isolé, l'outil s'abat une fois.
+   */
+  public wield(tool: HeldTool, swing = false): void {
+    if (!this.held) return;
+    if (tool !== this.wielded) {
+      if (this.wielded) this.held[this.wielded].visible = false;
+      this.wielded = tool;
+      this.held[tool].visible = true;
+    }
+    this.holdLeft = HOLD_MS;
+    if (swing) this.swingLeft = SWING_MS;
   }
 
   /** La charge d'un ouvrier : l'objet porté sur la tête, ou rien. */
@@ -195,6 +236,16 @@ export class Puppet {
     this.hurt = Math.max(0, this.hurt - deltaMs);
     this.shot = Math.max(0, this.shot - deltaMs);
     this.strikeLeft = Math.max(0, this.strikeLeft - deltaMs);
+    this.swingLeft = Math.max(0, this.swingLeft - deltaMs);
+
+    if (this.wielded && this.held) {
+      this.holdLeft = Math.max(0, this.holdLeft - deltaMs);
+      // Le geste est fini : l'outil retourne au sac.
+      if (this.holdLeft === 0) {
+        this.held[this.wielded].visible = false;
+        this.wielded = null;
+      }
+    }
 
     if (this.flashLeft > 0) {
       this.flashLeft = Math.max(0, this.flashLeft - deltaMs);
@@ -323,14 +374,26 @@ export class Puppet {
       this.tool.rotation = chop * 1.3;
     }
 
-    if (this.bow) {
+    if (this.held && this.wielded === 'bow') {
       // Tendu (écrasé en largeur), puis relâché en vibrant.
+      const bow = this.held.bow;
       const t = this.shot / SHOT_MS;
       const twang = t > 0.6 ? -(t - 0.6) * 0.8 : Math.sin(t * 30) * t * 0.25;
 
-      this.bow.scale.set(1 + twang, 1);
-      this.bow.position.x = this.body.x + (this.proto.pivots?.['bow']?.[0] ?? 0) - this.proto.anchorX * this.proto.width;
-      this.bow.position.y = bodyY + (this.proto.pivots?.['bow']?.[1] ?? 0) - this.proto.anchorY * this.proto.height;
+      bow.scale.set(1 + twang, 1);
+      bow.position.x = this.body.x + (this.proto.pivots?.['bow']?.[0] ?? 0) - this.proto.anchorX * this.proto.width;
+      bow.position.y = bodyY + (this.proto.pivots?.['bow']?.[1] ?? 0) - this.proto.anchorY * this.proto.height;
+    } else if (this.held && this.wielded) {
+      // L'outil suit la main, et s'abat vers l'avant au coup : à chaque frappe, ou une fois pour un geste isolé.
+      const tool = this.held[this.wielded];
+      const [px, py] = this.proto.pivots?.[this.wielded] ?? [0, 0];
+      const swing = Math.sin((this.swingLeft / SWING_MS) * Math.PI);
+
+      tool.position.set(
+        bodyX + px + (view === 'side' ? SIDE_HAND_SHIFT : 0) - this.proto.anchorX * this.proto.width,
+        bodyY + py - this.proto.anchorY * this.proto.height,
+      );
+      tool.rotation = Math.max(chop, swing) * 1.3;
     }
 
     if (this.halo) {
