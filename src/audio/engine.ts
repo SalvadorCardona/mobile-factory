@@ -11,9 +11,13 @@
  * avant le premier geste, et l'applique dès qu'il a un contexte — passe-bas
  * sur la musique, couche de tension (`nightLayer.ts`) si le son est activé.
  *
- * Le réglage muet survit au rechargement (`localStorage`) : couper le son
- * dans un jeu mobile est une décision qu'on ne veut pas reprendre à chaque
- * partie.
+ * Le réglage muet et celui de la musique survivent au rechargement
+ * (`localStorage`) : couper le son dans un jeu mobile est une décision
+ * qu'on ne veut pas reprendre à chaque partie. Couper la musique laisse les
+ * bruitages.
+ *
+ * Onglet caché, le contexte est suspendu (`setHidden`) : plus de musique en
+ * arrière-plan, et elle reprend où elle en était au retour.
  */
 
 import { Music } from './music.ts';
@@ -22,6 +26,7 @@ import { DAWN_RAMP_S, DAY_MOOD, DUSK_RAMP_S, TENSION_FADE_S, nightLevels, nightM
 import { SOUNDS, type SoundName } from './synth.ts';
 
 const MUTE_KEY = 'mobile-factory:muted';
+const MUSIC_KEY = 'mobile-factory:music';
 
 /** Deux sons identiques à moins de cet intervalle : le second est ignoré. */
 const DEDUPE_MS = 35;
@@ -36,13 +41,21 @@ export class AudioEngine {
   private tension: NightLayer | null = null;
   private readonly lastPlayed = new Map<SoundName, number>();
   private mutedFlag: boolean;
+  private musicFlag: boolean;
+  private hidden = false;
 
   public constructor() {
-    this.mutedFlag = readMuted();
+    this.mutedFlag = readFlag(MUTE_KEY, false);
+    this.musicFlag = readFlag(MUSIC_KEY, true);
   }
 
   public get muted(): boolean {
     return this.mutedFlag;
+  }
+
+  /** Vrai si la musique de fond est voulue (réglage du joueur, indépendant du muet). */
+  public get musicOn(): boolean {
+    return this.musicFlag;
   }
 
   /** Vrai une fois le contexte créé et démarré par un geste. */
@@ -75,8 +88,25 @@ export class AudioEngine {
       this.syncTension(DUSK_RAMP_S);
     }
 
+    if (this.hidden) return;
     if (this.ctx.state !== 'running') void this.ctx.resume();
-    this.music?.start();
+    if (this.musicFlag) this.music?.start();
+  }
+
+  /** L'onglet passe en arrière-plan ou en revient : tout se suspend, puis reprend où il en était. */
+  public setHidden(hidden: boolean): void {
+    this.hidden = hidden;
+    if (!this.ctx) return;
+    if (hidden) void this.ctx.suspend();
+    else void this.ctx.resume();
+  }
+
+  public toggleMusic(): boolean {
+    this.musicFlag = !this.musicFlag;
+    writeFlag(MUSIC_KEY, this.musicFlag);
+    if (this.musicFlag) this.music?.start();
+    else this.music?.stop();
+    return this.musicFlag;
   }
 
   public play(name: SoundName): void {
@@ -109,7 +139,7 @@ export class AudioEngine {
 
   public setMuted(muted: boolean): void {
     this.mutedFlag = muted;
-    writeMuted(muted);
+    writeFlag(MUTE_KEY, muted);
 
     if (this.master && this.ctx) {
       // Une rampe courte : couper net fait claquer les haut-parleurs.
@@ -141,17 +171,19 @@ export class AudioEngine {
   }
 }
 
-function readMuted(): boolean {
+function readFlag(key: string, fallback: boolean): boolean {
   try {
-    return window.localStorage.getItem(MUTE_KEY) === 'true';
+    const value = window.localStorage.getItem(key);
+
+    return value === null ? fallback : value === 'true';
   } catch {
-    return false;
+    return fallback;
   }
 }
 
-function writeMuted(muted: boolean): void {
+function writeFlag(key: string, value: boolean): void {
   try {
-    window.localStorage.setItem(MUTE_KEY, String(muted));
+    window.localStorage.setItem(key, String(value));
   } catch {
     // Mode privé ou stockage plein : le réglage ne survit pas, tant pis.
   }

@@ -15,6 +15,7 @@ import '@fontsource/fredoka/latin-600.css';
 import '@fontsource/fredoka/latin-700.css';
 import './style.css';
 import { AudioEngine } from './audio/engine.ts';
+import { prefetchMusic } from './audio/music.ts';
 import { assertPrototypes } from './data/validate.ts';
 import { GROUND, PARTICLES, type ParticleStyle } from './data/artDirection.ts';
 import { MENU_BUILDING_IDS } from './data/buildings.ts';
@@ -128,6 +129,9 @@ async function main(): Promise<void> {
   // Le contrôle d'intégrité des prototypes ne tourne qu'en dev : en production
   // les données sont figées au build, et TypeScript a déjà tout vérifié.
   if (import.meta.env.DEV) assertPrototypes();
+
+  // La musique se télécharge pendant que l'écran titre se monte, sans le retarder.
+  prefetchMusic();
 
   const mount = document.querySelector<HTMLDivElement>('#app');
 
@@ -344,7 +348,7 @@ async function main(): Promise<void> {
   pointers.add(stick.canvasFinger(renderer.canvas, () => placement.mode === 'idle'));
   pointers.add(placement);
 
-  wireAudio(world, audio, hud);
+  wireAudio(world, audio, hud, pause);
   wireParticles(world, renderer);
   wireAlarm(world, renderer, hud);
   // Le joueur vise ou lit : un bâtiment armé, le menu, une fenêtre ou le sac ouverts.
@@ -441,7 +445,7 @@ async function main(): Promise<void> {
  * Un son par événement de simulation. Le moteur ne connaît pas le monde,
  * le monde ne connaît pas le moteur : la table est ici, et nulle part ailleurs.
  */
-function wireAudio(world: World, audio: AudioEngine, hud: Hud): void {
+function wireAudio(world: World, audio: AudioEngine, hud: Hud, pause: PauseScreen): void {
   // Les navigateurs mobiles exigent un geste avant le moindre son : le
   // premier doigt posé n'importe où déverrouille tout, musique comprise.
   // On réessaie à chaque geste tant que le contexte n'a pas démarré — iOS
@@ -455,8 +459,17 @@ function wireAudio(world: World, audio: AudioEngine, hud: Hud): void {
 
   for (const type of GESTURES) window.addEventListener(type, unlock);
 
+  // Onglet caché, plus de musique ; au retour, elle reprend. Si le navigateur
+  // refuse de reprendre sans geste (iOS), le prochain doigt posé s'en charge.
+  document.addEventListener('visibilitychange', () => {
+    audio.setHidden(document.hidden);
+    if (!document.hidden) for (const type of GESTURES) window.addEventListener(type, unlock);
+  });
+
   hud.setMuted(audio.muted);
   hud.audioButton.addEventListener('click', () => hud.setMuted(audio.toggleMuted()));
+  pause.setMusic(audio.musicOn);
+  pause.musicButton.addEventListener('click', () => pause.setMusic(audio.toggleMusic()));
 
   // Une partie rechargée au crépuscule ou en pleine vague : l'oreille le sait aussitôt.
   const phase = world.clock()?.phase;

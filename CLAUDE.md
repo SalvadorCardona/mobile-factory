@@ -362,8 +362,12 @@ Les règles, en résumé :
 
 ## Son
 
-Tout est synthétisé en Web Audio (`src/audio/`) : pas de fichier audio dans
-le dépôt. Un nouvel effet = une entrée dans `SOUNDS` (`synth.ts`) et une
+Les bruitages sont synthétisés en Web Audio (`src/audio/`) : pas de fichier
+pour eux. Seule la musique de fond est un fichier (`public/audio/music/`,
+Ogg Vorbis puis repli `.m4a` pour Safari ; `audio/music.ts`) : préchargée
+sans retarder l'écran titre, bouclée par un `AudioBufferSourceNode`, coupée
+onglet caché, interrupteur « Musique » dans la pause (`mobile-factory:music`).
+Un nouvel effet = une entrée dans `SOUNDS` (`synth.ts`) et une
 ligne dans `wireAudio()` (`main.ts`), qui est la seule table événement → son.
 Rien ne joue avant un geste du joueur.
 
