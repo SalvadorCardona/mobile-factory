@@ -136,11 +136,13 @@ export interface Quarry extends Built {
 
 /**
  * La forge : fer et charbon, apportés par Adam, deviennent des plaques de
- * fer dans son coffre, à la cadence de la recette.
+ * fer dans son coffre, à la cadence de la recette. Le four à charbon est une
+ * forge aussi, sur sa propre recette (`recipeOf(proto)`) : le bois y devient
+ * du charbon.
  */
 export interface Forge extends Built {
   kind: 'forge';
-  /** Vrai quand la forge ne se replanifie plus : il manque une entrée, ou elle est en pause. */
+  /** Vrai quand la forge ne se replanifie plus : il manque une entrée, elle est en pause ou sans ouvrier. */
   blocked: boolean;
 }
 

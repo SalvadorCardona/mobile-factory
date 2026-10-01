@@ -16,9 +16,10 @@
  * recalcule depuis les jobs des ouvriers (`rebuild`), comme les réservations
  * des coffres, dont la sauvegarde ne garde que le stock réel.
  *
- * Premier périmètre : livrer les chantiers, le labo de recherche, la forge
- * et la nurserie depuis la mairie, et vider les coffres des foreuses, des fermes et des cabanes de
- * bûcheron dans la mairie.
+ * Premier périmètre : livrer les chantiers, le labo de recherche, les forges
+ * (la forge, le four à charbon) et la nurserie depuis la mairie, et vider
+ * dans la mairie les coffres des foreuses, des fermes et des cabanes de
+ * bûcheron, et les sorties des forges — plaques, charbon.
  *
  * Trois équipes se partagent le travail (`Crew`). Un producteur dans le rayon
  * d'un poste de logistique fini est à ses logisticiens, qui ne font que ça :
@@ -34,9 +35,9 @@ import { BUILDINGS } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
 import { BUILDERS, JOB_PRIORITY, LOGISTICIANS, PORTERS } from '../data/workers.ts';
 import { labSurplus, labWants, researchCost } from './research.ts';
-import { consumerRecipe, consumerWants, isStarving } from './consumers.ts';
+import { consumerRecipe, consumerWants, forgeOutputs, isStarving } from './consumers.ts';
 import type { Store } from './store.ts';
-import type { Depot, Drill, Entity, EntityId, Farm, Job, LumberCamp, Quarry, Site, TownHall, Yard } from './types.ts';
+import type { Depot, Drill, Entity, EntityId, Farm, Forge, Job, LumberCamp, Quarry, Site, TownHall, Yard } from './types.ts';
 
 /** Le trajet en ligne droite de (x0, y0) à (x1, y1) est-il praticable ? */
 export type LineTest = (x0: number, y0: number, x1: number, y1: number) => boolean;
@@ -231,6 +232,9 @@ export class JobBoard {
 
         case 'forge':
         case 'nursery': {
+          // Ce que la forge a produit — plaques, charbon du four — part à la mairie, même en pause.
+          if (entity.kind === 'forge') this.outputOffers(entity, hall, carry, offers);
+
           // En pause, elle ne consomme rien : inutile de la remplir.
           if (entity.paused) break;
 
@@ -281,6 +285,20 @@ export class JobBoard {
       const priority = available >= carry ? JOB_PRIORITY.empty : JOB_PRIORITY.surplus;
 
       offers.push({ from: entity.id, to: hall.id, item, amount, priority });
+    }
+  }
+
+  /** Vider les sorties d'une forge dans la mairie — ses entrées restent au four. */
+  private outputOffers(forge: Forge, hall: TownHall, carry: number, offers: Offer[]): void {
+    for (const item of forgeOutputs(forge)) {
+      const available = forge.store.available(item);
+      const amount = Math.min(carry, available, hall.store.freeSpace());
+
+      if (amount <= 0) continue;
+
+      const priority = available >= carry ? JOB_PRIORITY.empty : JOB_PRIORITY.surplus;
+
+      offers.push({ from: forge.id, to: hall.id, item, amount, priority });
     }
   }
 

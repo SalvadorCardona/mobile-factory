@@ -46,6 +46,7 @@ import { ITEMS, type ItemId } from '../data/items.ts';
 import { RECIPES, type RecipeProto } from '../data/recipes.ts';
 import { WEAPONS } from '../data/weapons.ts';
 import { BUILDERS, LOGISTICIANS, LUMBERJACKS } from '../data/workers.ts';
+import { forgeRecipe } from '../sim/consumers.ts';
 import { canPause } from '../sim/staffing.ts';
 import type { Building, Entity, EntityId, Forge, Nursery } from '../sim/types.ts';
 import { TICKS_PER_SECOND, repairCost, siteMissing, type SiteCoverage, type World } from '../sim/world.ts';
@@ -461,18 +462,24 @@ export class BuildingPanel {
           break;
         }
 
-        case 'forge':
-          lines.push(`${recipeLine(RECIPES.smeltPlate.inputs)} → ${recipeLine(RECIPES.smeltPlate.outputs)}`);
+        case 'forge': {
+          // La forge fond des plaques, le four à charbon cuit le bois : chacun sa recette.
+          const recipe = forgeRecipe(entity);
+
+          lines.push(`${recipeLine(recipe.inputs)} → ${recipeLine(recipe.outputs)}`);
           lines.push(
             entity.paused
               ? PAUSED
-              : entity.blocked
+              : stopped
+                ? 'À l’arrêt : personne au four — ajoutez un ouvrier.'
+                : entity.blocked
                 ? this.world.supplyStatus(entity)
                   ? `À l’arrêt. ${starvedLine(this.world, entity)}`
                   : BLOCKED
                 : 'Le four chauffe.',
           );
           break;
+        }
 
         case 'tower': {
           const weapon = level.weapon ? WEAPONS[level.weapon] : null;

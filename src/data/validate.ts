@@ -168,6 +168,9 @@ export function validatePrototypes(): string[] {
   for (const [id, recipe] of Object.entries(RECIPES) as [string, RecipeProto][]) {
     if (!(recipe.building in BUILDINGS)) {
       errors.push(`RECIPES.${id} : bâtiment inconnu « ${recipe.building} »`);
+    } else if (buildingsWithRecipe.has(recipe.building) && BUILDINGS[recipe.building].kind === 'forge') {
+      // Une forge trouve sa recette par son id (`recipeOf`) : une seconde ne tournerait jamais.
+      errors.push(`RECIPES.${id} : « ${recipe.building} » a déjà une recette`);
     } else {
       buildingsWithRecipe.add(recipe.building);
     }

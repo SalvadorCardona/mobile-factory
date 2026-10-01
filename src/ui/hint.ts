@@ -119,9 +119,14 @@ export function tutorialAdvice(world: World, progress: HintProgress, towers: boo
   }
 
   // La forge se débloque à la tombée d'une nuit : le charbon, jusque-là sans usage, devient un objectif.
-  const forged = [...world.entities.values()].some((entity) => BUILDINGS[entity.proto].kind === 'forge');
+  const forged = [...world.entities.values()].some((entity) => entity.proto === 'forge');
 
   if (mutants === 0 && world.isUnlocked('forge') && !forged) return say(lines.forge, 'coal');
+
+  // La forge debout, la ville sans charbon, et rien pour en cuire : le four à charbon.
+  const kiln = [...world.entities.values()].some((entity) => entity.proto === 'charcoalKiln');
+
+  if (mutants === 0 && forged && !kiln && (world.townStock()?.available('coal') ?? 0) === 0) return say(lines.kiln);
 
   const objective = currentObjective(world);
 

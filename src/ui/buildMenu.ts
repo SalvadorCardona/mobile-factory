@@ -247,7 +247,7 @@ export class BuildMenu {
     const meta = document.createElement('div');
 
     meta.className = 'build-card-meta';
-    meta.textContent = `${proto.width}×${proto.height}` + (proto.workers > 0 ? ` · ${proto.workers} ouvriers` : '');
+    meta.textContent = `${proto.width}×${proto.height}` + (proto.workers > 0 ? ` · ${proto.workers} ouvrier${proto.workers > 1 ? 's' : ''}` : '');
 
     // Coût et emprise sur une ligne : la carte garde la hauteur d'un pouce, effet compris.
     const footer = document.createElement('div');

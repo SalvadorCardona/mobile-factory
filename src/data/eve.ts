@@ -57,6 +57,8 @@ export const EVE_LINES = {
     coming: 'Tiens bon : encore {n} nuit{s} et j’arrive avec ma machine !',
     /** Une fois la forge débloquée, tant qu'elle n'est pas bâtie : le charbon sert enfin. */
     forge: 'La forge est débloquée ! Fer et charbon dedans, plaques de fer dehors.',
+    /** La forge bâtie, plus de charbon en ville et pas de four à charbon : le bois en trop s'y change en charbon. */
+    kiln: 'Ta forge a faim de charbon ? Un four à charbon cuit ton bois en trop : trois bûches, un charbon.',
   },
   /** Le petit dialogue d'arrivée, bulle après bulle. */
   arrival: [
