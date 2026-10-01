@@ -22,7 +22,10 @@
  * - un ouvrier qui **porte** a sa charge sur la tête, qui suit le rebond du pas ;
  * - un bûcheron qui **coupe** abat sa hache, pivot dans la main, à chaque coup ;
  * - un patient **boitille** : le corps penche d'un côté à chaque pas, une
- *   jambe traîne ; assommé, il prend une **pose** (`pose()`) qui remplace son corps.
+ *   jambe traîne ; assommé, il prend une **pose** (`pose()`) qui remplace son corps ;
+ * - un enfant **sautille** : il court à petits bonds, et saute sur place à l'arrêt ;
+ * - un ouvrier qui **glande** (`lounge()`) s'assoit par terre, s'adosse en
+ *   penchant, s'étire bras levés, ou bâille, une bulle « zzz » qui flotte à côté.
  *
  * Le profil gauche est le miroir du profil droit ; l'ombre portée, elle, ne
  * se retourne pas : la lumière vient toujours d'en haut à gauche.
@@ -33,6 +36,7 @@
 import { ColorMatrixFilter, Container, Sprite, type Texture } from 'pixi.js';
 import { LIGHT } from '../data/artDirection.ts';
 import type { ItemId } from '../data/items.ts';
+import type { IdlePose } from '../art/people.ts';
 import { SPRITES, type SpriteId, type SpriteProto } from '../data/sprites.ts';
 import type { Facing } from '../sim/types.ts';
 import type { SpriteLibrary } from './spriteLibrary.ts';
@@ -61,6 +65,15 @@ const HOLD_MS = 800;
 const SWING_MS = 260;
 /** De profil, la main est plus en arrière qu'à droite du corps de face. */
 const SIDE_HAND_SHIFT = -5.5;
+/** Le saut sur place d'un enfant : un bond de `HOP_MS` toutes les `HOP_PERIOD_MS`, haut de `HOP_PX`. */
+const HOP_PERIOD_MS = 1400;
+const HOP_MS = 280;
+const HOP_PX = 3.5;
+/** L'inclinaison d'un ouvrier adossé, en radians. */
+const LEAN_TILT = 0.2;
+
+/** Ce que fait un ouvrier qui glande : une pose dessinée, ou adossé (le corps penche). */
+export type Lounge = IdlePose | 'lean';
 
 /**
  * Le flash d'un coup reçu : chaque couleur tirée aux quatre cinquièmes vers
@@ -77,8 +90,8 @@ export interface PuppetOptions {
   shadowWidth: number;
   /** Écart des pieds de part et d'autre du centre. */
   stride: number;
-  /** `scuttle` : l'allure du crabe, de côté ; `limp` : le boitillement d'un patient. Par défaut, la marche. */
-  gait?: 'walk' | 'scuttle' | 'limp';
+  /** `scuttle` : l'allure du crabe, de côté ; `limp` : le boitillement d'un patient ; `hop` : les bonds d'un enfant. Par défaut, la marche. */
+  gait?: 'walk' | 'scuttle' | 'limp' | 'hop';
 }
 
 export class Puppet {
@@ -106,7 +119,10 @@ export class Puppet {
   private readonly id: PuppetId;
   private readonly proto: SpriteProto;
   private readonly stride: number;
-  private readonly gait: 'walk' | 'scuttle' | 'limp';
+  private readonly gait: 'walk' | 'scuttle' | 'limp' | 'hop';
+  /** La bulle « zzz » de l'ouvrier qui bâille. */
+  private readonly zzz: Sprite | null;
+  private lounging: Lounge | null = null;
 
   private phase = 0;
   private clock = Math.random() * 1000;
@@ -147,13 +163,15 @@ export class Puppet {
         : null;
     this.toolName = 'hammer' in this.proto.parts ? 'hammer' : 'axe';
     this.tool = this.toolName in this.proto.parts ? this.part(this.toolName) : null;
+    this.zzz = 'zzz' in this.proto.parts ? this.part('zzz') : null;
 
     if (this.halo) this.halo.alpha = 0.35;
     if (this.load) this.load.visible = false;
     if (this.held) for (const tool of HELD_TOOLS) this.held[tool].visible = false;
+    if (this.zzz) this.zzz.visible = false;
 
     this.figure.addChild(
-      ...[this.halo, ...this.feet, this.body, ...(this.held ? HELD_TOOLS.map((tool) => this.held![tool]) : []), this.tool, this.claws, this.load].filter(
+      ...[this.halo, ...this.feet, this.body, ...(this.held ? HELD_TOOLS.map((tool) => this.held![tool]) : []), this.tool, this.claws, this.load, this.zzz].filter(
         (sprite) => sprite !== null,
       ),
     );
@@ -221,6 +239,16 @@ export class Puppet {
     this.posed = part;
   }
 
+  /**
+   * L'ouvrier glande : assis, adossé, qui s'étire ou qui bâille — ou `null`,
+   * il repart. Seuls les pantins qui ont les poses (`sit`, `stretch`, `yawn`, `zzz`) en tiennent compte.
+   */
+  public lounge(pose: Lounge | null): void {
+    if (!this.zzz || pose === this.lounging) return;
+    this.lounging = pose;
+    this.posed = pose === null || pose === 'lean' ? null : pose;
+  }
+
   /** Attaque d'une bête : les pinces claquent, le loup bondit. */
   public strike(): void {
     this.strikeLeft = STRIKE_MS;
@@ -284,6 +312,16 @@ export class Puppet {
       squash = 0;
       left.position.set(-this.stride + lift * 1.2, -Math.max(0, lift) * 1.6);
       right.position.set(this.stride + lift * 1.2, -Math.max(0, -lift) * 1.6);
+    } else if (verb === 'walk' && this.gait === 'hop') {
+      // À petits bonds : les deux pieds quittent le sol ensemble, le corps monte plus haut.
+      this.phase += deltaMs * WALK_RATE * 1.3;
+
+      const bound = Math.abs(Math.sin(this.phase));
+
+      bodyY = -bound * 3.2;
+      squash = (bound - 0.5) * 0.08;
+      left.position.set(view === 'side' ? -1.5 : -this.stride, -bound * 2.2);
+      right.position.set(view === 'side' ? 1.5 : this.stride, -bound * 2.2);
     } else if (verb === 'walk') {
       this.phase += deltaMs * WALK_RATE;
 
@@ -328,6 +366,40 @@ export class Puppet {
         else bodyY = view === 'down' ? punch * 2 : -punch * 2;
       } else {
         squash = Math.sin(this.clock * 0.004) * 0.025;
+
+        if (this.gait === 'hop') {
+          // Sur place, un enfant saute de temps en temps — accroupi juste avant, écrasé à l'atterrissage.
+          const t = this.clock % HOP_PERIOD_MS;
+          const hop = t < HOP_MS ? Math.sin((t / HOP_MS) * Math.PI) : 0;
+
+          bodyY -= hop * HOP_PX;
+          left.position.y -= hop * HOP_PX * 0.7;
+          right.position.y -= hop * HOP_PX * 0.7;
+          squash += t < HOP_MS ? 0.04 : t > HOP_PERIOD_MS - 120 ? -0.06 : 0;
+        }
+
+        switch (this.lounging) {
+          case 'sit':
+            // Assis : il respire, à peine.
+            squash *= 0.6;
+            break;
+          case 'stretch':
+            // Il s'étire vers le ciel, lentement, et relâche.
+            squash = 0.04 + Math.max(0, Math.sin(this.clock * 0.0025)) * 0.07;
+            break;
+          case 'yawn':
+            // Le bâillement : la bouche s'ouvre, le corps s'allonge un peu, la tête part en arrière.
+            squash = Math.max(0, Math.sin(this.clock * 0.002)) * 0.05;
+            break;
+          case 'lean':
+            // Adossé : il penche de côté, un pied croisé devant l'autre.
+            tilt = LEAN_TILT;
+            bodyX = -1.5;
+            right.position.set(view === 'side' ? 0 : -this.stride + 2.5, 0);
+            break;
+          case null:
+            break;
+        }
       }
     }
 
@@ -372,6 +444,18 @@ export class Puppet {
 
       this.tool.position.set(bodyX + px - this.proto.anchorX * this.proto.width, bodyY + py - this.proto.anchorY * this.proto.height);
       this.tool.rotation = chop * 1.3;
+    }
+
+    if (this.zzz) {
+      // Les pieds disparaissent sous l'assis ; l'outil se range quand on glande ; la bulle flotte en montant.
+      const posed = this.posed !== null && verb === 'idle';
+      const float = Math.sin(this.clock * 0.003);
+
+      this.feet[0].visible = this.feet[1].visible = !(posed && this.lounging === 'sit');
+      if (this.tool) this.tool.visible = !posed;
+      this.zzz.visible = verb === 'idle' && this.lounging === 'yawn';
+      this.zzz.position.set(float * 0.8, -1.5 - Math.abs(float) * 1.5);
+      this.zzz.scale.set(0.92 + Math.abs(float) * 0.1);
     }
 
     if (this.held && this.wielded === 'bow') {

@@ -16,6 +16,7 @@ import {
   line,
   pill,
   polygon,
+  polyline,
   rect,
   shadedBlock,
   shadedCircle,
@@ -181,6 +182,31 @@ export const UI_ICONS = {
     circle(12, 8, 5, PALETTE.skin.base),
     pill(7, 3, 10, 5, ink.base),
     pill(6.5, 5.5, 11, 2.6, coral.base),
+  ),
+  /** Un ouvrier au travail : le marteau, tête indigo, manche orange. */
+  toil: svg(
+    S,
+    S,
+    group('translate(12 12) rotate(-40)', rect(-1.8, -3, 3.6, 14, orange.shade, 1.8), rect(-1.8, -3, 2.6, 13, orange.base, 1.3)),
+    group('translate(12 12) rotate(-40)', rect(-7, -9, 14, 7.5, ink.shade, 2.5), rect(-7, -9, 14, 6, ink.base, 2.5), pill(-5.5, -8, 5, 1.6, ink.light)),
+  ),
+  /** Un ouvrier qui glande : deux « z » de dormeur, le grand devant. */
+  idle: svg(
+    S,
+    S,
+    polyline([13, 4, 19, 4, 13, 10, 19, 10], ink.light),
+    polyline([4, 11, 12, 11, 4, 19, 12, 19], ink.base),
+  ),
+  /** Un enfant : la tête, la casquette jaune des enfants de la colonie, la tunique orange. */
+  child: svg(
+    S,
+    S,
+    shadedPill(6.5, 14, 11, 8, 2.5, 'orange'),
+    circle(12, 10, 5, PALETTE.skin.base),
+    pill(6.5, 4.5, 11, 4.5, yellow.base),
+    pill(8, 5.2, 4, 1.4, yellow.light),
+    circle(10.2, 11, 0.9, ink.base),
+    circle(13.8, 11, 0.9, ink.base),
   ),
   /** Une tête de mutant, pour les mutants abattus. */
   mutant: svg(

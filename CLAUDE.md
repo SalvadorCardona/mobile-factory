@@ -123,6 +123,17 @@ les autres reviennent aux porteurs et à Adam.
 Un ouvrier sans travail **flâne** devant chez
 lui (`wander()`, hachage de la seed, sans PRNG ni chemin) et ne rentre que
 le soir (crépuscule, nuit) ou pendant une vague.
+**Âge** (`data/inhabitants.ts`, `sim/inhabitants.ts`) — chacun a un `age`,
+sauvegardé, qui prend un an à chaque aube (`ageInhabitants`) ; un adulte
+arrivé tout fait a un âge haché de la seed et de son id, son prénom aussi
+(`nameOf`, jamais stocké). L'enfant sort de la nurserie à 10 ans et n'est
+affecté à rien ; à 14, il devient un porteur `grown` sous le même id, logé à
+sa nurserie, hors des postes comme un ex-mutant (toast « Lina a 14 ans… »).
+Un ouvrier dehors sans tâche depuis `IDLE.graceTicks` est **inactif**
+(`World.isIdle`, compte non sauvegardé) : le rendu le fait glander (assis,
+adossé, s'étire, bâille avec bulle « zzz »), le HUD compte au travail /
+inactifs / enfants (`World.census`), et un tap sur les inactifs y jette un
+coup d'œil, puis le suivant ; un tap sur un habitant montre son infobulle.
 
 **Jour et nuit** — dès que la mairie est debout, le cycle démarre
 (`src/data/dayNight.ts`, horloge pure dans `src/sim/dayNight.ts`) : une

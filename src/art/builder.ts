@@ -14,7 +14,7 @@
 
 import { PALETTE, pill, rect, svg } from '../data/artDirection.ts';
 import type { SpriteProto } from '../data/sprites.ts';
-import { hammer, foot, humanBody, scaledAround, type Facing } from './people.ts';
+import { hammer, foot, humanBody, idleParts, scaledAround, type Facing, type IdleLook } from './people.ts';
 import { loadParts } from './worker.ts';
 
 const W = 32;
@@ -54,8 +54,13 @@ function belt(facing: Facing): string {
   }
 }
 
+/** Le corps d'adulte, avant réduction ; `look` : les bras levés ou le bâillement d'une pose de glande. */
+function figure(facing: Facing, look: IdleLook = {}): string {
+  return humanBody(facing, { ...OPTIONS, ...look }) + belt(facing) + helmet(facing);
+}
+
 function body(facing: Facing): string {
-  return svg(W, H, scaledAround(16, GROUND, SCALE, humanBody(facing, OPTIONS) + belt(facing) + helmet(facing)));
+  return svg(W, H, scaledAround(16, GROUND, SCALE, figure(facing)));
 }
 
 export const BUILDER = {
@@ -68,6 +73,7 @@ export const BUILDER = {
     up: body('up'),
     side: body('side'),
     foot: svg(W, H, foot(GROUND, 'ink', 0.9)),
+    ...idleParts(W, H, GROUND, SCALE, (look) => figure('down', look)),
     hammer: svg(W, H, hammer(...HAND)),
     // Le casque rehausse la tête : la charge se pose un peu plus haut.
     ...loadParts(1.5),

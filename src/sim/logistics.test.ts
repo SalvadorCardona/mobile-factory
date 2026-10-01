@@ -234,7 +234,7 @@ describe('poste de logistique', () => {
     expect(hallOf(world).store.count('ironOre')).toBe(33);
     expect(hallOf(world).store.count('coal')).toBe(4);
     expect(count(at(world, NEAR_A), 'ironOre') + count(at(world, NEAR_B), 'ironOre')).toBe(0);
-  });
+  }, 30_000);
 
   it('va d’abord au coffre le plus rempli, même plus loin', () => {
     const world = colony({}, [

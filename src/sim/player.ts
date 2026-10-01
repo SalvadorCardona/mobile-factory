@@ -12,6 +12,7 @@
  */
 
 import { TILE_SIZE } from '../core/grid.ts';
+import { AGES } from '../data/inhabitants.ts';
 import { boxOverlaps, facingOf, moveBoxAmong, type ObstacleTest } from './motion.ts';
 import { Store } from './store.ts';
 import type { Contact, Player } from './types.ts';
@@ -48,7 +49,8 @@ export const PLAYER_HALF_H = 7;
 
 const PLAYER_BOX = { halfW: PLAYER_HALF_W, halfH: PLAYER_HALF_H };
 
-export function createPlayer(x: number, y: number): Player {
+/** `age` : celui d'Adam au départ — le monde le tire de la seed (`adultAge`). */
+export function createPlayer(x: number, y: number, age: number = AGES.adultMin): Player {
   return {
     x,
     y,
@@ -61,6 +63,7 @@ export function createPlayer(x: number, y: number): Player {
     target: null,
     hp: PLAYER_MAX_HP,
     calmTicks: 0,
+    age,
     inventory: new Store(INVENTORY_CAPACITY),
   };
 }

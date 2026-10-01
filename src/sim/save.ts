@@ -25,6 +25,7 @@ import { JOB_PRIORITY, type JobPriority } from '../data/workers.ts';
 import { PERKS, type PerkId } from '../data/perks.ts';
 import { RESEARCH, type ResearchId } from '../data/research.ts';
 import type { SchedulerSnapshot } from './scheduler.ts';
+import { ADAM_SALT, adultAge } from './inhabitants.ts';
 import { canPause, clampStaff } from './staffing.ts';
 import type { Store, StoreSnapshot } from './store.ts';
 import type {
@@ -52,7 +53,7 @@ import { World } from './world.ts';
  * `WorldState` ; une migration de l'ancienne version se branche alors dans
  * `decodeSave`, sinon l'ancienne sauvegarde est ignorée.
  */
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 7;
 
 /** Une entité telle qu'elle est rangée : son coffre devient un simple stock. */
 export type SavedEntity = Stored<Entity>;
@@ -164,11 +165,14 @@ export function decodeSave(text: string): DecodedSave {
   }
 
   if (!isRecord(file) || typeof file['version'] !== 'number') return { ok: false, reason: 'corrupt' };
-  if (file['version'] !== SAVE_VERSION && file['version'] !== 5 && file['version'] !== 4) return { ok: false, reason: 'version' };
+  const version = file['version'];
+
+  if (version !== SAVE_VERSION && version !== 6 && version !== 5 && version !== 4) return { ok: false, reason: 'version' };
 
   try {
-    const v5 = file['version'] === 4 ? migrateV4(file['state']) : file['state'];
-    const state = file['version'] === SAVE_VERSION ? v5 : migrateV5(v5);
+    const v5 = version === 4 ? migrateV4(file['state']) : file['state'];
+    const v6 = version === 4 || version === 5 ? migrateV5(v5) : v5;
+    const state = version === SAVE_VERSION ? v6 : migrateV6(v6);
 
     return { ok: true, world: deserialize(state), savedAt: finite(file['savedAt']) };
   } catch {
@@ -241,6 +245,33 @@ function migrateV5(raw: unknown): unknown {
 
   return { ...raw, entities };
 }
+
+/**
+ * Version 6 : personne n'avait d'âge. Chaque habitant — Adam, Ève, les
+ * ouvriers, les bûcherons, et les enfants aussi — reçoit un âge d'adulte,
+ * tiré de la seed et de son id : aucune partie ne casse, et un enfant de
+ * l'ancienne sauvegarde devient ouvrier au chargement (`World.load`).
+ */
+function migrateV6(raw: unknown): unknown {
+  if (!isRecord(raw) || typeof raw['seed'] !== 'number') return raw;
+
+  const seed = raw['seed'] >>> 0;
+  const player = isRecord(raw['player']) ? { ...raw['player'], age: adultAge(seed, ADAM_SALT) } : raw['player'];
+  const mobiles = Array.isArray(raw['mobiles'])
+    ? raw['mobiles'].map((mobile: unknown) => {
+        if (!isRecord(mobile) || !INHABITANTS.includes(mobile['kind'] as string) || typeof mobile['id'] !== 'number') return mobile;
+
+        const age = adultAge(seed, mobile['id']);
+
+        return mobile['kind'] === 'worker' ? { ...mobile, age, grown: false } : { ...mobile, age };
+      })
+    : raw['mobiles'];
+
+  return { ...raw, player, mobiles };
+}
+
+/** Les mobiles qui ont un âge. */
+const INHABITANTS: readonly string[] = ['kid', 'eve', 'worker', 'lumberjack'];
 
 /* ------------------------------------------------------------- validation */
 
@@ -353,6 +384,7 @@ function parsePlayer(raw: unknown): SavedPlayer {
   return {
     ...moving(player),
     harvesting: bool(player['harvesting']),
+    age: age(player['age']),
     bowCooldown: int(player['bowCooldown']),
     target: player['target'] === null ? null : int(player['target']),
     hp: finite(player['hp']),
@@ -526,6 +558,7 @@ function parseMobile(raw: unknown): Mobile {
       return {
         ...base,
         kind: 'kid',
+        age: age(mobile['age']),
         homeId: int(mobile['homeId']),
         homeX: finite(mobile['homeX']),
         homeY: finite(mobile['homeY']),
@@ -541,6 +574,7 @@ function parseMobile(raw: unknown): Mobile {
       return {
         ...base,
         kind: 'eve',
+        age: age(mobile['age']),
         state: state as EveState,
         homeX: finite(mobile['homeX']),
         homeY: finite(mobile['homeY']),
@@ -556,6 +590,7 @@ function parseMobile(raw: unknown): Mobile {
       return {
         ...base,
         kind: 'worker',
+        age: age(mobile['age']),
         homeId: int(mobile['homeId']),
         // Absent des sauvegardes d'avant la clinique : aucun ex-mutant.
         exMutant: mobile['exMutant'] === undefined ? false : bool(mobile['exMutant']),
@@ -565,6 +600,7 @@ function parseMobile(raw: unknown): Mobile {
         builder: mobile['builder'] === undefined ? false : bool(mobile['builder']),
         // Absent des sauvegardes d'avant le Signal : aucun survivant.
         survivor: mobile['survivor'] === undefined ? false : bool(mobile['survivor']),
+        grown: bool(mobile['grown']),
         build: mobile['build'] === undefined || mobile['build'] === null ? null : int(mobile['build']),
         inside: bool(mobile['inside']),
         job: mobile['job'] === null ? null : parseJob(mobile['job']),
@@ -579,6 +615,7 @@ function parseMobile(raw: unknown): Mobile {
       return {
         ...base,
         kind: 'lumberjack',
+        age: age(mobile['age']),
         homeId: int(mobile['homeId']),
         inside: bool(mobile['inside']),
         state: state as LumberjackState,
@@ -758,6 +795,14 @@ function int(value: unknown): number {
 
   if (!Number.isInteger(number)) throw new SaveError('entier attendu');
   return number;
+}
+
+/** Un âge, en années : un entier positif. */
+function age(value: unknown): number {
+  const years = int(value);
+
+  if (years < 0) throw new SaveError(`âge négatif : ${years}`);
+  return years;
 }
 
 function bool(value: unknown): boolean {

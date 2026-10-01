@@ -252,6 +252,8 @@ export interface Player {
   hp: number;
   /** Ticks depuis le dernier coup reçu : Adam ne récupère qu'au calme. */
   calmTicks: number;
+  /** Son âge, en années : une de plus à chaque aube (`data/inhabitants.ts`). */
+  age: number;
   /**
    * Le sac à dos : ce qu'Adam a récolté ou ramassé et pas encore déposé.
    * Ce n'est pas le stock de la ville — celui-là est le coffre de la mairie
@@ -354,9 +356,15 @@ export interface Arrow extends Moving {
   damage: number;
 }
 
-/** Un enfant : il joue autour de sa nurserie et n'en va jamais loin. */
+/**
+ * Un enfant : il joue autour de sa nurserie et n'en va jamais loin. Il en
+ * sort à `AGES.nursery` ans ; à `AGES.work`, il devient ouvrier — un
+ * porteur logé à sa nurserie, sous le même id.
+ */
 export interface Kid extends Moving {
   kind: 'kid';
+  /** Son âge, en années : une de plus à chaque aube. */
+  age: number;
   /** La nurserie qui l'a vu naître, et le point autour duquel il flâne. */
   homeId: EntityId;
   homeX: number;
@@ -379,6 +387,8 @@ export type EveState = 'arriving' | 'idle' | 'repair';
 /** Ève : elle rejoint Adam après la troisième vague, vit à la mairie et répare. */
 export interface Eve extends Moving {
   kind: 'eve';
+  /** Son âge, en années : une de plus à chaque aube. */
+  age: number;
   state: EveState;
   /** Là où elle vit : la tuile libre devant la mairie. */
   homeX: number;
@@ -431,6 +441,7 @@ export interface Wandering {
  *
  * Un ex-mutant sorti de la clinique est un ouvrier comme les autres, logé à
  * la clinique ; il porte plus lourd et marche plus lentement (`EX_MUTANT`).
+ * Un enfant de la colonie, à 14 ans, devient un porteur logé à sa nurserie.
  *
  * Un logisticien est un ouvrier logé au poste de logistique : même vie, mais
  * il ne fait qu'un travail — vider les producteurs du rayon de son poste
@@ -441,10 +452,17 @@ export interface Wandering {
  */
 export interface Worker extends Moving, Wandering {
   kind: 'worker';
+  /** Son âge, en années : une de plus à chaque aube. */
+  age: number;
   /** La maison qui le loge — la clinique, pour un ex-mutant. */
   homeId: EntityId;
   /** Vrai pour un ex-mutant : plus fort, plus lent. */
   exMutant: boolean;
+  /**
+   * Vrai pour un enfant de la colonie devenu ouvrier à 14 ans : un porteur
+   * logé à sa nurserie, qui ne prend le poste de personne — comme un ex-mutant.
+   */
+  grown: boolean;
   /** Vrai pour un logisticien du poste de logistique. */
   logistician: boolean;
   /** Vrai pour un bâtisseur du poste de construction. */
@@ -480,6 +498,8 @@ export type LumberjackState = 'idle' | 'toTree' | 'chop' | 'toCamp' | 'wait';
  */
 export interface Lumberjack extends Moving, Wandering {
   kind: 'lumberjack';
+  /** Son âge, en années : une de plus à chaque aube. */
+  age: number;
   /** La cabane qui le loge, et dont le coffre reçoit son bois. */
   homeId: EntityId;
   /** Vrai s'il est chez lui : invisible, immobile. */

@@ -102,6 +102,16 @@ export const WANDER = {
 } as const;
 
 /**
+ * Un ouvrier qui glande : dehors, sans rien à faire. Un porteur entre deux
+ * jobs n'en est pas un — il cherche du travail toutes les `PORTERS.retryTicks` :
+ * il ne passe inactif qu'au bout de `graceTicks`, et le compteur du HUD ne
+ * clignote pas à chaque livraison.
+ */
+export const IDLE = {
+  graceTicks: 60,
+} as const;
+
+/**
  * Bâtisseurs — les ouvriers du poste de construction (`BUILDINGS.constructionPost`).
  *
  * En boucle : prendre, dans le rayon du poste, le chantier le plus ancien

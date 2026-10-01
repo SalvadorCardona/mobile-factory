@@ -68,6 +68,7 @@ import {
   type LootTable,
 } from '../data/enemies.ts';
 import { EVE } from '../data/eve.ts';
+import { AGES } from '../data/inhabitants.ts';
 import { TOWN_PLENTY, type ItemId } from '../data/items.ts';
 import {
   PERKS,
@@ -85,7 +86,7 @@ import { RESEARCH, type ResearchId, type ResearchStat } from '../data/research.t
 import { RESOURCES, type ResourceId } from '../data/resources.ts';
 import { ROADS } from '../data/roads.ts';
 import { WEAPONS } from '../data/weapons.ts';
-import { BUILDERS, JOB_PRIORITY, LUMBERJACKS, PORTERS } from '../data/workers.ts';
+import { BUILDERS, IDLE, JOB_PRIORITY, LUMBERJACKS, PORTERS } from '../data/workers.ts';
 import { WEATHER, WEATHER_CALENDAR, type WeatherId } from '../data/weather.ts';
 import { ChunkIndex } from './chunk.ts';
 import { floorCost, floorMissing, floorNeeds, floorWants } from './antenna.ts';
@@ -110,7 +111,8 @@ import { caravanBagBonus, caravanRoute, createCaravan, drawOffers, isCaravanDay,
 import type { WildlifeId } from '../data/enemies.ts';
 import { compassOf, spawnPoint, stepMutant, stepQueen, surfacePoint, type Compass, type MutantStep } from './enemies.ts';
 import { createEve, currentQuest, harvestYieldWithTools, isUnlocked, mostDamaged, questProgress, rideHome, walkTo } from './eve.ts';
-import { stepKid } from './kids.ts';
+import { ADAM_SALT, adultAge, canWork, nameOf, yearsToWork } from './inhabitants.ts';
+import { KID_SPRINT, stepKid } from './kids.ts';
 import { rollLoot, stepPickup } from './loot.ts';
 import { copyStats, emptyStats, objectiveDone } from './objectives.ts';
 import { denSize, densOfChunk, stepBeast, type Den } from './wildlife.ts';
@@ -284,6 +286,29 @@ export interface Workforce {
   free: number;
   /** Postes demandés mais vides, faute d'ouvrier libre. */
   missing: number;
+}
+
+/**
+ * Ce que fait un habitant, pour le HUD et l'infobulle :
+ * - `child` : un enfant, qui travaillera dans `days` aubes ;
+ * - `working` : un ouvrier à la tâche, au bâtiment `at` (sa maison s'il est entre deux) ;
+ * - `idle` : un ouvrier sans travail, qui glande dehors ;
+ * - `home` : chez lui — il dort, ou s'abrite d'une vague.
+ */
+export type Occupation =
+  | { kind: 'child'; days: number }
+  | { kind: 'working'; at: BuildingId | null }
+  | { kind: 'idle' }
+  | { kind: 'home' };
+
+/** Un habitant qu'on peut taper : un enfant, un ouvrier, un bûcheron. */
+export type Inhabitant = Kid | Worker | Lumberjack;
+
+/** La population détaillée du HUD Ville : au travail, inactifs, enfants. */
+export interface Census {
+  working: number;
+  idle: number;
+  children: number;
 }
 
 export type WorldEvents = {
@@ -469,6 +494,8 @@ export type WorldEvents = {
   patientAdmitted: { id: MobileId; clinicId: EntityId };
   /** Il en ressort guéri : `id` est l'ex-mutant, un ouvrier de plus. */
   mutantHealed: { id: MobileId; clinicId: EntityId; x: number; y: number };
+  /** Un enfant a eu 14 ans : il devient ouvrier, sous le même id. */
+  kidGrewUp: { id: MobileId; name: string; x: number; y: number };
   /** Le labo `id` a choisi une recherche : il attend son coût. */
   researchChosen: { id: EntityId; research: ResearchId };
   /** La recherche choisie est abandonnée ; ce qui était déposé reste au coffre. */
@@ -648,6 +675,9 @@ export class World {
    */
   private duty: { tick: number; filled: Map<EntityId, number>; onDuty: Set<MobileId> } | null = null;
 
+  /** Depuis quel tick chaque ouvrier dehors est sans travail, cf. `isIdle()`. Jamais sauvegardé. */
+  private readonly idleSince = new Map<MobileId, number>();
+
   public constructor(seed: number) {
     this.seed = seed >>> 0;
     this.resources = new ResourceIndex(this.seed);
@@ -665,7 +695,7 @@ export class World {
 
     this.spawnX = (sx + 0.5) * TILE_SIZE;
     this.spawnY = (sy + 1.5) * TILE_SIZE;
-    this.player = createPlayer(this.spawnX, this.spawnY);
+    this.player = createPlayer(this.spawnX, this.spawnY, adultAge(this.seed, ADAM_SALT));
     this.townHallId = this.openSite(STARTING_BUILDING, sx - 1, sy - proto.height);
     this.target = { x: (sx + 0.5) * TILE_SIZE, y: (sy - proto.height / 2) * TILE_SIZE };
   }
@@ -813,6 +843,11 @@ export class World {
     this.scheduler.restore(state.scheduler);
     this.restoreJobs();
     this.restoreLumberjacks();
+
+    // Un enfant d'une sauvegarde d'avant les âges a reçu un âge d'adulte : il est ouvrier.
+    for (const mobile of [...this.mobiles.values()]) {
+      if (mobile.kind === 'kid' && canWork(mobile.age)) this.growUp(mobile, false);
+    }
 
     // Une sauvegarde d'avant l'achèvement automatique peut garder un chantier livré : il s'achève au
     // chargement — sauf s'il attend les bâtisseurs d'un poste de construction.
@@ -2725,6 +2760,7 @@ export class World {
     const kid: Kid = {
       kind: 'kid',
       id: this.nextMobileId++,
+      age: AGES.nursery,
       x,
       y,
       prevX: x,
@@ -2811,7 +2847,7 @@ export class World {
   /**
    * La population : Adam et Ève, les enfants nés aux nurseries, et les
    * ouvriers qu'emploient les bâtiments finis — plus les ex-mutants sortis
-   * de la clinique. Un chantier n'emploie personne.
+   * de la clinique et les enfants devenus ouvriers. Un chantier n'emploie personne.
    */
   public population(): { adults: number; children: number; workers: number } {
     let children = 0;
@@ -2819,12 +2855,73 @@ export class World {
 
     for (const mobile of this.mobiles.values()) {
       if (mobile.kind === 'kid') children += 1;
-      if (mobile.kind === 'worker' && (mobile.exMutant || mobile.survivor)) workers += 1;
+      if (mobile.kind === 'worker' && (mobile.exMutant || mobile.grown || mobile.survivor)) workers += 1;
     }
     for (const entity of this.entities.values()) {
       if (entity.kind !== 'site') workers += BUILDINGS[entity.proto].workers;
     }
     return { adults: this.eve() ? 2 : 1, children, workers };
+  }
+
+  /**
+   * La population détaillée : les enfants, les ouvriers qui glandent dehors
+   * (`isIdle`), et tous les autres — à la tâche, entre deux, ou qui dorment.
+   */
+  public census(): Census {
+    const { children, workers } = this.population();
+    let idle = 0;
+
+    for (const mobile of this.mobiles.values()) {
+      if ((mobile.kind === 'worker' || mobile.kind === 'lumberjack') && this.isIdle(mobile)) idle += 1;
+    }
+    return { working: Math.max(0, workers - idle), idle, children };
+  }
+
+  /** Les ouvriers qui glandent, par id : le HUD centre la caméra sur l'un, puis le suivant. */
+  public idleWorkers(): (Worker | Lumberjack)[] {
+    const idle: (Worker | Lumberjack)[] = [];
+
+    for (const mobile of this.mobiles.values()) {
+      if ((mobile.kind === 'worker' || mobile.kind === 'lumberjack') && this.isIdle(mobile)) idle.push(mobile);
+    }
+    return idle.sort((a, b) => a.id - b.id);
+  }
+
+  /**
+   * L'ouvrier glande-t-il ? Dehors, sans rien à porter, à bâtir ni à couper,
+   * depuis `IDLE.graceTicks` au moins : un porteur entre deux jobs n'est pas
+   * un oisif. Le rendu lui donne alors ses poses de glande.
+   */
+  public isIdle(mobile: Worker | Lumberjack): boolean {
+    const since = this.idleSince.get(mobile.id);
+
+    return since !== undefined && this.tickCount - since >= IDLE.graceTicks;
+  }
+
+  /** Ce que fait un habitant : enfant, au travail (et où), inactif, chez lui. */
+  public occupation(mobile: Inhabitant): Occupation {
+    if (mobile.kind === 'kid') return { kind: 'child', days: yearsToWork(mobile.age) };
+    if (mobile.inside) return { kind: 'home' };
+    if (this.isIdle(mobile)) return { kind: 'idle' };
+
+    const place =
+      mobile.kind === 'worker'
+        ? (mobile.build ?? (mobile.job ? (mobile.job.carried ? mobile.job.to : mobile.job.from) : mobile.homeId))
+        : mobile.homeId;
+    const at = this.entities.get(place);
+
+    return { kind: 'working', at: at ? at.proto : null };
+  }
+
+  /** Tient le compte de qui glande depuis quand : rien de tout ça n'est sauvegardé. */
+  private noteIdle(mobile: Worker | Lumberjack): void {
+    const busy = mobile.kind === 'worker' ? mobile.job !== null || mobile.build !== null : mobile.state !== 'idle';
+
+    if (busy || mobile.inside || !this.mobiles.has(mobile.id) || !this.entities.has(mobile.homeId)) {
+      this.idleSince.delete(mobile.id);
+    } else if (!this.idleSince.has(mobile.id)) {
+      this.idleSince.set(mobile.id, this.tickCount);
+    }
   }
 
   /**
@@ -2929,7 +3026,7 @@ export class World {
         }
 
         case 'kid':
-          stepKid(mobile, { x: mobile.homeX, y: mobile.homeY }, this.isSolid, this.rng, STEP_SECONDS);
+          stepKid(mobile, { x: mobile.homeX, y: mobile.homeY }, this.isSolid, this.rng, STEP_SECONDS, undefined, undefined, KID_SPRINT);
           break;
 
         case 'eve':
@@ -2938,10 +3035,12 @@ export class World {
 
         case 'worker':
           this.stepWorker(mobile, alarm, bedtime);
+          this.noteIdle(mobile);
           break;
 
         case 'lumberjack':
           this.stepLumberjack(mobile, alarm, bedtime);
+          this.noteIdle(mobile);
           break;
 
         case 'pickup':
@@ -3245,9 +3344,11 @@ export class World {
   /** La nuit de soins est finie : il sort sur le seuil, ex-mutant et porteur, logé à la clinique. */
   private heal(patient: Patient, clinic: Clinic): void {
     const door = doorOf(clinic);
+    const id = this.nextMobileId++;
     const worker: Worker = {
       kind: 'worker',
-      id: this.nextMobileId++,
+      id,
+      age: adultAge(this.seed, id),
       x: door.x,
       y: door.y,
       prevX: door.x,
@@ -3256,6 +3357,7 @@ export class World {
       moving: false,
       homeId: clinic.id,
       exMutant: true,
+      grown: false,
       logistician: false,
       builder: false,
       survivor: false,
@@ -3458,7 +3560,8 @@ export class World {
     const spot = this.freeTileAround(hall.tx, hall.ty, hall.width, hall.height);
     const homeX = spot ? (spot.tx + 0.5) * TILE_SIZE : this.spawnX;
     const homeY = spot ? (spot.ty + 0.5) * TILE_SIZE : this.spawnY;
-    const eve = createEve(this.nextMobileId++, homeX, homeY);
+    const id = this.nextMobileId++;
+    const eve = createEve(id, homeX, homeY, adultAge(this.seed, id));
 
     this.mobiles.set(eve.id, eve);
     this.events.emit('eveArriving', { id: eve.id });
@@ -3863,6 +3966,8 @@ export class World {
 
       this.events.emit('lootDropped', { id: pickup.id, item, x: pickup.x, y: pickup.y });
     }
+    this.ageInhabitants();
+
     // La nuit est survécue : la mairie tient encore (`stepClock` s'arrête à la défaite).
     this.stats.nightsSurvived += 1;
     this.events.emit('dawnBroke', { night: this.night, reward, to: town ? 'town' : 'bag' });
@@ -3885,9 +3990,11 @@ export class World {
 
     for (let i = 0; i < count; i += 1) {
       const x = door.x + (i - (count - 1) / 2) * DROP_SPACING;
+      const id = this.nextMobileId++;
       const worker: Worker = {
         kind: 'worker',
-        id: this.nextMobileId++,
+        id,
+        age: adultAge(this.seed, id),
         x,
         y: door.y,
         prevX: x,
@@ -3896,6 +4003,7 @@ export class World {
         moving: false,
         homeId: hall.id,
         exMutant: false,
+        grown: false,
         logistician: false,
         builder: false,
         survivor: true,
@@ -3909,6 +4017,56 @@ export class World {
       this.mobiles.set(worker.id, worker);
     }
     this.events.emit('survivorsArrived', { count, x: door.x, y: door.y });
+  }
+
+  /**
+   * Une année de plus pour chaque habitant — un cycle jour/nuit vaut un an —
+   * et l'enfant qui a l'âge de travailler devient ouvrier.
+   */
+  private ageInhabitants(): void {
+    this.player.age += AGES.yearsPerCycle;
+    for (const mobile of [...this.mobiles.values()]) {
+      if (mobile.kind !== 'kid' && mobile.kind !== 'eve' && mobile.kind !== 'worker' && mobile.kind !== 'lumberjack') continue;
+      mobile.age += AGES.yearsPerCycle;
+      if (mobile.kind === 'kid' && canWork(mobile.age)) this.growUp(mobile, true);
+    }
+  }
+
+  /**
+   * L'enfant devient ouvrier, sous le même id — il garde son prénom : un
+   * porteur logé à sa nurserie (à la mairie si elle est tombée), qui ne prend
+   * le poste de personne, comme un ex-mutant. Il entre dans le système
+   * d'affectation au tick suivant.
+   */
+  private growUp(kid: Kid, announce: boolean): void {
+    const nursery = this.entities.get(kid.homeId);
+    const homeId = nursery && nursery.kind !== 'site' ? nursery.id : this.townHallId;
+    const worker: Worker = {
+      kind: 'worker',
+      id: kid.id,
+      age: kid.age,
+      x: kid.x,
+      y: kid.y,
+      prevX: kid.prevX,
+      prevY: kid.prevY,
+      facing: kid.facing,
+      moving: false,
+      homeId,
+      exMutant: false,
+      grown: true,
+      logistician: false,
+      builder: false,
+      survivor: false,
+      build: null,
+      inside: false,
+      job: null,
+      searchTicks: PORTERS.retryTicks,
+      ...wanderFrom(kid.x, kid.y),
+    };
+
+    this.mobiles.set(worker.id, worker);
+    this.duty = null;
+    if (announce) this.events.emit('kidGrewUp', { id: kid.id, name: nameOf(this.seed, kid.id), x: kid.x, y: kid.y });
   }
 
   /** Le point, en pixels monde, d'où surgira la prochaine vague : ce que l'annonce montre du doigt. */
@@ -3991,9 +4149,11 @@ export class World {
     const door = doorOf(house);
 
     for (let i = lodged; i < BUILDINGS[house.proto].workers; i += 1) {
+      const id = this.nextMobileId++;
       const worker: Worker = {
         kind: 'worker',
-        id: this.nextMobileId++,
+        id,
+        age: adultAge(this.seed, id),
         x: door.x,
         y: door.y,
         prevX: door.x,
@@ -4002,6 +4162,7 @@ export class World {
         moving: false,
         homeId: house.id,
         exMutant: false,
+        grown: false,
         logistician: house.kind === 'depot',
         builder: house.kind === 'yard',
         survivor: false,
@@ -4391,9 +4552,11 @@ export class World {
     const door = doorOf(camp);
 
     for (let i = lodged; i < BUILDINGS[camp.proto].workers; i += 1) {
+      const id = this.nextMobileId++;
       const lumberjack: Lumberjack = {
         kind: 'lumberjack',
-        id: this.nextMobileId++,
+        id,
+        age: adultAge(this.seed, id),
         x: door.x,
         y: door.y,
         prevX: door.x,
@@ -4866,7 +5029,7 @@ export class World {
     const crews = new Map<EntityId, MobileId[]>();
 
     for (const mobile of this.mobiles.values()) {
-      if (mobile.kind !== 'lumberjack' && (mobile.kind !== 'worker' || mobile.exMutant || mobile.survivor)) continue;
+      if (mobile.kind !== 'lumberjack' && (mobile.kind !== 'worker' || mobile.exMutant || mobile.grown || mobile.survivor)) continue;
 
       const crew = crews.get(mobile.homeId);
 
@@ -4887,7 +5050,7 @@ export class World {
 
   /** L'ouvrier a-t-il un poste ? Sinon, il finit son geste, puis flâne. */
   private onDuty(mobile: Worker | Lumberjack): boolean {
-    return (mobile.kind === 'worker' && (mobile.exMutant || mobile.survivor)) || this.roster().onDuty.has(mobile.id);
+    return (mobile.kind === 'worker' && (mobile.exMutant || mobile.grown || mobile.survivor)) || this.roster().onDuty.has(mobile.id);
   }
 
   /**

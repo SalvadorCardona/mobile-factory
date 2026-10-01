@@ -42,6 +42,10 @@ jouable dans le navigateur, sur téléphone :
 - une fenêtre d'inspection au tap sur un chantier ou un bâtiment ;
 - une **nurserie** qui fait naître un enfant toutes les trois minutes, et une
   **tour de guet** qui tire seule ;
+- des **habitants qui vieillissent** — un cycle jour/nuit, un an : l'enfant
+  sort de la nurserie à 10 ans, joue, et devient ouvrier à 14 ; l'ouvrier sans
+  travail glande à la vue de tous (assis, adossé, il s'étire, il bâille), et
+  le HUD compte au travail / inactifs / enfants ;
 - des **mutants radioactifs** par vagues, dès que la mairie est debout : ils
   marchent droit sur elle et cassent ce qui les bloque ; l'arc d'Adam tire
   automatiquement sur le plus proche ; si la mairie tombe, la partie est perdue ;
