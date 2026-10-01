@@ -49,4 +49,9 @@ export class IndicatorTap implements PointerConsumer {
     this.pointerId = null;
     if (!this.moved) this.onTap();
   }
+
+  /** Un pinch reprend le doigt : pas de tap. */
+  public onCancel(id: number): void {
+    if (id === this.pointerId) this.pointerId = null;
+  }
 }

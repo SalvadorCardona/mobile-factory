@@ -718,6 +718,31 @@ button {
   background: var(--paper-shade);
 }
 
+/*
+ * Le zoom : trois petits disques empilés sur le bord droit, à mi-hauteur —
+ * entre la colonne du sac et le bouton « Bâtir », loin du joystick.
+ */
+.hud-zoom {
+  position: absolute;
+  top: 50%;
+  right: calc(var(--safe-right) + 10px);
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hud-zoom-button {
+  width: 40px;
+  height: 40px;
+}
+
+.hud-zoom-button[disabled] {
+  opacity: 0.45;
+  transform: none;
+  box-shadow: var(--face);
+}
+
 /* ------------------------------------------------------------ ville et sac */
 
 /*

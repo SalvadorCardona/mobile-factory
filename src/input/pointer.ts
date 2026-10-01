@@ -12,6 +12,13 @@
  * reste attribué jusqu'au `pointerup`. Un consommateur ne voit donc jamais les
  * mouvements d'un doigt qu'il n'a pas revendiqué.
  *
+ * Une exception : le **geste à deux doigts** (le pinch, `PointerGesture`).
+ * Un second doigt qui se pose pendant qu'un premier touche la carte prend
+ * les deux — à condition que le premier soit libre ou tenu par un
+ * consommateur qui sait le céder (`onCancel` : un tap, qui l'oublie sans
+ * rien ouvrir). Le joystick et le placement ne cèdent rien : un pouce qui
+ * marche et un doigt qui vise restent deux doigts.
+ *
  * L'aiguillage (`PointerDispatch`) ne touche pas au DOM : il se teste en Node.
  *
  * `touch-action: none` (cf. style.css) est indispensable : sans lui, le
@@ -40,32 +47,95 @@ export interface PointerConsumer {
   onDown(sample: PointerSample): boolean;
   onMove(sample: PointerSample): void;
   onUp(sample: PointerSample): void;
+  /**
+   * Un geste à deux doigts reprend ce doigt : oublier l'appui, sans rien
+   * déclencher. Un consommateur sans cette méthode ne cède pas ses doigts.
+   */
+  onCancel?(id: number): void;
+}
+
+/** Un geste à deux doigts : il voit les deux doigts du début jusqu'à ce que l'un se lève. */
+export interface PointerGesture {
+  start(first: PointerSample, second: PointerSample): void;
+  move(sample: PointerSample): void;
+  /** Un des deux doigts se lève : le geste est fini (l'autre ne fait plus rien jusqu'à son tour). */
+  end(id: number): void;
 }
 
 /** L'attribution des doigts aux consommateurs, sans DOM. */
 export class PointerDispatch {
   private readonly consumers: PointerConsumer[] = [];
   private readonly owners = new Map<number, PointerConsumer>();
+  /** Les doigts (pas la souris) posés sur la carte, revendiqués ou non, à leur dernière position. */
+  private readonly touches = new Map<number, PointerSample>();
+  /** Les doigts du geste en cours. */
+  private readonly gestureFingers = new Set<number>();
+  private gesture: PointerGesture | null = null;
 
   public add(consumer: PointerConsumer): void {
     this.consumers.push(consumer);
   }
 
+  /** Le geste à deux doigts : un seul. */
+  public setGesture(gesture: PointerGesture): void {
+    this.gesture = gesture;
+  }
+
   public down(sample: PointerSample): void {
+    if (!sample.mouse && this.startGesture(sample)) return;
+
     const consumer = this.consumers.find((candidate) => candidate.onDown(sample));
 
     if (consumer) this.owners.set(sample.id, consumer);
+    if (!sample.mouse) this.touches.set(sample.id, sample);
   }
 
+  /** Le second doigt d'un pinch ? Il prend alors le premier à son consommateur, s'il le cède. */
+  private startGesture(sample: PointerSample): boolean {
+    if (!this.gesture || this.gestureFingers.size > 0) return false;
+
+    const free = [...this.touches.keys()].filter((id) => {
+      const owner = this.owners.get(id);
+
+      return !owner || owner.onCancel !== undefined;
+    });
+
+    if (free.length !== 1) return false;
+
+    const [id] = free as [number];
+    const first = this.touches.get(id)!;
+
+    this.owners.get(id)?.onCancel?.(id);
+    this.owners.delete(id);
+    this.touches.set(sample.id, sample);
+    this.gestureFingers.add(id).add(sample.id);
+    this.gesture.start(first, sample);
+    return true;
+  }
+
+  /** Un consommateur ou le geste tient-il ce doigt ? */
   public owns(id: number): boolean {
-    return this.owners.has(id);
+    return this.owners.has(id) || this.gestureFingers.has(id);
+  }
+
+  /** Ce doigt est-il suivi — revendiqué, ou posé sur la carte sans preneur, candidat à un pinch ? */
+  public tracks(id: number): boolean {
+    return this.owns(id) || this.touches.has(id);
   }
 
   public move(sample: PointerSample): void {
-    this.owners.get(sample.id)?.onMove(sample);
+    if (this.touches.has(sample.id)) this.touches.set(sample.id, sample);
+    if (this.gestureFingers.has(sample.id)) this.gesture?.move(sample);
+    else this.owners.get(sample.id)?.onMove(sample);
   }
 
   public up(sample: PointerSample): void {
+    this.touches.delete(sample.id);
+    if (this.gestureFingers.delete(sample.id)) {
+      this.gesture?.end(sample.id);
+      return;
+    }
+
     const owner = this.owners.get(sample.id);
 
     if (!owner) return;
@@ -76,6 +146,9 @@ export class PointerDispatch {
 
   public clear(): void {
     this.owners.clear();
+    this.touches.clear();
+    this.gestureFingers.clear();
+    this.gesture = null;
     this.consumers.length = 0;
   }
 }
@@ -126,6 +199,10 @@ export class PointerRouter {
     this.dispatch.add(consumer);
   }
 
+  public setGesture(gesture: PointerGesture): void {
+    this.dispatch.setGesture(gesture);
+  }
+
   private sample(event: PointerEvent): PointerSample {
     const rect = this.canvas.getBoundingClientRect();
 
@@ -144,7 +221,7 @@ export class PointerRouter {
   }
 
   private handleMove(event: PointerEvent): void {
-    if (!this.dispatch.owns(event.pointerId)) {
+    if (!this.dispatch.tracks(event.pointerId)) {
       // Sur le HUD, le curseur vise un bouton, pas la carte.
       if (event.pointerType === 'mouse' && event.target === this.canvas) this.onHover(this.sample(event));
       return;
@@ -155,7 +232,7 @@ export class PointerRouter {
   }
 
   private handleUp(event: PointerEvent): void {
-    if (!this.dispatch.owns(event.pointerId)) return;
+    if (!this.dispatch.tracks(event.pointerId)) return;
     this.dispatch.up(this.sample(event));
   }
 

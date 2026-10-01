@@ -116,6 +116,13 @@ export class Inspect implements PointerConsumer {
     }
   }
 
+  /** Un pinch reprend le doigt : rien ne s'ouvre. */
+  public onCancel(id: number): void {
+    if (id !== this.pointerId) return;
+    this.pointerId = null;
+    this.target = null;
+  }
+
   private targetAt(sample: PointerSample): Target | undefined {
     const position = this.screenToWorld(sample.x, sample.y);
     const eve = this.world.eve();

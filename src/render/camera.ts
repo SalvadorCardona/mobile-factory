@@ -27,6 +27,14 @@
  *
  * Tant que l'un ou l'autre fait glisser la carte d'elle-même, elle le dit
  * (`drifting`) : un tap posé à ce moment viserait un point qui bouge.
+ *
+ * Le joueur, lui, choisit son **niveau de zoom** (`level`, borné par `ZOOM`) :
+ * boutons, molette, pinch. Un zoom se fait autour d'un point de l'écran — le
+ * curseur, le milieu des deux doigts — qui reste sous lui : la caméra garde
+ * pour cela un décalage (`pan`) par rapport à Adam, qu'elle suit toujours.
+ * Ce décalage n'emmène jamais Adam hors de l'écran, et se résorbe quand il
+ * marche. Le recul d'une vague est un zoom absolu : il ne s'applique que
+ * s'il montre plus large que le niveau choisi.
  */
 
 import { CHUNK_SIZE, TILE_SIZE, floorDiv } from '../core/grid.ts';
@@ -49,6 +57,43 @@ const PEEK_BACK_MS = 450;
 
 /** Constante de temps du zoom, en ms : il glisse, il ne saute pas. */
 const ZOOM_MS = 420;
+
+/** Constante de temps d'un cran de zoom du joueur, en ms : plus vive que le recul. */
+const LEVEL_MS = 140;
+
+/**
+ * Bornes du zoom du joueur. En deçà de `min`, le sol à baker grossit vite
+ * (blocs de 512 px à la résolution de l'écran) ; au-delà de `max`, les
+ * sprites, rastérisés une fois à la résolution de l'écran, s'étirent et
+ * deviennent flous. Un cran (bouton, touche) multiplie par `step`.
+ */
+export const ZOOM = { min: 0.6, max: 1.5, default: 1, step: 1.25 } as const;
+
+/** Un décalage du joueur garde Adam à au moins autant de pixels monde du bord de l'écran. */
+const PAN_MARGIN = 3 * TILE_SIZE;
+
+/** Quand Adam marche, le décalage se résorbe avec cette constante de temps, en ms. */
+const PAN_RELAX_MS = 900;
+
+/** Adam marche au-delà de cette vitesse, en pixels monde par ms. */
+const WALKING = 0.01;
+
+/** Le zoom `level` ramené dans les bornes. */
+export function clampZoom(level: number): number {
+  return Math.min(ZOOM.max, Math.max(ZOOM.min, level));
+}
+
+/**
+ * Le cran suivant depuis `level`, vers l'avant (`direction` 1) ou l'arrière
+ * (-1) : les crans sont les puissances de `ZOOM.step`, si bien qu'on retombe
+ * toujours sur le zoom par défaut, même parti d'un niveau de molette.
+ */
+export function stepZoom(level: number, direction: 1 | -1): number {
+  const index = Math.log(level) / Math.log(ZOOM.step);
+  const next = direction > 0 ? Math.floor(index + 1e-6) + 1 : Math.ceil(index - 1e-6) - 1;
+
+  return clampZoom(ZOOM.step ** next);
+}
 
 /** Pendant un recul, part du chemin entre le joueur et le point à montrer que la caméra parcourt. */
 const FOCUS_SHARE = 0.4;
@@ -97,6 +142,18 @@ export class Camera {
   /** Le recul est encore en route vers sa cible, ou en revient. */
   private zoomDrifting = false;
 
+  /** Le niveau de zoom choisi par le joueur, vers lequel `zoom` glisse. */
+  private levelTarget: number = ZOOM.default;
+  /** Un zoom du joueur est en route : il glisse à son rythme, et ce n'est pas une dérive. */
+  private levelEasing = false;
+  /** Le point de l'écran, en pixels CSS, qui reste immobile pendant le zoom du joueur ; `null` : le centre. */
+  private anchor: { x: number; y: number } | null = null;
+  /** Décalage du centre par rapport au suivi d'Adam, en pixels monde : ce qu'a laissé un zoom ancré. */
+  private panX = 0;
+  private panY = 0;
+  /** Le décalage revient à zéro en glissant : le retour sur Adam. */
+  private panHome = false;
+
   public resize(width: number, height: number): void {
     this.viewWidth = width;
     this.viewHeight = height;
@@ -120,11 +177,30 @@ export class Camera {
     this.zoomHold = Math.max(0, this.zoomHold - deltaMs);
 
     const zooming = this.zoomHold > 0;
-    const zoomTo = zooming ? this.zoomTarget : 1;
+    const zoomTo = this.goal();
     const ease = 1 - Math.exp(-deltaMs / ZOOM_MS);
+    const levelEase = 1 - Math.exp(-deltaMs / LEVEL_MS);
+    const before = this.zoom;
 
-    this.zoom += (zoomTo - this.zoom) * ease;
-    if (Math.abs(zoomTo - this.zoom) < 0.001) this.zoom = zoomTo;
+    this.zoom += (zoomTo - this.zoom) * (this.levelEasing ? levelEase : ease);
+    if (Math.abs(zoomTo - this.zoom) < 0.001) {
+      this.zoom = zoomTo;
+      this.levelEasing = false;
+      this.anchor = null;
+    }
+    if (this.anchor) this.hold(this.anchor, before);
+
+    if (this.panHome) {
+      this.panX -= this.panX * levelEase;
+      this.panY -= this.panY * levelEase;
+      if (Math.hypot(this.panX, this.panY) < 0.5) this.panHome = false;
+    } else if (Math.hypot(vx, vy) > WALKING) {
+      const relax = Math.exp(-deltaMs / PAN_RELAX_MS);
+
+      this.panX *= relax;
+      this.panY *= relax;
+    }
+    this.clampPan();
     const toFocusX = zooming && this.focus ? this.focus.x - x : 0;
     const toFocusY = zooming && this.focus ? this.focus.y - y : 0;
     const shifting = Math.hypot(toFocusX, toFocusY) <= FOCUS_RANGE;
@@ -134,12 +210,12 @@ export class Camera {
     this.focusShiftX += (shiftToX - this.focusShiftX) * ease;
     this.focusShiftY += (shiftToY - this.focusShiftY) * ease;
     this.zoomDrifting =
-      Math.abs(zoomTo - this.zoom) > SETTLED_ZOOM ||
+      (!this.levelEasing && Math.abs(zoomTo - this.zoom) > SETTLED_ZOOM) ||
       Math.hypot(shiftToX - this.focusShiftX, shiftToY - this.focusShiftY) > SETTLED_SHIFT_PX;
 
     const catchUp = 1 - Math.exp(-deltaMs / FOLLOW_MS);
-    const targetX = x + this.leadX + this.focusShiftX;
-    const targetY = y + this.leadY + this.focusShiftY;
+    const targetX = x + this.leadX + this.focusShiftX + this.panX;
+    const targetY = y + this.leadY + this.focusShiftY + this.panY;
 
     this.x += (targetX - this.x) * catchUp;
     this.y += (targetY - this.y) * catchUp;
@@ -185,12 +261,93 @@ export class Camera {
 
   /**
    * Recule jusqu'à `zoom` (moins de 1) et y reste `holdMs`, en glissant un
-   * peu vers `focus` (pixels monde) s'il est donné, puis revient tout seul.
+   * peu vers `focus` (pixels monde) s'il est donné, puis revient tout seul
+   * au niveau du joueur. Un joueur déjà plus loin que `zoom` ne bouge pas.
    */
   public zoomOut(zoom: number, holdMs: number, focus: { x: number; y: number } | null = null): void {
     this.zoomTarget = zoom;
     this.zoomHold = Math.max(this.zoomHold, holdMs);
     this.focus = focus;
+  }
+
+  /** Le niveau de zoom choisi par le joueur. */
+  public get level(): number {
+    return this.levelTarget;
+  }
+
+  /** La caméra est-elle au zoom par défaut, centrée sur Adam ? */
+  public get atHome(): boolean {
+    return Math.abs(this.levelTarget - ZOOM.default) < 1e-3 && Math.hypot(this.panX, this.panY) < 1;
+  }
+
+  /**
+   * Zoome au niveau `level` (ramené dans les bornes), autour du point écran
+   * `anchor` (pixels CSS) qui reste sous le curseur ou les doigts — le
+   * centre de l'écran si `null`. `immediate` : sans glisser (le pinch, qui
+   * suit déjà le doigt).
+   */
+  public zoomTo(level: number, anchor: { x: number; y: number } | null = null, immediate = false): void {
+    this.levelTarget = clampZoom(level);
+    this.anchor = anchor;
+    this.panHome = false;
+    if (!immediate) {
+      this.levelEasing = true;
+      return;
+    }
+
+    const before = this.zoom;
+
+    this.zoom = this.goal();
+    this.levelEasing = false;
+    if (anchor) this.hold(anchor, before);
+    this.anchor = null;
+    this.clampPan();
+  }
+
+  /** Multiplie le niveau de zoom par `factor`, autour de `anchor` : cf. `zoomTo`. */
+  public zoomBy(factor: number, anchor: { x: number; y: number } | null = null, immediate = false): void {
+    this.zoomTo(this.levelTarget * factor, anchor, immediate);
+  }
+
+  /** Revient en glissant au zoom par défaut, centré sur Adam. */
+  public resetZoom(): void {
+    this.zoomTo(ZOOM.default);
+    this.panHome = true;
+  }
+
+  /** Reprend un niveau mémorisé, sans glisser : au chargement. */
+  public restoreLevel(level: number): void {
+    this.levelTarget = clampZoom(level);
+    this.zoom = this.goal();
+  }
+
+  /** Le zoom vers lequel glisser : le niveau du joueur, ou le recul s'il montre plus large. */
+  private goal(): number {
+    return this.zoomHold > 0 ? Math.min(this.levelTarget, this.zoomTarget) : this.levelTarget;
+  }
+
+  /**
+   * Le zoom vient de passer de `before` à `this.zoom` : décale le centre
+   * pour que le point monde sous `anchor` y soit encore.
+   */
+  private hold(anchor: { x: number; y: number }, before: number): void {
+    const shift = 1 / before - 1 / this.zoom;
+    const dx = (anchor.x - this.viewWidth / 2) * shift;
+    const dy = (anchor.y - this.viewHeight / 2) * shift;
+
+    this.x += dx;
+    this.y += dy;
+    this.panX += dx;
+    this.panY += dy;
+  }
+
+  /** Le décalage ne pousse jamais Adam à moins de `PAN_MARGIN` du bord de l'écran. */
+  private clampPan(): void {
+    const maxX = Math.max(0, this.viewWidth / (2 * this.zoom) - PAN_MARGIN);
+    const maxY = Math.max(0, this.viewHeight / (2 * this.zoom) - PAN_MARGIN);
+
+    this.panX = Math.min(maxX, Math.max(-maxX, this.panX));
+    this.panY = Math.min(maxY, Math.max(-maxY, this.panY));
   }
 
   /** Ajoute du trauma : 0.2 pour un coup, 0.6 pour un effondrement. */
