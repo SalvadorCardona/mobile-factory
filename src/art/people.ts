@@ -11,7 +11,7 @@
  * ras des pieds : pas de jambes, la silhouette reste lisible à 32 px.
  */
 
-import { PALETTE, circle, curve, group, highlight, line, pill, rect, shadedBlock, svg } from '../data/artDirection.ts';
+import { PALETTE, circle, curve, group, highlight, line, pill, polyline, rect, shadedBlock, svg } from '../data/artDirection.ts';
 
 export type Facing = 'down' | 'up' | 'side';
 
@@ -22,6 +22,10 @@ export interface HumanOptions {
   scarf: boolean;
   /** Petite casquette jaune — les enfants de la colonie. */
   cap: boolean;
+  /** Bras levés au-dessus de la tête — un ouvrier qui s'étire. De face seulement. */
+  armsUp?: boolean;
+  /** Yeux fermés, bouche grande ouverte — un ouvrier qui bâille. De face seulement. */
+  yawn?: boolean;
 }
 
 const { ink, orange, coral, violet, skin, yellow, cyan } = PALETTE;
@@ -36,16 +40,18 @@ export function humanBody(facing: Facing, options: HumanOptions): string {
       return (
         (options.pack ? pill(9.5, 17.5, 13, 6, violet.shade) : '') +
         // Bras, puis tunique en trois tons, mains.
-        pill(7.5, 22, 4.5, 10, orange.shade) +
-        pill(20, 22, 4.5, 10, orange.shade) +
+        (options.armsUp
+          ? pill(4.5, 6, 4.5, 18, orange.shade) + pill(23, 6, 4.5, 18, orange.shade)
+          : pill(7.5, 22, 4.5, 10, orange.shade) + pill(20, 22, 4.5, 10, orange.shade)) +
         rect(10, 21, 12, 14, orange.shade, 5) +
         rect(10, 21, 12, 11, orange.base, 5) +
         highlight(10, 21, 12, 11, 'orange') +
-        circle(9.7, 32, 2, skin.base) +
-        circle(22.3, 32, 2, skin.base) +
+        (options.armsUp ? '' : circle(9.7, 32, 2, skin.base) + circle(22.3, 32, 2, skin.base)) +
         (options.pack ? line(12.5, 22.5, 12.5, 28, violet.shade) + line(19.5, 22.5, 19.5, 28, violet.shade) : '') +
         (options.scarf ? pill(10, 19, 12, 4.5, coral.base) + pill(18.5, 21, 3.5, 7, coral.shade) : '') +
-        headFront(options.cap)
+        headFront(options.cap, options.yawn ?? false) +
+        // Les mains par-dessus la tête : elles se rejoignent presque.
+        (options.armsUp ? circle(6.75, 5.5, 2.3, skin.base) + circle(25.25, 5.5, 2.3, skin.base) : '')
       );
 
     case 'up':
@@ -76,15 +82,16 @@ export function humanBody(facing: Facing, options: HumanOptions): string {
   }
 }
 
-/** Tête de face : cheveux indigo, visage, deux yeux, les joues roses. */
-function headFront(cap: boolean): string {
+/** Tête de face : cheveux indigo, visage, deux yeux, les joues roses. Qui bâille : yeux plissés, bouche en O. */
+function headFront(cap: boolean, yawn = false): string {
   return (
     circle(16, 11.5, 7, ink.base) +
     rect(10, 11, 12, 9, skin.base, 4.5) +
     pill(10.5, 11, 11, 2.2, ink.base) +
     (cap ? pill(9, 5.5, 14, 5, yellow.base) + pill(11, 6.3, 5, 1.6, yellow.light) : pill(11.5, 6.3, 6, 2, ink.light)) +
-    circle(13.4, 15, 1.1, ink.base) +
-    circle(18.6, 15, 1.1, ink.base) +
+    (yawn
+      ? pill(12.2, 14.4, 2.6, 1.1, ink.base) + pill(17.2, 14.4, 2.6, 1.1, ink.base) + pill(14.4, 15.8, 3.2, 3.8, ink.shade) + pill(15, 17.9, 2, 1.2, coral.base)
+      : circle(13.4, 15, 1.1, ink.base) + circle(18.6, 15, 1.1, ink.base)) +
     circle(11.9, 17.3, 1.1, coral.light) +
     circle(20.1, 17.3, 1.1, coral.light)
   );
@@ -163,6 +170,65 @@ export function pickaxe(x: number, y: number): string {
       pill(cx - 3.5, top - 1.4, 4, 1.2, cyan.light),
       circle(cx, top, 1.8, ink.base),
     )
+  );
+}
+
+/**
+ * Les poses d'un ouvrier qui glande, toutes de face :
+ * - `sit` : assis par terre, le corps tassé au sol, les deux pieds devant ;
+ * - `stretch` : debout, il s'étire, bras levés au-dessus de la tête ;
+ * - `yawn` : il bâille, yeux plissés, bouche en O — la bulle `zzz` à côté.
+ * (Adossé et flâneur se font au rendu : le corps penche, ou marche sans but.)
+ */
+export const IDLE_POSES = ['sit', 'stretch', 'yawn'] as const;
+
+export type IdlePose = (typeof IDLE_POSES)[number];
+
+/** Ce qu'une pose de glande change au corps : les bras, le visage. */
+export type IdleLook = Pick<HumanOptions, 'armsUp' | 'yawn'>;
+
+/** De combien le corps descend quand il s'assoit, en pixels du corps d'adulte. */
+const SIT_DROP = 6;
+
+/**
+ * Les morceaux de glande d'un ouvrier : une pose par `IDLE_POSES`, dans le
+ * cadre `width × height` du sprite, et la bulle `zzz`. `figure` dessine le
+ * corps d'adulte de face (pieds en (16, 38.4)) avec ce qui le distingue —
+ * casque, caisse, barbe — selon les options de la pose ; `scale` le réduit
+ * autour des pieds, posés à `ground`.
+ */
+export function idleParts(
+  width: number,
+  height: number,
+  ground: number,
+  scale: number,
+  figure: (look: IdleLook) => string,
+): Record<IdlePose | 'zzz', string> {
+  const sized = (body: string): string => svg(width, height, scaledAround(16, ground, scale, body));
+
+  return {
+    sit: sized(
+      // Tassé sur son derrière : plus bas, un peu écrasé, les pieds devant lui, écartés, semelles vers nous.
+      group(`translate(16 ${ground + SIT_DROP}) scale(1.06 0.9) translate(-16 ${-ground})`, figure({})) +
+        pill(6.5, ground + 1, 7, 4.4, ink.shade) +
+        pill(18.5, ground + 1, 7, 4.4, ink.shade),
+    ),
+    stretch: sized(figure({ armsUp: true })),
+    yawn: sized(figure({ yawn: true })),
+    zzz: svg(width, height, zzz(25, 6)),
+  };
+}
+
+/** La bulle du dormeur : un nuage blanc, un grand Z indigo, deux petites bulles vers la tête. */
+function zzz(cx: number, cy: number): string {
+  const { paper } = PALETTE;
+
+  return (
+    circle(cx - 6.2, cy + 7.6, 1.3, paper.shade) +
+    circle(cx - 4, cy + 5, 1.9, paper.shade) +
+    circle(cx + 0.4, cy + 0.5, 5.6, paper.shade) +
+    circle(cx, cy, 5.4, paper.base) +
+    polyline([cx - 2.4, cy - 2.4, cx + 2.4, cy - 2.4, cx - 2.4, cy + 2.4, cx + 2.4, cy + 2.4], ink.base)
   );
 }
 

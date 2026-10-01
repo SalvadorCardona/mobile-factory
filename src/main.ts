@@ -207,12 +207,14 @@ async function main(): Promise<void> {
       hud.talkToEve();
       audio.play('open');
     },
+    (id) => hud.showPerson(id),
   );
 
   hud.root.append(stick.root, buildMenu.root, panel.root, inventory.root, trade.root);
   stick.avoid([...buildMenu.root.children]);
   hud.bag.addEventListener('click', () => inventory.toggle());
   hud.setProjector((x, y) => renderer.worldToScreen(x, y));
+  hud.setFocus((x, y) => renderer.peek(x, y));
 
   /*
    * L'horloge : la simulation n'avance que si la partie a commencé et n'est
@@ -501,6 +503,7 @@ function wireAudio(world: World, audio: AudioEngine, hud: Hud, pause: PauseScree
   world.events.on('patientFollowing', () => audio.play('pickup'));
   world.events.on('patientAdmitted', () => audio.play('open'));
   world.events.on('mutantHealed', () => audio.play('baby'));
+  world.events.on('kidGrewUp', () => audio.play('baby'));
   world.events.on('beastHit', () => audio.play('hit'));
   world.events.on('beastDied', () => audio.play('die'));
   world.events.on('playerHurt', ({ hp }) => {
@@ -754,6 +757,7 @@ function wireParticles(world: World, renderer: GameRenderer): void {
   world.events.on('lootDropped', ({ x, y }) => particles.burst(x, y - 6, PARTICLES.confetti, 5, 0.08));
   world.events.on('mutantStunned', ({ x, y }) => particles.burst(x, y - 16, PARTICLES.star, 6, 0.1));
   world.events.on('mutantHealed', ({ x, y }) => particles.burst(x, y - 12, PARTICLES.confetti, 10, 0.14));
+  world.events.on('kidGrewUp', ({ x, y }) => particles.burst(x, y - 12, PARTICLES.confetti, 10, 0.14));
   world.events.on('lootPicked', ({ item, x, y }) => particles.burst(x, y - 6, ITEM_PARTICLES[item], 6, 0.1));
   world.events.on('waveCleared', () => {
     const hall = world.entities.get(world.townHallId);

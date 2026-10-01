@@ -14,7 +14,7 @@
 
 import { PALETTE, line, pill, rect, shadedBlock, svg } from '../data/artDirection.ts';
 import type { SpriteProto } from '../data/sprites.ts';
-import { foot, humanBody, scaledAround, type Facing } from './people.ts';
+import { foot, humanBody, idleParts, scaledAround, type Facing, type IdleLook } from './people.ts';
 import { loadParts } from './worker.ts';
 
 const W = 32;
@@ -64,8 +64,13 @@ function cap(facing: Facing): string {
   }
 }
 
+/** Le corps d'adulte, avant réduction ; `look` : les bras levés ou le bâillement d'une pose de glande. */
+function figure(facing: Facing, look: IdleLook = {}): string {
+  return crateBehind(facing) + humanBody(facing, { ...OPTIONS, ...look }) + crateFront(facing) + cap(facing);
+}
+
 function body(facing: Facing): string {
-  return svg(W, H, scaledAround(16, GROUND, SCALE, crateBehind(facing) + humanBody(facing, OPTIONS) + crateFront(facing) + cap(facing)));
+  return svg(W, H, scaledAround(16, GROUND, SCALE, figure(facing)));
 }
 
 export const LOGISTICIAN = {
@@ -78,6 +83,7 @@ export const LOGISTICIAN = {
     up: body('up'),
     side: body('side'),
     foot: svg(W, H, foot(GROUND, 'ink', 0.9)),
+    ...idleParts(W, H, GROUND, SCALE, (look) => figure('down', look)),
     // L'objet dépasse de la caisse : un peu plus haut que sur la tête d'un porteur.
     ...loadParts(1),
   },

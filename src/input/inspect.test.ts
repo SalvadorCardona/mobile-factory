@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { TILE_SIZE } from '../core/grid.ts';
 import { SPRITES } from '../data/sprites.ts';
 import { Camera } from '../render/camera.ts';
-import type { Entity } from '../sim/types.ts';
-import { buildingAt } from './inspect.ts';
+import type { Entity, Mobile } from '../sim/types.ts';
+import { buildingAt, personAt } from './inspect.ts';
 
 /** Le chantier de la mairie, emprise 3 × 3 en (0, 0) : cadre de 96 × 128, 32 px de toit au-dessus. */
 const HALL = { id: 1, kind: 'site', proto: 'townHall', tx: 0, ty: 0, width: 3, height: 3, delivered: {} } as Entity;
@@ -74,4 +74,24 @@ describe('écran → monde → bâtiment', () => {
       });
     }
   }
+});
+
+describe('personAt', () => {
+  const worker = { kind: 'worker', id: 10, x: 100, y: 200, inside: false } as Mobile;
+  const kid = { kind: 'kid', id: 11, x: 100, y: 210 } as Mobile;
+
+  it('vise le corps d’un habitant dehors, pas son cadre entier', () => {
+    expect(personAt([worker], 100, 180)).toBe(10);
+    expect(personAt([worker], 100 + 15, 180)).toBeUndefined();
+    expect(personAt([worker], 100, 150)).toBeUndefined();
+    expect(personAt([{ ...worker, inside: true } as Mobile], 100, 180)).toBeUndefined();
+  });
+
+  it('prend le plus bas à l’écran quand deux se recouvrent', () => {
+    expect(personAt([worker, kid], 100, 195)).toBe(11);
+  });
+
+  it('ignore ce qui n’est pas un habitant', () => {
+    expect(personAt([{ kind: 'mutant', id: 12, x: 100, y: 200 } as Mobile], 100, 180)).toBeUndefined();
+  });
 });

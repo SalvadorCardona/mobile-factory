@@ -805,6 +805,80 @@ button.hud-stock:active {
   display: none;
 }
 
+/*
+ * La population de la ville : au travail, inactifs, enfants. Seul le compteur
+ * d'inactifs se tape ; il passe en corail dès qu'un ouvrier glande.
+ */
+.hud .hud-people {
+  pointer-events: none;
+  width: 124px;
+  display: flex;
+  justify-content: space-between;
+  gap: 2px;
+  padding: 6px 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-people[hidden] {
+  display: none;
+}
+
+.hud-people-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  font-size: 15px;
+}
+
+.hud-people-count .icon {
+  width: 18px;
+  height: 18px;
+}
+
+.hud .hud-people-idle {
+  position: relative;
+  pointer-events: auto;
+  padding: 1px 5px 1px 2px;
+  border: none;
+  border-radius: 999px;
+  background: var(--paper-shade);
+  box-shadow: 0 2px 0 var(--violet-light);
+  font: inherit;
+  font-size: 15px;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* La capsule est petite, le doigt ne l'est pas : la zone de tap déborde. */
+.hud-people-idle::after {
+  content: '';
+  position: absolute;
+  inset: -8px -4px;
+}
+
+.hud .hud-people-idle[data-alert='true'] {
+  background: var(--coral);
+  box-shadow: 0 2px 0 var(--coral-shade);
+  color: var(--paper);
+  font-weight: 700;
+}
+
+.hud-people-idle:active {
+  transform: translateY(2px);
+  box-shadow: none;
+}
+
+/* L'infobulle d'un habitant : la bulle d'Ève, plus petite. */
+.hud-person {
+  max-width: 220px;
+  padding: 6px 12px;
+  font-size: 14px;
+}
+
+.hud-person[hidden] {
+  display: none;
+}
+
 /* Le résumé de la pastille (ville, objet réclamé) ne sert que sur un téléphone. */
 .hud-bag-town,
 .hud-bag-wanted {
@@ -820,6 +894,22 @@ button.hud-stock:active {
 @media (max-width: 599px), (max-height: 499px) {
   .hud-town {
     display: none;
+  }
+
+  .hud .hud-people {
+    width: 104px;
+    padding: 4px 6px;
+    border-radius: 18px;
+  }
+
+  .hud-people-count,
+  .hud .hud-people-idle {
+    font-size: 14px;
+  }
+
+  .hud-people-count .icon {
+    width: 15px;
+    height: 15px;
   }
 
   .hud-bag {

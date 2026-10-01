@@ -66,6 +66,8 @@ function porter(x: number, y: number): Worker {
     moving: false,
     homeId: 1,
     exMutant: false,
+    grown: false,
+    age: 30,
     logistician: false,
     builder: false,
     survivor: false,

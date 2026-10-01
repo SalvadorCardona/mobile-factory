@@ -3,8 +3,9 @@
  *
  * Ils ne produisent rien et ne se battent pas : ils sont la preuve visible
  * que la nurserie fonctionne, et que la colonie vit. Un enfant flâne au
- * hasard autour de sa nurserie, s'arrête, repart, et revient s'il s'éloigne
- * trop. Il respecte les obstacles — il ne traverse ni un arbre ni un mur.
+ * hasard autour de sa nurserie, s'arrête, repart — parfois en courant —, et
+ * revient s'il s'éloigne trop. Il respecte les obstacles — il ne traverse ni
+ * un arbre ni un mur. Les ouvriers ne le heurtent pas : il ne gêne personne.
  */
 
 import { TILE_SIZE } from '../core/grid.ts';
@@ -23,6 +24,11 @@ const KID_RANGE_TILES = 4;
 
 const KID_BOX = { halfW: 6, halfH: 5 };
 
+/** Une idée courte est une course : l'enfant file à autant de fois son pas. */
+export const KID_SPRINT = 1.8;
+/** Sous cette durée, en ticks, une idée de marche est une course. */
+const SPRINT_TICKS = 34;
+
 export function stepKid(
   kid: Wanderer,
   home: { x: number; y: number },
@@ -31,6 +37,7 @@ export function stepKid(
   stepSeconds: number,
   range = KID_RANGE_TILES,
   speedTiles = KID_SPEED_TILES,
+  sprint = 1,
 ): void {
   if (kid.wanderTicks <= 0) {
     if (rng() < 0.4) {
@@ -43,6 +50,11 @@ export function stepKid(
       kid.dirY = Math.sin(angle);
     }
     kid.wanderTicks = 20 + Math.floor(rng() * 50);
+    // Pas de tirage de plus : une course est une idée courte, la suite du PRNG ne bouge pas.
+    if (kid.wanderTicks < SPRINT_TICKS) {
+      kid.dirX *= sprint;
+      kid.dirY *= sprint;
+    }
   }
   kid.wanderTicks -= 1;
 

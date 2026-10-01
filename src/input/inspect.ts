@@ -16,25 +16,37 @@
  *
  * Ève se tape aussi : un doigt sur elle la fait parler (`onTalk`). Elle
  * passe avant les bâtiments — elle se tient devant la mairie, dont le cadre
- * la recouvre.
+ * la recouvre. Un habitant — enfant, ouvrier, bûcheron — aussi : un doigt
+ * sur lui montre son infobulle (`onPerson`) ; sa zone de tap est son corps,
+ * pas son cadre, pour qu'un ouvrier devant une porte n'empêche pas d'ouvrir
+ * le bâtiment.
  *
- * Aucune commande ici : ouvrir une fenêtre ou faire parler Ève ne modifie
- * pas le monde.
+ * Aucune commande ici : ouvrir une fenêtre, faire parler Ève ou montrer qui
+ * est un habitant ne modifie pas le monde.
  */
 
 import { TILE_SIZE } from '../core/grid.ts';
 import { BUILDINGS } from '../data/buildings.ts';
 import { SPRITES } from '../data/sprites.ts';
-import type { Entity, EntityId, Eve } from '../sim/types.ts';
+import type { Entity, EntityId, Eve, Mobile, MobileId } from '../sim/types.ts';
 import type { World } from '../sim/world.ts';
 import { TAP_SLOP, type PointerConsumer, type PointerSample } from './pointer.ts';
 
 /** Marge autour du cadre d'Ève, en pixels monde : elle est petite, le doigt est gros. */
 const EVE_TAP_MARGIN = 6;
 
+/** Le corps d'un habitant, autour de ses pieds, en pixels monde : demi-largeur, hauteur au-dessus, marge sous les pieds. */
+const PERSON_HALF_W = 9;
+const PERSON_TOP = 34;
+const KID_TOP = 24;
+const PERSON_BELOW = 4;
+
+/** Ce que le doigt vise : un bâtiment, Ève, ou un habitant. */
+type Target = { kind: 'building'; id: EntityId } | { kind: 'eve' } | { kind: 'person'; id: MobileId };
+
 export class Inspect implements PointerConsumer {
   private pointerId: number | null = null;
-  private target: EntityId | 'eve' | null = null;
+  private target: Target | null = null;
   private startX = 0;
   private startY = 0;
   private moved = false;
@@ -44,6 +56,7 @@ export class Inspect implements PointerConsumer {
   private readonly enabled: () => boolean;
   private readonly onTap: (id: EntityId) => void;
   private readonly onTalk: () => void;
+  private readonly onPerson: (id: MobileId) => void;
 
   public constructor(
     world: World,
@@ -51,23 +64,25 @@ export class Inspect implements PointerConsumer {
     enabled: () => boolean,
     onTap: (id: EntityId) => void,
     onTalk: () => void = () => {},
+    onPerson: (id: MobileId) => void = () => {},
   ) {
     this.world = world;
     this.screenToWorld = screenToWorld;
     this.enabled = enabled;
     this.onTap = onTap;
     this.onTalk = onTalk;
+    this.onPerson = onPerson;
   }
 
   public onDown(sample: PointerSample): boolean {
     if (this.pointerId !== null || !this.enabled()) return false;
 
-    const id = this.targetAt(sample);
+    const target = this.targetAt(sample);
 
-    if (id === undefined) return false;
+    if (target === undefined) return false;
 
     this.pointerId = sample.id;
-    this.target = id;
+    this.target = target;
     this.startX = sample.x;
     this.startY = sample.y;
     this.moved = false;
@@ -88,20 +103,32 @@ export class Inspect implements PointerConsumer {
     this.target = null;
 
     if (this.moved || target === null) return;
-    if (target === 'eve') {
-      this.onTalk();
-      return;
+    switch (target.kind) {
+      case 'eve':
+        this.onTalk();
+        return;
+      case 'person':
+        if (this.world.mobiles.has(target.id)) this.onPerson(target.id);
+        return;
+      case 'building':
+        // Le bâtiment doit encore exister au relâchement : un mutant a pu le raser entre-temps.
+        if (this.world.entities.has(target.id)) this.onTap(target.id);
     }
-    // Le bâtiment doit encore exister au relâchement : un mutant a pu le raser entre-temps.
-    if (this.world.entities.has(target)) this.onTap(target);
   }
 
-  private targetAt(sample: PointerSample): EntityId | 'eve' | undefined {
+  private targetAt(sample: PointerSample): Target | undefined {
     const position = this.screenToWorld(sample.x, sample.y);
     const eve = this.world.eve();
 
-    if (eve && isOnEve(eve, position.x, position.y)) return 'eve';
-    return buildingAt(this.world.entities.values(), position.x, position.y);
+    if (eve && isOnEve(eve, position.x, position.y)) return { kind: 'eve' };
+
+    const person = personAt(this.world.mobiles.values(), position.x, position.y);
+
+    if (person !== undefined) return { kind: 'person', id: person };
+
+    const building = buildingAt(this.world.entities.values(), position.x, position.y);
+
+    return building === undefined ? undefined : { kind: 'building', id: building };
   }
 }
 
@@ -112,6 +139,29 @@ export function isOnEve(eve: Eve, x: number, y: number): boolean {
   const top = eve.y - height * anchorY - EVE_TAP_MARGIN;
 
   return x >= left && x < left + width + EVE_TAP_MARGIN * 2 && y >= top && y < top + height + EVE_TAP_MARGIN * 2;
+}
+
+/**
+ * L'habitant dessiné sous un point monde — un enfant, un ouvrier ou un
+ * bûcheron dehors —, le plus bas à l'écran s'ils se recouvrent.
+ */
+export function personAt(mobiles: Iterable<Mobile>, x: number, y: number): MobileId | undefined {
+  let found: MobileId | undefined;
+  let foundY = -Infinity;
+
+  for (const mobile of mobiles) {
+    if (mobile.kind !== 'kid' && mobile.kind !== 'worker' && mobile.kind !== 'lumberjack') continue;
+    if (mobile.kind !== 'kid' && mobile.inside) continue;
+
+    const top = mobile.kind === 'kid' ? KID_TOP : PERSON_TOP;
+
+    if (Math.abs(x - mobile.x) > PERSON_HALF_W || y < mobile.y - top || y > mobile.y + PERSON_BELOW) continue;
+    if (mobile.y <= foundY) continue;
+
+    found = mobile.id;
+    foundY = mobile.y;
+  }
+  return found;
 }
 
 /**

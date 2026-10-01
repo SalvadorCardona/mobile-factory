@@ -20,12 +20,13 @@ import { facingOf, moveBox, type SolidTest } from './motion.ts';
 import type { Building, Entity, Eve, MobileId } from './types.ts';
 
 /** Ève, au départ de son vélo-cargo : à `EVE.arrivalDistance` tuiles à l'est de chez elle. */
-export function createEve(id: MobileId, homeX: number, homeY: number): Eve {
+export function createEve(id: MobileId, homeX: number, homeY: number, age: number): Eve {
   const x = homeX + EVE.arrivalDistance * TILE_SIZE;
 
   return {
     kind: 'eve',
     id,
+    age,
     x,
     y: homeY,
     prevX: x,

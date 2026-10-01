@@ -43,6 +43,11 @@
  * bûcheron abat sa hache sur l'arbre qu'il coupe, et rapporte son bois sur
  * la tête.
  *
+ * Un enfant sautille : il court à petits bonds et saute sur place. Un
+ * ouvrier qui glande (`World.isIdle`) et s'arrête prend une pose tirée au
+ * hasard — assis, adossé, il s'étire, il bâille sous sa bulle « zzz » — et
+ * se relève dès qu'il marche. Un enfant devenu ouvrier change de pantin.
+ *
  * Un mutant assommé est affalé, trois étoiles en ronde au-dessus de la tête,
  * qui tournent plus vite quand il va se réveiller ; touché par Adam, il le
  * suit en boitillant ; en soins, il n'est pas dessiné.
@@ -53,10 +58,10 @@ import { TILE_SIZE, floorDiv } from '../core/grid.ts';
 import { PALETTE, hex } from '../data/artDirection.ts';
 import { ENEMIES, LOOT_DROPS, WILDLIFE } from '../data/enemies.ts';
 import { SPRITES } from '../data/sprites.ts';
-import type { Mobile, MobileId, Mutant, Pickup } from '../sim/types.ts';
+import type { Lumberjack, Mobile, MobileId, Mutant, Pickup, Worker } from '../sim/types.ts';
 import { terrainAt } from '../sim/terrain.ts';
 import type { World } from '../sim/world.ts';
-import { Puppet, type PuppetId } from './puppet.ts';
+import { Puppet, type Lounge, type PuppetId } from './puppet.ts';
 import type { SpriteLibrary } from './spriteLibrary.ts';
 import type { TerrainTiles } from './terrainTiles.ts';
 
@@ -119,10 +124,15 @@ const STARS_SPIN = 0.004;
 /** Sous ce nombre de ticks avant le réveil, les étoiles tournent deux fois plus vite. */
 const STARS_HURRY_TICKS = 20 * 3;
 
+/** Les glandes d'un ouvrier inactif, et combien de temps il en garde une : un minimum, plus une part tirée au hasard. */
+const LOUNGES: readonly Lounge[] = ['sit', 'lean', 'stretch', 'yawn'];
+const LOUNGE_MS = 2600;
+const LOUNGE_JITTER_MS = 3200;
+
 /** Le pantin de chaque marcheur : sprite, ombre, écart des pieds, allure. */
 function puppetOf(
   mobile: Exclude<Mobile, { kind: 'arrow' | 'pickup' | 'caravan' }>,
-): { id: PuppetId; shadowWidth: number; stride: number; gait?: 'scuttle' | 'limp' } {
+): { id: PuppetId; shadowWidth: number; stride: number; gait?: 'scuttle' | 'limp' | 'hop' } {
   switch (mobile.kind) {
     case 'mutant':
       return mobile.proto === 'queen'
@@ -131,7 +141,7 @@ function puppetOf(
     case 'patient':
       return { id: 'patient', shadowWidth: 22, stride: 4, gait: 'limp' };
     case 'kid':
-      return { id: 'kid', shadowWidth: 15, stride: 3 };
+      return { id: 'kid', shadowWidth: 15, stride: 3, gait: 'hop' };
     case 'eve':
       return { id: 'eve', shadowWidth: 20, stride: 4 };
     case 'worker':
@@ -169,6 +179,11 @@ interface MobileView {
   puddle: number;
   /** Le recul d'un mutant touché : direction du tir, ms restantes. */
   recoil: { dx: number; dy: number; left: number } | null;
+  /** Ce qu'est le mobile : un enfant qui a 14 ans devient ouvrier sous le même id, et change de pantin. */
+  kind: Mobile['kind'];
+  /** La glande en cours d'un ouvrier inactif, et ses ms restantes avant d'en changer. */
+  lounge: Lounge | null;
+  loungeLeft: number;
 }
 
 /** Le vélo-cargo — une ombre, le cadre avec Ève en selle, deux roues qui tournent — ou la charrette du marchand. */
@@ -280,6 +295,11 @@ export class MobileLayer {
     const deltaMs = ticker.deltaMS;
 
     for (const mobile of this.world.mobiles.values()) {
+      const stale = this.views.get(mobile.id);
+
+      // Un enfant devenu ouvrier garde son id, pas son pantin.
+      if (stale && stale.kind !== mobile.kind) this.drop(mobile.id, stale);
+
       const view = this.views.get(mobile.id) ?? this.add(mobile);
       const x = mobile.prevX + (mobile.x - mobile.prevX) * alpha;
       const y = mobile.prevY + (mobile.y - mobile.prevY) * alpha;
@@ -342,7 +362,8 @@ export class MobileLayer {
           view.root.visible = !mobile.inside;
           this.ground(view, x, y);
           puppet.carry(mobile.load > 0 ? 'wood' : null);
-          puppet.update(deltaMs, mobile.facing, mobile.state === 'chop' ? 'act' : mobile.moving ? 'walk' : 'idle');
+          this.loiter(view, mobile, deltaMs);
+          puppet.update(deltaMs, view.lounge ? 'down' : mobile.facing, mobile.state === 'chop' ? 'act' : mobile.moving ? 'walk' : 'idle');
           break;
         }
 
@@ -358,6 +379,7 @@ export class MobileLayer {
           if (mobile.kind === 'worker') {
             view.root.visible = !mobile.inside;
             puppet.carry(mobile.job?.carried ? mobile.job.item : null);
+            this.loiter(view, mobile, deltaMs);
           }
 
           if ((mobile.kind === 'mutant' || mobile.kind === 'beast') && view.hp) {
@@ -387,7 +409,7 @@ export class MobileLayer {
           // Un bâtisseur arrivé au chantier tape du marteau.
           const hammering = mobile.kind === 'worker' && mobile.build !== null && !mobile.moving;
 
-          puppet.update(deltaMs, mobile.facing, mobile.moving ? 'walk' : hammering ? 'act' : 'idle');
+          puppet.update(deltaMs, view.lounge ? 'down' : mobile.facing, mobile.moving ? 'walk' : hammering ? 'act' : 'idle');
           break;
         }
       }
@@ -396,14 +418,45 @@ export class MobileLayer {
     for (const [id, view] of this.views) {
       if (this.world.mobiles.has(id)) continue;
 
-      view.puppet?.destroy();
-      view.root.destroy({ children: true });
-      this.views.delete(id);
+      this.drop(id, view);
     }
 
     this.bury(deltaMs);
     this.bubble(deltaMs);
     this.mark(alpha, deltaMs);
+  }
+
+  /**
+   * Un ouvrier qui glande (`World.isIdle`) et s'est arrêté prend une pose,
+   * tirée au hasard, qu'il garde quelques secondes avant d'en changer : assis,
+   * adossé, il s'étire, il bâille. Dès qu'il marche — il flâne, ou un
+   * travail l'appelle —, il se relève.
+   */
+  private loiter(view: MobileView, mobile: Worker | Lumberjack, deltaMs: number): void {
+    const puppet = view.puppet!;
+
+    if (mobile.moving || !this.world.isIdle(mobile)) {
+      view.lounge = null;
+      view.loungeLeft = 0;
+      puppet.lounge(null);
+      return;
+    }
+
+    view.loungeLeft -= deltaMs;
+    if (view.lounge === null || view.loungeLeft <= 0) {
+      const choices = LOUNGES.filter((pose) => pose !== view.lounge);
+
+      view.lounge = choices[Math.floor(Math.random() * choices.length)]!;
+      view.loungeLeft = LOUNGE_MS + Math.random() * LOUNGE_JITTER_MS;
+    }
+    puppet.lounge(view.lounge);
+  }
+
+  /** Détruit la vue d'un mobile parti — ou qui a changé de nature. */
+  private drop(id: MobileId, view: MobileView): void {
+    view.puppet?.destroy();
+    view.root.destroy({ children: true });
+    this.views.delete(id);
   }
 
   /**
@@ -591,7 +644,7 @@ export class MobileLayer {
       }
       sprite.anchor.set(SPRITES.arrow.anchorX, SPRITES.arrow.anchorY);
       root.addChild(sprite);
-      view = { root, puppet: null, hp: null, lastHp: 0, age: SPAWN_MS, tile: '', bike: null, stars: null, size: 1, puddle: 1, recoil: null };
+      view = { root, puppet: null, hp: null, lastHp: 0, age: SPAWN_MS, tile: '', bike: null, stars: null, size: 1, puddle: 1, recoil: null, kind: mobile.kind, lounge: null, loungeLeft: 0 };
     } else if (mobile.kind === 'pickup') {
       const tx = floorDiv(mobile.x, TILE_SIZE);
       const ty = floorDiv(mobile.y, TILE_SIZE);
@@ -610,14 +663,14 @@ export class MobileLayer {
       // Butin rechargé d'une sauvegarde : déjà posé, pas de saut.
       const fresh = LOOT_DROPS.lifetimeTicks - mobile.ttl < 20;
 
-      view = { root, puppet: null, hp: null, lastHp: 0, age: fresh ? 0 : LOOT_DROP_MS, tile: '', bike: null, stars: null, size: 1, puddle: 1, recoil: null };
+      view = { root, puppet: null, hp: null, lastHp: 0, age: fresh ? 0 : LOOT_DROP_MS, tile: '', bike: null, stars: null, size: 1, puddle: 1, recoil: null, kind: mobile.kind, lounge: null, loungeLeft: 0 };
     } else if (mobile.kind === 'caravan') {
       const cart = this.cart(this.tiles.shadow('grass'));
 
       // Rechargée garée, elle garde le sens où elle roulait.
       cart.figure.scale.x = mobile.facing === 'left' ? -1 : 1;
       root.addChild(cart.root);
-      view = { root, puppet: null, hp: null, lastHp: 0, age: SPAWN_MS, tile: '', bike: cart, stars: null, size: 1, puddle: 1, recoil: null };
+      view = { root, puppet: null, hp: null, lastHp: 0, age: SPAWN_MS, tile: '', bike: cart, stars: null, size: 1, puddle: 1, recoil: null, kind: mobile.kind, lounge: null, loungeLeft: 0 };
     } else {
       const foe = mobile.kind === 'mutant' || mobile.kind === 'beast';
       const { id, ...options } = puppetOf(mobile);
@@ -647,7 +700,7 @@ export class MobileLayer {
       if (stars) root.addChild(stars.orbit);
       const puddle = mobile.kind === 'mutant' ? puddleSize(mobile) : 1;
 
-      view = { root, puppet, hp, lastHp: foe ? mobile.hp : 0, age: foe ? 0 : SPAWN_MS, tile: '', bike, stars, size: scale, puddle, recoil: null };
+      view = { root, puppet, hp, lastHp: foe ? mobile.hp : 0, age: foe ? 0 : SPAWN_MS, tile: '', bike, stars, size: scale, puddle, recoil: null, kind: mobile.kind, lounge: null, loungeLeft: 0 };
       if (mobile.kind === 'mutant' && mobile.emerge > 0) this.spill(mobile, puddle);
     }
 

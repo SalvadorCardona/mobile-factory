@@ -69,14 +69,16 @@ import type { AtlasStats } from '../render/spriteLibrary.ts';
 import type { WaterStats } from '../render/waterLayer.ts';
 import type { PlacementRejection, RepairRejection, RoadRejection } from '../sim/commands.ts';
 import type { Compass } from '../sim/enemies.ts';
-import type { Entity } from '../sim/types.ts';
+import { nameOf } from '../sim/inhabitants.ts';
+import type { Entity, Mobile, MobileId } from '../sim/types.ts';
 import { ticksToNight } from '../sim/dayNight.ts';
 import { currentQuest, questProgress } from '../sim/eve.ts';
 import { currentObjective, goalProgress, goalWait, type GoalWait } from '../sim/objectives.ts';
-import { TICKS_PER_SECOND, type Workforce, type World } from '../sim/world.ts';
+import { TICKS_PER_SECOND, type Inhabitant, type Workforce, type World } from '../sim/world.ts';
 import { carriesWanted, harvestRefusedText, tutorialAdvice, type Advice } from './hint.ts';
 import { buildingIcon, itemAmount, itemIcon, uiIcon } from './icons.ts';
 import { effectLine } from './researchText.ts';
+import { personText } from './personText.ts';
 import { mapUrl, seedLine } from './seed.ts';
 
 const REJECTION_LABELS: Record<PlacementRejection, string> = {
@@ -129,6 +131,8 @@ const SPEECH_BASE_MS = 1600;
 const SPEECH_PER_CHAR_MS = 45;
 /** Sous la quête, la bulle garde ce jeu (ses 10 px de flottement compris). */
 const SPEECH_GAP = 14;
+/** Le temps de lire l'infobulle d'un habitant, en ms. */
+const PERSON_MS = 4200;
 
 /**
  * Un conseil inchangé se replie au bout de ce délai, compté en ticks : il ne
@@ -204,6 +208,17 @@ export class Hud {
   public readonly bag: HTMLButtonElement;
   /** Le stock de la ville, compact. */
   private readonly town: HTMLElement;
+  /** La population de la ville : au travail, inactifs, enfants. */
+  private readonly people: HTMLElement;
+  private lastPeople = '';
+  /** Rang, dans `World.idleWorkers()`, du prochain inactif que montre un tap sur leur compteur. */
+  private idleCursor = 0;
+  /** L'infobulle d'un habitant : son id, et l'heure (`performance.now()`) où elle s'efface. */
+  private readonly person: HTMLElement;
+  private personId: MobileId | null = null;
+  private personUntil = 0;
+  private personHeight = 0;
+  private onFocus: (x: number, y: number) => void = () => {};
   private readonly buttons: HTMLElement;
   private readonly floats: HTMLElement;
   private readonly stats: HTMLElement;
@@ -319,6 +334,10 @@ export class Hud {
     this.bag = element('button', 'panel hud-stock hud-bag');
     this.bag.type = 'button';
     this.town = element('div', 'panel hud-stock hud-town');
+    this.people = element('div', 'panel hud-people');
+    this.people.hidden = true;
+    this.person = element('div', 'hud-speech hud-person');
+    this.person.hidden = true;
     this.floats = element('div', 'hud-floats');
     this.stats = element('div', 'panel hud-stats');
     this.stats.hidden = !debug;
@@ -414,7 +433,7 @@ export class Hud {
     const side = element('div', 'hud-side');
 
     this.quest.append(fold);
-    side.append(buttons, this.town, this.bag);
+    side.append(buttons, this.town, this.people, this.bag);
     this.top.append(this.quest, side, this.weather);
 
     this.root.append(
@@ -423,6 +442,7 @@ export class Hud {
       this.top,
       this.countdown,
       this.speech,
+      this.person,
       this.banner,
       this.toasts,
       this.floats,
@@ -551,6 +571,7 @@ export class Hud {
     world.events.on('patientFollowing', () => this.notify('Il vous suit en boitillant — direction la clinique', 'good'));
     world.events.on('patientAdmitted', () => this.notify('Admis à la clinique : une nuit de soins', 'good'));
     world.events.on('mutantHealed', () => this.notify('Un ex-mutant sort de la clinique : un porteur de plus !', 'good'));
+    world.events.on('kidGrewUp', ({ name }) => this.notify(`${name} a 14 ans, un ouvrier de plus`, 'good'));
     world.events.on('townHallDestroyed', () => this.showDefeat());
     world.events.on('weatherAnnounced', ({ id, seconds }) => {
       const proto = WEATHER[id];
@@ -703,6 +724,98 @@ export class Hud {
     this.speech.style.left = `${Math.round(Math.min(Math.max(x, margin), window.innerWidth - margin))}px`;
     // `top` est le bas de la bulle, qui flotte 10 px au-dessus : tout entière sous la quête.
     this.speech.style.top = `${Math.round(Math.max(y, questBottom + this.speechHeight + SPEECH_GAP))}px`;
+  }
+
+  /** Le renderer sait centrer la caméra ; le HUD non. `main.ts` fait le lien. */
+  public setFocus(focus: (x: number, y: number) => void): void {
+    this.onFocus = focus;
+  }
+
+  /**
+   * L'infobulle d'un habitant — prénom, âge, ce qu'il fait —, au-dessus de
+   * lui, le temps de la lire. Elle le suit s'il marche.
+   */
+  public showPerson(id: MobileId): void {
+    this.personId = id;
+    this.personUntil = performance.now() + PERSON_MS;
+    this.person.style.animation = 'none';
+    this.person.textContent = '';
+    this.person.hidden = false;
+    void this.person.offsetWidth;
+    this.person.style.animation = '';
+  }
+
+  private updatePerson(): void {
+    const mobile = this.personId === null ? undefined : this.world.mobiles.get(this.personId);
+
+    if (!mobile || !isInhabitant(mobile) || (mobile.kind !== 'kid' && mobile.inside) || performance.now() >= this.personUntil) {
+      this.personId = null;
+      this.person.hidden = true;
+      return;
+    }
+
+    const line = personText(nameOf(this.world.seed, mobile.id), mobile.age, this.world.occupation(mobile));
+
+    if (line !== this.person.textContent) {
+      this.person.textContent = line;
+      this.personHeight = this.person.offsetHeight;
+    }
+
+    const { x, y } = this.project(mobile.x, mobile.y - (mobile.kind === 'kid' ? 30 : 40));
+    const margin = Math.min(130, window.innerWidth / 2);
+
+    this.person.style.left = `${Math.round(Math.min(Math.max(x, margin), window.innerWidth - margin))}px`;
+    this.person.style.top = `${Math.round(Math.max(y, this.topInset() + this.personHeight + SPEECH_GAP))}px`;
+  }
+
+  /**
+   * La population de la ville : au travail, inactifs, enfants. Les inactifs
+   * sont un bouton, en corail dès qu'il y en a un : un tap centre la caméra
+   * sur l'un d'eux, le tap suivant sur le suivant.
+   */
+  private updatePeople(): void {
+    const { working, idle, children } = this.world.census();
+    const key = `${working}:${idle}:${children}`;
+
+    if (key === this.lastPeople) return;
+    this.lastPeople = key;
+
+    const count = (icon: 'toil' | 'child', value: number, label: string): HTMLElement => {
+      const node = text('hud-people-count', String(value));
+
+      node.title = label;
+      node.setAttribute('aria-label', label);
+      node.prepend(uiIcon(icon, 18));
+      return node;
+    };
+    const lazy = text('hud-people-count hud-people-idle', String(idle), 'button');
+
+    lazy.setAttribute('type', 'button');
+    lazy.dataset['alert'] = String(idle > 0);
+    lazy.title = `${idle} inactif${idle > 1 ? 's' : ''}${idle > 0 ? ' — taper pour en voir un' : ''}`;
+    lazy.setAttribute('aria-label', lazy.title);
+    lazy.prepend(uiIcon('idle', 18));
+    lazy.addEventListener('click', () => this.focusIdle());
+
+    this.people.hidden = working + idle + children === 0;
+    this.people.replaceChildren(
+      count('toil', working, `${working} au travail`),
+      lazy,
+      count('child', children, `${children} enfant${children > 1 ? 's' : ''}`),
+    );
+  }
+
+  /** Centre la caméra sur un ouvrier qui glande — au tap suivant, sur le suivant — et dit qui il est. */
+  private focusIdle(): void {
+    const idle = this.world.idleWorkers();
+
+    if (idle.length === 0) return;
+
+    const worker = idle[this.idleCursor % idle.length]!;
+
+    this.idleCursor = (this.idleCursor + 1) % idle.length;
+    this.onFocus(worker.x, worker.y);
+    this.showPerson(worker.id);
   }
 
   /** Le renderer sait où est Adam à l'écran ; le HUD non. `main.ts` fait le lien. */
@@ -942,7 +1055,9 @@ export class Hud {
     this.updateHint();
     this.updateBag();
     this.updateTown();
+    this.updatePeople();
     this.updateSpeech();
+    this.updatePerson();
     this.updateWeather();
     this.placeCelebration();
     this.updateQueenBanner();
@@ -1498,6 +1613,11 @@ function crewDetail({ byBuilding, porters, assigned, free, missing }: Workforce)
     );
   }
   return detail;
+}
+
+/** Un enfant, un ouvrier, un bûcheron : ce qui a un prénom et une infobulle. */
+function isInhabitant(mobile: Mobile): mobile is Inhabitant {
+  return mobile.kind === 'kid' || mobile.kind === 'worker' || mobile.kind === 'lumberjack';
 }
 
 /** « Objectif 3/7 », ou « Après le Signal » une fois la chaîne bouclée : la partie sans fin. */
