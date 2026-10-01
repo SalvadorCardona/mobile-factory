@@ -28,6 +28,7 @@ import {
   type WaterDepth,
   type WaterSprite,
 } from '../art/terrain.ts';
+import { ROAD_TILES } from '../art/road.ts';
 import { hash3 } from '../core/rng.ts';
 import { terrainAt, type TerrainKind } from '../sim/terrain.ts';
 import type { SpriteLibrary, SvgSource } from './spriteLibrary.ts';
@@ -96,6 +97,7 @@ export function terrainSources(): SvgSource[] {
   for (const color of CORNER_COLORS) {
     for (const corner of CORNERS) add(`terrain.corner.${color}.${corner}`, cornerTile(color, corner));
   }
+  ROAD_TILES.forEach((svg, links) => add(`terrain.road.${links}`, svg));
   return sources;
 }
 
@@ -137,6 +139,11 @@ export class TerrainTiles {
           : GROUND[neighbour].base;
 
     return this.library.texture(`terrain.corner.${color}.${corner}`);
+  }
+
+  /** La dalle d'une route dont les voisines pavées sont `links` (bits `ROAD_LINK`). */
+  public road(links: number): Texture {
+    return this.library.texture(`terrain.road.${links}`);
   }
 
   /** Un sprite animé de l'eau : écume des rives ou vaguelette du large. */

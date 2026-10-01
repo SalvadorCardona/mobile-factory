@@ -11,6 +11,7 @@
  * l'interface (`art/ui.ts`).
  */
 
+import { ROAD_THUMB } from '../art/road.ts';
 import { UI_ICONS, type UiIcon } from '../art/ui.ts';
 import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
 import { ITEM_ICONS } from '../data/icons.ts';
@@ -55,6 +56,14 @@ export function buildingIcon(building: BuildingId, size = 40): HTMLImageElement 
   const element = image(buildingIconUrl(building), 'icon icon-building', size, size);
 
   element.alt = BUILDINGS[building].label;
+  return element;
+}
+
+/** La vignette de la route au menu de construction : quelques dalles qui tournent. */
+export function roadIcon(size = 40): HTMLImageElement {
+  const element = image(url('road', ROAD_THUMB), 'icon icon-building', size, size);
+
+  element.alt = 'Route';
   return element;
 }
 

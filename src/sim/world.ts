@@ -78,6 +78,7 @@ import type { QuestId } from '../data/quests.ts';
 import { RECIPES, type RecipeId, type RecipeProto } from '../data/recipes.ts';
 import { RESEARCH, type ResearchId, type ResearchStat } from '../data/research.ts';
 import { RESOURCES, type ResourceId } from '../data/resources.ts';
+import { ROADS } from '../data/roads.ts';
 import { WEAPONS } from '../data/weapons.ts';
 import { BUILDERS, JOB_PRIORITY, LUMBERJACKS, PORTERS } from '../data/workers.ts';
 import { WEATHER, WEATHER_CALENDAR, type WeatherId } from '../data/weather.ts';
@@ -92,6 +93,7 @@ import type {
   PlacementRejection,
   RepairRejection,
   ResearchRejection,
+  RoadRejection,
   SiteRejection,
   SupplyRejection,
   TakeRejection,
@@ -143,6 +145,7 @@ import {
   researchCost,
 } from './research.ts';
 import { ResourceIndex } from './resources.ts';
+import { RoadNetwork } from './roads.ts';
 import type { SavedEntity, WorldState } from './save.ts';
 import { Scheduler } from './scheduler.ts';
 import { Store } from './store.ts';
@@ -242,6 +245,14 @@ const DROP_SPACING = 14;
 export const STARTING_BUILDING: BuildingId = 'townHall';
 
 /** Un refus de placement, et les cases de l'emprise qui le causent. */
+/** Une tuile d'un tracé de route, jugée par `World.roadPlan`. */
+export interface RoadStep extends TileCoord {
+  /** `pave` : elle sera payée et pavée ; `paved` : elle l'est déjà ; sinon, pourquoi elle ne le sera pas. */
+  state: 'pave' | 'paved' | RoadRejection;
+  /** D'où vient sa pierre, si elle est payée. */
+  from: 'bag' | 'town' | null;
+}
+
 export interface PlacementBlock {
   reason: PlacementRejection;
   tiles: TileCoord[];
@@ -273,6 +284,12 @@ export type WorldEvents = {
   /** Le chantier a reçu son dernier objet : l'entité est devenue le bâtiment, sous le même id, sans autre action du joueur. */
   buildingCompleted: { id: EntityId };
   placementRejected: { reason: PlacementRejection };
+  /** Ces tuiles viennent d'être pavées ; `fromBag` pierres sont sorties du sac, le reste de la ville. */
+  roadPaved: { tiles: TileCoord[]; fromBag: number };
+  /** Ces dalles viennent d'être retirées ; `toBag` pierres sont revenues au sac. */
+  roadRemoved: { tiles: TileCoord[]; toBag: number };
+  /** Une partie du tracé n'a pas été pavée — faute de pierre d'abord, sinon le premier refus ; `paved` tuiles l'ont été quand même. */
+  roadRejected: { reason: RoadRejection; paved: number };
   drillBlocked: { id: EntityId };
   drillProduced: { id: EntityId; item: ItemId };
   /** Adam a arraché une unité à la tuile, et `amount` objets sont allés dans le sac. `remaining` à 0 : elle a disparu. */
@@ -459,6 +476,8 @@ export class World {
   public readonly seed: number;
   public readonly chunks = new ChunkIndex();
   public readonly resources: ResourceIndex;
+  /** Les tuiles pavées : une modification du joueur, sauvegardée comme les tuiles entamées. */
+  public readonly roads = new RoadNetwork();
   public readonly entities = new Map<EntityId, Entity>();
   public readonly mobiles = new Map<MobileId, Mobile>();
   public readonly events = new Emitter<WorldEvents>();
@@ -650,6 +669,7 @@ export class World {
       objectiveBase: copyStats(this.objectiveBase),
       player: { ...player, inventory: inventory.toJSON() },
       resources: this.resources.toJSON(),
+      roads: this.roads.toJSON(),
       entities: [...this.entities.values()].map(saveEntity),
       mobiles: [...this.mobiles.values()].map(copyMobile),
       dens: [...this.dens].map(([id, den]) => ({ id, ...den })),
@@ -712,6 +732,7 @@ export class World {
 
     Object.assign(this.player, player, { inventory: Store.fromJSON(capacity, inventory) });
     this.resources.restore(state.resources);
+    this.roads.restore(state.roads);
 
     for (const saved of state.entities) {
       const entity: Entity =
@@ -752,7 +773,8 @@ export class World {
     this.updateWeather();
 
     const slowed = this.spell && !this.sheltered(this.player.x, this.player.y);
-    const speed = slowed && this.spell ? WEATHER[this.spell.id].playerSpeed : 1;
+    const paved = this.onRoad(floorDiv(this.player.x, TILE_SIZE), floorDiv(this.player.y, TILE_SIZE));
+    const speed = (slowed && this.spell ? WEATHER[this.spell.id].playerSpeed : 1) * (paved ? ROADS.speed : 1);
     const contact = stepPlayer(
       this.player,
       this.moveX,
@@ -865,6 +887,14 @@ export class World {
 
       case 'trade':
         this.trade(command.caravan, command.offer);
+        break;
+
+      case 'paveRoad':
+        this.paveRoad(command.tiles);
+        break;
+
+      case 'removeRoad':
+        this.removeRoad(command.tiles);
         break;
     }
   }
@@ -1371,6 +1401,9 @@ export class World {
     if (!resource) return null;
     return RESOURCES[resource.id].hitbox === 'trunk' ? TRUNK : FULL_TILE;
   };
+
+  /** La tuile est-elle pavée ? Ce que lit le pas d'Adam et des ouvriers ; jamais celui d'un mutant ni d'une bête. */
+  public readonly onRoad = (tx: number, ty: number): boolean => this.roads.has(tx, ty);
 
   /** Ce qui arrête une bête qui se faufile entre les arbres : l'eau et le bâti, rien d'autre. */
   private readonly isOpenGroundSolid = (tx: number, ty: number): boolean =>
@@ -1936,6 +1969,7 @@ export class World {
     const checks: [PlacementRejection, (x: number, y: number) => boolean][] = [
       ['terrain', (x, y) => !isBuildable(terrainAt(this.seed, x, y))],
       ['occupied', (x, y) => !this.chunks.isFree(x, y, 1, 1)],
+      ['road', (x, y) => this.roads.has(x, y)],
       ['resource', (x, y) => this.resources.isSolid(x, y)],
       // Un bâtiment est solide : le poser sur Adam l'emmurerait.
       ['onPlayer', (x, y) => playerOverlaps(this.player, x, y, 1, 1)],
@@ -1966,6 +2000,109 @@ export class World {
     if (this.atLimit(building)) return { reason: 'unique', tiles: tiles(() => true) };
 
     return null;
+  }
+
+  /* ---------------------------------------------------------------- routes */
+
+  /**
+   * Pourquoi la tuile ne se pave pas, ou `null` si elle se pave — déjà
+   * pavée comprise : le tracé y passe sans rien payer. Le juge unique du
+   * tracé fantôme et du tick, comme `placementBlock()` pour un bâtiment.
+   */
+  public roadBlock(tx: number, ty: number): Exclude<RoadRejection, 'noStone'> | null {
+    if (!isWalkable(terrainAt(this.seed, tx, ty))) return 'terrain';
+    if (this.chunks.occupantAt(tx, ty) !== undefined) return 'occupied';
+    if (this.resources.isSolid(tx, ty)) return 'resource';
+    return null;
+  }
+
+  /**
+   * Ce que deviendrait chaque tuile du tracé, payée dans l'ordre — le sac
+   * d'abord, puis la ville pour une tuile dans son rayon : `pave` (payée),
+   * `paved` (déjà pavée, gratuite), ou le motif du refus. Au-delà de
+   * `ROADS.maxTiles`, ou après la première tuile sans pierre, plus rien n'est
+   * pavé. Le juge unique : le fantôme du tracé le lit, le tick l'applique.
+   */
+  public roadPlan(tiles: readonly TileCoord[]): RoadStep[] {
+    const town = this.townStock();
+    let bag = this.player.inventory.count(ROADS.item);
+    let stock = town?.available(ROADS.item) ?? 0;
+    let broke = false;
+    const seen = new Set<string>();
+
+    return tiles.slice(0, ROADS.maxTiles).map(({ tx, ty }): RoadStep => {
+      const key = coordKey(tx, ty);
+      const first = !seen.has(key);
+
+      seen.add(key);
+      if (!Number.isInteger(tx) || !Number.isInteger(ty)) return { tx, ty, state: 'terrain', from: null };
+      if (!first || this.roads.has(tx, ty)) return { tx, ty, state: 'paved', from: null };
+
+      const block = this.roadBlock(tx, ty);
+
+      if (block) return { tx, ty, state: block, from: null };
+      if (!broke && bag > 0) {
+        bag -= 1;
+        return { tx, ty, state: 'pave', from: 'bag' };
+      }
+      if (!broke && stock > 0 && this.tileInTownRange(tx, ty)) {
+        stock -= 1;
+        return { tx, ty, state: 'pave', from: 'town' };
+      }
+      broke = true;
+      return { tx, ty, state: 'noStone', from: null };
+    });
+  }
+
+  private tileInTownRange(tx: number, ty: number): boolean {
+    const hall = this.warehouse();
+
+    return hall !== null && inLogisticRange(hall, { tx, ty, width: 1, height: 1 });
+  }
+
+  /** Le tracé, tuile à tuile : chaque tuile payée est pavée, sans chantier. */
+  private paveRoad(tiles: readonly TileCoord[]): void {
+    const town = this.townStock();
+    const paved: TileCoord[] = [];
+    let fromBag = 0;
+    let reason: RoadRejection | null = null;
+
+    for (const step of this.roadPlan(tiles)) {
+      if (step.state === 'paved') continue;
+      if (step.state !== 'pave') {
+        // Sans pierre, le motif l'emporte : c'est celui qui arrête le tracé.
+        if (reason === null || step.state === 'noStone') reason = step.state;
+        continue;
+      }
+
+      if (step.from === 'bag') fromBag += this.player.inventory.remove(ROADS.item, 1);
+      else town?.remove(ROADS.item, 1);
+
+      this.roads.add(step.tx, step.ty);
+      paved.push({ tx: step.tx, ty: step.ty });
+    }
+
+    if (paved.length > 0) this.events.emit('roadPaved', { tiles: paved, fromBag });
+    if (reason) this.events.emit('roadRejected', { reason, paved: paved.length });
+  }
+
+  /** Le marteau : chaque dalle retirée rend sa pierre — au sac, à la ville s'il est plein, au sol sinon. */
+  private removeRoad(tiles: readonly TileCoord[]): void {
+    const town = this.townStock();
+    const removed: TileCoord[] = [];
+    let toBag = 0;
+
+    for (const { tx, ty } of tiles.slice(0, ROADS.maxTiles)) {
+      if (!this.roads.remove(tx, ty)) continue;
+      removed.push({ tx, ty });
+
+      if (this.player.inventory.add(ROADS.item, 1) === 1) toBag += 1;
+      else if (!town || town.add(ROADS.item, 1) === 0) {
+        this.spawnPickup(ROADS.item, 1, (tx + 0.5) * TILE_SIZE, (ty + 0.5) * TILE_SIZE, false);
+      }
+    }
+
+    if (removed.length > 0) this.events.emit('roadRemoved', { tiles: removed, toBag });
   }
 
   /**
@@ -2783,7 +2920,7 @@ export class World {
         } else if (distanceSq(player.x, player.y, patient.x, patient.y) <= gap * gap) {
           standStill(patient);
         } else {
-          walkToward(patient, player.x, player.y, STEP_SECONDS);
+          walkToward(patient, player.x, player.y, STEP_SECONDS, this.onRoad);
         }
         break;
       }
@@ -3536,7 +3673,7 @@ export class World {
 
     const door = doorOf(stop);
 
-    if (!walkToward(worker, door.x, door.y, STEP_SECONDS)) return;
+    if (!walkToward(worker, door.x, door.y, STEP_SECONDS, this.onRoad)) return;
 
     if (job.carried) this.dropOff(worker, job);
     else this.pickUp(worker, job);
@@ -3544,7 +3681,7 @@ export class World {
 
   private goHome(worker: Worker | Lumberjack, door: { x: number; y: number }): void {
     if (worker.inside) standStill(worker);
-    else if (walkToward(worker, door.x, door.y, STEP_SECONDS)) worker.inside = true;
+    else if (walkToward(worker, door.x, door.y, STEP_SECONDS, this.onRoad)) worker.inside = true;
   }
 
   /** Sans travail : il dort chez lui à la nuit tombée, et flâne devant sa porte le reste du temps. */
@@ -3558,7 +3695,7 @@ export class World {
       worker.inside = false;
       Object.assign(worker, wanderFrom(door.x, door.y));
     }
-    wander(worker, door, this.seed, this.tickCount, STEP_SECONDS);
+    wander(worker, door, this.seed, this.tickCount, STEP_SECONDS, this.onRoad);
   }
 
   /** Le crépuscule et la nuit : les ouvriers sans travail vont se coucher. Sans cycle — mairie en chantier —, jamais. */
@@ -3770,7 +3907,7 @@ export class World {
 
     const spot = this.buildSpot(worker, site);
 
-    if (!walkToward(worker, spot.x, spot.y, STEP_SECONDS)) return;
+    if (!walkToward(worker, spot.x, spot.y, STEP_SECONDS, this.onRoad)) return;
 
     worker.facing = 'up';
     site.work += 1;
@@ -3921,7 +4058,7 @@ export class World {
 
         const spot = chopSpot(tree);
 
-        if (walkToward(lumberjack, spot.x, spot.y, STEP_SECONDS)) {
+        if (walkToward(lumberjack, spot.x, spot.y, STEP_SECONDS, this.onRoad)) {
           lumberjack.state = 'chop';
           lumberjack.facing = 'right';
           lumberjack.chopTicks = LUMBERJACKS.chopTicks;
@@ -3938,7 +4075,7 @@ export class World {
 
       case 'toCamp':
         lumberjack.inside = false;
-        if (walkToward(lumberjack, door.x, door.y, STEP_SECONDS)) this.storeWood(lumberjack, camp);
+        if (walkToward(lumberjack, door.x, door.y, STEP_SECONDS, this.onRoad)) this.storeWood(lumberjack, camp);
         break;
     }
   }
@@ -4035,7 +4172,7 @@ export class World {
       return;
     }
     lumberjack.inside = false;
-    if (walkToward(lumberjack, door.x, door.y, STEP_SECONDS)) lumberjack.facing = 'down';
+    if (walkToward(lumberjack, door.x, door.y, STEP_SECONDS, this.onRoad)) lumberjack.facing = 'down';
   }
 
   private releaseTree(lumberjack: Lumberjack): void {

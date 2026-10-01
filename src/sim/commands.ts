@@ -8,6 +8,7 @@
  * - le canal vers un Web Worker est déjà défini, il ne restera qu'à le brancher.
  */
 
+import type { TileCoord } from '../core/grid.ts';
 import type { BuildingId } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
 import type { PerkId } from '../data/perks.ts';
@@ -109,6 +110,19 @@ export type Command =
    */
   | { type: 'trade'; caravan: MobileId; offer: number }
   /**
+   * Pave les tuiles du tracé, dans l'ordre, au plus `ROADS.maxTiles` : une
+   * pierre chacune, prise au sac d'abord, puis à la ville si la tuile est
+   * dans son rayon. Pas de chantier : la tuile payée est pavée. Une tuile
+   * déjà pavée ne coûte rien ; une tuile refusée (eau, bâti, arbre, rocher)
+   * est sautée ; sans pierre, le tracé s'arrête là.
+   */
+  | { type: 'paveRoad'; tiles: readonly TileCoord[] }
+  /**
+   * Retire au marteau les dalles du tracé, au plus `ROADS.maxTiles` : chacune
+   * rend sa pierre — au sac, à la ville s'il est plein, au sol sinon.
+   */
+  | { type: 'removeRoad'; tiles: readonly TileCoord[] }
+  /**
    * Les bonus plantés au jardin des souvenirs, au départ d'une nouvelle
    * colonie. Poussée avant le premier tick ; ignorée ensuite.
    */
@@ -200,9 +214,22 @@ export type UpgradeRejection =
   /** Ni le sac, ni la ville à portée n'ont tout le coût. */
   | 'missingItems';
 
+/** Pourquoi une tuile d'un tracé de route n'a pas été pavée — remonté à l'UI par un événement. */
+export type RoadRejection =
+  /** De l'eau : on ne pave pas un lac. */
+  | 'terrain'
+  /** Un bâtiment ou un chantier occupe la tuile. */
+  | 'occupied'
+  /** Un arbre ou un rocher : il faut le récolter d'abord. */
+  | 'resource'
+  /** Plus de pierre, ni dans le sac, ni en ville à portée. */
+  | 'noStone';
+
 /** Motif de refus d'un placement — remonté à l'UI par un événement. */
 export type PlacementRejection =
   | 'occupied'
+  /** Une route pave l'emprise : on la retire d'abord, au marteau. */
+  | 'road'
   | 'terrain'
   | 'outOfReach'
   /** Un arbre ou un rocher encombre l'emprise : il faut le récolter d'abord. */

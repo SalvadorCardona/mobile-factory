@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { brandBanner, brandIcon } from '../art/brand.ts';
+import { ROAD_THUMB, ROAD_TILES } from '../art/road.ts';
 import { GROUND_TILES, WATER_SPRITES, WATER_TILES, cornerTile, edgeTile, shadowTile } from '../art/terrain.ts';
 import { UI_ICONS } from '../art/ui.ts';
 import { GROUND, PALETTE, auditSvg, type Ground } from './artDirection.ts';
@@ -31,6 +32,8 @@ function everySvg(): [string, string][] {
     ),
     ...Object.entries(WATER_SPRITES).map(([name, svg]): [string, string] => [`terrain.${name}`, svg]),
     ['terrain.corner.water.deep', cornerTile(GROUND.water.deep, 'tl')] as [string, string],
+    ...ROAD_TILES.map((svg, links): [string, string] => [`terrain.road.${links}`, svg]),
+    ['terrain.road.vignette', ROAD_THUMB] as [string, string],
   ];
   const icons = [
     ...Object.entries(ITEM_ICONS).map(([item, svg]): [string, string] => [`icon.${item}`, svg]),
