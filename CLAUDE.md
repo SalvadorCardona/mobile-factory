@@ -188,7 +188,10 @@ cours dessous) ; le conseil d'Ève retombe sur celui de l'objectif. Chaque
 objectif réussi a sa célébration (son, pluie de feuilles, bandeau) et une
 récompense concrète (objets, places de sac, réparation de la mairie). Ce
 qui est fait en avance compte ; les nuits à « tenir » se comptent depuis
-le début de l'objectif.
+le début de l'objectif. Une condition qui n'attend qu'une horloge (naissance,
+nuit à tenir : `goalWait`/`objectiveWait`) affiche son temps restant, ou en
+corail ce qui la retient ; Ève enchaîne alors sur de quoi s'occuper
+(réparer, une tour, l'objet le plus bas en ville, une recherche).
 
 **Faune** — en plus des mutants, des **crabes** vivent sur le sable et des
 **loups** au cœur des forêts (`WILDLIFE`, `src/data/enemies.ts` ;

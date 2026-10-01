@@ -15,9 +15,14 @@
 
 import { BUILDINGS, REPAIR, buildingLevel } from '../data/buildings.ts';
 import { EVE, EVE_LINES } from '../data/eve.ts';
-import { ITEMS, type ItemId } from '../data/items.ts';
-import { currentObjective } from '../sim/objectives.ts';
-import type { World } from '../sim/world.ts';
+import { ITEMS, TOWN_PLENTY, type ItemId } from '../data/items.ts';
+import type { Goal } from '../data/objectives.ts';
+import { RESEARCH_IDS } from '../data/research.ts';
+import { RESOURCES } from '../data/resources.ts';
+import { currentObjective, objectiveWait, type GoalWait } from '../sim/objectives.ts';
+import { researchStatus } from '../sim/research.ts';
+import type { Building } from '../sim/types.ts';
+import { TICKS_PER_SECOND, type World } from '../sim/world.ts';
 
 /** Ce que le joueur a déjà fait : un conseil compris ne revient pas. */
 export interface HintProgress {
@@ -128,7 +133,85 @@ export function tutorialAdvice(world: World, progress: HintProgress, towers: boo
 
   if (mutants === 0 && forged && !kiln && (world.townStock()?.available('coal') ?? 0) === 0) return say(lines.kiln);
 
+  // L'objectif n'attend plus qu'une horloge qui court : le temps qu'il reste, et de quoi s'occuper d'ici là.
+  // Une nuit à tenir n'est une attente que de jour : le soir, le conseil de l'objectif dit comment la tenir.
+  const wait = mutants === 0 ? objectiveWait(world) : null;
+
+  if (wait && wait.blockedBy === null && (wait.goal.type !== 'nights' || world.clock()?.phase === 'day')) {
+    return waitingAdvice(world, wait);
+  }
+
   const objective = currentObjective(world);
 
   return objective ? say(objective.hint) : null;
+}
+
+/**
+ * Le conseil d'une attente : combien de temps encore, puis une activité tirée
+ * du monde, par ordre de priorité — réparer un bâtiment abîmé, une tour de
+ * plus tant qu'il y en a moins de deux, l'objet le plus bas en ville, la
+ * recherche à lancer. Le temps se dit en minutes : la phrase ne change pas à
+ * chaque seconde, le conseil ne se rouvre pas sans cesse.
+ */
+function waitingAdvice(world: World, wait: GoalWait & { goal: Goal }): Advice {
+  const lines = EVE_LINES.hints;
+  const time = waitTime(wait.remainingTicks);
+  const head = (wait.goal.type === 'births' ? lines.waitBirth : lines.waitDawn).replace('{time}', time);
+  const todo = meanwhile(world);
+
+  return todo
+    ? { text: lines.meanwhile.replace('{wait}', head).replace('{todo}', todo.text), wants: todo.wants }
+    : { text: lines.meanwhileIdle.replace('{wait}', head), wants: null };
+}
+
+/** « 3 minutes », « 1 minute », « moins d’une minute ». */
+function waitTime(ticks: number): string {
+  const minutes = Math.ceil(ticks / (TICKS_PER_SECOND * 60));
+
+  if (ticks < TICKS_PER_SECOND * 60) return 'moins d’une minute';
+  return `${minutes} minute${minutes > 1 ? 's' : ''}`;
+}
+
+/** De quoi s'occuper pendant une attente, ou `null` si rien ne presse. */
+function meanwhile(world: World): Advice | null {
+  const lines = EVE_LINES.hints;
+  const entities = [...world.entities.values()];
+
+  const damaged = entities.find(
+    (entity): entity is Building => entity.kind !== 'site' && entity.hp < buildingLevel(entity.proto, entity.level).hp,
+  );
+
+  if (damaged) {
+    const text = lines.meanwhileRepair.replace('{building}', BUILDINGS[damaged.proto].label.toLowerCase());
+
+    return { text, wants: world.repairStock(damaged) > 0 ? null : REPAIR.item };
+  }
+
+  // Les chantiers comptent : une tour posée n'est plus à conseiller.
+  const towers = entities.filter((entity) => BUILDINGS[entity.proto].kind === 'tower').length;
+
+  if (towers < 2 && world.isUnlocked('watchtower')) {
+    return { text: towers === 0 ? lines.meanwhileTower : lines.meanwhileSecondTower, wants: null };
+  }
+
+  const town = world.townStock();
+  const gathered = [...new Set(Object.values(RESOURCES).map((resource) => resource.item))];
+  const lowest = town
+    ? gathered.reduce<ItemId | null>((low, item) => (low === null || town.available(item) < town.available(low) ? item : low), null)
+    : null;
+
+  if (town && lowest && town.available(lowest) < TOWN_PLENTY) {
+    return { text: lines.meanwhileStock.replace('{item}', ITEMS[lowest].label.toLowerCase()), wants: lowest };
+  }
+
+  const lab = entities.find((entity) => entity.kind === 'lab');
+
+  if (
+    lab?.kind === 'lab' &&
+    lab.research === null &&
+    RESEARCH_IDS.some((id) => researchStatus(id, world.researchDone, lab) === 'available')
+  ) {
+    return { text: lines.meanwhileResearch, wants: null };
+  }
+  return null;
 }

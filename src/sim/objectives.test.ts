@@ -9,7 +9,8 @@ import { RECIPES } from '../data/recipes.ts';
 import { validatePrototypes } from '../data/validate.ts';
 import { BUILD_REACH_TILES, INVENTORY_CAPACITY } from './player.ts';
 import { SAVE_VERSION, decodeSave, encodeSave, serialize } from './save.ts';
-import { currentObjective, goalProgress } from './objectives.ts';
+import { currentObjective, goalProgress, goalWait, objectiveWait } from './objectives.ts';
+import { CYCLE_TICKS } from './dayNight.ts';
 import { oreAt } from './terrain.ts';
 import type { Entity, EntityId } from './types.ts';
 import { World } from './world.ts';
@@ -372,5 +373,68 @@ describe('objectifs', () => {
     // La mairie est debout : le premier objectif tombe au tick suivant, récompense comprise.
     decoded.world.tick();
     expect(decoded.world.objective).toBe(1);
+  });
+
+  describe('attentes', () => {
+    /** La mairie bâtie, l'objectif « premier enfant » en cours et sa nurserie debout. */
+    function nurseryWorld(): { world: World; nursery: Entity } {
+      const world = new World(7);
+
+      completeSite(world, world.townHallId);
+      world.objective = 4;
+
+      const nursery = build(world, 'nursery');
+
+      guardTownHall(world);
+      return { world, nursery };
+    }
+
+    it('donnent le temps restant d’une nurserie nourrie, à mi-recette', () => {
+      const { world, nursery } = nurseryWorld();
+      const { duration } = RECIPES.raiseChild;
+
+      if (nursery.kind !== 'nursery') throw new Error('pas une nurserie');
+      nursery.store.add('food', RECIPES.raiseChild.inputs.food);
+      nursery.nextBirthTick = world.tickCount + duration;
+      for (let i = 0; i < duration / 2; i += 1) world.tick();
+
+      expect(objectiveWait(world)).toMatchObject({ remainingTicks: duration / 2, durationTicks: duration, blockedBy: null, missing: 0 });
+    });
+
+    it('disent ce qui manque à une nurserie sans nourriture', () => {
+      const { world, nursery } = nurseryWorld();
+
+      if (nursery.kind !== 'nursery') throw new Error('pas une nurserie');
+      nursery.store.add('food', RECIPES.raiseChild.inputs.food - 2);
+
+      expect(objectiveWait(world)).toMatchObject({ blockedBy: 'food', missing: 2 });
+
+      world.push({ type: 'pauseBuilding', id: nursery.id, paused: true });
+      world.tick();
+      expect(objectiveWait(world)?.blockedBy).toBe('paused');
+    });
+
+    it('ne parlent pas d’attente tant qu’il reste une action : la nurserie à bâtir', () => {
+      const world = new World(7);
+
+      completeSite(world, world.townHallId);
+      world.objective = 4;
+      expect(objectiveWait(world)).toBeNull();
+      expect(goalWait(world, OBJECTIVES[4].goals[1])).toBeNull();
+    });
+
+    it('comptent jusqu’à la prochaine aube pour les nuits à tenir', () => {
+      const world = new World(7);
+
+      completeSite(world, world.townHallId);
+      expect(world.objective).toBe(1);
+
+      const first = objectiveWait(world)!;
+
+      expect(first.durationTicks).toBe(CYCLE_TICKS);
+      expect(first.remainingTicks).toBe(DAY_CYCLE.day + DAY_CYCLE.dusk + DAY_CYCLE.night - (world.tickCount - world.cycleStartTick));
+      world.tick();
+      expect(objectiveWait(world)!.remainingTicks).toBe(first.remainingTicks - 1);
+    });
   });
 });
