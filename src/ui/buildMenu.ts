@@ -3,7 +3,7 @@
  *
  * Un seul bouton à l'écran — « Bâtir » — qui ouvre un tiroir. Le tiroir
  * liste les bâtiments débloqués en cartes : vignette, nom, ce que fait le
- * bâtiment en une ligne (`effect`), coût en icônes, ouvriers. Choisir une carte ferme le tiroir et arme le placement
+ * bâtiment en une ligne (`effect`), coût et ouvriers en icônes. Choisir une carte ferme le tiroir et arme le placement
  * (`input/placement.ts`) ; une barre remplace alors le bouton, avec le nom
  * du bâtiment choisi, « Poser », « Poser encore » et « Annuler ». « Poser »
  * rend la main au joystick ; « Poser encore » garde le bâtiment armé, pour
@@ -41,7 +41,7 @@
  * reste ouvert.
  *
  * Sur téléphone, les cartes se compactent en deux colonnes — vignette, nom,
- * coût — pour tenir toutes, ou presque, sans défiler. L'effet quitte la
+ * coût et ouvriers en puces — pour tenir toutes, ou presque, sans défiler. L'effet quitte la
  * carte pour une ligne au pied du tiroir, qu'un appui long (ou le focus
  * clavier) remplit ; la ligne est toujours là, la liste ne bouge pas.
  *
@@ -224,7 +224,7 @@ export class BuildMenu {
     this.refresh();
   }
 
-  /** Une carte : vignette, nom, effet, coût, ouvriers. */
+  /** Une carte : vignette, nom, effet, coût et ouvriers en puces, emprise. */
   private card(id: BuildingId): HTMLButtonElement {
     const proto = BUILDINGS[id];
     const card = button('', () => {
@@ -272,10 +272,23 @@ export class BuildMenu {
       cost.append(element);
     }
 
+    // Les ouvriers en puce à la suite du coût : elle reste sur la carte compacte du téléphone.
+    if (proto.workers > 0) {
+      const workers = document.createElement('span');
+      const label = `Emploie ${proto.workers} ouvrier${proto.workers > 1 ? 's' : ''}`;
+
+      workers.className = 'build-card-workers';
+      workers.setAttribute('role', 'img');
+      workers.setAttribute('aria-label', label);
+      workers.title = label;
+      workers.append(uiIcon('worker', 18), String(proto.workers));
+      cost.append(workers);
+    }
+
     const meta = document.createElement('div');
 
     meta.className = 'build-card-meta';
-    meta.textContent = `${proto.width}×${proto.height}` + (proto.workers > 0 ? ` · ${proto.workers} ouvrier${proto.workers > 1 ? 's' : ''}` : '');
+    meta.textContent = `${proto.width}×${proto.height}`;
 
     // Coût et emprise sur une ligne : la carte garde la hauteur d'un pouce, effet compris.
     const footer = document.createElement('div');

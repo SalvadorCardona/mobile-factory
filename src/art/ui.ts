@@ -18,6 +18,7 @@ import {
   polygon,
   polyline,
   rect,
+  ring,
   shadedBlock,
   shadedCircle,
   shadedPill,
@@ -296,6 +297,24 @@ export const UI_ICONS = {
   leafMint: svg(S, S, confettiLeaf('mint')),
   leafYellow: svg(S, S, confettiLeaf('yellow')),
   petal: svg(S, S, confettiLeaf('coral')),
+  /** Un croissant de lune et son étoile : les nuits affrontées. */
+  moon: svg(
+    S,
+    S,
+    shape('M14 3.5A9 9 0 1 0 21 16.5A7 7 0 1 1 14 3.5Z', yellow.shade),
+    shape('M13.2 3A8.6 8.6 0 1 0 20.2 15.6A6.8 6.8 0 1 1 13.2 3Z', yellow.base),
+    pill(5.5, 8, 2.6, 5, yellow.light),
+    circle(18.5, 6, 1.6, cyan.base),
+  ),
+  /** Le cercle de portée et son rayon : jusqu'où un bâtiment sert. */
+  range: svg(
+    S,
+    S,
+    ring(12.4, 12.4, 10, 10, 2.6, yellow.shade),
+    ring(12, 12, 9.6, 9.6, 2.4, yellow.base),
+    line(12, 12, 19, 12, ink.base),
+    circle(12, 12, 2.4, ink.base),
+  ),
   /**
    * Le coffre d'un bâtiment : une malle jaune de la colonie, couvercle
    * corail comme les toits, fermoir indigo. Face au sac, dans la zone d'échange.
@@ -312,6 +331,8 @@ export const UI_ICONS = {
   takeAll: svg(S, S, group('translate(0.6 0.8)', arrow(true, violet.shade)), arrow(true, paper.base)),
   /** « Tout déposer » : une flèche blanche qui remonte vers le coffre. */
   depositAll: svg(S, S, group('translate(0.6 0.8)', arrow(false, mint.shade)), arrow(false, paper.base)),
+  /** Le « i » qui déplie un texte d'ambiance. */
+  info: svg(S, S, shadedCircle(12, 12, 10, 'cyan'), circle(12, 7.3, 1.7, paper.base), rect(10.5, 10.3, 3, 8.2, paper.base, 1.5)),
   /** Un drapeau planté : l'objectif en cours. */
   goal: svg(
     S,
