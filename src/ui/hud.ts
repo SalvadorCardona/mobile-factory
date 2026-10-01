@@ -110,6 +110,8 @@ const MAX_TOASTS = 3;
 /** Durée d'une réplique d'Ève : un socle, plus le temps de lire. */
 const SPEECH_BASE_MS = 1600;
 const SPEECH_PER_CHAR_MS = 45;
+/** Sous la quête, la bulle garde ce jeu (ses 10 px de flottement compris). */
+const SPEECH_GAP = 14;
 
 /**
  * Un conseil inchangé se replie au bout de ce délai, compté en ticks : il ne
@@ -122,6 +124,8 @@ const CREW_FOLD_TICKS = 5 * TICKS_PER_SECOND;
 
 /** Durée du bandeau d'objectif réussi, en ms (cf. `celebration-in` dans le CSS). */
 const CELEBRATION_MS = 4200;
+/** Rangé sous la quête quand une fenêtre est ouverte, le bandeau en garde ce jeu. */
+const CELEBRATION_GAP = 8;
 
 /** Feuilles de la pluie de confettis, et combien il en tombe. */
 const CONFETTI: readonly UiIcon[] = ['leafMint', 'leafMint', 'leafYellow', 'petal'];
@@ -217,8 +221,8 @@ export class Hud {
   /** Ce qu'elle a déjà dit quand on la tape : elle ne radote pas. */
   private chatterIndex = 0;
   private talks = 0;
-  /** Bas de la quête, relu à chaque réplique seulement : lire la mise en page force un reflow. */
-  private speechFloor = 0;
+  /** Hauteur de la bulle, lue une fois par réplique : son texte ne change pas entre-temps. */
+  private speechHeight = 0;
   private lastWeather = '';
   private debug: boolean;
 
@@ -372,6 +376,8 @@ export class Hud {
     this.top.append(this.quest, side, this.weather);
 
     this.root.append(
+      // Les confettis d'abord : ils tombent derrière les cartes du HUD et les fenêtres.
+      this.confetti,
       this.top,
       this.countdown,
       this.speech,
@@ -379,7 +385,6 @@ export class Hud {
       this.toasts,
       this.floats,
       this.stats,
-      this.confetti,
       this.celebration,
       this.victory,
       this.defeat,
@@ -576,21 +581,25 @@ export class Hud {
       this.speech.textContent = line;
       this.speech.hidden = false;
       this.speechUntil = now + SPEECH_BASE_MS + line.length * SPEECH_PER_CHAR_MS;
-      this.speechFloor = this.topInset() + 60;
 
-      // Relance l'animation d'entrée à chaque réplique.
+      // Relance l'animation d'entrée à chaque réplique ; le reflow qu'il faut
+      // pour ça donne aussi la hauteur de la bulle.
       this.speech.style.animation = 'none';
-      void this.speech.offsetWidth;
+      this.speechHeight = this.speech.offsetHeight;
       this.speech.style.animation = '';
     }
 
+    // La quête grandit pendant qu'Ève parle (une quête commence, un conseil
+    // s'ouvre) : son bas se relit à chaque frame où la bulle est là.
+    const questBottom = this.topInset();
     // Au-dessus de la tête — plus haut en selle —, sans sortir de l'écran.
     const head = eve.state === 'arriving' ? 62 : 50;
     const { x, y } = this.project(eve.x, eve.y - head);
     const margin = Math.min(130, window.innerWidth / 2);
 
     this.speech.style.left = `${Math.round(Math.min(Math.max(x, margin), window.innerWidth - margin))}px`;
-    this.speech.style.top = `${Math.round(Math.max(y, this.speechFloor))}px`;
+    // `top` est le bas de la bulle, qui flotte 10 px au-dessus : tout entière sous la quête.
+    this.speech.style.top = `${Math.round(Math.max(y, questBottom + this.speechHeight + SPEECH_GAP))}px`;
   }
 
   /** Le renderer sait où est Adam à l'écran ; le HUD non. `main.ts` fait le lien. */
@@ -787,6 +796,7 @@ export class Hud {
     this.updateTown();
     this.updateSpeech();
     this.updateWeather();
+    this.placeCelebration();
     this.root.dataset['danger'] = String(this.mutantCount() > 0 && !this.world.defeated);
     if (!this.banner.hidden) this.aimBanner();
     if (this.root.dataset['alarm'] === 'true' && (performance.now() > this.alarmUntil || this.world.defeated)) {
@@ -1106,6 +1116,36 @@ export class Hud {
     }, CELEBRATION_MS);
 
     this.rainLeaves();
+  }
+
+  /**
+   * Une fenêtre ouverte (bâtiment ou sac) : le bandeau ne se pose pas dessus.
+   * Il se range sous la quête, à sa largeur, et la fenêtre se tasse sous lui
+   * (`--celebration-bottom`, cf. le CSS) — jamais deux cartes l'une sur l'autre.
+   */
+  private placeCelebration(): void {
+    const docked = !this.celebration.hidden && this.root.querySelector('.building-panel:not([hidden])') !== null;
+
+    if (!docked) {
+      if (this.root.dataset['celebration'] !== 'docked') return;
+      delete this.root.dataset['celebration'];
+      this.celebration.style.removeProperty('top');
+      this.celebration.style.removeProperty('left');
+      this.celebration.style.removeProperty('width');
+      return;
+    }
+
+    const quest = this.quest.getBoundingClientRect();
+    const above = this.weather.hidden ? quest.bottom : Math.max(quest.bottom, this.weather.getBoundingClientRect().bottom);
+
+    this.root.dataset['celebration'] = 'docked';
+    this.celebration.style.top = `${Math.round(above + CELEBRATION_GAP)}px`;
+    this.celebration.style.left = `${Math.round(quest.left + quest.width / 2)}px`;
+    this.celebration.style.width = `${Math.round(quest.width)}px`;
+    // Le bas sans l'animation (qui le fait rebondir) : la fenêtre ne bouge pas avec.
+    const bottom = this.celebration.offsetTop + this.celebration.offsetHeight;
+
+    this.root.style.setProperty('--celebration-bottom', `${bottom}px`);
   }
 
   /** Des feuilles, des pétales : la pluie de confettis, en CSS. Chacune part au bout de sa chute. */

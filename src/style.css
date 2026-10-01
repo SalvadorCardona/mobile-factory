@@ -545,6 +545,8 @@ button {
 .hud-speech {
   position: absolute;
   z-index: 2;
+  /* Sa largeur ne dépend pas de sa place à l'écran : sa hauteur se lit une fois par réplique. */
+  width: max-content;
   max-width: 230px;
   padding: 8px 14px;
   border-radius: 18px;
@@ -2386,6 +2388,25 @@ button.hud-stock:active {
   display: none;
 }
 
+/*
+ * Une fenêtre ouverte : le bandeau se range sous la quête (`hud.ts` le
+ * place), plus serré, et la fenêtre se tasse sous lui, quitte à défiler.
+ */
+.hud[data-celebration='docked'] .hud-celebration {
+  gap: 2px;
+  padding: 8px 14px 10px;
+  border-radius: 20px;
+}
+
+.hud[data-celebration='docked'] .hud-celebration-goal {
+  font-size: 18px;
+}
+
+.hud[data-celebration='docked'] .building-panel {
+  max-height: calc(100% - var(--safe-bottom) - 102px - var(--celebration-bottom, 0px));
+  overflow-y: auto;
+}
+
 .hud-celebration-title {
   display: inline-flex;
   align-items: center;
@@ -2423,11 +2444,15 @@ button.hud-stock:active {
   }
 }
 
-/* La pluie de feuilles : chacune tombe en tournoyant, avec son propre retard et sa dérive. */
+/*
+ * La pluie de feuilles : chacune tombe en tournoyant, avec son propre retard
+ * et sa dérive. Premier enfant du HUD, sans rang : elle passe derrière les
+ * cartes et les fenêtres, jamais sur un bouton.
+ */
 .hud-confetti {
   position: absolute;
   inset: 0;
-  z-index: 11;
+  z-index: 0;
   overflow: hidden;
   pointer-events: none;
 }
