@@ -119,62 +119,64 @@ describe('doigt sur le joystick', () => {
   });
 });
 
-/** Un écran de téléphone, 390 × 844, l'anneau au repos en (90, 754). */
-const PHONE = { width: 390, height: 844, centerX: 90, centerY: 754 };
+/** Un écran de téléphone, 390 × 844, l'anneau au repos au milieu, au-dessus du bouton « Bâtir », en (195, 684). */
+const PHONE = { width: 390, height: 844, centerX: 195, centerY: 684 };
 
 describe('pouce posé à côté de l’anneau', () => {
   const at = (x: number, y: number, id = 1): PointerSample => ({ id, x, y });
 
-  it('la zone de prise est le quart bas-gauche de l’écran', () => {
-    expect(inCaptureZone(90, 600, PHONE.width, PHONE.height)).toBe(true);
+  it('la zone de prise est le bas de l’écran, au milieu', () => {
+    expect(inCaptureZone(195, 600, PHONE.width, PHONE.height)).toBe(true);
+    expect(inCaptureZone(PHONE.width * CAPTURE_ZONE.minX - 1, 700, PHONE.width, PHONE.height)).toBe(false);
     expect(inCaptureZone(PHONE.width * CAPTURE_ZONE.maxX + 1, 700, PHONE.width, PHONE.height)).toBe(false);
-    expect(inCaptureZone(90, PHONE.height * CAPTURE_ZONE.minY - 1, PHONE.width, PHONE.height)).toBe(false);
+    expect(inCaptureZone(195, PHONE.height * CAPTURE_ZONE.minY - 1, PHONE.width, PHONE.height)).toBe(false);
   });
 
   it('posé hors de l’anneau dans la zone : sortie nulle au contact, puis Adam suit le glissé', () => {
     const joystick = new Joystick();
     const capture = new StickCapture(joystick, () => PHONE);
 
-    expect(capture.onDown(at(90, 600))).toBe(true);
+    expect(capture.onDown(at(195, 530))).toBe(true);
     expect(joystick.state).toMatchObject({ active: true, axisX: 0, axisY: 0, originX: 0, originY: -154 });
 
-    capture.onMove(at(90, 650));
+    capture.onMove(at(195, 580));
     expect(joystick.state.axisY).toBeGreaterThan(0.8);
     expect(joystick.state.axisX).toBeCloseTo(0);
 
-    capture.onUp(at(90, 650));
+    capture.onUp(at(195, 580));
     expect(joystick.state).toMatchObject({ active: false, axisY: 0, originX: 0, originY: 0 });
   });
 
   it('hors de la zone, masqué ou à la souris, le doigt n’est pas pris', () => {
     const joystick = new Joystick();
 
-    expect(new StickCapture(joystick, () => PHONE).onDown(at(300, 600))).toBe(false);
-    expect(new StickCapture(joystick, () => PHONE).onDown(at(90, 300))).toBe(false);
-    expect(new StickCapture(joystick, () => null).onDown(at(90, 600))).toBe(false);
-    expect(new StickCapture(joystick, () => PHONE).onDown({ ...at(90, 600), mouse: true })).toBe(false);
+    expect(new StickCapture(joystick, () => PHONE).onDown(at(60, 600))).toBe(false);
+    expect(new StickCapture(joystick, () => PHONE).onDown(at(330, 600))).toBe(false);
+    expect(new StickCapture(joystick, () => PHONE).onDown(at(195, 300))).toBe(false);
+    expect(new StickCapture(joystick, () => null).onDown(at(195, 600))).toBe(false);
+    expect(new StickCapture(joystick, () => PHONE).onDown({ ...at(195, 600), mouse: true })).toBe(false);
     expect(joystick.state.active).toBe(false);
   });
 
-  it('un tap sur un bâtiment du coin ouvre toujours sa fenêtre', () => {
+  it('un tap sur un bâtiment proche ouvre toujours sa fenêtre', () => {
     const joystick = new Joystick();
     const opened: number[] = [];
-    // Une maison des constructeurs sous le doigt, en (64, 576) – écran = monde.
-    const building = { id: 7, proto: 'builderHouse', tx: 2, ty: 17, width: 2, height: 2 } as unknown as Entity;
+    // Une maison des constructeurs sous le doigt, en (128, 544) – écran = monde.
+    const building = { id: 7, proto: 'builderHouse', tx: 4, ty: 17, width: 2, height: 2 } as unknown as Entity;
     const world = { entities: new Map([[7, building]]), mobiles: new Map(), eve: () => undefined } as unknown as World;
     const pointers = new PointerDispatch();
 
     pointers.add(new Inspect(world, (x, y) => ({ x, y }), () => true, (id) => opened.push(id)));
     pointers.add(new StickCapture(joystick, () => PHONE));
 
-    pointers.down(at(80, 600));
-    pointers.move(at(80 + DEAD_ZONE - 1, 600));
+    pointers.down(at(150, 580));
+    pointers.move(at(150 + DEAD_ZONE - 1, 580));
     expect(joystick.state.active).toBe(false);
-    pointers.up(at(80 + DEAD_ZONE - 1, 600));
+    pointers.up(at(150 + DEAD_ZONE - 1, 580));
     expect(opened).toEqual([7]);
 
     // À côté du bâtiment, le même doigt prend le joystick.
-    pointers.down(at(170, 600, 2));
+    pointers.down(at(250, 580, 2));
     expect(joystick.state.active).toBe(true);
   });
 });

@@ -243,7 +243,7 @@ async function main(): Promise<void> {
   });
 
   hud.root.append(zoom.root, stick.root, buildMenu.root, panel.root, inventory.root, trade.root);
-  stick.avoid([...buildMenu.root.children]);
+  stick.avoid([...buildMenu.root.children], hud.root);
   hud.bag.addEventListener('click', () => inventory.toggle());
   hud.setProjector((x, y) => renderer.worldToScreen(x, y));
   hud.setFocus((x, y) => renderer.peek(x, y));
@@ -378,7 +378,7 @@ async function main(): Promise<void> {
   // (il ne revendique rien tant qu'aucun bâtiment n'est armé). Le joystick
   // est dans le DOM, au-dessus du canvas, et garde ses doigts pour lui —
   // Adam marche au pouce pendant que l'autre doigt vise. Un pouce qui rate
-  // l'anneau, dans le quart bas-gauche, passe après les taps : l'anneau
+  // l'anneau, en bas au milieu, passe après les taps : l'anneau
   // saute sous lui, sauf si un bâtiment armé attend d'être posé.
   //
   // À la souris, le survol seul fait suivre le fantôme au curseur : le mode
