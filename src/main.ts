@@ -225,6 +225,8 @@ async function main(): Promise<void> {
       audio.play('open');
     },
     (id) => hud.showPerson(id),
+    () => panel.open,
+    () => panel.close(),
   );
 
   // Le zoom de la carte : un niveau choisi par le joueur, mémorisé sur l'appareil.

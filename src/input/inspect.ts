@@ -21,6 +21,10 @@
  * pas son cadre, pour qu'un ouvrier devant une porte n'empêche pas d'ouvrir
  * le bâtiment.
  *
+ * Une fenêtre de bâtiment ouverte (`canDismiss`), un tap dans le vide la
+ * ferme (`onDismiss`) — et son cadre de sélection avec elle. Fenêtre
+ * fermée, le vide n'est pas revendiqué : il reste au joystick et au placement.
+ *
  * Aucune commande ici : ouvrir une fenêtre, faire parler Ève ou montrer qui
  * est un habitant ne modifie pas le monde.
  */
@@ -41,8 +45,8 @@ const PERSON_TOP = 34;
 const KID_TOP = 24;
 const PERSON_BELOW = 4;
 
-/** Ce que le doigt vise : un bâtiment, Ève, ou un habitant. */
-type Target = { kind: 'building'; id: EntityId } | { kind: 'eve' } | { kind: 'person'; id: MobileId };
+/** Ce que le doigt vise : un bâtiment, Ève, un habitant, ou le vide (pour fermer la fenêtre ouverte). */
+type Target = { kind: 'building'; id: EntityId } | { kind: 'eve' } | { kind: 'person'; id: MobileId } | { kind: 'nothing' };
 
 export class Inspect implements PointerConsumer {
   private pointerId: number | null = null;
@@ -57,6 +61,8 @@ export class Inspect implements PointerConsumer {
   private readonly onTap: (id: EntityId) => void;
   private readonly onTalk: () => void;
   private readonly onPerson: (id: MobileId) => void;
+  private readonly canDismiss: () => boolean;
+  private readonly onDismiss: () => void;
 
   public constructor(
     world: World,
@@ -65,6 +71,8 @@ export class Inspect implements PointerConsumer {
     onTap: (id: EntityId) => void,
     onTalk: () => void = () => {},
     onPerson: (id: MobileId) => void = () => {},
+    canDismiss: () => boolean = () => false,
+    onDismiss: () => void = () => {},
   ) {
     this.world = world;
     this.screenToWorld = screenToWorld;
@@ -72,12 +80,14 @@ export class Inspect implements PointerConsumer {
     this.onTap = onTap;
     this.onTalk = onTalk;
     this.onPerson = onPerson;
+    this.canDismiss = canDismiss;
+    this.onDismiss = onDismiss;
   }
 
   public onDown(sample: PointerSample): boolean {
     if (this.pointerId !== null || !this.enabled()) return false;
 
-    const target = this.targetAt(sample);
+    const target = this.targetAt(sample) ?? (this.canDismiss() ? { kind: 'nothing' } : undefined);
 
     if (target === undefined) return false;
 
@@ -109,6 +119,9 @@ export class Inspect implements PointerConsumer {
         return;
       case 'person':
         if (this.world.mobiles.has(target.id)) this.onPerson(target.id);
+        return;
+      case 'nothing':
+        this.onDismiss();
         return;
       case 'building':
         // Le bâtiment doit encore exister au relâchement : un mutant a pu le raser entre-temps.

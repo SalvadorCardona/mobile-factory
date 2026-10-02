@@ -3,7 +3,8 @@ import { TILE_SIZE } from '../core/grid.ts';
 import { SPRITES } from '../data/sprites.ts';
 import { Camera } from '../render/camera.ts';
 import type { Entity, Mobile } from '../sim/types.ts';
-import { buildingAt, personAt } from './inspect.ts';
+import type { World } from '../sim/world.ts';
+import { Inspect, buildingAt, personAt } from './inspect.ts';
 
 /** Le chantier de la mairie, emprise 3 × 3 en (0, 0) : cadre de 96 × 128, 32 px de toit au-dessus. */
 const HALL = { id: 1, kind: 'site', proto: 'townHall', tx: 0, ty: 0, width: 3, height: 3, delivered: {} } as Entity;
@@ -93,5 +94,59 @@ describe('personAt', () => {
 
   it('ignore ce qui n’est pas un habitant', () => {
     expect(personAt([{ kind: 'mutant', id: 12, x: 100, y: 200 } as Mobile], 100, 180)).toBeUndefined();
+  });
+});
+
+describe('tap dans le vide', () => {
+  const world = { eve: () => null, mobiles: new Map(), entities: new Map([[1, HALL]]) } as unknown as World;
+
+  function inspector(open: boolean): { inspect: Inspect; taps: number[]; dismissed: () => number } {
+    const taps: number[] = [];
+    let dismissed = 0;
+    const inspect = new Inspect(
+      world,
+      (x, y) => ({ x, y }),
+      () => true,
+      (id) => taps.push(id),
+      () => {},
+      () => {},
+      () => open,
+      () => dismissed++,
+    );
+
+    return { inspect, taps, dismissed: () => dismissed };
+  }
+
+  it('ferme la fenêtre ouverte', () => {
+    const { inspect, dismissed } = inspector(true);
+
+    expect(inspect.onDown({ id: 1, x: 500, y: 500 })).toBe(true);
+    inspect.onUp({ id: 1, x: 500, y: 500 });
+    expect(dismissed()).toBe(1);
+  });
+
+  it('laisse le doigt aux autres quand aucune fenêtre n’est ouverte', () => {
+    const { inspect, dismissed } = inspector(false);
+
+    expect(inspect.onDown({ id: 1, x: 500, y: 500 })).toBe(false);
+    expect(dismissed()).toBe(0);
+  });
+
+  it('ne ferme rien si le doigt glisse', () => {
+    const { inspect, dismissed } = inspector(true);
+
+    inspect.onDown({ id: 1, x: 500, y: 500 });
+    inspect.onMove({ id: 1, x: 600, y: 500 });
+    inspect.onUp({ id: 1, x: 600, y: 500 });
+    expect(dismissed()).toBe(0);
+  });
+
+  it('un tap sur un autre bâtiment l’ouvre à la place', () => {
+    const { inspect, taps, dismissed } = inspector(true);
+
+    inspect.onDown({ id: 1, x: 48, y: 48 });
+    inspect.onUp({ id: 1, x: 48, y: 48 });
+    expect(taps).toEqual([1]);
+    expect(dismissed()).toBe(0);
   });
 });
