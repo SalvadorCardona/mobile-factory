@@ -22,6 +22,7 @@ import { MENU_BUILDING_IDS } from './data/buildings.ts';
 import type { WildlifeId } from './data/enemies.ts';
 import type { ItemId } from './data/items.ts';
 import { OBJECTIVES, type ObjectiveProto } from './data/objectives.ts';
+import { TEST_SCENARIOS } from './data/testScenario.ts';
 import { IndicatorTap } from './input/indicatorTap.ts';
 import { seedsFor, type PerkId } from './data/perks.ts';
 import { Inspect } from './input/inspect.ts';
@@ -33,6 +34,7 @@ import { Pinch, bindWheelZoom } from './input/zoom.ts';
 import { GameRenderer } from './render/renderer.ts';
 import { isUnlocked } from './sim/eve.ts';
 import { activePerks, harvestSeeds, plant, type Garden } from './sim/garden.ts';
+import { stageScenario } from './sim/testScenario.ts';
 import type { Entity } from './sim/types.ts';
 import { STEP_MS, World } from './sim/world.ts';
 import { LocalGarden } from './storage/localGarden.ts';
@@ -49,6 +51,7 @@ import { BuildMenu } from './ui/buildMenu.ts';
 import { Hud } from './ui/hud.ts';
 import { PauseScreen, TitleScreen } from './ui/screens.ts';
 import { formatSeed, parseSeed } from './ui/seed.ts';
+import { testBanner, testScenarioOf } from './ui/testRoute.ts';
 import { ZoomControls } from './ui/zoomControls.ts';
 
 /**
@@ -140,10 +143,21 @@ async function main(): Promise<void> {
 
   if (!mount) throw new Error('#app introuvable');
 
+  /*
+   * `…/test` : une base déjà bâtie, rebâtie à chaque chargement. Elle ne lit
+   * ni n'écrit aucun stockage — ni la sauvegarde du joueur, ni son jardin,
+   * ni son record — et s'ouvre sans écran titre.
+   */
+  const scenario = testScenarioOf(window.location.pathname, import.meta.env.BASE_URL);
+
   // Une partie sauvegardée reprend là où elle s'était arrêtée ; sinon, une carte neuve.
-  const saves = LocalSave.browser();
+  const saves = scenario ? new LocalSave(null) : LocalSave.browser();
   const loaded = saves.load();
-  const world = loaded.status === 'ok' ? loaded.world : new World(readSeed());
+  const world = scenario
+    ? stageScenario(TEST_SCENARIOS[scenario])
+    : loaded.status === 'ok'
+      ? loaded.world
+      : new World(readSeed());
 
   // Le joystick repart au repos : un doigt posé au moment où l'onglet s'est fermé ne fait plus marcher Adam.
   if (loaded.status === 'ok') world.push({ type: 'setMoveAxis', x: 0, y: 0 });
@@ -243,8 +257,8 @@ async function main(): Promise<void> {
   let celebrating = false;
 
   const autosave = wireSave(world, saves, () => started);
-  const garden = wireGarden(world, LocalGarden.browser());
-  const record = wireRecord(world, LocalRecord.browser());
+  const garden = wireGarden(world, scenario ? new LocalGarden(null) : LocalGarden.browser());
+  const record = wireRecord(world, scenario ? new LocalRecord(null) : LocalRecord.browser());
 
   const pause = new PauseScreen(world.seed, () => setPaused(false), () => autosave.restart());
   const title = new TitleScreen({
@@ -280,7 +294,15 @@ async function main(): Promise<void> {
   });
 
   hud.pauseButton.addEventListener('click', () => setPaused(!paused));
-  hud.root.append(pause.root, title.root);
+  hud.root.append(pause.root);
+
+  if (scenario) {
+    started = true;
+    hud.root.dataset['started'] = 'true';
+    hud.root.append(testBanner(scenario));
+  } else {
+    hud.root.append(title.root);
+  }
   mount.append(hud.root);
 
   /*

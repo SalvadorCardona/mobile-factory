@@ -1,0 +1,119 @@
+/**
+ * Les parties de test, bâties comme un joueur les bâtirait.
+ *
+ * Le scénario (`data/testScenario.ts`) dit quoi poser et où ; ce module le
+ * rejoue sur un monde neuf avec les commandes du jeu : Adam se tient à côté
+ * de l'emprise, pousse `placeBuilding`, remplit son sac de ce que le chantier
+ * attend et pousse `transferToSite`, un tick à chaque fois. Le chantier
+ * s'achève, ses ouvriers s'installent, le jour se lève à la mairie — par les
+ * mêmes chemins qu'en jeu. Rien n'est écrit à la main dans l'état, sauf la
+ * position d'Adam, son sac et le coffre de la ville.
+ *
+ * Un scénario qui ne se pose plus (règle de placement, coût, terrain) lève
+ * une erreur qui dit lequel et pourquoi : `testScenario.test.ts` la verrait
+ * avant le joueur.
+ */
+
+import { TILE_SIZE } from '../core/grid.ts';
+import { BUILDINGS } from '../data/buildings.ts';
+import type { ItemId } from '../data/items.ts';
+import type { TestScenarioProto } from '../data/testScenario.ts';
+import type { Store } from './store.ts';
+import type { EntityId } from './types.ts';
+import { World, siteMissing } from './world.ts';
+
+type Amounts = Partial<Record<ItemId, number>>;
+
+/** Le monde du scénario, au matin du premier jour : chaque appel rend le même. */
+export function stageScenario(scenario: TestScenarioProto): World {
+  const world = new World(scenario.seed);
+  const hall = world.entities.get(world.townHallId);
+
+  if (!hall) throw new Error('scénario de test : pas de mairie sur la carte');
+
+  const { tx: hx, ty: hy } = hall;
+
+  deliver(world, world.townHallId, BUILDINGS.townHall.cost);
+
+  for (const { building, dx, dy, delivered } of scenario.buildings) {
+    const tx = hx + dx;
+    const ty = hy + dy;
+    const { width, height, cost } = BUILDINGS[building];
+
+    standBeside(world, tx, ty, width, height);
+
+    const rejection = world.canPlace(building, tx, ty);
+
+    if (rejection) throw new Error(`scénario de test : ${building} refusé en (${dx}, ${dy}) — ${rejection}`);
+
+    world.push({ type: 'placeBuilding', building, tx, ty });
+    world.tick();
+
+    const id = entityAt(world, tx, ty);
+
+    if (id === null) throw new Error(`scénario de test : ${building} pas posé en (${dx}, ${dy})`);
+    deliver(world, id, delivered ?? cost);
+  }
+
+  const town = world.townStock();
+
+  if (!town) throw new Error('scénario de test : la mairie n’est pas bâtie');
+  fill(town, scenario.town);
+  fill(world.player.inventory, scenario.bag);
+  teleport(world, (hx + scenario.adam.dx + 0.5) * TILE_SIZE, (hy + scenario.adam.dy + 0.5) * TILE_SIZE);
+
+  return world;
+}
+
+/**
+ * Livre `amounts` au chantier `id` par « Transférer », depuis le sac
+ * d'Adam seulement : la ville est vidée d'abord, pour qu'elle n'y ajoute
+ * rien. Vérifie qu'il a reçu ce qu'on voulait.
+ */
+function deliver(world: World, id: EntityId, amounts: Amounts): void {
+  const site = world.entities.get(id);
+
+  if (site?.kind !== 'site') throw new Error(`scénario de test : ${id} n’est pas un chantier`);
+
+  const want = Object.values(amounts).reduce((total, amount) => total + amount, 0);
+  const missing = siteMissing(site) - want;
+  const town = world.townStock();
+
+  standBeside(world, site.tx, site.ty, site.width, site.height);
+  if (town) fill(town, {});
+  fill(world.player.inventory, amounts);
+  world.push({ type: 'transferToSite', id });
+  world.tick();
+
+  const after = world.entities.get(id);
+  const left = after?.kind === 'site' ? siteMissing(after) : 0;
+
+  if (left !== missing) {
+    throw new Error(`scénario de test : ${site.proto} attend encore ${left} objets au lieu de ${missing}`);
+  }
+}
+
+/** Le bâtiment ou le chantier dont le coin haut-gauche est (tx, ty). */
+function entityAt(world: World, tx: number, ty: number): EntityId | null {
+  for (const entity of world.entities.values()) {
+    if (entity.tx === tx && entity.ty === ty) return entity.id;
+  }
+  return null;
+}
+
+/** Adam se tient juste sous l'emprise, à mi-largeur : à portée, et pas dessus. */
+function standBeside(world: World, tx: number, ty: number, width: number, height: number): void {
+  teleport(world, (tx + width / 2) * TILE_SIZE, (ty + height + 0.5) * TILE_SIZE);
+}
+
+function teleport(world: World, x: number, y: number): void {
+  Object.assign(world.player, { x, y, prevX: x, prevY: y });
+}
+
+/** Le coffre ne contient plus que `amounts`. */
+function fill(store: Store, amounts: Amounts): void {
+  for (const [item, count] of store.entries()) store.remove(item, count);
+  for (const [item, amount] of Object.entries(amounts) as [ItemId, number][]) {
+    if (store.add(item, amount) < amount) throw new Error(`scénario de test : pas la place pour ${amount} ${item}`);
+  }
+}

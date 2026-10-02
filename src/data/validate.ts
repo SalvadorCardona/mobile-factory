@@ -27,6 +27,7 @@ import { QUESTS, QUEST_IDS, TOOLS, type QuestProto } from './quests.ts';
 import { RECIPES, type RecipeProto } from './recipes.ts';
 import { RESEARCH, RESEARCH_STATS, type ResearchProto } from './research.ts';
 import { RESOURCES } from './resources.ts';
+import { TEST_SCENARIOS, type TestScenarioProto } from './testScenario.ts';
 import { BUILDING_PARTS, RESOURCE_PARTS, SPRITES, UPGRADE_PARTS, WALKER_PARTS, type SpriteProto } from './sprites.ts';
 import { WEAPONS } from './weapons.ts';
 import { WEATHER, WEATHER_CALENDAR, type WeatherProto } from './weather.ts';
@@ -456,6 +457,32 @@ export function validatePrototypes(): string[] {
       if (!(resourceId in RESOURCES) || speed <= 0 || speed > 0.5) {
         errors.push(`PERKS.${id} : accélération de récolte invalide sur « ${resourceId} »`);
       }
+    }
+  }
+
+  // Une partie de test : des quantités entières, et un chantier en cours qui l'est vraiment.
+  for (const [id, scenario] of Object.entries(TEST_SCENARIOS) as [string, TestScenarioProto][]) {
+    const at = `TEST_SCENARIOS.${id}`;
+
+    if (!Number.isInteger(scenario.seed) || scenario.seed < 0) errors.push(`${at} : seed invalide`);
+    for (const [where, amounts] of [['town', scenario.town], ['bag', scenario.bag]] as const) {
+      for (const [itemId, amount] of Object.entries<number>(amounts)) {
+        if (!(itemId in ITEMS) || amount <= 0 || !Number.isInteger(amount)) {
+          errors.push(`${at}.${where} : quantité invalide de « ${itemId} »`);
+        }
+      }
+    }
+    for (const { building, delivered } of scenario.buildings) {
+      if (delivered === undefined) continue;
+
+      const cost: Partial<Record<string, number>> = BUILDINGS[building].cost;
+
+      for (const [itemId, amount] of Object.entries<number>(delivered)) {
+        if (!(itemId in cost) || amount <= 0 || !Number.isInteger(amount) || amount > (cost[itemId] ?? 0)) {
+          errors.push(`${at} : livraison de « ${itemId} » invalide sur le chantier ${building}`);
+        }
+      }
+      if (sum(delivered) >= sum(cost)) errors.push(`${at} : le chantier ${building} est livré en entier — ce n'est plus un chantier en cours`);
     }
   }
 

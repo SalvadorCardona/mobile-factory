@@ -445,6 +445,20 @@ Rien ne joue avant un geste du joueur.
   `validatePrototypes()` tourne au démarrage en dev et dans les tests.
 - Pas d'ECS, pas de moteur physique, pas de multijoueur.
 
+## Partie de test
+
+**`/mobile-factory/test`** — en local `http://localhost:5173/mobile-factory/test`,
+en ligne https://cardona.digital/mobile-factory/test — ouvre directement,
+sans écran titre, une petite base déjà bâtie (graine 100, matin du jour 1) :
+mairie et son stock, cabane de bûcheron, ferme, poste de construction, et le
+chantier du labo à moitié livré (bois complet, pierre en route, fer manquant).
+Bandeau « Partie de test » en haut. Elle ne lit ni n'écrit aucun stockage
+(sauvegarde, jardin, record) et repart à l'identique à chaque rechargement.
+Le scénario est de la donnée (`data/testScenario.ts`), rejoué avec les
+commandes du jeu par `sim/testScenario.ts` ; `/test/<id>` ouvrira un autre
+scénario (`ui/testRoute.ts`). GitHub Pages n'ayant pas de page de repli, le
+build copie `index.html` sous chaque route (`vite.config.ts`).
+
 ## Vérifier avant de pousser
 
 ```bash

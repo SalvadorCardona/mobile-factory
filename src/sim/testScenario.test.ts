@@ -1,0 +1,66 @@
+import { describe, expect, it } from 'vitest';
+import { BUILDINGS } from '../data/buildings.ts';
+import { TEST_SCENARIOS, type TestScenarioId } from '../data/testScenario.ts';
+import { validatePrototypes } from '../data/validate.ts';
+import { encodeSave } from './save.ts';
+import { stageScenario } from './testScenario.ts';
+import { siteMissing } from './world.ts';
+
+const IDS = Object.keys(TEST_SCENARIOS) as TestScenarioId[];
+
+describe('parties de test', () => {
+  it('passent la validation des données', () => {
+    expect(validatePrototypes()).toEqual([]);
+  });
+
+  it.each(IDS)('%s se bâtit sans erreur, et chaque fois à l’identique', (id) => {
+    const a = stageScenario(TEST_SCENARIOS[id]);
+    const b = stageScenario(TEST_SCENARIOS[id]);
+
+    expect(encodeSave(a, 0)).toBe(encodeSave(b, 0));
+
+    // Et elles le restent en jouant : même seed, mêmes commandes, même partie.
+    for (let i = 0; i < 400; i += 1) {
+      a.tick();
+      b.tick();
+    }
+    expect(encodeSave(a, 0)).toBe(encodeSave(b, 0));
+  });
+
+  it.each(IDS)('%s pose chaque bâtiment du scénario, au matin, sans mutant', (id) => {
+    const scenario = TEST_SCENARIOS[id];
+    const world = stageScenario(scenario);
+    const hall = world.entities.get(world.townHallId)!;
+
+    expect(hall.kind).toBe('townHall');
+    expect(world.clock()?.phase).toBe('day');
+    expect([...world.mobiles.values()].some((mobile) => mobile.kind === 'mutant')).toBe(false);
+
+    for (const { building, dx, dy } of scenario.buildings) {
+      const placed = [...world.entities.values()].find((entity) => entity.tx === hall.tx + dx && entity.ty === hall.ty + dy);
+
+      expect(placed?.proto).toBe(building);
+    }
+    expect(Object.fromEntries(world.townStock()!.entries())).toEqual(scenario.town);
+    expect(Object.fromEntries(world.player.inventory.entries())).toEqual(scenario.bag);
+  });
+
+  it('la petite base : trois bâtiments qui emploient, et un chantier à moitié livré', () => {
+    const world = stageScenario(TEST_SCENARIOS.base);
+    const buildings = [...world.entities.values()].filter((entity) => entity.kind !== 'site' && entity.kind !== 'townHall');
+    const sites = [...world.entities.values()].filter((entity) => entity.kind === 'site');
+
+    expect(buildings.map((entity) => entity.proto).sort()).toEqual(['constructionPost', 'farm', 'lumberCamp']);
+    expect(world.mobiles.size).toBeGreaterThan(0);
+    expect([...world.mobiles.values()].filter((mobile) => mobile.kind === 'lumberjack')).toHaveLength(BUILDINGS.lumberCamp.workers);
+
+    expect(sites).toHaveLength(1);
+
+    const lab = sites[0]!;
+
+    if (lab.kind !== 'site') throw new Error('pas un chantier');
+    expect(lab.proto).toBe('lab');
+    expect(lab.delivered).toEqual({ wood: 14, stone: 3 });
+    expect(siteMissing(lab)).toBeGreaterThan(0);
+  });
+});
