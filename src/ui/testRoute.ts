@@ -10,6 +10,7 @@
  */
 
 import { DEFAULT_TEST_SCENARIO, TEST_SCENARIOS, type TestScenarioId } from '../data/testScenario.ts';
+import { onLocale, t } from '../i18n/locale.ts';
 
 /** Le segment de chemin qui mène aux parties de test. */
 const TEST_SEGMENT = 'test';
@@ -46,7 +47,9 @@ export function testBanner(id: TestScenarioId): HTMLElement {
   const banner = document.createElement('div');
 
   banner.className = 'test-banner';
-  banner.textContent = `Partie de test · ${TEST_SCENARIOS[id].label}`;
+  onLocale(() => {
+    banner.textContent = t().screens.test.banner(t().testScenarios[id]);
+  });
   banner.setAttribute('role', 'note');
   return banner;
 }

@@ -234,6 +234,20 @@ export const UI_ICONS = {
     group('translate(12 12) rotate(-45)', pill(-7, -8, 14, 7, paper.shade), pill(-7, -8.5, 14, 6, paper.base)),
   ),
   close: svg(S, S, line(7, 7, 17, 17, ink.base), line(17, 7, 7, 17, ink.base)),
+  /**
+   * L'engrenage des réglages : huit dents en capsules autour d'un moyeu
+   * indigo, l'ombre en bas à droite, un reflet en haut à gauche, et le trou
+   * blanc du bouton au milieu.
+   */
+  settings: svg(
+    S,
+    S,
+    ...[0, 45, 90, 135, 180, 225, 270, 315].map((angle) => group(`rotate(${angle} 12 12)`, rect(9.75, 1.5, 4.5, 6, ink.base, 1.6))),
+    circle(12.5, 12.5, 7.6, ink.shade),
+    circle(12, 12, 7.4, ink.base),
+    pill(6.6, 7.4, 4.4, 2, ink.light),
+    circle(12, 12, 3, paper.base),
+  ),
   /** L'ampoule du conseil. */
   hint: svg(
     S,

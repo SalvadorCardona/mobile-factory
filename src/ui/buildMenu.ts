@@ -65,6 +65,7 @@ import type { ItemId } from '../data/items.ts';
 import { ROADS } from '../data/roads.ts';
 import type { Placement } from '../input/placement.ts';
 import type { World } from '../sim/world.ts';
+import { onLocale, t } from '../i18n/locale.ts';
 import { buildOrder } from './buildOrder.ts';
 import { buildingIcon, itemAmount, roadIcon, uiIcon } from './icons.ts';
 import { placementOutput, placementReason, roadReason } from './placementReason.ts';
@@ -84,11 +85,10 @@ const MOVES: Readonly<Record<string, GridMove>> = {
 /** Un doigt posé plus longtemps que ça sur une carte lit son effet au lieu de la choisir. */
 const LONG_PRESS_MS = 450;
 
-/** La carte de la route : ce qu'elle fait, en une ligne. */
-const ROAD_EFFECT = `Adam et les ouvriers y vont ${String(ROADS.speed).replace('.', ',')} fois plus vite. Glissez de tuile en tuile`;
-
-/** Ce que dit la ligne d'effet tant qu'aucune carte n'a été lue. */
-const EFFECT_PROMPT = 'Appui long sur une carte : à quoi sert le bâtiment';
+/** La carte de la route : ce qu'elle fait, en une ligne, dans la langue du moment. */
+function roadEffect(): string {
+  return t().menu.roadEffect(t().common.number(ROADS.speed));
+}
 
 export class BuildMenu {
   public readonly root: HTMLElement;
@@ -112,6 +112,8 @@ export class BuildMenu {
   private readonly roadLock: HTMLElement;
   private readonly locks = new Map<BuildingId, HTMLElement>();
   private readonly costs: { item: ItemId; amount: number; element: HTMLElement }[] = [];
+  /** Les libellés fixes des cartes, réécrits à chaque changement de langue. */
+  private readonly relabels: (() => void)[] = [];
   private opened = false;
   /** L'appui long vient de montrer un effet : le `click` qui suit le relâchement ne choisit pas la carte. */
   private swallowClick = false;
@@ -135,10 +137,12 @@ export class BuildMenu {
     this.root = document.createElement('div');
     this.root.className = 'build-menu';
 
-    this.toggleButton = button('Bâtir', () => this.toggle());
+    const toggleLabel = document.createTextNode('');
+    const spaceKey = keyHint();
+
+    this.toggleButton = button('', () => this.toggle());
     this.toggleButton.className = 'build-toggle';
-    this.toggleButton.prepend(uiIcon('hammer', 28));
-    this.toggleButton.append(keyHint('Espace'));
+    this.toggleButton.append(uiIcon('hammer', 28), toggleLabel, spaceKey);
     this.toggleButton.setAttribute('aria-keyshortcuts', 'Space');
 
     this.drawer = document.createElement('div');
@@ -148,18 +152,19 @@ export class BuildMenu {
     const title = document.createElement('div');
 
     title.className = 'build-drawer-title';
-    title.textContent = 'Bâtiments';
 
     const close = button('', () => this.close());
 
     close.className = 'build-drawer-close';
     close.append(uiIcon('close'));
-    close.setAttribute('aria-label', 'Fermer');
 
     const keys = document.createElement('span');
+    const arrowsKey = keyHint();
+    const enterKey = keyHint();
+    const escapeKey = keyHint();
 
     keys.className = 'build-drawer-keys';
-    keys.append(keyHint('Flèches'), keyHint('Entrée'), keyHint('Échap'));
+    keys.append(arrowsKey, enterKey, escapeKey);
 
     const header = document.createElement('header');
 
@@ -183,7 +188,6 @@ export class BuildMenu {
     this.effectLine = document.createElement('div');
     this.effectLine.className = 'build-drawer-effect';
     this.effectLine.setAttribute('role', 'status');
-    this.effectLine.textContent = EFFECT_PROMPT;
 
     this.drawer.append(header, this.list, this.effectLine);
 
@@ -203,11 +207,11 @@ export class BuildMenu {
     this.reasonRemedy = document.createElement('span');
     this.reason.append(this.reasonText, this.reasonRemedy);
 
-    this.confirmButton = button('Poser', () => this.placement.confirm());
+    this.confirmButton = button('', () => this.placement.confirm());
     this.confirmButton.dataset['confirm'] = 'true';
-    this.repeatButton = button('Poser encore', () => this.placement.confirm(true));
-    this.cancelButton = button('Annuler', () => this.placement.cancel());
-    this.toolButton = button('Retirer', () => {
+    this.repeatButton = button('', () => this.placement.confirm(true));
+    this.cancelButton = button('', () => this.placement.cancel());
+    this.toolButton = button('', () => {
       this.placement.selectRoad(this.placement.roadTool() === 'remove' ? 'pave' : 'remove');
     });
     this.toolButton.hidden = true;
@@ -221,7 +225,34 @@ export class BuildMenu {
     );
 
     this.root.append(this.drawer, this.armedBar, this.toggleButton);
-    this.refresh();
+
+    // Le menu vit toute la partie : ses libellés fixes suivent la langue.
+    // Ceux qui changent avec l'état (barre de pose, verrous) se relisent à chaque `refresh()`.
+    onLocale(() => {
+      const text = t();
+
+      toggleLabel.data = text.menu.build;
+      spaceKey.textContent = text.menu.keys.space;
+      title.textContent = text.menu.drawerTitle;
+      close.setAttribute('aria-label', text.common.close);
+      arrowsKey.textContent = text.menu.keys.arrows;
+      enterKey.textContent = text.menu.keys.enter;
+      escapeKey.textContent = text.menu.keys.escape;
+      this.effectLine.textContent = text.menu.effectPrompt;
+      this.repeatButton.textContent = text.menu.placeAgain;
+      this.cancelButton.textContent = text.common.cancel;
+      for (const relabel of this.relabels) relabel();
+      // Les icônes des coûts portent le nom de l'objet (`itemIcon`), posé à leur création.
+      for (const { item, element } of this.costs) {
+        const image = element.querySelector('img');
+
+        if (image) {
+          image.alt = text.items[item];
+          image.title = text.items[item];
+        }
+      }
+      this.refresh();
+    });
   }
 
   /** Une carte : vignette, nom, effet, coût et ouvriers en puces, emprise. */
@@ -240,7 +271,9 @@ export class BuildMenu {
     card.className = 'build-card';
     this.longPress(card, () => this.showEffect(id));
     card.addEventListener('focus', () => this.showEffect(id));
-    card.append(buildingIcon(id));
+    const icon = buildingIcon(id);
+
+    card.append(icon);
 
     const body = document.createElement('div');
 
@@ -249,13 +282,11 @@ export class BuildMenu {
     const name = document.createElement('div');
 
     name.className = 'build-card-name';
-    name.textContent = proto.label;
     body.append(name);
 
     const effect = document.createElement('div');
 
     effect.className = 'build-card-effect';
-    effect.textContent = proto.effect;
     body.append(effect);
 
     const cost = document.createElement('div');
@@ -264,7 +295,10 @@ export class BuildMenu {
 
     const entries = Object.entries(proto.cost) as [ItemId, number][];
 
-    if (entries.length === 0) cost.textContent = 'gratuit';
+    // Sans coût, un mot à la place des icônes (un nœud texte : la puce des ouvriers le suit).
+    const free = entries.length === 0 ? document.createTextNode('') : null;
+
+    if (free) cost.append(free);
     for (const [item, amount] of entries) {
       const element = itemAmount(item, amount);
 
@@ -273,17 +307,30 @@ export class BuildMenu {
     }
 
     // Les ouvriers en puce à la suite du coût : elle reste sur la carte compacte du téléphone.
-    if (proto.workers > 0) {
-      const workers = document.createElement('span');
-      const label = `Emploie ${proto.workers} ouvrier${proto.workers > 1 ? 's' : ''}`;
+    let workers: HTMLElement | null = null;
 
+    if (proto.workers > 0) {
+      workers = document.createElement('span');
       workers.className = 'build-card-workers';
       workers.setAttribute('role', 'img');
-      workers.setAttribute('aria-label', label);
-      workers.title = label;
       workers.append(uiIcon('worker', 18), String(proto.workers));
       cost.append(workers);
     }
+
+    this.relabels.push(() => {
+      const text = t();
+
+      icon.alt = text.buildings[id].label;
+      name.textContent = text.buildings[id].label;
+      effect.textContent = text.buildings[id].effect;
+      if (free) free.data = text.menu.free;
+      if (workers) {
+        const label = text.menu.employs(proto.workers);
+
+        workers.setAttribute('aria-label', label);
+        workers.title = label;
+      }
+    });
 
     const meta = document.createElement('div');
 
@@ -312,7 +359,7 @@ export class BuildMenu {
    * tuile, et elle arme le tracé au lieu d'un fantôme.
    */
   private road(): HTMLButtonElement {
-    const show = (): void => setText(this.effectLine, `Route : ${ROAD_EFFECT}`);
+    const show = (): void => setText(this.effectLine, t().menu.cardEffect(t().menu.road, roadEffect()));
     const card = button('', () => {
       if (this.swallowClick) {
         this.swallowClick = false;
@@ -326,7 +373,9 @@ export class BuildMenu {
     card.className = 'build-card';
     this.longPress(card, show);
     card.addEventListener('focus', show);
-    card.append(roadIcon());
+    const icon = roadIcon();
+
+    card.append(icon);
 
     const body = document.createElement('div');
     const name = document.createElement('div');
@@ -338,19 +387,22 @@ export class BuildMenu {
 
     body.className = 'build-card-body';
     name.className = 'build-card-name';
-    name.textContent = 'Route';
     effect.className = 'build-card-effect';
-    effect.textContent = ROAD_EFFECT;
     cost.className = 'build-card-cost';
     cost.append(price);
     this.costs.push({ item: ROADS.item, amount: 1, element: price });
     meta.className = 'build-card-meta';
-    meta.textContent = 'par tuile · sans chantier';
     footer.className = 'build-card-footer';
     footer.append(cost, meta);
     this.roadLock.className = 'build-card-lock';
     body.append(name, effect, footer, this.roadLock);
     card.append(body);
+    this.relabels.push(() => {
+      icon.alt = t().screens.road;
+      name.textContent = t().menu.road;
+      effect.textContent = roadEffect();
+      meta.textContent = t().menu.roadMeta;
+    });
     return card;
   }
 
@@ -379,7 +431,9 @@ export class BuildMenu {
   }
 
   private showEffect(id: BuildingId): void {
-    setText(this.effectLine, `${BUILDINGS[id].label} : ${BUILDINGS[id].effect}`);
+    const { label, effect } = t().buildings[id];
+
+    setText(this.effectLine, t().menu.cardEffect(label, effect));
   }
 
   /** Range les cartes par utilité du moment. Seulement à l'ouverture : rien ne saute sous le doigt. */
@@ -424,7 +478,7 @@ export class BuildMenu {
   public open(focusCard = false): void {
     this.opened = true;
     this.sortCards();
-    setText(this.effectLine, EFFECT_PROMPT);
+    setText(this.effectLine, t().menu.effectPrompt);
     this.drawer.hidden = false;
     this.onOpen();
     this.refresh();
@@ -526,13 +580,15 @@ export class BuildMenu {
 
   /** Pourquoi la carte est grisée, ou `null` si le joueur peut la choisir. */
   private lockReason(id: BuildingId): string | null {
-    if (!this.unlocked()) return 'Débloqué après la mairie';
-    if (this.world.atLimit(id)) return 'Un seul par colonie';
+    const { locked } = t().menu;
+
+    if (!this.unlocked()) return locked.hall;
+    if (this.world.atLimit(id)) return locked.unique;
 
     const { unlockNight, unlockObjective }: BuildingProto = BUILDINGS[id];
 
-    if (unlockObjective !== undefined && this.world.objective < unlockObjective) return `Après l’objectif ${unlockObjective}`;
-    return this.world.night < unlockNight ? `Dès la nuit ${unlockNight}` : null;
+    if (unlockObjective !== undefined && this.world.objective < unlockObjective) return locked.objective(unlockObjective);
+    return this.world.night < unlockNight ? locked.night(unlockNight) : null;
   }
 
   /** Recalcule l'état visible. Appelé à chaque changement de placement et à chaque frame. */
@@ -555,7 +611,7 @@ export class BuildMenu {
 
     this.roadCard.dataset['active'] = String(roadTool !== null);
     if (this.roadCard.getAttribute('aria-disabled') !== roadLocked) this.roadCard.setAttribute('aria-disabled', roadLocked);
-    setText(this.roadLock, this.unlocked() ? '' : 'Débloqué après la mairie');
+    setText(this.roadLock, this.unlocked() ? '' : t().menu.locked.hall);
 
     // Le sac et la ville ne comptent que tiroir ouvert : fermé, personne ne voit les coûts.
     if (this.opened) {
@@ -577,7 +633,8 @@ export class BuildMenu {
     this.armedBar.dataset['placing'] = String(placing);
 
     if (armed) {
-      const label = placing ? `Poser : ${BUILDINGS[armed].label}` : `Tapez la carte pour placer ${BUILDINGS[armed].label}`;
+      const name = t().buildings[armed].label;
+      const label = placing ? t().menu.placing(name) : t().menu.tapToPlace(name);
 
       if (this.armedLabel.textContent !== label) this.armedLabel.textContent = label;
     }
@@ -586,7 +643,7 @@ export class BuildMenu {
       this.refreshRoad(roadTool, placing);
       return;
     }
-    setText(this.confirmButton, 'Poser');
+    setText(this.confirmButton, t().menu.place);
 
     const block = this.placement.block();
     const confirmable = this.placement.isConfirmable();
@@ -614,24 +671,25 @@ export class BuildMenu {
     const trail = this.placement.roadTrail();
     const tiles = trail?.tiles ?? [];
     const confirmable = this.placement.isConfirmable();
+    const { menu } = t();
     let label: string;
     let reason: { text: string; remedy: string | null } | null = null;
 
     if (tool === 'remove') {
       const slabs = tiles.filter(({ tx, ty }) => this.world.roads.has(tx, ty)).length;
 
-      label = placing ? `Retirer ${plural(slabs, 'dalle')} — rend ${plural(slabs, 'pierre')}` : 'Retirer : glissez sur les dalles';
+      label = placing ? menu.removeCount(slabs) : menu.removeHint;
     } else {
       const plan = this.world.roadPlan(tiles);
       const paid = plan.filter((step) => step.state === 'pave').length;
 
-      label = placing ? `Route : ${plural(paid, 'tuile')} — ${plural(paid, 'pierre')}` : 'Route : glissez de tuile en tuile';
+      label = placing ? menu.roadCount(paid) : menu.roadHint;
       reason = roadReason(plan);
     }
 
     setText(this.armedLabel, label);
-    setText(this.toolButton, tool === 'pave' ? 'Retirer' : 'Paver');
-    setText(this.confirmButton, tool === 'pave' ? 'Poser' : 'Retirer');
+    setText(this.toolButton, tool === 'pave' ? menu.remove : menu.pave);
+    setText(this.confirmButton, tool === 'pave' ? menu.place : menu.remove);
 
     this.reason.hidden = !placing || !reason;
     this.reason.dataset['ok'] = 'false';
@@ -652,22 +710,16 @@ export class BuildMenu {
   }
 }
 
-/** « 1 pierre », « 3 pierres ». */
-function plural(count: number, word: string): string {
-  return `${count} ${word}${count > 1 ? 's' : ''}`;
-}
-
 /** Ne touche au DOM que si le texte change : `refresh()` tourne à chaque frame. */
 function setText(element: HTMLElement, text: string): void {
   if (element.textContent !== text) element.textContent = text;
 }
 
-/** Le nom d'une touche, en petite capsule. Masqué en CSS sur les écrans sans clavier. */
-function keyHint(label: string): HTMLElement {
+/** Le nom d'une touche, en petite capsule (écrit par `onLocale`). Masqué en CSS sur les écrans sans clavier. */
+function keyHint(): HTMLElement {
   const key = document.createElement('kbd');
 
   key.className = 'key-hint';
-  key.textContent = label;
   return key;
 }
 

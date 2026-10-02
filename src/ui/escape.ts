@@ -1,7 +1,8 @@
 /**
  * Ce que fait Échap : fermer ce qui est au premier plan, sinon basculer la pause.
  *
- * Le voile de la pause couvre tout : en pause, Échap la lève, et ce qui était
+ * Le menu des réglages passe avant tout : ouvert, Échap le ferme. Le voile
+ * de la pause couvre le reste : en pause, Échap la lève, et ce qui était
  * ouvert derrière le reste. Hors pause, il ferme d'abord le menu de
  * construction, puis la fenêtre d'un bâtiment (celle du labo comprise) ou le
  * sac — les deux ne sont jamais ouverts ensemble. Rien d'ouvert : pause.
@@ -11,15 +12,17 @@
 
 /** Ce qui est ouvert à l'écran quand Échap tombe. */
 export interface EscapeState {
+  settingsOpen: boolean;
   paused: boolean;
   menuOpen: boolean;
   panelOpen: boolean;
   inventoryOpen: boolean;
 }
 
-export type EscapeAction = 'resume' | 'closeMenu' | 'closePanel' | 'closeInventory' | 'pause';
+export type EscapeAction = 'closeSettings' | 'resume' | 'closeMenu' | 'closePanel' | 'closeInventory' | 'pause';
 
 export function escapeAction(state: EscapeState): EscapeAction {
+  if (state.settingsOpen) return 'closeSettings';
   if (state.paused) return 'resume';
   if (state.menuOpen) return 'closeMenu';
   if (state.panelOpen) return 'closePanel';

@@ -18,6 +18,7 @@
 
 import type { ItemId } from '../data/items.ts';
 import { RESEARCH, RESEARCH_IDS, RESEARCH_THEMES, type ResearchId, type ResearchTheme } from '../data/research.ts';
+import { locale, onLocale, t } from '../i18n/locale.ts';
 import { labNeeds, researchCost, researchStatus, type ResearchStatus } from '../sim/research.ts';
 import type { Lab } from '../sim/types.ts';
 import type { World } from '../sim/world.ts';
@@ -58,14 +59,23 @@ export class ResearchPanel {
 
     const actions = element('div', 'building-panel-actions');
 
-    this.transferButton = button('Transférer', () => this.push('transferToLab'));
-    this.cancelButton = button('Abandonner', () => this.push('cancelResearch'));
-    this.takeButton = button('Prendre le reste', () => this.push('takeFromBuilding'));
+    this.transferButton = button(() => this.push('transferToLab'));
+    this.cancelButton = button(() => this.push('cancelResearch'));
+    this.takeButton = button(() => this.push('takeFromBuilding'));
     actions.append(this.transferButton, this.cancelButton, this.takeButton);
     this.current.append(this.currentTitle, this.currentStatus, this.bar, this.currentCost, actions);
 
     this.list = element('div', 'research-list');
     this.root.append(this.current, this.list);
+
+    // Les boutons suivent la langue ; la liste se réécrit au prochain `update()`, dont la clé porte la langue.
+    onLocale(() => {
+      const text = t().researchPanel;
+
+      this.transferButton.textContent = text.transfer;
+      this.cancelButton.textContent = text.abandon;
+      this.takeButton.textContent = text.takeRest;
+    });
   }
 
   /** À chaque frame, fenêtre du labo ouverte. */
@@ -96,8 +106,8 @@ export class ResearchPanel {
 
     if (lab.research === null) {
       this.current.dataset['state'] = 'idle';
-      this.currentTitle.textContent = 'Aucune recherche en cours';
-      this.setText(this.currentStatus, 'Choisissez-en une ci-dessous, puis apportez son coût.');
+      this.currentTitle.textContent = t().researchPanel.noneTitle;
+      this.setText(this.currentStatus, t().researchPanel.noneHint);
       this.bar.hidden = true;
       this.transferButton.hidden = true;
       this.cancelButton.hidden = true;
@@ -107,7 +117,7 @@ export class ResearchPanel {
 
     const research = RESEARCH[lab.research];
 
-    this.currentTitle.textContent = research.label;
+    this.currentTitle.textContent = t().research[lab.research].label;
     this.bar.hidden = false;
 
     if (lab.endTick > 0) {
@@ -130,14 +140,9 @@ export class ResearchPanel {
     const fromTown = world.labInTownRange(lab);
 
     this.current.dataset['state'] = 'collecting';
-    this.setText(
-      this.currentStatus,
-      !inReach
-        ? 'Rapprochez-vous pour déposer — ou laissez faire les porteurs.'
-        : fromTown
-          ? 'Transférez le sac et la ville, heurtez le labo, ou laissez faire les porteurs.'
-          : 'Transférez le sac, heurtez le labo, ou laissez faire les porteurs.',
-    );
+    const text = t().researchPanel;
+
+    this.setText(this.currentStatus, !inReach ? text.approach : fromTown ? text.transferBoth : text.transferBag);
     this.bar.dataset['kind'] = 'progress';
     this.barFill.style.width = `${Math.round((1 - missing / total) * 100)}%`;
     this.transferButton.hidden = false;
@@ -165,6 +170,7 @@ export class ResearchPanel {
     const { researchDone: done } = world;
     const statuses = RESEARCH_IDS.map((id): [ResearchId, ResearchStatus] => [id, researchStatus(id, done, lab)]);
     const key = [
+      locale(),
       statuses.map(([, status]) => status).join(','),
       lab.endTick > 0,
       world.perks.join(','),
@@ -178,7 +184,7 @@ export class ResearchPanel {
       const section = element('section', 'research-group');
       const title = element('h3', 'research-group-title');
 
-      title.textContent = RESEARCH_THEMES[theme];
+      title.textContent = t().researchThemes[theme];
       section.append(title);
       for (const [id, status] of statuses) {
         if (RESEARCH[id].theme === theme) section.append(this.row(id, status, lab));
@@ -192,7 +198,6 @@ export class ResearchPanel {
   /** Une recherche : nom, effet chiffré, coût, état, et « Lancer » si on peut. */
   private row(id: ResearchId, status: ResearchStatus, lab: Lab): HTMLElement {
     const { world } = this;
-    const research = RESEARCH[id];
     const row = element('article', 'research-row');
     const head = element('div', 'research-row-head');
     const name = element('h4', 'research-name');
@@ -200,9 +205,9 @@ export class ResearchPanel {
     const state = element('p', 'research-status');
 
     row.dataset['status'] = status;
-    name.textContent = research.label;
+    name.textContent = t().research[id].label;
     effect.textContent = effectLine(id, world.researchDone, world.perks);
-    state.textContent = status === 'running' ? 'En cours' : statusLine(id, status, world.researchDone);
+    state.textContent = status === 'running' ? t().researchPanel.running : statusLine(id, status, world.researchDone);
     head.append(name);
 
     if (status === 'available') {
@@ -210,7 +215,7 @@ export class ResearchPanel {
 
       launch.type = 'button';
       launch.dataset['tone'] = 'deposit';
-      launch.textContent = 'Lancer';
+      launch.textContent = t().researchPanel.launch;
       // Une seule à la fois : tant qu'une recherche tourne, on attend.
       launch.disabled = lab.endTick > 0;
       launch.addEventListener('click', () => world.push({ type: 'startResearch', lab: lab.id, research: id }));
@@ -252,11 +257,11 @@ function element(tag: string, className: string): HTMLElement {
   return node;
 }
 
-function button(label: string, onClick: () => void): HTMLButtonElement {
+/** Un bouton : son libellé s'écrit dans `onLocale`. */
+function button(onClick: () => void): HTMLButtonElement {
   const node = document.createElement('button');
 
   node.type = 'button';
-  node.textContent = label;
   node.addEventListener('click', onClick);
   return node;
 }

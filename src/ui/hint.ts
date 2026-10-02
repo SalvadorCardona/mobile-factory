@@ -5,7 +5,7 @@
  * déjà fait. Elle se tait dès que l'étape est franchie : un joueur qui sait
  * déjà jouer ne la voit presque pas.
  *
- * C'est Ève qui parle (`EVE_LINES.hints`) : par radio tant qu'elle n'est pas
+ * C'est Ève qui parle (`t().eve.hints`) : par radio tant qu'elle n'est pas
  * arrivée, de vive voix ensuite. Elle tutoie Adam. Quand elle n'a rien de
  * plus pressé à dire, c'est le conseil de l'objectif en cours
  * (`data/objectives.ts`) : le joueur sait toujours quoi faire ensuite.
@@ -14,8 +14,8 @@
  */
 
 import { BUILDINGS, REPAIR, buildingLevel } from '../data/buildings.ts';
-import { EVE, EVE_LINES } from '../data/eve.ts';
-import { ITEMS, TOWN_PLENTY, type ItemId } from '../data/items.ts';
+import { EVE } from '../data/eve.ts';
+import { TOWN_PLENTY, type ItemId } from '../data/items.ts';
 import type { Goal } from '../data/objectives.ts';
 import { RESEARCH_IDS } from '../data/research.ts';
 import { RESOURCES } from '../data/resources.ts';
@@ -23,6 +23,7 @@ import { currentObjective, objectiveWait, type GoalWait } from '../sim/objective
 import { researchStatus } from '../sim/research.ts';
 import type { Building } from '../sim/types.ts';
 import { TICKS_PER_SECOND, type World } from '../sim/world.ts';
+import { t } from '../i18n/locale.ts';
 
 /** Ce que le joueur a déjà fait : un conseil compris ne revient pas. */
 export interface HintProgress {
@@ -52,11 +53,12 @@ export function carriesWanted(world: World): boolean {
  * ville en a déjà assez (`plenty`), c'est elle qui le dit.
  */
 export function harvestRefusedText(item: ItemId, wanted: number, plenty = false): string {
-  const label = ITEMS[item].label.toLowerCase();
+  const label = t().items[item];
+  const text = t().hud.hint;
 
-  if (plenty) return `La ville a assez de ${label} — Adam n’en ramasse plus en passant`;
-  if (wanted > 0) return `Assez de ${label} dans le sac pour les chantiers — allez les livrer`;
-  return `Assez de ${label} : aucun chantier n’en attend plus`;
+  if (plenty) return text.harvestPlenty(label);
+  if (wanted > 0) return text.harvestDeliver(label);
+  return text.harvestNone(label);
 }
 
 /**
@@ -71,7 +73,7 @@ export function uselessBagHint(world: World): string | null {
 
   const [bulk] = inventory.entries().sort((a, b) => b[1] - a[1])[0] ?? [];
 
-  return bulk ? EVE_LINES.hints.bagUseless.replace('{item}', ITEMS[bulk].label.toLowerCase()) : null;
+  return bulk ? t().eve.hints.bagUseless.replace('{item}', t().hud.hint.inSentence(t().items[bulk])) : null;
 }
 
 export function tutorialHint(world: World, progress: HintProgress, towers: boolean, mutants: number): string | null {
@@ -83,7 +85,7 @@ export function tutorialAdvice(world: World, progress: HintProgress, towers: boo
   const hall = world.entities.get(world.townHallId);
   const { inventory } = world.player;
 
-  const lines = EVE_LINES.hints;
+  const lines = t().eve.hints;
 
   if (world.defeated || !hall) return null;
 
@@ -120,7 +122,7 @@ export function tutorialAdvice(world: World, progress: HintProgress, towers: boo
   if (mutants === 0 && world.night > 0 && world.night < EVE.arrivalNight && !world.eve()) {
     const left = EVE.arrivalNight - world.night;
 
-    return say(lines.coming.replace('{n}', String(left)).replace('{s}', left > 1 ? 's' : ''));
+    return say(lines.coming.replace('{n}', String(left)).replace('{s}', t().common.plural(left)));
   }
 
   // La forge se débloque à la tombée d'une nuit : le charbon, jusque-là sans usage, devient un objectif.
@@ -143,7 +145,7 @@ export function tutorialAdvice(world: World, progress: HintProgress, towers: boo
 
   const objective = currentObjective(world);
 
-  return objective ? say(objective.hint) : null;
+  return objective ? say(t().objectives[world.objective]!.hint) : null;
 }
 
 /**
@@ -154,7 +156,7 @@ export function tutorialAdvice(world: World, progress: HintProgress, towers: boo
  * chaque seconde, le conseil ne se rouvre pas sans cesse.
  */
 function waitingAdvice(world: World, wait: GoalWait & { goal: Goal }): Advice {
-  const lines = EVE_LINES.hints;
+  const lines = t().eve.hints;
   const time = waitTime(wait.remainingTicks);
   const head = (wait.goal.type === 'births' ? lines.waitBirth : lines.waitDawn).replace('{time}', time);
   const todo = meanwhile(world);
@@ -168,13 +170,13 @@ function waitingAdvice(world: World, wait: GoalWait & { goal: Goal }): Advice {
 function waitTime(ticks: number): string {
   const minutes = Math.ceil(ticks / (TICKS_PER_SECOND * 60));
 
-  if (ticks < TICKS_PER_SECOND * 60) return 'moins d’une minute';
-  return `${minutes} minute${minutes > 1 ? 's' : ''}`;
+  if (ticks < TICKS_PER_SECOND * 60) return t().hud.hint.lessThanMinute;
+  return t().hud.hint.minutes(minutes);
 }
 
 /** De quoi s'occuper pendant une attente, ou `null` si rien ne presse. */
 function meanwhile(world: World): Advice | null {
-  const lines = EVE_LINES.hints;
+  const lines = t().eve.hints;
   const entities = [...world.entities.values()];
 
   const damaged = entities.find(
@@ -182,7 +184,7 @@ function meanwhile(world: World): Advice | null {
   );
 
   if (damaged) {
-    const text = lines.meanwhileRepair.replace('{building}', BUILDINGS[damaged.proto].label.toLowerCase());
+    const text = lines.meanwhileRepair.replace('{building}', t().hud.hint.inSentence(t().buildings[damaged.proto].label));
 
     return { text, wants: world.repairStock(damaged) > 0 ? null : REPAIR.item };
   }
@@ -201,7 +203,7 @@ function meanwhile(world: World): Advice | null {
     : null;
 
   if (town && lowest && town.available(lowest) < TOWN_PLENTY) {
-    return { text: lines.meanwhileStock.replace('{item}', ITEMS[lowest].label.toLowerCase()), wants: lowest };
+    return { text: lines.meanwhileStock.replace('{item}', t().hud.hint.inSentence(t().items[lowest])), wants: lowest };
   }
 
   const lab = entities.find((entity) => entity.kind === 'lab');

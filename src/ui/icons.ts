@@ -15,9 +15,10 @@ import { ROAD_THUMB } from '../art/road.ts';
 import { UI_ICONS, type UiIcon } from '../art/ui.ts';
 import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
 import { ITEM_ICONS } from '../data/icons.ts';
-import { ITEMS, type ItemId } from '../data/items.ts';
+import type { ItemId } from '../data/items.ts';
 import { PERKS, type PerkId } from '../data/perks.ts';
 import { SPRITES } from '../data/sprites.ts';
+import { t } from '../i18n/locale.ts';
 
 const cache = new Map<string, string>();
 
@@ -51,8 +52,8 @@ export function dayDialUrl(svg: string): string {
 export function itemIcon(item: ItemId, size = 20): HTMLImageElement {
   const element = image(itemIconUrl(item), 'icon', size, size);
 
-  element.alt = ITEMS[item].label;
-  element.title = ITEMS[item].label;
+  element.alt = t().items[item];
+  element.title = t().items[item];
   return element;
 }
 
@@ -60,7 +61,7 @@ export function itemIcon(item: ItemId, size = 20): HTMLImageElement {
 export function buildingIcon(building: BuildingId, size = 40): HTMLImageElement {
   const element = image(buildingIconUrl(building), 'icon icon-building', size, size);
 
-  element.alt = BUILDINGS[building].label;
+  element.alt = t().buildings[building].label;
   return element;
 }
 
@@ -68,7 +69,7 @@ export function buildingIcon(building: BuildingId, size = 40): HTMLImageElement 
 export function roadIcon(size = 40): HTMLImageElement {
   const element = image(url('road', ROAD_THUMB), 'icon icon-building', size, size);
 
-  element.alt = 'Route';
+  element.alt = t().screens.road;
   return element;
 }
 

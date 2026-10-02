@@ -8,6 +8,7 @@
  * les grise en butée (et le bouton du milieu quand on est déjà chez soi).
  */
 
+import { onLocale, t } from '../i18n/locale.ts';
 import { uiIcon } from './icons.ts';
 
 export interface ZoomActions {
@@ -32,10 +33,18 @@ export class ZoomControls {
   public constructor(actions: ZoomActions) {
     this.root = document.createElement('div');
     this.root.className = 'hud-zoom';
-    this.zoomIn = button('zoomIn', 'Zoomer', actions.zoomIn);
-    this.recenter = button('recenter', 'Revenir sur Adam', actions.recenter);
-    this.zoomOut = button('zoomOut', 'Dézoomer', actions.zoomOut);
+    this.zoomIn = button('zoomIn', actions.zoomIn);
+    this.recenter = button('recenter', actions.recenter);
+    this.zoomOut = button('zoomOut', actions.zoomOut);
     this.root.append(this.zoomIn, this.recenter, this.zoomOut);
+    onLocale(() => {
+      for (const node of [this.zoomIn, this.recenter, this.zoomOut]) {
+        const label = t().screens.zoom[node.dataset['icon'] as 'zoomIn' | 'zoomOut' | 'recenter'];
+
+        node.setAttribute('aria-label', label);
+        node.title = label;
+      }
+    });
   }
 
   public update({ canZoomIn, canZoomOut, atHome }: ZoomLimits): void {
@@ -45,13 +54,12 @@ export class ZoomControls {
   }
 }
 
-function button(icon: 'zoomIn' | 'zoomOut' | 'recenter', label: string, onClick: () => void): HTMLButtonElement {
+function button(icon: 'zoomIn' | 'zoomOut' | 'recenter', onClick: () => void): HTMLButtonElement {
   const node = document.createElement('button');
 
   node.type = 'button';
   node.className = 'hud-button hud-zoom-button';
-  node.setAttribute('aria-label', label);
-  node.title = label;
+  node.dataset['icon'] = icon;
   node.append(uiIcon(icon, 20));
   node.addEventListener('click', onClick);
   return node;

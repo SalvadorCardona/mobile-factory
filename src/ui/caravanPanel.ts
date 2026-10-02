@@ -14,17 +14,12 @@
  */
 
 import { RARE_OFFERS } from '../data/caravan.ts';
-import { ITEMS, type ItemId } from '../data/items.ts';
+import type { ItemId } from '../data/items.ts';
+import { locale, onLocale, t } from '../i18n/locale.ts';
 import { tradeCost, tradeItems } from '../sim/caravan.ts';
 import type { Caravan, MobileId, TradeOffer } from '../sim/types.ts';
 import { TICKS_PER_SECOND, type World } from '../sim/world.ts';
 import { itemAmount, uiIcon } from './icons.ts';
-
-/** Le titre d'un échange, par sorte. */
-const TRADE_TITLES: Record<Exclude<TradeOffer['kind'], 'rare'>, string> = {
-  surplus: 'Surplus contre manque',
-  loot: 'Butin contre métal',
-};
 
 export class CaravanPanel {
   public readonly root: HTMLElement;
@@ -44,17 +39,16 @@ export class CaravanPanel {
 
     this.root = element('section', 'panel building-panel caravan-panel');
     this.root.hidden = true;
-    this.root.setAttribute('aria-label', 'Troc');
 
     const header = element('header', '');
     const title = element('h2', '');
+    const titleText = document.createTextNode('');
 
-    title.append(uiIcon('bag', 28), 'Troc');
+    title.append(uiIcon('bag', 28), titleText);
 
     const close = element('button', 'building-panel-close');
 
     close.type = 'button';
-    close.setAttribute('aria-label', 'Fermer');
     close.append(uiIcon('close'));
     close.addEventListener('click', () => this.close());
     header.append(title, close);
@@ -63,6 +57,16 @@ export class CaravanPanel {
     this.where = element('p', 'building-panel-description');
     this.list = element('div', 'caravan-list');
     this.root.append(header, this.timer, this.where, this.list);
+
+    // Les libellés fixes suivent la langue ; la liste se réécrit au prochain `update()`, dont la clé porte la langue.
+    onLocale(() => {
+      const text = t();
+
+      this.root.setAttribute('aria-label', text.trade.title);
+      titleText.data = text.trade.title;
+      close.setAttribute('aria-label', text.common.close);
+      this.update();
+    });
   }
 
   public get open(): boolean {
@@ -97,23 +101,21 @@ export class CaravanPanel {
     const { world } = this;
     const near = world.caravanInReach(caravan);
     const fromTown = world.caravanInTownRange(caravan) && world.townStock() !== null;
+    const text = t().trade;
     const seconds = caravan.state === 'parked' ? Math.max(0, Math.ceil((caravan.leaveTick - world.tickCount) / TICKS_PER_SECOND)) : null;
 
     setText(
       this.timer,
-      seconds === null ? 'Le marchand s’installe…' : `Repart dans ${Math.floor(seconds / 60)} min ${String(seconds % 60).padStart(2, '0')} s`,
+      seconds === null ? text.settling : text.leavesIn(seconds),
     );
     setText(
       this.where,
-      !near
-        ? 'Approchez-vous de la charrette pour échanger.'
-        : fromTown
-          ? 'Payé avec le sac, puis la ville.'
-          : 'Payé avec le sac : la ville est trop loin.',
+      !near ? text.approach : fromTown ? text.paidBoth : text.paidBag,
     );
 
     const items = [...new Set(caravan.offers.flatMap((trade) => tradeCost(trade).map(([item]) => item)))];
     const key = [
+      locale(),
       caravan.id,
       near,
       fromTown,
@@ -137,9 +139,10 @@ export class CaravanPanel {
     const name = element('h4', 'trade-name');
     const deal = element('div', 'trade-deal');
     const state = element('p', 'trade-status');
+    const text = t().trade;
 
     row.dataset['status'] = trade.done ? 'done' : missing.length > 0 ? 'short' : 'ready';
-    name.textContent = trade.rare ? `Rare : ${RARE_OFFERS[trade.rare].label.toLowerCase()}` : TRADE_TITLES[trade.kind as keyof typeof TRADE_TITLES];
+    name.textContent = trade.rare ? text.rare(t().rareOffers[trade.rare]) : text.kinds[trade.kind as keyof typeof text.kinds];
     head.append(name);
 
     if (!trade.done) {
@@ -147,7 +150,7 @@ export class CaravanPanel {
 
       button.type = 'button';
       button.dataset['tone'] = 'deposit';
-      button.textContent = 'Échanger';
+      button.textContent = text.exchange;
       button.disabled = !near || missing.length > 0 || caravan.state !== 'parked';
       button.addEventListener('click', () => world.push({ type: 'trade', caravan: caravan.id, offer: index }));
       head.append(button);
@@ -159,21 +162,21 @@ export class CaravanPanel {
     if (trade.bag > 0) {
       const bag = element('span', 'item-amount');
 
-      bag.append(uiIcon('bag', 20), `+${trade.bag} places`);
+      bag.append(uiIcon('bag', 20), text.bagSlots(trade.bag));
       gains.push(bag);
     }
     deal.append(...cost, element('span', 'trade-arrow', '→'), ...gains);
 
     if (trade.done) {
-      state.textContent = 'Échangé';
+      state.textContent = text.done;
     } else if (missing.length > 0) {
-      state.textContent = `Il manque ${missing.map(([item, amount]) => `${amount} ${ITEMS[item].label.toLowerCase()}`).join(', ')}`;
+      state.textContent = text.missing(missing.map(([item, amount]) => text.missingItem(amount, t().items[item])).join(', '));
     } else if (trade.rare) {
       const left = RARE_OFFERS[trade.rare].limit - (world.rareTrades[trade.rare] ?? 0);
 
-      state.textContent = `Encore ${left} fois sur la partie`;
+      state.textContent = text.rareLeft(left);
     } else {
-      state.textContent = 'Une fois par caravane';
+      state.textContent = text.oncePerCaravan;
     }
 
     row.append(head, deal, state);

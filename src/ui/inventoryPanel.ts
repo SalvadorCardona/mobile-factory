@@ -23,7 +23,8 @@
  * `dropItem`) que le tick consomme.
  */
 
-import { ITEMS, type ItemId } from '../data/items.ts';
+import type { ItemId } from '../data/items.ts';
+import { locale, onLocale, t } from '../i18n/locale.ts';
 import { formatRate, type FlowAlert } from '../sim/flows.ts';
 import type { World } from '../sim/world.ts';
 import { itemAmount, itemIcon, uiIcon } from './icons.ts';
@@ -53,17 +54,16 @@ export class InventoryPanel {
 
     this.root = element('section', 'panel building-panel inventory-panel');
     this.root.hidden = true;
-    this.root.setAttribute('aria-label', 'Sac');
 
     const header = element('header', '');
     const title = element('h2', '');
+    const titleText = document.createTextNode('');
 
-    title.append(uiIcon('bag', 28), 'Sac');
+    title.append(uiIcon('bag', 28), titleText);
 
     const close = element('button', 'building-panel-close');
 
     close.type = 'button';
-    close.setAttribute('aria-label', 'Fermer');
     close.append(uiIcon('close'));
     close.addEventListener('click', () => this.close());
     header.append(title, close);
@@ -81,7 +81,9 @@ export class InventoryPanel {
 
     const townTitle = element('div', 'inventory-town-title');
 
-    townTitle.append(uiIcon('town', 20), 'Ville');
+    const townText = document.createTextNode('');
+
+    townTitle.append(uiIcon('town', 20), townText);
     this.townAlerts = element('ul', 'inventory-alerts');
     this.townItems = element('div', 'building-panel-items');
     this.town.append(townTitle, this.townAlerts, this.townItems);
@@ -94,6 +96,17 @@ export class InventoryPanel {
     actions.append(this.allButton);
 
     this.root.append(header, bar, this.capacity, this.where, this.list, actions, this.town);
+
+    // Les libellés fixes suivent la langue ; le reste se réécrit au prochain `update()`, dont la clé porte la langue.
+    onLocale(() => {
+      const text = t();
+
+      this.root.setAttribute('aria-label', text.inventory.title);
+      titleText.data = text.inventory.title;
+      close.setAttribute('aria-label', text.common.close);
+      townText.data = text.inventory.town;
+      this.update();
+    });
   }
 
   public get open(): boolean {
@@ -130,12 +143,13 @@ export class InventoryPanel {
     const rates = town ? town.entries().map(([item]) => Math.round(world.flows.netRate(item))) : [];
     const alerts = town ? world.flows.alerts(world) : [];
     const key = [
+      locale(),
       near,
       inventory.capacity,
       entries.map(([item, amount]) => `${item}:${amount}`).join(','),
       town ? town.entries().map(([item, amount]) => `${item}:${amount}`).join(',') : 'none',
       rates.join(','),
-      alerts.map((alert) => `${alert.text}@${alert.target}`).join(','),
+      alerts.map((alert) => `${alertText(alert)}@${alert.target}`).join(','),
     ].join('|');
 
     if (key === this.last) return;
@@ -143,21 +157,18 @@ export class InventoryPanel {
 
     const total = inventory.total();
     const free = inventory.freeSpace();
+    const text = t().inventory;
 
     this.barFill.style.width = `${Math.round((total / inventory.capacity) * 100)}%`;
-    this.capacity.textContent = `${total}/${inventory.capacity} — ${free} place${free > 1 ? 's' : ''} libre${free > 1 ? 's' : ''}`;
+    this.capacity.textContent = text.capacity(total, inventory.capacity, free);
     this.capacity.dataset['full'] = String(free <= 0);
-    this.where.textContent = near
-      ? 'Près de la mairie : ce que vous déposez rejoint le stock de la ville.'
-      : town
-        ? 'Loin de la mairie : ce que vous jetez reste au sol, et se ramasse en repassant dessus.'
-        : 'Pas encore de ville : ce que vous jetez reste au sol, et se ramasse en repassant dessus.';
+    this.where.textContent = near ? text.whereNear : town ? text.whereFar : text.whereNoTown;
 
     this.list.replaceChildren(
-      ...(entries.length === 0 ? [element('li', 'inventory-empty', 'Le sac est vide.')] : entries.map(([item, amount]) => this.row(item, amount, near))),
+      ...(entries.length === 0 ? [element('li', 'inventory-empty', text.empty)] : entries.map(([item, amount]) => this.row(item, amount, near))),
     );
 
-    this.allButton.textContent = near ? 'Déposer en ville' : 'Tout jeter';
+    this.allButton.textContent = near ? text.depositAll : text.dropAll;
     this.allButton.dataset['tone'] = near ? 'deposit' : 'drop';
     this.allButton.disabled = entries.length === 0;
 
@@ -167,7 +178,7 @@ export class InventoryPanel {
 
       this.townItems.replaceChildren(
         ...(stock.length === 0
-          ? [element('span', 'inventory-empty', 'Rien en stock pour l’instant.')]
+          ? [element('span', 'inventory-empty', text.townEmpty)]
           : stock.map(([item, amount], index) => this.stockEntry(item, amount, rates[index]!))),
       );
       this.townItems.hidden = false;
@@ -179,13 +190,15 @@ export class InventoryPanel {
   /** Une ligne : l'objet, sa quantité, et le bouton qui le vide. */
   private row(item: ItemId, amount: number, near: boolean): HTMLElement {
     const row = element('li', 'inventory-row');
-    const name = element('span', 'inventory-name', ITEMS[item].label);
+    const text = t().inventory;
+    const label = t().items[item];
+    const name = element('span', 'inventory-name', label);
     const count = element('span', 'inventory-count', String(amount));
-    const button = element('button', 'inventory-action', near ? 'Déposer' : 'Jeter');
+    const button = element('button', 'inventory-action', near ? text.deposit : text.drop);
 
     button.type = 'button';
     button.dataset['tone'] = near ? 'deposit' : 'drop';
-    button.setAttribute('aria-label', `${near ? 'Déposer en ville' : 'Jeter'} : ${ITEMS[item].label}`);
+    button.setAttribute('aria-label', near ? text.depositItem(label) : text.dropItem(label));
     button.addEventListener('click', () =>
       this.world.push(this.world.nearTown() ? { type: 'depositToTown', item } : { type: 'dropItem', item }),
     );
@@ -199,7 +212,7 @@ export class InventoryPanel {
 
     entry.append(itemAmount(item, amount));
     if (rate !== 0) {
-      const trend = element('span', 'inventory-rate', `${formatRate(rate)}/min`);
+      const trend = element('span', 'inventory-rate', t().inventory.perMinute(formatRate(rate)));
 
       trend.dataset['trend'] = rate > 0 ? 'up' : 'down';
       entry.append(trend);
@@ -214,7 +227,7 @@ export class InventoryPanel {
 
     button.type = 'button';
     button.dataset['kind'] = alert.kind;
-    button.append(itemIcon(alert.item, 22), element('span', '', alert.text));
+    button.append(itemIcon(alert.item, 22), element('span', '', alertText(alert)));
     button.addEventListener('click', () => {
       this.close();
       this.onAlert(alert);
@@ -231,6 +244,15 @@ export class InventoryPanel {
   public destroy(): void {
     this.root.remove();
   }
+}
+
+/** La phrase d'une alerte de la ville, dans la langue du moment. */
+function alertText(alert: FlowAlert): string {
+  const text = t().inventory;
+  const item = t().items[alert.item];
+
+  if (alert.kind === 'shortage') return text.shortage[alert.waiting](item, alert.stock);
+  return alert.rate > 0 ? text.surplusRate(item, formatRate(alert.rate)) : text.surplusStock(item, alert.stock);
 }
 
 function element<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, content?: string): HTMLElementTagNameMap[K] {

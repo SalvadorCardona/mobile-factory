@@ -50,9 +50,9 @@
  * seule si l'entité disparaît — rasée par un mutant, par exemple.
  */
 
-import { BUILDINGS, REPAIR, buildingLevel, maxLevel, nextUpgrade, type BuildingLevel } from '../data/buildings.ts';
+import { BUILDINGS, REPAIR, buildingLevel, maxLevel, nextUpgrade, type BuildingId, type BuildingLevel } from '../data/buildings.ts';
 import { CLINIC } from '../data/clinic.ts';
-import { ITEMS, type ItemId } from '../data/items.ts';
+import type { ItemId } from '../data/items.ts';
 import { RECIPES, type RecipeProto } from '../data/recipes.ts';
 import { WEAPONS } from '../data/weapons.ts';
 import { BUILDERS, LOGISTICIANS, LUMBERJACKS } from '../data/workers.ts';
@@ -63,12 +63,10 @@ import type { SiteLine } from '../sim/siteLedger.ts';
 import type { Building, Entity, EntityId, Forge, Nursery } from '../sim/types.ts';
 import { TICKS_PER_SECOND, repairCost, siteMissing, type SiteCoverage, type World } from '../sim/world.ts';
 import type { UiIcon } from '../art/ui.ts';
+import { onLocale, t } from '../i18n/locale.ts';
 import { buildingIcon, buildingIconUrl, itemAmount, uiIcon } from './icons.ts';
 import { ResearchPanel } from './researchPanel.ts';
 import { TransferPanel } from './transferPanel.ts';
-
-/** L'état d'une foreuse ou d'une ferme qui attend qu'on la vide. */
-const BLOCKED = 'Bloquée : coffre plein — heurtez-la ou appuyez sur Tout prendre.';
 
 /** Combien de temps la bulle d'une puce reste affichée. */
 const TIP_MS = 2200;
@@ -79,9 +77,6 @@ interface Stat {
   value: string;
   label: string;
 }
-
-/** L'état d'un producteur mis en pause. */
-const PAUSED = 'En pause : plus rien ne sort ni n’entre en production — appuyez sur Reprendre.';
 
 export class BuildingPanel {
   public readonly root: HTMLElement;
@@ -163,7 +158,6 @@ export class BuildingPanel {
     this.infoButton = document.createElement('button');
     this.infoButton.type = 'button';
     this.infoButton.className = 'building-panel-info';
-    this.infoButton.setAttribute('aria-label', 'À propos');
     this.infoButton.setAttribute('aria-controls', this.description.id);
     this.infoButton.setAttribute('aria-expanded', 'false');
     this.infoButton.append(uiIcon('info', 26));
@@ -173,7 +167,6 @@ export class BuildingPanel {
 
     close.type = 'button';
     close.className = 'building-panel-close';
-    close.setAttribute('aria-label', 'Fermer');
     close.append(uiIcon('close'));
     close.addEventListener('click', () => this.close());
 
@@ -222,7 +215,6 @@ export class BuildingPanel {
 
     this.transferButton = document.createElement('button');
     this.transferButton.type = 'button';
-    this.transferButton.textContent = 'Transférer le sac';
     this.transferButton.addEventListener('click', () => {
       if (this.entityId === null) return;
 
@@ -279,8 +271,8 @@ export class BuildingPanel {
     const crewRow = document.createElement('div');
 
     crewRow.className = 'building-panel-crew-row';
-    this.crewLess = crewButton('−', 'Un ouvrier de moins', () => this.stepStaff(-1));
-    this.crewMore = crewButton('+', 'Un ouvrier de plus', () => this.stepStaff(1));
+    this.crewLess = crewButton('−', () => this.stepStaff(-1));
+    this.crewMore = crewButton('+', () => this.stepStaff(1));
     this.crewSlots = document.createElement('div');
     this.crewSlots.className = 'building-panel-crew-slots';
     this.crewCount = document.createElement('span');
@@ -330,6 +322,23 @@ export class BuildingPanel {
       this.research.root,
       this.tip,
     );
+
+    // Les libellés fixes suivent la langue ; les caches tombent, la fenêtre ouverte se réécrit.
+    onLocale(() => {
+      const text = t().panel;
+
+      this.infoButton.setAttribute('aria-label', text.about);
+      close.setAttribute('aria-label', t().common.close);
+      this.crewLess.setAttribute('aria-label', text.crew.less);
+      this.crewMore.setAttribute('aria-label', text.crew.more);
+      this.transferButton.textContent = text.transferBag;
+      this.lastText = '';
+      this.lastStats = null;
+      this.lastItems = '';
+      this.lastUpgrade = '';
+      this.lastCrew = '';
+      this.update();
+    });
   }
 
   public get open(): boolean {
@@ -381,6 +390,9 @@ export class BuildingPanel {
 
   private refresh(entity: Entity): void {
     const proto = BUILDINGS[entity.proto];
+    const text = t().panel;
+    const paused = text.paused;
+    const blocked = text.blocked;
     const lines: string[] = [];
     const stats: Stat[] = [];
     let ratio: number;
@@ -391,7 +403,7 @@ export class BuildingPanel {
     const inReach = this.world.inReach(entity);
 
     // Le chantier devient le bâtiment sous le même id, le bâtiment change de niveau : le texte suit.
-    this.title.textContent = entity.kind === 'site' ? proto.label : buildingLevel(entity.proto, entity.level).label;
+    this.title.textContent = entity.kind === 'site' ? t().buildings[entity.proto].label : levelText(entity.proto, entity.level).label;
     this.description.textContent = panelDescription(entity);
 
     const thumb = buildingIconUrl(entity.proto);
@@ -427,22 +439,20 @@ export class BuildingPanel {
         ratio = work === 0 ? 1 : done / work;
         barClass = 'build';
         lines.push(
-          builders === 0
-            ? 'Tout est livré : les bâtisseurs arrivent pour le bâtir.'
-            : `${builders} bâtisseur${builders > 1 ? 's' : ''} au marteau — ${Math.floor(ratio * 100)} %`,
+          builders === 0 ? text.site.allDelivered : text.site.building(builders, Math.floor(ratio * 100)),
         );
       } else {
         lines.push(
           this.world.builderYard(entity)
-            ? 'Les bâtisseurs du poste de construction le livrent depuis la mairie, puis le bâtiront.'
+            ? text.site.byYard
             : !inReach
-              ? 'Chantier en cours — rapprochez-vous pour livrer.'
+              ? text.site.comeCloser
               : !fromTown
-                ? 'Chantier en cours — transférez le sac, ou heurtez-le.'
+                ? text.site.transferOrBump
                 : siteCoverageText(this.world.siteCoverage(entity)),
         );
       }
-      if (proto.workers > 0) stats.push({ icon: 'worker', value: String(proto.workers), label: `Ouvriers qu’il emploiera : ${proto.workers}` });
+      if (proto.workers > 0) stats.push({ icon: 'worker', value: String(proto.workers), label: text.site.workers(proto.workers) });
 
       // Objet par objet : livré / requis, puis ce qui est en route et ce que la ville en a.
       const ledger = this.world.siteLedger(entity);
@@ -450,11 +460,11 @@ export class BuildingPanel {
       this.setItems(ledger.map(siteNeedRow), `site:${entity.id}:${JSON.stringify(ledger)}`);
       this.items.dataset['layout'] = 'ledger';
       this.transferButton.hidden = building;
-      this.transferButton.textContent = this.world.townStock() ? 'Transférer' : 'Transférer le sac';
+      this.transferButton.textContent = this.world.townStock() ? text.transferButton : text.transferBag;
       this.transferButton.disabled = !inReach || !canGive;
       // Le chantier de la mairie ne s'annule pas.
       this.cancelButton.hidden = entity.id === this.world.townHallId;
-      this.cancelButton.textContent = this.cancelArmed ? 'Vraiment annuler ?' : 'Annuler le chantier';
+      this.cancelButton.textContent = this.cancelArmed ? text.cancelConfirm : text.cancelSite;
       this.exchange.show(null);
       this.repairButton.hidden = true;
       this.pauseButton.hidden = true;
@@ -467,7 +477,7 @@ export class BuildingPanel {
       ratio = entity.hp / level.hp;
       barClass = 'hp';
       meterValue = `${entity.hp}/${level.hp}`;
-      meterLabel = `Points de vie : ${meterValue}`;
+      meterLabel = text.hp(meterValue);
 
       const pausable = canPause(entity.proto);
       const stopped = this.world.stopped(entity);
@@ -479,28 +489,24 @@ export class BuildingPanel {
       // Abîmé : le bouton dit ce que coûte la remise à neuf, la ligne dit comment s'en passer.
       const cost = repairCost(entity);
       const stock = this.world.repairStock(entity);
-      const material = ITEMS[REPAIR.item].label.toLowerCase();
+      const material = t().items[REPAIR.item];
 
       if (cost > 0) {
-        lines.push(
-          stock === 0
-            ? `Abîmé — rapportez du ${material} pour le réparer (1 = ${REPAIR.hp} PV).`
-            : `Abîmé — réparez-le, ou heurtez-le avec du ${material} dans le sac (1 = ${REPAIR.hp} PV).`,
-        );
+        lines.push(stock === 0 ? text.repair.noStock(material, REPAIR.hp) : text.repair.damaged(material, REPAIR.hp));
       }
       this.repairButton.hidden = cost === 0;
       this.repairButton.disabled = !inReach || stock === 0;
-      const repairLabel = `Réparer (${stock > 0 ? Math.min(cost, stock) : cost} ${material})`;
+      const repairLabel = text.repair.button(stock > 0 ? Math.min(cost, stock) : cost, material);
 
       if (this.repairButton.textContent !== repairLabel) this.repairButton.textContent = repairLabel;
 
       this.pauseButton.hidden = !pausable;
-      this.pauseButton.textContent = entity.paused ? 'Reprendre' : 'Pause';
+      this.pauseButton.textContent = entity.paused ? text.resume : text.pause;
       this.pauseButton.dataset['tone'] = entity.paused ? 'resume' : 'pause';
       this.refreshCrew(entity);
       this.cancelButton.hidden = true;
       this.transferButton.hidden = !consumer && !floor;
-      this.transferButton.textContent = this.world.inTownRange(entity) ? 'Transférer' : 'Transférer le sac';
+      this.transferButton.textContent = this.world.inTownRange(entity) ? text.transferButton : text.transferBag;
       this.transferButton.disabled = !inReach || !this.world.canSupply(entity);
 
       // Un coffre où échanger : la mairie, un producteur, une forge, une nurserie.
@@ -511,7 +517,7 @@ export class BuildingPanel {
           id: entity.id,
           store: entity.store,
           rules,
-          title: entity.kind === 'townHall' ? 'Coffre de la ville' : 'Coffre',
+          title: entity.kind === 'townHall' ? text.chest.town : text.chest.plain,
           icon: entity.kind === 'townHall' ? 'town' : 'chest',
           reachable: inReach,
         },
@@ -522,36 +528,32 @@ export class BuildingPanel {
           const { adults, children, workers } = this.world.population();
 
           stats.push(
-            { icon: 'people', value: String(adults), label: `Adultes : ${adults}` },
-            { icon: 'child', value: String(children), label: `Enfants : ${children}` },
-            { icon: 'worker', value: String(workers), label: `Ouvriers : ${workers}` },
-            { icon: 'moon', value: String(this.world.night), label: `Nuits affrontées : ${this.world.night}` },
-            {
-              icon: 'range',
-              value: String(proto.logisticRadius),
-              label: `Rayon d’approvisionnement : les chantiers à ${proto.logisticRadius} cases puisent dans son coffre`,
-            },
+            { icon: 'people', value: String(adults), label: text.townHall.adults(adults) },
+            { icon: 'child', value: String(children), label: text.townHall.children(children) },
+            { icon: 'worker', value: String(workers), label: text.townHall.workers(workers) },
+            { icon: 'moon', value: String(this.world.night), label: text.townHall.nights(this.world.night) },
+            { icon: 'range', value: String(proto.logisticRadius), label: text.townHall.radius(proto.logisticRadius) },
           );
           break;
         }
 
         case 'drill':
-          lines.push(entity.output ? `Extrait : ${ITEMS[entity.output].label}` : 'Posée à sec : aucun gisement dessous.');
-          lines.push(entity.paused ? PAUSED : entity.blocked && entity.output ? BLOCKED : entity.output ? 'En marche.' : '');
+          lines.push(entity.output ? text.drill.extracts(t().items[entity.output]) : text.drill.dry);
+          lines.push(entity.paused ? paused : entity.blocked && entity.output ? blocked : entity.output ? text.drill.running : '');
           break;
 
         case 'nursery': {
           const remaining = Math.max(0, entity.nextBirthTick - this.world.tickCount);
 
-          lines.push(`Chaque naissance mange ${recipeLine(RECIPES.raiseChild.inputs)}.`);
+          lines.push(text.nursery.perBirth(recipeLine(RECIPES.raiseChild.inputs)));
           lines.push(
             entity.paused
-              ? PAUSED
+              ? paused
               : entity.hungry
-                ? `En attente d’un repas. ${starvedLine(this.world, entity)}`
-                : `Prochain enfant dans ${clock(remaining)}`,
+                ? text.nursery.hungry(starvedLine(this.world, entity))
+                : text.nursery.next(clock(remaining)),
           );
-          stats.push({ icon: 'child', value: String(entity.born), label: `Enfants nés ici : ${entity.born}` });
+          stats.push({ icon: 'child', value: String(entity.born), label: text.nursery.born(entity.born) });
           break;
         }
 
@@ -562,14 +564,14 @@ export class BuildingPanel {
           lines.push(`${recipeLine(recipe.inputs)} → ${recipeLine(recipe.outputs)}`);
           lines.push(
             entity.paused
-              ? PAUSED
+              ? paused
               : stopped
-                ? 'À l’arrêt : personne au four — ajoutez un ouvrier.'
+                ? text.forge.noOne
                 : entity.blocked
                 ? this.world.supplyStatus(entity)
-                  ? `À l’arrêt. ${starvedLine(this.world, entity)}`
-                  : BLOCKED
-                : 'Le four chauffe.',
+                  ? text.forge.starved(starvedLine(this.world, entity))
+                  : blocked
+                : text.forge.heating,
           );
           break;
         }
@@ -577,37 +579,39 @@ export class BuildingPanel {
         case 'tower': {
           const weapon = level.weapon ? WEAPONS[level.weapon] : null;
 
-          if (weapon) stats.push({ icon: 'range', value: String(weapon.range), label: `${weapon.label} — portée : ${weapon.range} cases` });
-          lines.push(entity.armed ? 'En alerte : des mutants approchent.' : 'En veille.');
+          if (level.weapon && weapon) {
+            stats.push({ icon: 'range', value: String(weapon.range), label: text.tower.range(t().weapons[level.weapon], weapon.range) });
+          }
+          lines.push(entity.armed ? text.tower.alert : text.tower.idle);
           break;
         }
 
         case 'farm':
           lines.push(
             entity.paused
-              ? PAUSED
+              ? paused
               : stopped
-                ? 'À l’arrêt : personne aux champs — ajoutez un ouvrier.'
+                ? text.farm.noOne
                 : entity.blocked
-                  ? BLOCKED
-                  : 'Les sillons poussent.',
+                  ? blocked
+                  : text.farm.growing,
           );
           break;
 
         case 'quarry':
           lines.push(
             entity.paused
-              ? PAUSED
+              ? paused
               : stopped
-                ? 'À l’arrêt : personne à la taille — ajoutez un ouvrier.'
+                ? text.quarry.noOne
                 : entity.blocked
-                  ? BLOCKED
-                  : 'Les pioches entament la ruine.',
+                  ? blocked
+                  : text.quarry.working,
           );
           break;
 
         case 'house':
-          lines.push('Les ouvriers dorment ici entre deux journées.');
+          lines.push(text.house.sleeping);
           break;
 
         case 'lab':
@@ -618,18 +622,18 @@ export class BuildingPanel {
           stats.push({
             icon: 'range',
             value: String(LUMBERJACKS.radius),
-            label: `Rayon : les bûcherons coupent les arbres à ${LUMBERJACKS.radius} cases`,
+            label: text.lumberCamp.radius(LUMBERJACKS.radius),
           });
           lines.push(
             entity.paused
-              ? 'En pause : les bûcherons rapportent leur bois, puis flânent.'
+              ? text.lumberCamp.paused
               : stopped
-                ? 'À l’arrêt : aucun bûcheron — ajoutez un ouvrier.'
+                ? text.lumberCamp.noOne
                 : this.world.treesLeft(entity) === 0
-                  ? 'Plus d’arbres à portée.'
+                  ? text.lumberCamp.noTrees
                   : entity.store.total() > entity.store.capacity - LUMBERJACKS.carry
-                    ? 'Coffre plein : les bûcherons attendent qu’on le vide.'
-                    : 'Les haches résonnent.',
+                    ? text.lumberCamp.full
+                    : text.lumberCamp.working,
           );
           break;
 
@@ -639,13 +643,9 @@ export class BuildingPanel {
           stats.push({
             icon: 'range',
             value: String(LOGISTICIANS.radius),
-            label: `Rayon : les logisticiens vident les producteurs à ${LOGISTICIANS.radius} cases`,
+            label: text.depot.radius(LOGISTICIANS.radius),
           });
-          lines.push(
-            served === 0
-              ? 'Aucun producteur à portée : ils flânent.'
-              : `${served} producteur${served > 1 ? 's' : ''} à portée : leur production part à la mairie.`,
-          );
+          lines.push(served === 0 ? text.depot.none : text.depot.served(served));
           break;
         }
 
@@ -655,16 +655,16 @@ export class BuildingPanel {
           stats.push({
             icon: 'range',
             value: String(BUILDERS.radius),
-            label: `Rayon : les bâtisseurs livrent et bâtissent les chantiers à ${BUILDERS.radius} cases`,
+            label: text.yard.radius(BUILDERS.radius),
           });
           lines.push(
             entity.paused
-              ? 'En pause : ses chantiers reviennent aux porteurs et à vous.'
+              ? text.yard.paused
               : stopped
-                ? 'À l’arrêt : aucun bâtisseur — ajoutez un ouvrier.'
+                ? text.yard.noOne
                 : served === 0
-                  ? 'Aucun chantier à portée : ils flânent.'
-                  : `${served} chantier${served > 1 ? 's' : ''} à portée : les bâtisseurs s’en chargent.`,
+                  ? text.yard.none
+                  : text.yard.served(served),
           );
           break;
         }
@@ -674,26 +674,18 @@ export class BuildingPanel {
           const lure = this.world.lureNight;
           const clock = this.world.clock();
 
-          lines.push(`Étage ${entity.level}/${max}`);
-          lines.push(
-            floor
-              ? 'L’étage suivant se livre comme un chantier : transférez, heurtez-la, ou laissez faire les porteurs.'
-              : 'Le Signal est lancé : des survivants arrivent à chaque aube.',
-          );
-          if (lure > this.world.night) lines.push(`La nuit ${lure}, toutes les vagues marcheront sur elle.`);
-          else if (lure === this.world.night && clock?.phase === 'night') lines.push('Cette nuit, toutes les vagues marchent sur elle.');
+          lines.push(text.antenna.floor(entity.level, max));
+          lines.push(floor ? text.antenna.nextFloor : text.antenna.signalSent);
+          if (lure > this.world.night) lines.push(text.antenna.lureNight(lure));
+          else if (lure === this.world.night && clock?.phase === 'night') lines.push(text.antenna.lureTonight);
           break;
         }
 
         case 'clinic': {
           const used = this.world.clinicBedsUsed(entity.id);
 
-          stats.push({ icon: 'people', value: `${used}/${CLINIC.beds}`, label: `Places occupées : ${used}/${CLINIC.beds}` });
-          lines.push(
-            used >= CLINIC.beds
-              ? 'Complète : les mutants vaincus ne tombent plus assommés pour elle.'
-              : 'Un mutant vaincu peut tomber assommé — touchez-le, il vous suivra jusqu’ici.',
-          );
+          stats.push({ icon: 'people', value: `${used}/${CLINIC.beds}`, label: text.clinic.beds(used, CLINIC.beds) });
+          lines.push(used >= CLINIC.beds ? text.clinic.full : text.clinic.open);
           break;
         }
       }
@@ -714,12 +706,12 @@ export class BuildingPanel {
       } else if (proto.storage > 0 && !lab) {
         const capacity = Number.isFinite(proto.storage) ? `/${proto.storage}` : '';
         const entries = entity.store.entries();
-        const label = `Coffre ${entity.store.total()}${capacity}`;
+        const label = text.chest.label(`${entity.store.total()}${capacity}`);
         // Sans plafond, un coffre ne dit son compte que vide.
-        const count = entries.length === 0 ? 'vide' : capacity ? `${entity.store.total()}${capacity}` : '';
+        const count = entries.length === 0 ? text.chest.empty : capacity ? `${entity.store.total()}${capacity}` : '';
 
         this.stock.hidden = false;
-        this.stock.setAttribute('aria-label', `${label}${entries.length ? '' : ' : vide'}`);
+        this.stock.setAttribute('aria-label', entries.length ? label : text.chest.emptyLabel(label));
         this.stock.title = label;
         if (this.stockCount.textContent !== count) this.stockCount.textContent = count;
         this.setItems(
@@ -738,11 +730,11 @@ export class BuildingPanel {
     // Plus aucun bouton à montrer : la rangée disparaît.
     this.actions.hidden = [...this.actions.children].every((button) => (button as HTMLElement).hidden);
 
-    const text = lines.filter(Boolean).join('\n');
+    const body = lines.filter(Boolean).join('\n');
     const width = `${Math.round(Math.max(0, Math.min(1, ratio)) * 100)}%`;
 
-    this.lines.hidden = text === '';
-    if (this.lines.textContent !== text) this.lines.textContent = text;
+    this.lines.hidden = body === '';
+    if (this.lines.textContent !== body) this.lines.textContent = body;
     if (`${barClass}:${width}:${meterValue}` === this.lastText) return;
     this.lastText = `${barClass}:${width}:${meterValue}`;
     this.bar.dataset['kind'] = barClass;
@@ -831,15 +823,10 @@ export class BuildingPanel {
 
     const missing = wanted - filled;
 
-    const plural = (count: number): string => (count > 1 ? 's' : '');
+    const text = t().panel.crew;
 
     this.crewNote.textContent =
-      missing > 0
-        ? `${missing} ouvrier${plural(missing)} manquant${plural(missing)} : le poste se remplira dès qu’un ouvrier sera libre.`
-        : wanted === 0
-          ? 'Aucun ouvrier : le bâtiment est à l’arrêt.'
-          : `${filled} ouvrier${plural(filled)} affecté${plural(filled)}` +
-            (max > wanted ? `, ${max - wanted} rendu${plural(max - wanted)} à la ville.` : '.');
+      missing > 0 ? text.missing(missing) : wanted === 0 ? text.none : text.assigned(filled, max - wanted);
     this.crewNote.dataset['missing'] = String(missing > 0);
   }
 
@@ -875,14 +862,17 @@ export class BuildingPanel {
       this.upgradeEffect.hidden = true;
       this.upgradeCost.replaceChildren();
       this.upgradeCost.hidden = true;
-      this.upgradeButton.textContent = 'Niveau max';
+      this.upgradeButton.textContent = t().panel.maxLevel;
       return;
     }
 
+    const text = t().panel.upgrade;
+    // Le niveau suivant est `entity.level + 1` : son texte est `upgrades[entity.level - 1]`.
+    const action = t().buildings[entity.proto].upgrades[entity.level - 1]?.action ?? '';
+
     this.upgradeEffect.hidden = false;
-    this.upgradeEffect.textContent = `${upgrade.action} : ${upgradeEffect(buildingLevel(entity.proto, entity.level), upgrade)}${
-      inReach ? '' : ' — rapprochez-vous.'
-    }`;
+    this.upgradeEffect.textContent =
+      text.effect(action, upgradeEffect(buildingLevel(entity.proto, entity.level), upgrade)) + (inReach ? '' : text.comeCloser);
     this.upgradeCost.hidden = false;
     this.upgradeCost.replaceChildren(
       ...(Object.entries(upgrade.cost) as [ItemId, number][]).map(([item, needed]) => {
@@ -894,13 +884,13 @@ export class BuildingPanel {
 
           row.dataset['missing'] = 'true';
           note.className = 'item-missing';
-          note.textContent = `manque ${lacking}`;
+          note.textContent = text.lacking(lacking);
           row.append(note);
         }
         return row;
       }),
     );
-    this.upgradeButton.textContent = upgrade.action;
+    this.upgradeButton.textContent = action;
   }
 
   /** Les lignes d'objets ne sont reconstruites que si leur clé change. */
@@ -949,13 +939,14 @@ function siteNeedChip(icon: UiIcon, value: number, kind: string): HTMLElement {
 
 /** « Pierre : 0/8 livrés, 2 en route, aucune en ville » — le libellé d'une ligne. */
 export function siteNeedLabel(line: SiteLine): string {
-  const label = ITEMS[line.item].label;
+  const label = t().items[line.item];
+  const text = t().panel.site;
 
-  if (line.done) return `${label} : ${line.delivered}/${line.needed}, tout est livré`;
+  if (line.done) return text.needDone(label, line.delivered, line.needed);
 
-  const parts = [`${label} : ${line.delivered}/${line.needed} livrés`, `${line.incoming} en route`];
+  const parts = [text.needDelivered(label, line.delivered, line.needed), text.needIncoming(line.incoming)];
 
-  if (line.inTown !== null) parts.push(line.inTown === 0 ? 'plus rien en ville' : `${line.inTown} en ville`);
+  if (line.inTown !== null) parts.push(line.inTown === 0 ? text.needTownEmpty : text.needInTown(line.inTown));
   return parts.join(', ');
 }
 
@@ -974,51 +965,49 @@ function statChip({ icon, value, label }: Stat): HTMLButtonElement {
   return chip;
 }
 
-/** Un bouton rond du sélecteur d'ouvriers. */
-function crewButton(label: string, title: string, onClick: () => void): HTMLButtonElement {
+/** Un bouton rond du sélecteur d'ouvriers ; son `aria-label` suit la langue. */
+function crewButton(label: string, onClick: () => void): HTMLButtonElement {
   const button = document.createElement('button');
 
   button.type = 'button';
   button.className = 'building-panel-crew-step';
   button.textContent = label;
-  button.setAttribute('aria-label', title);
   button.addEventListener('click', onClick);
   return button;
 }
 
 /** Texte d'inspection : celui du chantier tant qu'il en est un, celui du bâtiment à son niveau ensuite. */
 export function panelDescription(entity: Entity): string {
-  return entity.kind === 'site' ? BUILDINGS[entity.proto].siteDescription : buildingLevel(entity.proto, entity.level).description;
+  return entity.kind === 'site' ? t().buildings[entity.proto].siteDescription : levelText(entity.proto, entity.level).description;
+}
+
+/** Nom et description d'un bâtiment à son niveau, dans la langue en cours (1 = tel que bâti). */
+function levelText(id: BuildingId, level: number): { label: string; description: string } {
+  const text = t().buildings[id];
+
+  return (level <= 1 ? undefined : text.upgrades[level - 2]) ?? text;
 }
 
 /** Ce que « Transférer » ferait d'un chantier à portée de la ville, en disant d'où vient la matière. */
 export function siteCoverageText(coverage: SiteCoverage): string {
-  switch (coverage) {
-    case 'bag':
-      return 'Votre sac suffit : transférez pour l’achever.';
-    case 'town':
-      return 'Le stock de la ville couvre le reste : transférez pour l’achever.';
-    case 'both':
-      return 'Sac et ville couvrent le reste : transférez pour l’achever.';
-    case 'short':
-      return 'Chantier en cours — transférez le sac et la ville, ou heurtez-le.';
-  }
+  return t().panel.site.coverage[coverage];
 }
 
 /** Ce qu'apporte un niveau : « PV 60 → 90, portée 8 → 10, cadence +29 % ». */
 export function upgradeEffect(from: BuildingLevel, to: BuildingLevel): string {
+  const text = t().panel.upgrade;
   const parts: string[] = [];
 
-  if (to.hp !== from.hp) parts.push(`PV ${from.hp} → ${to.hp}`);
+  if (to.hp !== from.hp) parts.push(text.hp(from.hp, to.hp));
 
   const before = from.weapon ? WEAPONS[from.weapon] : null;
   const after = to.weapon ? WEAPONS[to.weapon] : null;
 
-  if (after && after.range !== before?.range) parts.push(`portée ${before?.range ?? 0} → ${after.range}`);
+  if (after && after.range !== before?.range) parts.push(text.range(before?.range ?? 0, after.range));
   if (before && after && after.cooldown !== before.cooldown) {
     const faster = Math.round((before.cooldown / after.cooldown - 1) * 100);
 
-    parts.push(`cadence ${faster > 0 ? '+' : ''}${faster} %`);
+    parts.push(text.rate(faster));
   }
   return parts.join(', ');
 }
@@ -1033,21 +1022,22 @@ function starvedLine(world: World, consumer: Nursery | Forge): string {
 
   if (!status) return '';
 
-  const label = ITEMS[status.item].label;
+  const label = t().items[status.item];
+  const text = t().panel.starved;
 
-  if (status.coming) return `${label} : les porteurs l’apportent.`;
+  if (status.coming) return text.coming(label);
   if (status.inTown > 0) {
     return status.porters
-      ? `${label} en ville : ${status.inTown} — les porteurs arrivent.`
-      : `${label} en ville : ${status.inTown} — aucun porteur : ${world.inTownRange(consumer) ? 'transférez-le' : 'apportez-le'}.`;
+      ? text.inTown(label, status.inTown)
+      : text.noPorter(label, status.inTown, world.inTownRange(consumer));
   }
-  if (world.player.inventory.count(status.item) > 0) return `${label} dans le sac — heurtez-la ou transférez.`;
-  return `Plus de ${label.toLowerCase()} nulle part — récoltez-en.`;
+  if (world.player.inventory.count(status.item) > 0) return text.inBag(label);
+  return text.nowhere(label);
 }
 
 function recipeLine(amounts: RecipeProto['inputs']): string {
   return (Object.entries(amounts) as [ItemId, number][])
-    .map(([item, amount]) => `${amount} ${ITEMS[item].label.toLowerCase()}`)
+    .map(([item, amount]) => t().panel.recipeAmount(amount, t().items[item]))
     .join(' + ');
 }
 
@@ -1057,5 +1047,5 @@ function clock(ticks: number): string {
   const minutes = Math.floor(seconds / 60);
   const rest = seconds % 60;
 
-  return minutes > 0 ? `${minutes} min ${rest.toString().padStart(2, '0')} s` : `${rest} s`;
+  return t().panel.duration(minutes, rest);
 }

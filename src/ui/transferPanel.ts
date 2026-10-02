@@ -28,6 +28,7 @@ import {
   type TransferView,
 } from '../sim/transfer.ts';
 import type { EntityId } from '../sim/types.ts';
+import { locale, onLocale, t } from '../i18n/locale.ts';
 import { itemIcon, uiIcon } from './icons.ts';
 
 /** Le coffre affiché : à qui il est, ce qu'il contient, ses règles, et si Adam est assez près. */
@@ -92,14 +93,12 @@ export class TransferPanel {
 
     selector.className = 'transfer-quantity';
     selector.setAttribute('role', 'radiogroup');
-    selector.setAttribute('aria-label', 'Quantité par tap');
     this.quantityButtons = new Map(
       TRANSFER_QUANTITIES.map((quantity) => {
         const button = document.createElement('button');
 
         button.type = 'button';
         button.setAttribute('role', 'radio');
-        button.textContent = quantity === 'all' ? 'Tout' : String(quantity);
         button.addEventListener('click', () => {
           this.quantity = quantity;
           this.lastKey = '';
@@ -116,7 +115,6 @@ export class TransferPanel {
     const gauge = document.createElement('div');
 
     bagTitle.className = 'transfer-band-title';
-    bagTitle.textContent = 'Sac d’Adam';
     this.bagCount = document.createElement('span');
     this.bagCount.className = 'transfer-band-count';
     gauge.className = 'transfer-gauge';
@@ -129,14 +127,32 @@ export class TransferPanel {
     const actions = document.createElement('div');
 
     actions.className = 'building-panel-actions transfer-actions';
-    this.takeAllButton = bigButton('takeAll', 'Tout prendre', 'take', () => this.moveAll('take'));
-    this.depositAllButton = bigButton('depositAll', 'Tout déposer', 'deposit', () => this.moveAll('deposit'));
+    const takeAll = bigButton('takeAll', 'take', () => this.moveAll('take'));
+    const depositAll = bigButton('depositAll', 'deposit', () => this.moveAll('deposit'));
+
+    this.takeAllButton = takeAll.button;
+    this.depositAllButton = depositAll.button;
     actions.append(this.takeAllButton, this.depositAllButton);
 
     this.note = document.createElement('p');
     this.note.className = 'transfer-note';
 
     this.root.append(chestBand.root, selector, bagBand.root, actions, this.note);
+
+    // Les libellés fixes suivent la langue ; le reste se réécrit au prochain `update`.
+    onLocale(() => {
+      const text = t().panel.transfer;
+
+      selector.setAttribute('aria-label', text.quantity);
+      for (const [quantity, button] of this.quantityButtons) {
+        button.textContent = quantity === 'all' ? text.all : String(quantity);
+      }
+      bagTitle.textContent = text.bag;
+      takeAll.label.textContent = text.takeAll;
+      depositAll.label.textContent = text.depositAll;
+      this.lastKey = '';
+      this.update();
+    });
   }
 
   /** Le coffre à montrer, ou `null` : la zone se cache. */
@@ -154,7 +170,7 @@ export class TransferPanel {
 
     const bag = this.bag();
     const view = transferView(chest.store, chest.rules, bag, this.quantity);
-    const key = `${chest.id}:${chest.title}:${chest.reachable}:${this.quantity}:${bag.capacity}:${JSON.stringify(view)}`;
+    const key = `${locale()}:${chest.id}:${chest.title}:${chest.reachable}:${this.quantity}:${bag.capacity}:${JSON.stringify(view)}`;
 
     if (key === this.lastKey) return;
     this.lastKey = key;
@@ -163,6 +179,7 @@ export class TransferPanel {
 
   private render(chest: TransferChest, bag: Store, view: TransferView): void {
     const { reachable } = chest;
+    const text = t().panel.transfer;
     const capacity = chest.store.capacity;
 
     this.chestIcon.replaceChildren(uiIcon(chest.icon, 22));
@@ -171,9 +188,9 @@ export class TransferPanel {
 
     this.chestChips.replaceChildren(
       ...(view.chest.length === 0
-        ? [empty('Vide')]
+        ? [empty(text.empty)]
         : view.chest.map(({ item, count, reserved, movable }) =>
-            chip(item, count, reserved > 0 ? `dont ${reserved} réservé${reserved > 1 ? 's' : ''}` : '', reachable && movable > 0, (from) =>
+            chip(item, count, reserved > 0 ? text.reserved(reserved) : '', reachable && movable > 0, (from) =>
               this.move('take', item, from),
             ),
           )),
@@ -185,7 +202,7 @@ export class TransferPanel {
     this.bagGauge.dataset['full'] = String(bag.freeSpace() <= 0);
     this.bagChips.replaceChildren(
       ...(view.bag.length === 0
-        ? [empty('Vide')]
+        ? [empty(text.empty)]
         : view.bag.map(({ item, count, movable }) =>
             chip(item, count, '', reachable && movable > 0, (from) => this.move('deposit', item, from)),
           )),
@@ -198,11 +215,11 @@ export class TransferPanel {
     this.depositAllButton.disabled = !reachable || view.depositAll === 0;
 
     this.note.textContent = !reachable
-      ? 'Rapprochez-vous du bâtiment pour échanger.'
+      ? text.comeCloser
       : view.chest.length > 0 && view.takeAll === 0 && bag.freeSpace() <= 0
-        ? 'Sac plein : déposez avant de prendre.'
+        ? text.bagFull
         : view.bag.length > 0 && view.depositAll === 0
-          ? 'Rien de votre sac n’entre dans ce coffre pour l’instant.'
+          ? text.nothingFits
           : '';
     this.note.hidden = this.note.textContent === '';
   }
@@ -286,14 +303,20 @@ function chip(item: ItemId, count: number, note: string, enabled: boolean, onTap
   return button;
 }
 
-function bigButton(icon: UiIcon, label: string, tone: TransferDirection, onClick: () => void): HTMLButtonElement {
+/** Un gros bouton, et le nœud de son libellé, que la langue réécrit. */
+function bigButton(
+  icon: UiIcon,
+  tone: TransferDirection,
+  onClick: () => void,
+): { button: HTMLButtonElement; label: Text } {
   const button = document.createElement('button');
+  const label = document.createTextNode('');
 
   button.type = 'button';
   button.dataset['tone'] = tone;
   button.append(uiIcon(icon, 22), label);
   button.addEventListener('click', onClick);
-  return button;
+  return { button, label };
 }
 
 /**

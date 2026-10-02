@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BUILDINGS } from '../data/buildings.ts';
+import { setLocale } from '../i18n/locale.ts';
 import { personText } from './personText.ts';
 
 describe('infobulle d’un habitant', () => {
@@ -9,5 +10,14 @@ describe('infobulle d’un habitant', () => {
     expect(personText('Tom', 27, { kind: 'working', at: 'drill' })).toBe(`Tom, 27 ans · au travail : ${BUILDINGS.drill.label}`);
     expect(personText('Tom', 27, { kind: 'idle' })).toBe('Tom, 27 ans · sans travail');
     expect(personText('Tom', 27, { kind: 'home' })).toBe('Tom, 27 ans · à la maison');
+  });
+
+  it('se dit aussi en anglais', () => {
+    setLocale('en');
+    try {
+      expect(personText('Tom', 27, { kind: 'idle' })).toBe('Tom, 27 · no job');
+    } finally {
+      setLocale('fr');
+    }
   });
 });

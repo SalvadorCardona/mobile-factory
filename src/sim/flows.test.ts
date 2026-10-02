@@ -141,8 +141,9 @@ describe('alertes de la ville', () => {
     expect(alerts[0]).toEqual({
       kind: 'shortage',
       item: 'coal',
-      text: 'Charbon : la forge attend (0 en ville)',
       target: idOf(world, 'forge'),
+      waiting: 'forge',
+      stock: 0,
     });
     // Le minerai, lui, est en ville : la forge ne l'attend pas.
     expect(alerts.some((alert) => alert.item === 'ironOre')).toBe(false);
@@ -167,7 +168,8 @@ describe('alertes de la ville', () => {
     expect(alerts[1]!.kind).toBe('surplus');
     expect(alerts[1]!.item).toBe('ironOre');
     expect(alerts[1]!.target).toBe(idOf(world, 'drill'));
-    expect(alerts[1]!.text).toMatch(/^Minerai de fer : \+\d+\/min, personne ne l’utilise$/);
+    expect(alerts[1]!.stock).toBeGreaterThan(300);
+    expect((alerts[1] as { rate: number }).rate).toBeGreaterThan(0);
   });
 
   it('une forge en pause n’attend rien', () => {
