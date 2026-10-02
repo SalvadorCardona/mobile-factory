@@ -1,0 +1,28 @@
+/**
+ * Le dictionnaire français, celui qui fait foi : `Messages` (`../messages.ts`)
+ * se déduit de lui. Une section par partie de l'interface, et le contenu de
+ * `data/` à plat (`items`, `buildings`, `eve`…).
+ */
+
+import { common, settings } from './common.ts';
+import { content } from './content.ts';
+import { hud } from './hud.ts';
+import { inventory } from './inventory.ts';
+import { menu } from './menu.ts';
+import { panel } from './panel.ts';
+import { researchPanel } from './researchPanel.ts';
+import { screens } from './screens.ts';
+import { trade } from './trade.ts';
+
+export const FR = {
+  common,
+  settings,
+  screens,
+  hud,
+  panel,
+  menu,
+  inventory,
+  trade,
+  researchPanel,
+  ...content,
+};

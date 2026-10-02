@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { setLocale } from '../i18n/locale.ts';
 import { INVENTORY_CAPACITY } from '../sim/player.ts';
 import { clock, effectLine, statusLine } from './researchText.ts';
 
@@ -28,5 +29,15 @@ describe('textes du panneau Recherche', () => {
   it('écrit le temps en minutes et secondes', () => {
     expect(clock(20 * 42)).toBe('42 s');
     expect(clock(20 * 60)).toBe('1 min 00 s');
+  });
+
+  it('parle anglais quand la langue change', () => {
+    setLocale('en');
+    try {
+      expect(effectLine('walkingBoots', [])).toBe('Adam’s speed: 4.5 tiles/s → 5.4 tiles/s');
+      expect(statusLine('sharpArrows', 'running', [], 20 * 65)).toBe('Underway — 1 min 05 s left');
+    } finally {
+      setLocale('fr');
+    }
   });
 });

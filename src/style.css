@@ -794,10 +794,6 @@ button {
   box-shadow: var(--face-pressed);
 }
 
-.hud-audio[data-muted='true'] {
-  background: var(--paper-shade);
-}
-
 /*
  * Le zoom : trois petits disques empilés sur le bord droit, à mi-hauteur —
  * entre la colonne du sac et le bouton « Bâtir », loin du joystick.
@@ -2988,6 +2984,60 @@ button.hud-stock:active {
 .hud-defeat .overlay-title,
 .confirm-panel .overlay-title {
   color: var(--coral);
+}
+
+/*
+ * Le menu des réglages : le titre et sa croix sur une ligne, puis la langue
+ * en deux capsules côte à côte — la choisie en violet plein —, puis les
+ * interrupteurs. Au-dessus de la pause et des écrans de fin.
+ */
+.settings-screen {
+  z-index: 12;
+}
+
+.settings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-head .overlay-title {
+  font-size: 28px;
+  text-align: left;
+}
+
+.settings-label {
+  margin: 4px 0 -4px;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
+  color: var(--muted);
+}
+
+.settings-languages {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.settings-language {
+  padding: 0 12px;
+  font-size: 18px;
+}
+
+.settings-language[aria-checked='true'] {
+  background: var(--violet);
+  color: var(--paper);
+  box-shadow: 0 5px 0 var(--violet-shade);
+}
+
+.settings-language[aria-checked='true']:active {
+  box-shadow: 0 2px 0 var(--violet-shade);
+}
+
+.settings-toggle[aria-pressed='false'] {
+  color: var(--muted);
 }
 
 /* Un écran qui pose une question cache son panneau : `hidden` doit l'emporter sur `display: flex`. */

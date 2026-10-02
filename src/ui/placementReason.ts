@@ -13,8 +13,8 @@
  */
 
 import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
-import { ITEMS } from '../data/items.ts';
 import type { ResourceId } from '../data/resources.ts';
+import { t } from '../i18n/locale.ts';
 import type { PlacementRejection, RoadRejection } from '../sim/commands.ts';
 import type { PlacementBlock, RoadStep, World } from '../sim/world.ts';
 
@@ -25,38 +25,28 @@ export interface PlacementReason {
   remedy: string | null;
 }
 
-const LABELS: Readonly<Record<Exclude<PlacementRejection, 'resource' | 'noOre' | 'road' | 'nearHall'>, string>> = {
-  locked: 'Il vous manque le plan',
-  terrain: 'Pas sur l’eau',
-  occupied: 'Case occupée',
-  onPlayer: 'Vous êtes sur l’emplacement',
-  outOfReach: 'Trop loin — rapprochez-vous',
-  unique: 'Un seul par colonie',
-};
+type SimpleRejection = Exclude<PlacementRejection, 'resource' | 'noOre' | 'road' | 'nearHall'>;
 
-/** Les filons se voient en mode construction, même sous les rochers qui les couvrent. */
-const NO_ORE: PlacementReason = {
-  text: 'Aucun filon ici',
-  remedy: 'Cassez un rocher, puis posez la foreuse à sa place',
-};
+/** Une entrée du dictionnaire (remède '' = aucun) en motif affichable. */
+function reason(entry: { text: string; remedy: string }): PlacementReason {
+  return { text: entry.text, remedy: entry.remedy === '' ? null : entry.remedy };
+}
 
-/** Une route ne se recouvre pas : le marteau la retire, et rend sa pierre. */
-const ROAD: PlacementReason = {
-  text: 'Une route passe ici',
-  remedy: 'Retirez-la d’abord : Bâtir › Route › Retirer',
-};
-
-/** L'antenne se dresse loin : le cercle de la mairie montre jusqu'où. */
-const NEAR_HALL: PlacementReason = {
-  text: 'Trop près de la mairie',
-  remedy: 'Éloignez-vous, hors du cercle autour d’elle',
-};
+/** Un motif sans remède : l'eau, la distance, le plan… */
+function simple(rejection: SimpleRejection): PlacementReason {
+  return { text: t().panel.placement[rejection], remedy: null };
+}
 
 export function placementReason(block: PlacementBlock, world: World): PlacementReason {
-  if (block.reason === 'noOre') return NO_ORE;
-  if (block.reason === 'nearHall') return NEAR_HALL;
-  if (block.reason === 'road') return ROAD;
-  if (block.reason !== 'resource') return { text: LABELS[block.reason], remedy: null };
+  const placement = t().panel.placement;
+
+  // Les filons se voient en mode construction, même sous les rochers qui les couvrent.
+  if (block.reason === 'noOre') return reason(placement.noOre);
+  // L'antenne se dresse loin : le cercle de la mairie montre jusqu'où.
+  if (block.reason === 'nearHall') return reason(placement.nearHall);
+  // Une route ne se recouvre pas : le marteau la retire, et rend sa pierre.
+  if (block.reason === 'road') return reason(placement.road);
+  if (block.reason !== 'resource') return simple(block.reason);
 
   const found = block.tiles
     .map(({ tx, ty }) => world.resources.at(tx, ty)?.id)
@@ -70,16 +60,11 @@ function resourceReason(found: readonly ResourceId[]): PlacementReason {
   const trees = found.filter((id) => id === 'tree').length;
   const rocks = found.length - trees;
   const many = found.length > 1;
+  const placement = t().panel.placement;
 
-  if (trees > 0 && rocks > 0) return { text: 'Des arbres et des rochers gênent', remedy: 'Adam peut les récolter' };
-  if (rocks > 0) {
-    return many
-      ? { text: 'Des rochers gênent', remedy: 'Adam peut les casser' }
-      : { text: 'Un rocher gêne', remedy: 'Adam peut le casser' };
-  }
-  return many
-    ? { text: 'Des arbres gênent', remedy: 'Adam peut les couper' }
-    : { text: 'Un arbre gêne', remedy: 'Adam peut le couper' };
+  if (trees > 0 && rocks > 0) return reason(placement.treesAndRocks);
+  if (rocks > 0) return reason(many ? placement.rocks : placement.rock);
+  return reason(many ? placement.trees : placement.tree);
 }
 
 /** Ce que produira le bâtiment posé là : « Extraira : Pierre » pour une foreuse, `null` sinon. */
@@ -88,15 +73,8 @@ export function placementOutput(building: BuildingId, tx: number, ty: number, wo
 
   const item = world.oreUnder(building, tx, ty);
 
-  return item ? `Extraira : ${ITEMS[item].label}` : null;
+  return item ? t().panel.placement.extracts(t().items[item]) : null;
 }
-
-const ROAD_REASONS: Readonly<Record<RoadRejection, PlacementReason>> = {
-  noStone: { text: 'Plus de pierre pour la suite', remedy: 'Cassez des rochers, ou tracez dans le rayon de la mairie' },
-  terrain: { text: 'Pas sur l’eau', remedy: null },
-  occupied: { text: 'Un bâtiment est sur le tracé', remedy: null },
-  resource: { text: 'Un arbre ou un rocher gêne', remedy: 'Adam peut le récolter' },
-};
 
 /**
  * Pourquoi une partie du tracé ne sera pas pavée — le manque de pierre
@@ -105,9 +83,11 @@ const ROAD_REASONS: Readonly<Record<RoadRejection, PlacementReason>> = {
 export function roadReason(plan: readonly RoadStep[]): PlacementReason | null {
   const states = plan.map((step) => step.state);
 
-  if (states.includes('noStone')) return ROAD_REASONS.noStone;
+  const roads = t().panel.placement.roads;
+
+  if (states.includes('noStone')) return reason(roads.noStone);
 
   const refused = states.find((state): state is Exclude<RoadRejection, 'noStone'> => state !== 'pave' && state !== 'paved');
 
-  return refused ? ROAD_REASONS[refused] : null;
+  return refused ? reason(roads[refused]) : null;
 }

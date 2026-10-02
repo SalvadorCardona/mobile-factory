@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { worldToTile } from '../core/grid.ts';
 import type { PlacementRejection } from '../sim/commands.ts';
+import { setLocale } from '../i18n/locale.ts';
 import { World } from '../sim/world.ts';
 import { placementOutput, placementReason } from './placementReason.ts';
 
@@ -68,6 +69,17 @@ describe('placementReason', () => {
       text: 'Aucun filon ici',
       remedy: 'Cassez un rocher, puis posez la foreuse à sa place',
     });
+  });
+
+  it('parle anglais quand la langue change', () => {
+    const world = new World(1);
+
+    setLocale('en');
+    try {
+      expect(placementReason({ reason: 'terrain', tiles: [] }, world)).toEqual({ text: 'Not on water', remedy: null });
+    } finally {
+      setLocale('fr');
+    }
   });
 
   it('une foreuse sur un filon : dit ce qu’elle extraira', () => {

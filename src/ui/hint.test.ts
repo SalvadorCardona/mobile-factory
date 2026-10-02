@@ -7,6 +7,7 @@ import { TOWN_PLENTY, type ItemId } from '../data/items.ts';
 import { OBJECTIVES } from '../data/objectives.ts';
 import type { EntityId } from '../sim/types.ts';
 import { World } from '../sim/world.ts';
+import { setLocale } from '../i18n/locale.ts';
 import { INVENTORY_CAPACITY } from '../sim/player.ts';
 import { harvestRefusedText, tutorialAdvice, tutorialHint, uselessBagHint, type HintProgress } from './hint.ts';
 
@@ -195,6 +196,15 @@ describe('conseil du sac plein', () => {
 
     expect(world.wanted('coal')).toBe(0);
     expect(harvestRefusedText('coal', world.wanted('coal'))).toBe('Assez de charbon : aucun chantier n’en attend plus');
+  });
+
+  it('se dit aussi en anglais', () => {
+    setLocale('en');
+    try {
+      expect(harvestRefusedText('wood', 0, true)).toBe('The town has plenty of wood — Adam stops picking it up');
+    } finally {
+      setLocale('fr');
+    }
   });
 });
 

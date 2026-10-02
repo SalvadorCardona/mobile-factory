@@ -15,11 +15,14 @@
  * plante les graines des colonies tombées, et rappelle le record : les nuits
  * tenues après le Signal, par la meilleure colonie.
  *
+ * Les libellés suivent la langue (`onLocale`) : l'engrenage de l'écran titre
+ * ouvre les réglages avant même de jouer.
+ *
  * Aucun de ces écrans ne touche au monde ni à la sauvegarde : ils disent à
  * `main.ts` de jouer, d'arrêter l'horloge ou de recommencer, et c'est tout.
  */
 
-import { LORE } from '../data/lore.ts';
+import { onLocale, t } from '../i18n/locale.ts';
 import type { Garden } from '../sim/garden.ts';
 import { GardenPanel, type GardenActions } from './garden.ts';
 import { buildingIcon, itemIcon, uiIcon } from './icons.ts';
@@ -28,8 +31,8 @@ import { seedLine } from './seed.ts';
 export interface TitleOptions {
   /** Une partie sauvegardée attend : « Continuer » et « Nouvelle partie » remplacent « Jouer ». */
   resume: boolean;
-  /** Une ligne discrète sous les boutons — une vieille sauvegarde ignorée, par exemple. */
-  notice?: string;
+  /** Une ligne discrète sous les boutons — une vieille sauvegarde ignorée, par exemple ; relue à chaque langue. */
+  notice?: () => string;
   onPlay: () => void;
   /** « Nouvelle partie », confirmée : la sauvegarde est à effacer. */
   onRestart: () => void;
@@ -38,14 +41,29 @@ export interface TitleOptions {
   /** Le record « nuits tenues après le Signal » ; 0 tant qu'aucune antenne n'a parlé. */
   record: number;
   gardenActions: GardenActions;
+  /** L'engrenage du coin : le menu des réglages, la langue d'abord. */
+  onSettings: () => void;
 }
 
 export class TitleScreen {
   public readonly root: HTMLElement;
+  private readonly unsubscribe: () => void;
 
-  public constructor({ resume, notice, onPlay, onRestart, garden, gardenActions, record }: TitleOptions) {
+  public constructor({ resume, notice, onPlay, onRestart, garden, gardenActions, record, onSettings }: TitleOptions) {
     this.root = document.createElement('div');
     this.root.className = 'overlay title-screen';
+
+    // Les libellés fixes, réécrits à chaque langue ; `relabel` les rassemble.
+    const labels: (() => void)[] = [];
+
+    const settings = document.createElement('button');
+
+    settings.type = 'button';
+    settings.className = 'hud-button title-settings';
+    settings.setAttribute('aria-haspopup', 'dialog');
+    settings.append(uiIcon('settings'));
+    settings.addEventListener('click', onSettings);
+    labels.push(() => settings.setAttribute('aria-label', t().settings.title));
 
     const panel = document.createElement('div');
 
@@ -54,26 +72,29 @@ export class TitleScreen {
     const kicker = document.createElement('div');
 
     kicker.className = 'title-kicker';
-    kicker.textContent = 'Après la fin du monde';
 
     const title = document.createElement('h1');
 
     title.className = 'title-logo';
-    title.textContent = LORE.title;
 
     const pitch = document.createElement('p');
 
     pitch.className = 'title-pitch';
-    pitch.textContent = LORE.pitch;
+    labels.push(() => {
+      kicker.textContent = t().screens.title.kicker;
+      title.textContent = t().lore.title;
+      pitch.textContent = t().lore.pitch;
+    });
 
     const play = document.createElement('button');
 
     play.type = 'button';
     play.className = 'button-primary title-play';
-    play.append(uiIcon('play', 26), resume ? 'Continuer' : 'Jouer');
+    labels.push(() => play.replaceChildren(uiIcon('play', 26), resume ? t().screens.title.resume : t().screens.title.play));
     play.addEventListener('click', () => {
       this.root.dataset['leaving'] = 'true';
       window.setTimeout(() => this.root.remove(), 380);
+      this.unsubscribe();
       onPlay();
     });
 
@@ -81,15 +102,20 @@ export class TitleScreen {
 
     controls.className = 'title-controls';
     for (const [icon, label] of [
-      [uiIcon('move', 28), 'Glissez le pouce pour marcher (ZQSD / flèches sur PC)'],
-      [itemIcon('wood', 28), 'Passez près des arbres et des rochers pour récolter'],
-      [buildingIcon('townHall', 28), 'Foncez dans un chantier pour le livrer'],
+      [uiIcon('move', 28), 'move'],
+      [itemIcon('wood', 28), 'harvest'],
+      [buildingIcon('townHall', 28), 'deliver'],
     ] as const) {
       const item = document.createElement('li');
+      const text = document.createTextNode('');
 
       icon.alt = '';
+      icon.removeAttribute('title');
       icon.setAttribute('aria-hidden', 'true');
-      item.append(icon, label);
+      item.append(icon, text);
+      labels.push(() => {
+        text.data = t().screens.title.controls[label];
+      });
       controls.append(item);
     }
 
@@ -106,7 +132,7 @@ export class TitleScreen {
       confirm.hidden = true;
       fresh.type = 'button';
       fresh.className = 'button-secondary title-new';
-      fresh.append(uiIcon('restart', 22), 'Nouvelle partie');
+      labels.push(() => fresh.replaceChildren(uiIcon('restart', 22), t().screens.title.newGame));
       fresh.addEventListener('click', () => {
         panel.hidden = true;
         confirm.hidden = false;
@@ -117,12 +143,15 @@ export class TitleScreen {
     }
 
     const gardenButton = document.createElement('button');
+    let seeds = garden.seeds;
+    const gardenLabel = (): void => gardenButton.replaceChildren(uiIcon('seed', 22), t().screens.title.garden(seeds));
     const gardenPanel = new GardenPanel(
       garden,
       gardenActions,
-      ({ seeds, pure }) => {
-        gardenButton.replaceChildren(uiIcon('seed', 22), `Jardin · ${seeds}`);
-        gardenButton.dataset['pure'] = String(pure);
+      (current) => {
+        seeds = current.seeds;
+        gardenLabel();
+        gardenButton.dataset['pure'] = String(current.pure);
       },
       () => {
         gardenPanel.root.hidden = true;
@@ -134,7 +163,10 @@ export class TitleScreen {
     gardenPanel.root.hidden = true;
     gardenButton.type = 'button';
     gardenButton.className = 'button-secondary title-garden';
-    gardenButton.setAttribute('aria-label', 'Jardin des souvenirs');
+    labels.push(() => {
+      gardenLabel();
+      gardenButton.setAttribute('aria-label', t().screens.title.gardenLabel);
+    });
     gardenButton.addEventListener('click', () => {
       panel.hidden = true;
       gardenPanel.root.hidden = false;
@@ -150,7 +182,7 @@ export class TitleScreen {
       icon.alt = '';
       icon.setAttribute('aria-hidden', 'true');
       best.className = 'title-record';
-      best.append(icon, `Record après le Signal : ${record} nuit${record > 1 ? 's' : ''} tenue${record > 1 ? 's' : ''}`);
+      labels.push(() => best.replaceChildren(icon, t().screens.title.record(record)));
       panel.append(best);
     }
 
@@ -158,12 +190,18 @@ export class TitleScreen {
       const line = document.createElement('p');
 
       line.className = 'title-notice';
-      line.textContent = notice;
+      labels.push(() => {
+        line.textContent = notice();
+      });
       panel.append(line);
     }
 
     panel.append(controls);
     this.root.prepend(panel);
+    this.root.append(settings);
+    this.unsubscribe = onLocale(() => {
+      for (const label of labels) label();
+    });
 
     // « Continuer » est le choix par défaut : Entrée ou Espace le prennent.
     window.setTimeout(() => play.focus(), 0);
@@ -172,8 +210,6 @@ export class TitleScreen {
 
 export class PauseScreen {
   public readonly root: HTMLElement;
-  /** L'interrupteur de la musique de fond ; le câblage l'abonne au moteur audio. */
-  public readonly musicButton: HTMLButtonElement;
 
   private readonly panel: HTMLElement;
   private readonly confirm: HTMLElement;
@@ -189,33 +225,34 @@ export class PauseScreen {
     const title = document.createElement('h2');
 
     title.className = 'overlay-title';
-    title.textContent = 'Pause';
 
     const text = document.createElement('p');
 
     text.className = 'overlay-text';
-    text.textContent = 'Les mutants attendent, eux aussi.';
 
     const resume = document.createElement('button');
 
     resume.type = 'button';
     resume.className = 'button-primary';
-    resume.textContent = 'Reprendre';
     resume.addEventListener('click', onResume);
 
     const restart = document.createElement('button');
 
     restart.type = 'button';
     restart.className = 'button-secondary';
-    restart.append(uiIcon('restart', 22), 'Recommencer');
     restart.addEventListener('click', () => this.asking(true));
 
-    this.musicButton = document.createElement('button');
-    this.musicButton.type = 'button';
-    this.musicButton.className = 'button-secondary pause-music';
+    onLocale(() => {
+      const { pause } = t().screens;
+
+      title.textContent = pause.title;
+      text.textContent = pause.text;
+      resume.textContent = pause.resume;
+      restart.replaceChildren(uiIcon('restart', 22), pause.restart);
+    });
 
     this.confirm = confirmRestart(onRestart, () => this.asking(false));
-    this.panel.append(title, text, resume, this.musicButton, restart, seedLine(seed));
+    this.panel.append(title, text, resume, restart, seedLine(seed));
     this.root.append(this.panel, this.confirm);
     this.asking(false);
   }
@@ -224,12 +261,6 @@ export class PauseScreen {
     this.root.hidden = !visible;
     // Rouvrir la pause, c'est retrouver la pause, pas une question laissée en plan.
     if (visible) this.asking(false);
-  }
-
-  /** Le libellé et l'icône suivent le réglage du moteur audio. */
-  public setMusic(on: boolean): void {
-    this.musicButton.replaceChildren(uiIcon(on ? 'musicOn' : 'musicOff', 22), on ? 'Musique : oui' : 'Musique : non');
-    this.musicButton.setAttribute('aria-pressed', String(on));
   }
 
   private asking(asking: boolean): void {
@@ -253,26 +284,31 @@ function confirmRestart(onConfirm: () => void, onCancel: () => void): HTMLElemen
   const title = document.createElement('h2');
 
   title.className = 'overlay-title';
-  title.textContent = 'Recommencer ?';
 
   const text = document.createElement('p');
 
   text.className = 'overlay-text';
-  text.textContent = 'Ta colonie sera perdue : la mairie, le sac, les enfants, tout.';
 
   const confirm = document.createElement('button');
 
   confirm.type = 'button';
   confirm.className = 'button-primary';
-  confirm.append(uiIcon('restartLight', 22), 'Recommencer');
   confirm.addEventListener('click', onConfirm);
 
   const cancel = document.createElement('button');
 
   cancel.type = 'button';
   cancel.className = 'button-secondary';
-  cancel.textContent = 'Annuler';
   cancel.addEventListener('click', onCancel);
+
+  onLocale(() => {
+    const question = t().screens.confirmRestart;
+
+    title.textContent = question.title;
+    text.textContent = question.text;
+    confirm.replaceChildren(uiIcon('restartLight', 22), question.confirm);
+    cancel.textContent = t().common.cancel;
+  });
 
   panel.append(title, text, confirm, cancel);
   return panel;

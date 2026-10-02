@@ -31,7 +31,7 @@
  * - la **quête d'Ève** en cours, une fois qu'elle est arrivée ;
  * - la **bulle** d'Ève au-dessus de sa tête : son arrivée, ses quêtes, ce
  *   qu'elle répond quand on la tape. Courte, jamais bloquante ;
- * - les boutons pause et son à droite de la quête, et dessous les deux
+ * - les boutons pause et réglages (l'engrenage) à droite de la quête, et dessous les deux
  *   stocks, en version compacte : la **ville** (le coffre de la mairie) et
  *   le **sac** d'Adam avec son remplissage — un tap sur le sac ouvre le
  *   panneau inventaire (`inventoryPanel.ts`). Sur un téléphone, les deux
@@ -54,20 +54,17 @@
  */
 
 import { TILE_SIZE } from '../core/grid.ts';
-import { BUILDINGS, buildingLevel, type BuildingId } from '../data/buildings.ts';
-import { ITEMS, type ItemId } from '../data/items.ts';
-import { EVE_LINES } from '../data/eve.ts';
+import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
+import type { ItemId } from '../data/items.ts';
 import { SIGNAL_WAVES } from '../data/artDirection.ts';
-import { LORE } from '../data/lore.ts';
-import { OBJECTIVES, type Goal, type ObjectiveProto } from '../data/objectives.ts';
+import { OBJECTIVES, type Goal } from '../data/objectives.ts';
 import { seedsFor } from '../data/perks.ts';
-import { QUESTS, TOOLS, type QuestReward } from '../data/quests.ts';
-import { RESEARCH } from '../data/research.ts';
+import { QUESTS, type QuestReward } from '../data/quests.ts';
 import { WEATHER, WEATHER_CALENDAR } from '../data/weather.ts';
 import { dayDialSvg, type UiIcon } from '../art/ui.ts';
 import type { AtlasStats } from '../render/spriteLibrary.ts';
 import type { WaterStats } from '../render/waterLayer.ts';
-import type { PlacementRejection, RepairRejection, RoadRejection } from '../sim/commands.ts';
+import type { RoadRejection } from '../sim/commands.ts';
 import type { Compass } from '../sim/enemies.ts';
 import { nameOf } from '../sim/inhabitants.ts';
 import type { Entity, Mobile, MobileId } from '../sim/types.ts';
@@ -75,39 +72,12 @@ import { DIAL_ARCS } from '../sim/dayNight.ts';
 import { currentQuest, questProgress } from '../sim/eve.ts';
 import { currentObjective, goalProgress, goalWait, type GoalWait } from '../sim/objectives.ts';
 import { TICKS_PER_SECOND, type Inhabitant, type Workforce, type World } from '../sim/world.ts';
+import { locale, onLocale, t } from '../i18n/locale.ts';
 import { carriesWanted, harvestRefusedText, tutorialAdvice, type Advice } from './hint.ts';
 import { buildingIcon, dayDialUrl, itemAmount, itemIcon, uiIcon } from './icons.ts';
 import { effectLine } from './researchText.ts';
 import { personText } from './personText.ts';
 import { mapUrl, seedLine } from './seed.ts';
-
-const REJECTION_LABELS: Record<PlacementRejection, string> = {
-  occupied: 'Emplacement déjà occupé',
-  road: 'Une route passe ici — retirez-la d’abord',
-  terrain: 'Terrain non constructible',
-  outOfReach: 'Trop loin — rapprochez-vous',
-  resource: 'Dégagez d’abord les arbres et rochers',
-  onPlayer: 'Vous êtes sur l’emplacement',
-  noOre: 'Aucun filon ici — une foreuse se pose sur un filon',
-  locked: 'Pas encore débloqué — il faut son plan, ou tenir encore une nuit',
-  unique: 'Un seul par colonie — il y en a déjà un',
-  nearHall: `Trop près de la mairie — l’antenne se dresse à ${BUILDINGS.antenna.hallDistance} cases au moins`,
-};
-
-/** Ce que dit la bulle quand un tracé de route n'a pas été pavé en entier ; `paved` tuiles l'ont été. */
-const ROAD_LABELS: Record<RoadRejection, (paved: number) => string> = {
-  noStone: (paved) => (paved > 0 ? `Plus de pierre : route arrêtée après ${paved} tuile${paved > 1 ? 's' : ''}` : 'Pas de pierre pour paver — ni dans le sac, ni en ville à portée'),
-  terrain: () => 'Pas de route sur l’eau',
-  occupied: () => 'Une route ne passe pas sous un bâtiment',
-  resource: () => 'Arbres et rochers sautés : dégagez-les pour paver',
-};
-
-const REPAIR_LABELS: Record<RepairRejection, string | null> = {
-  missing: null,
-  outOfReach: 'Trop loin — rapprochez-vous',
-  intact: 'Rien à réparer',
-  noMaterial: 'Il faut du bois pour réparer — ni dans le sac, ni en ville',
-};
 
 /** Durée de l'alarme après le dernier coup reçu par la mairie hors de l'écran, en ms. */
 const ALARM_MS = 2500;
@@ -172,18 +142,6 @@ const CELEBRATION_GAP = 8;
 const CONFETTI: readonly UiIcon[] = ['leafMint', 'leafMint', 'leafYellow', 'petal'];
 const CONFETTI_COUNT = 36;
 const CONFETTI_MS = 3200;
-
-/** D'où vient une vague, dit comme on le dirait. */
-const FROM_LABELS: Record<Compass, string> = {
-  north: 'par le nord',
-  northEast: 'par le nord-est',
-  east: 'par l’est',
-  southEast: 'par le sud-est',
-  south: 'par le sud',
-  southWest: 'par le sud-ouest',
-  west: 'par l’ouest',
-  northWest: 'par le nord-ouest',
-};
 
 /** Le bandeau d'une vague reste le temps de l'annonce, et s'efface quand les flaques bouillonnent ; celui de la victoire, un peu moins. */
 const BANNER_WAVE_MS = 4200;
@@ -257,7 +215,8 @@ export class Hud {
   private onContinue: () => void = () => {};
   private readonly speech: HTMLElement;
   private readonly defeatSeeds: HTMLElement;
-  public readonly audioButton: HTMLButtonElement;
+  /** L'engrenage : il ouvre le menu des réglages (`settingsPanel.ts`). */
+  public readonly settingsButton: HTMLButtonElement;
   public readonly pauseButton: HTMLButtonElement;
   private lastBag = '';
   private lastTown = '';
@@ -273,6 +232,8 @@ export class Hud {
     this.crewOpen = false;
   };
   private lastHint = '';
+  /** La langue du conseil affiché : en changer réécrit le conseil sans le relancer. */
+  private hintLocale = locale();
   /** Tick où le conseil a été montré (ou déplié) : il se replie `HINT_FOLD_TICKS` plus tard. */
   private hintSince = 0;
   private wanted: ItemId | null = null;
@@ -314,7 +275,6 @@ export class Hud {
     // Replié, le conseil n'est plus qu'une ampoule à côté du titre : un tap le déplie.
     this.hintBulb = element('button', 'hud-hint-bulb');
     this.hintBulb.type = 'button';
-    this.hintBulb.setAttribute('aria-label', 'Afficher le conseil');
     this.hintBulb.append(uiIcon('hint', 20));
     this.hintBulb.addEventListener('click', () => this.unfoldHint());
 
@@ -399,13 +359,14 @@ export class Hud {
 
     this.pauseButton = element('button', 'hud-button hud-pause');
     this.pauseButton.type = 'button';
-    this.pauseButton.setAttribute('aria-label', 'Pause');
     this.pauseButton.append(uiIcon('pause'));
 
-    this.audioButton = element('button', 'hud-button hud-audio');
-    this.audioButton.type = 'button';
-    this.audioButton.setAttribute('aria-label', 'Son');
-    buttons.append(this.pauseButton, this.audioButton);
+    this.settingsButton = element('button', 'hud-button hud-settings');
+    this.settingsButton.type = 'button';
+    this.settingsButton.setAttribute('aria-haspopup', 'dialog');
+    this.settingsButton.append(uiIcon('settings'));
+    onLocale(() => this.settingsButton.setAttribute('aria-label', t().settings.title));
+    buttons.append(this.pauseButton, this.settingsButton);
 
     this.defeat = element('div', 'overlay hud-defeat');
     this.defeat.hidden = true;
@@ -418,14 +379,10 @@ export class Hud {
 
     this.defeatStats = element('dl', 'overlay-stats');
     this.defeatSeeds = element('div', 'overlay-seeds');
-    defeatTitle.textContent = `La ${LORE.buildings.townHall.name.toLowerCase()} est tombée`;
-    defeatText.textContent = 'Les mutants ont eu raison du premier toit de la colonie.';
     // La sauvegarde est déjà effacée : l'adresse seule décide de la carte.
     replay.type = 'button';
-    replay.textContent = 'Rejouer cette carte';
     replay.addEventListener('click', () => window.location.assign(mapUrl(window.location.href, world.seed)));
     fresh.type = 'button';
-    fresh.textContent = 'Nouvelle carte';
     fresh.addEventListener('click', () => window.location.assign(mapUrl(window.location.href, null)));
     defeatPanel.append(defeatTitle, defeatText, this.defeatStats, this.defeatSeeds, replay, fresh, seedLine(world.seed));
     this.defeat.append(defeatPanel);
@@ -439,10 +396,7 @@ export class Hud {
     const endless = element('button', 'button-primary');
 
     this.victoryStats = element('dl', 'overlay-stats');
-    victoryTitle.textContent = LORE.signal.title;
-    victoryText.textContent = LORE.signal.text;
     endless.type = 'button';
-    endless.textContent = 'Continuer sans fin';
     endless.addEventListener('click', () => {
       this.victory.hidden = true;
       this.onContinue();
@@ -482,16 +436,40 @@ export class Hud {
       this.defeat,
     );
 
+    // Les libellés fixes se réécrivent au changement de langue ; les rendus
+    // en cache repartent de zéro, et un écran de fin ouvert se réécrit.
+    onLocale(() => {
+      const text = t().hud;
+
+      this.hintBulb.setAttribute('aria-label', text.hintBulb);
+      this.pauseButton.setAttribute('aria-label', text.pause);
+      defeatTitle.textContent = text.defeat.title;
+      defeatText.textContent = text.defeat.text;
+      replay.textContent = text.defeat.replay;
+      fresh.textContent = text.defeat.fresh;
+      victoryTitle.textContent = t().lore.signal.title;
+      victoryText.textContent = t().lore.signal.text;
+      endless.textContent = text.victory.endless;
+      this.lastQuest = '';
+      this.lastClock = '';
+      this.lastBag = '';
+      this.lastTown = '';
+      this.lastPeople = '';
+      this.lastWeather = '';
+      if (!this.defeat.hidden) this.renderDefeat();
+      if (!this.victory.hidden) this.renderVictory();
+    });
+
     document.addEventListener('pointerdown', this.foldCrewOnTouch, { capture: true });
 
-    world.events.on('placementRejected', ({ reason }) => this.notify(REJECTION_LABELS[reason], 'bad'));
+    world.events.on('placementRejected', ({ reason }) => this.notify(t().hud.rejection[reason], 'bad'));
     world.events.on('roadPaved', ({ fromBag }) => {
       if (fromBag > 0) this.float('stone', -fromBag);
     });
     world.events.on('roadRemoved', ({ toBag }) => {
       if (toBag > 0) this.float('stone', toBag);
     });
-    world.events.on('roadRejected', ({ reason, paved }) => this.notify(ROAD_LABELS[reason](paved), 'bad'));
+    world.events.on('roadRejected', ({ reason, paved }) => this.notify(roadLabel(reason, paved), 'bad'));
     world.events.on('resourceHarvested', ({ item, amount }) => {
       if (item === 'wood') this.harvestedWood = true;
       if (item === 'stone') this.harvestedStone = true;
@@ -505,30 +483,30 @@ export class Hud {
     world.events.on('townDeposited', ({ item, amount }) => this.float(item, -amount));
     world.events.on('itemDropped', ({ item, amount }) => this.float(item, -amount));
     world.events.on('depositRejected', ({ reason }) => {
-      if (reason === 'outOfReach') this.notify('Trop loin de la mairie — rapprochez-vous pour déposer', 'bad');
-      if (reason === 'noTown') this.notify('Pas encore de ville : bâtissez d’abord la mairie', 'bad');
+      if (reason === 'outOfReach') this.notify(t().hud.toast.depositFar, 'bad');
+      if (reason === 'noTown') this.notify(t().hud.toast.depositNoTown, 'bad');
     });
     world.events.on('siteRejected', ({ reason }) => {
-      if (reason === 'outOfReach') this.notify(REJECTION_LABELS.outOfReach, 'bad');
-      if (reason === 'nothingToGive') this.notify('Rien dans le sac que ce chantier attende', 'bad');
+      if (reason === 'outOfReach') this.notify(t().hud.rejection.outOfReach, 'bad');
+      if (reason === 'nothingToGive') this.notify(t().hud.toast.siteNothing, 'bad');
     });
     world.events.on('storeTaken', ({ item, amount }) => this.float(item, amount));
     world.events.on('buildingSupplied', ({ item, amount, source }) => {
       if (source === 'bag') this.float(item, -amount);
     });
     world.events.on('supplyRejected', ({ reason }) => {
-      if (reason === 'outOfReach') this.notify(REJECTION_LABELS.outOfReach, 'bad');
-      if (reason === 'nothingToGive') this.notify('Rien dans le sac ni en ville que ce bâtiment attende', 'bad');
+      if (reason === 'outOfReach') this.notify(t().hud.rejection.outOfReach, 'bad');
+      if (reason === 'nothingToGive') this.notify(t().hud.toast.supplyNothing, 'bad');
     });
-    world.events.on('nurseryHungry', () => this.notify('La nurserie attend de la nourriture pour le prochain enfant', 'bad'));
+    world.events.on('nurseryHungry', () => this.notify(t().hud.toast.nurseryHungry, 'bad'));
     world.events.on('takeRejected', ({ reason }) => {
-      if (reason === 'outOfReach') this.notify(REJECTION_LABELS.outOfReach, 'bad');
-      if (reason === 'empty') this.notify('Le coffre est vide', 'bad');
-      if (reason === 'bagFull') this.notify('Sac plein — rien à prendre de plus', 'bad');
+      if (reason === 'outOfReach') this.notify(t().hud.rejection.outOfReach, 'bad');
+      if (reason === 'empty') this.notify(t().hud.toast.chestEmpty, 'bad');
+      if (reason === 'bagFull') this.notify(t().hud.toast.bagFullTake, 'bad');
     });
     world.events.on('transferRejected', ({ reason }) => {
-      if (reason === 'outOfReach') this.notify(REJECTION_LABELS.outOfReach, 'bad');
-      if (reason === 'bagFull') this.notify('Sac plein — rien à prendre de plus', 'bad');
+      if (reason === 'outOfReach') this.notify(t().hud.rejection.outOfReach, 'bad');
+      if (reason === 'bagFull') this.notify(t().hud.toast.bagFullTake, 'bad');
     });
     world.events.on('inventoryFull', () => this.notify(this.bagFullMessage(), 'bad'));
     world.events.on('harvestRefused', ({ item, wanted, plenty }) => {
@@ -538,27 +516,25 @@ export class Hud {
     world.events.on('buildingCompleted', ({ id }) => {
       const entity = world.entities.get(id);
 
-      if (entity) this.celebrate(entity, `${BUILDINGS[entity.proto].label} bâtie !`);
+      if (entity) this.celebrate(entity, t().hud.float.built(t().buildings[entity.proto].label));
     });
     world.events.on('buildingUpgraded', ({ id, level, fromBag }) => {
       const entity = world.entities.get(id);
 
       for (const [item, amount] of fromBag) this.float(item, -amount);
-      if (entity) this.celebrate(entity, `${buildingLevel(entity.proto, level).label} !`);
+      if (entity) this.celebrate(entity, t().hud.float.upgraded(levelLabel(entity.proto, level)));
     });
     world.events.on('upgradeRejected', ({ reason }) => {
-      if (reason === 'outOfReach') this.notify(REJECTION_LABELS.outOfReach, 'bad');
-      if (reason === 'missingItems') this.notify('Il manque de quoi payer — ni dans le sac, ni en ville', 'bad');
+      if (reason === 'outOfReach') this.notify(t().hud.rejection.outOfReach, 'bad');
+      if (reason === 'missingItems') this.notify(t().hud.toast.upgradeMissing, 'bad');
     });
     world.events.on('playerRepaired', ({ item, amount, fromBag }) => {
       this.repaired = true;
       if (fromBag > 0) this.float(item, -fromBag);
-      if (amount > fromBag) this.notify(`Réparé avec ${amount - fromBag} ${ITEMS[item].label.toLowerCase()} de la ville`, 'good');
+      if (amount > fromBag) this.notify(t().hud.toast.repairedFromTown(amount - fromBag, t().items[item]), 'good');
     });
     world.events.on('repairRejected', ({ reason }) => {
-      const label = REPAIR_LABELS[reason];
-
-      if (label) this.notify(label, 'bad');
+      if (reason !== 'missing') this.notify(t().hud.repair[reason], 'bad');
     });
     world.events.on('waveCountdown', ({ seconds, night, wave, count, boss, queen, from, targetProto, x, y }) => {
       this.showCountdown(String(seconds));
@@ -566,13 +542,13 @@ export class Hud {
     });
     // La veille au soir : Ève prévient, dans sa bulle — ou par radio si elle n'est pas là.
     world.events.on('queenAnnounced', () => {
-      if (world.eve()) this.say([EVE_LINES.queen]);
-      else this.notify(`Ève, par radio : ${EVE_LINES.queen}`, 'bad');
+      if (world.eve()) this.say([t().eve.queen]);
+      else this.notify(t().hud.toast.eveRadio(t().eve.queen), 'bad');
     });
     world.events.on('queenSlain', ({ night }) =>
-      this.showBanner('cleared', 'La Reine des flaques est tombée !', `Nuit ${night} — son cœur radioactif est au sol`, null, BANNER_CLEARED_MS),
+      this.showBanner('cleared', t().hud.wave.queenSlain, t().hud.wave.queenSlainText(night), null, BANNER_CLEARED_MS),
     );
-    world.events.on('duskFell', () => this.notify('La nuit tombe — rentrez !', 'bad'));
+    world.events.on('duskFell', () => this.notify(t().hud.toast.dusk, 'bad'));
     // Une vague qui n'a pas eu son compte à rebours (partie reprise pile avant) s'annonce quand même.
     world.events.on('waveStarted', ({ night, wave, count, boss, queen, from, targetProto, x, y }) => {
       this.announce(night, wave, count, boss, queen, from, targetProto, { x, y });
@@ -589,70 +565,70 @@ export class Hud {
       this.hallLow = low;
     });
     world.events.on('waveCleared', ({ night }) =>
-      this.showBanner('cleared', `Nuit ${night} — vague repoussée !`, 'Ramassez ce que les mutants ont lâché', null, BANNER_CLEARED_MS),
+      this.showBanner('cleared', t().hud.wave.cleared(night), t().hud.wave.clearedText, null, BANNER_CLEARED_MS),
     );
     world.events.on('lootPicked', ({ item, amount }) => this.float(item, amount));
     world.events.on('dawnBroke', ({ night, reward }) => {
-      this.notify(`L’aube ! Nuit ${night} survécue`, 'good');
+      this.notify(t().hud.toast.dawn(night), 'good');
       for (const [item, amount] of reward) this.float(item, amount);
     });
-    world.events.on('buildingDestroyed', ({ proto }) => this.notify(`${BUILDINGS[proto].label} détruite`, 'bad'));
+    world.events.on('buildingDestroyed', ({ proto }) => this.notify(t().hud.toast.destroyed(t().buildings[proto].label), 'bad'));
     world.events.on('siteCancelled', ({ proto, toTown }) =>
-      this.notify(`Chantier annulé : ${BUILDINGS[proto].label} — ${toTown ? 'le livré retourne en ville' : 'le livré reste au sol'}`, 'info'),
+      this.notify(t().hud.toast.siteCancelled(t().buildings[proto].label, toTown), 'info'),
     );
-    world.events.on('childBorn', () => this.notify('Un enfant est né à la nurserie !', 'good'));
-    world.events.on('mutantStunned', () => this.notify('Un mutant assommé ! Touchez-le pour l’emmener à la clinique', 'good'));
-    world.events.on('patientFollowing', () => this.notify('Il vous suit en boitillant — direction la clinique', 'good'));
-    world.events.on('patientAdmitted', () => this.notify('Admis à la clinique : une nuit de soins', 'good'));
-    world.events.on('mutantHealed', () => this.notify('Un ex-mutant sort de la clinique : un porteur de plus !', 'good'));
-    world.events.on('kidGrewUp', ({ name }) => this.notify(`${name} a 14 ans, un ouvrier de plus`, 'good'));
+    world.events.on('childBorn', () => this.notify(t().hud.toast.childBorn, 'good'));
+    world.events.on('mutantStunned', () => this.notify(t().hud.toast.mutantStunned, 'good'));
+    world.events.on('patientFollowing', () => this.notify(t().hud.toast.patientFollowing, 'good'));
+    world.events.on('patientAdmitted', () => this.notify(t().hud.toast.patientAdmitted, 'good'));
+    world.events.on('mutantHealed', () => this.notify(t().hud.toast.mutantHealed, 'good'));
+    world.events.on('kidGrewUp', ({ name }) => this.notify(t().hud.toast.kidGrewUp(name), 'good'));
     world.events.on('townHallDestroyed', () => this.showDefeat());
     world.events.on('weatherAnnounced', ({ id, seconds }) => {
-      const proto = WEATHER[id];
+      const { label, advice } = t().weather[id];
 
-      this.notify(`${proto.label} dans ${seconds} s — ${proto.advice}`, proto.harsh ? 'bad' : 'info');
+      this.notify(t().hud.toast.weatherSoon(label, seconds, advice), WEATHER[id].harsh ? 'bad' : 'info');
     });
-    world.events.on('weatherEnded', ({ id }) => this.notify(`Fin : ${WEATHER[id].label.toLowerCase()}`, 'good'));
-    world.events.on('playerKnockedOut', () => this.notify('Adam s’est évanoui — il se réveille à la mairie', 'bad'));
-    world.events.on('eveArriving', () => this.notify('Quelqu’un arrive à vélo…', 'good'));
+    world.events.on('weatherEnded', ({ id }) => this.notify(t().hud.toast.weatherEnded(t().weather[id].label), 'good'));
+    world.events.on('playerKnockedOut', () => this.notify(t().hud.toast.knockedOut, 'bad'));
+    world.events.on('eveArriving', () => this.notify(t().hud.toast.eveArriving, 'good'));
     world.events.on('caravanArriving', () => {
-      this.notify('Une caravane de troc arrive au bord de la clairière', 'good');
-      this.say([EVE_LINES.caravan]);
+      this.notify(t().hud.toast.caravanArriving, 'good');
+      this.say([t().eve.caravan]);
     });
-    world.events.on('caravanLeaving', () => this.notify('La caravane repart', 'info'));
+    world.events.on('caravanLeaving', () => this.notify(t().hud.toast.caravanLeaving, 'info'));
     world.events.on('traded', ({ fromBag, stored }) => {
       for (const [item, amount] of fromBag) this.float(item, -amount);
       for (const [item, amount] of Object.entries(stored) as [ItemId, number][]) {
-        if (amount > 0) this.notify(`Sac plein : ${amount} ${ITEMS[item].label.toLowerCase()} attend à la mairie`, 'info');
+        if (amount > 0) this.notify(t().hud.toast.storedAtHall(t().hud.toast.storedItem(amount, t().items[item])), 'info');
       }
     });
     world.events.on('tradeRejected', ({ reason }) => {
-      if (reason === 'outOfReach') this.notify('Approchez-vous de la charrette', 'bad');
-      if (reason === 'missingItems') this.notify('Il manque de quoi payer cet échange', 'bad');
-      if (reason === 'done') this.notify('Cet échange est déjà fait', 'bad');
-      if (reason === 'missing') this.notify('La caravane est repartie', 'bad');
+      if (reason === 'outOfReach') this.notify(t().hud.toast.tradeFar, 'bad');
+      if (reason === 'missingItems') this.notify(t().hud.toast.tradeMissing, 'bad');
+      if (reason === 'done') this.notify(t().hud.toast.tradeDone, 'bad');
+      if (reason === 'missing') this.notify(t().hud.toast.tradeGone, 'bad');
     });
     world.events.on('eveArrived', () => {
-      this.notify('Ève a rejoint la colonie !', 'good');
-      this.say(EVE_LINES.arrival);
+      this.notify(t().hud.toast.eveArrived, 'good');
+      this.say(t().eve.arrival);
     });
-    world.events.on('questStarted', ({ quest }) => this.say([QUESTS[quest].give]));
+    world.events.on('questStarted', ({ quest }) => this.say([t().quests[quest].give]));
     world.events.on('questCompleted', ({ quest }) => {
-      this.say([QUESTS[quest].done]);
+      this.say([t().quests[quest].done]);
       this.notify(rewardLabel(QUESTS[quest].reward), 'good');
     });
     world.events.on('labSupplied', ({ item, amount, source }) => {
       if (source === 'bag') this.float(item, -amount);
     });
-    world.events.on('researchStarted', ({ research }) => this.notify(`${RESEARCH[research].label} : la recherche commence`, 'info'));
+    world.events.on('researchStarted', ({ research }) => this.notify(t().hud.toast.researchStarted(t().research[research].label), 'info'));
     world.events.on('researchCompleted', ({ research }) =>
-      this.notify(`Recherche terminée — ${effectLine(research, world.researchDone, world.perks)}`, 'good'),
+      this.notify(t().hud.toast.researchCompleted(effectLine(research, world.researchDone, world.perks)), 'good'),
     );
     world.events.on('researchRejected', ({ reason }) => {
-      if (reason === 'busy') this.notify('Une recherche tourne déjà — une seule à la fois', 'bad');
-      if (reason === 'locked') this.notify('Il manque une recherche avant celle-ci', 'bad');
-      if (reason === 'outOfReach') this.notify(REJECTION_LABELS.outOfReach, 'bad');
-      if (reason === 'nothingToGive') this.notify('Rien dans le sac ni en ville que cette recherche attende', 'bad');
+      if (reason === 'busy') this.notify(t().hud.toast.researchBusy, 'bad');
+      if (reason === 'locked') this.notify(t().hud.toast.researchLocked, 'bad');
+      if (reason === 'outOfReach') this.notify(t().hud.rejection.outOfReach, 'bad');
+      if (reason === 'nothingToGive') this.notify(t().hud.toast.researchNothing, 'bad');
     });
     world.events.on('objectiveCompleted', ({ index, stored }) => {
       // Le dernier objectif, c'est l'écran de victoire qui le fête.
@@ -662,26 +638,25 @@ export class Hud {
       const kept = (Object.entries(stored) as [ItemId, number][]).filter(([, amount]) => amount > 0);
 
       if (kept.length > 0) {
-        this.notify(`Sac plein : ${kept.map(([item, amount]) => `${amount} ${ITEMS[item].label.toLowerCase()}`).join(', ')} attend à la mairie`, 'info');
+        const list = kept.map(([item, amount]) => t().hud.toast.storedItem(amount, t().items[item])).join(', ');
+
+        this.notify(t().hud.toast.storedAtHall(list), 'info');
       }
     });
     // L'antenne s'allume d'abord, ses ondes couvrent l'écran : l'écran du Signal vient après.
     world.events.on('victory', () => window.setTimeout(() => this.showVictory(), SIGNAL_WAVES.durationMs));
     world.events.on('antennaRaised', ({ floor, lureNight }) => {
-      this.notify(`Étage ${floor} debout ! La nuit ${lureNight}, toutes les vagues marcheront sur l’antenne.`, 'info');
+      this.notify(t().hud.toast.antennaRaised(floor, lureNight), 'info');
     });
-    world.events.on('antennaFell', ({ floor }) => this.notify(`L’antenne a perdu un étage — elle retombe à l’étage ${floor}`, 'bad'));
+    world.events.on('antennaFell', ({ floor }) => this.notify(t().hud.toast.antennaFell(floor), 'bad'));
     world.events.on('signalSent', () => {
       // Ève le dit tout de suite, à la place de ce qu'elle disait.
       this.speechQueue.length = 0;
-      this.speechQueue.push(LORE.signal.answer);
+      this.speechQueue.push(t().lore.signal.answer);
       this.speechUntil = 0;
     });
     world.events.on('survivorsArrived', ({ count }) =>
-      this.notify(
-        count > 1 ? `${count} survivants arrivent à l’appel de l’antenne : ${count} porteurs de plus` : 'Un survivant arrive à l’appel de l’antenne : un porteur de plus',
-        'good',
-      ),
+      this.notify(t().hud.toast.survivors(count), 'good'),
     );
   }
 
@@ -707,11 +682,13 @@ export class Hud {
     let line: string;
 
     if (this.mutantCount() > 0) {
-      line = EVE_LINES.busy;
+      line = t().eve.busy;
     } else if (this.talks++ % 2 === 0) {
-      line = quest ? QUESTS[quest].give : EVE_LINES.allDone;
+      line = quest ? t().quests[quest].give : t().eve.allDone;
     } else {
-      line = EVE_LINES.chatter[this.chatterIndex++ % EVE_LINES.chatter.length]!;
+      const { chatter } = t().eve;
+
+      line = chatter[this.chatterIndex++ % chatter.length]!;
     }
 
     this.speechQueue.length = 0;
@@ -812,6 +789,8 @@ export class Hud {
     const key = `${working}:${idle}:${children}`;
 
     if (key === this.lastPeople) return;
+    const label = t().hud.people;
+
     this.lastPeople = key;
 
     const count = (icon: 'toil' | 'child', value: number, label: string): HTMLElement => {
@@ -826,16 +805,16 @@ export class Hud {
 
     lazy.setAttribute('type', 'button');
     lazy.dataset['alert'] = String(idle > 0);
-    lazy.title = `${idle} inactif${idle > 1 ? 's' : ''}${idle > 0 ? ' — taper pour en voir un' : ''}`;
+    lazy.title = label.idle(idle);
     lazy.setAttribute('aria-label', lazy.title);
     lazy.prepend(uiIcon('idle', 18));
     lazy.addEventListener('click', () => this.focusIdle());
 
     this.people.hidden = working + idle + children === 0;
     this.people.replaceChildren(
-      count('toil', working, `${working} au travail`),
+      count('toil', working, label.working(working)),
       lazy,
-      count('child', children, `${children} enfant${children > 1 ? 's' : ''}`),
+      count('child', children, label.children(children)),
     );
   }
 
@@ -875,12 +854,6 @@ export class Hud {
   public toggleDebug(): void {
     this.debug = !this.debug;
     this.stats.hidden = !this.debug;
-  }
-
-  /** L'icône du bouton son suit l'état du moteur audio. */
-  public setMuted(muted: boolean): void {
-    this.audioButton.replaceChildren(uiIcon(muted ? 'soundOff' : 'soundOn'));
-    this.audioButton.dataset['muted'] = String(muted);
   }
 
   /** Une bulle empilée ; la plus ancienne part quand il y en a trop. */
@@ -929,18 +902,14 @@ export class Hud {
     if (key === this.announced) return;
     this.announced = key;
 
-    const plural = count > 1 && !boss;
-    // Tous les bâtiments que vise une vague sont féminins : la mairie, la foreuse, la ferme…
-    const aim = `${plural ? 'ils visent' : 'il vise'} la ${BUILDINGS[target].label.toLowerCase()} !`;
+    const text = t().hud.wave;
+    const direction = t().hud.from[from];
+    const aim = t().buildings[target].label;
 
     this.showBanner(
       'wave',
-      wave === 1 ? `Nuit ${night}` : 'Renforts',
-      queen
-        ? `La Reine des flaques sort ${FROM_LABELS[from]} !`
-        : boss
-          ? `Un gros mutant mène la charge ${FROM_LABELS[from]} : ${aim}`
-          : `${count} mutant${plural ? 's' : ''} arrive${plural ? 'nt' : ''} ${FROM_LABELS[from]} : ${aim}`,
+      wave === 1 ? text.night(night) : text.reinforcements,
+      queen ? text.queen(direction) : boss ? text.boss(direction, aim) : text.mutants(count, direction, aim),
       origin,
       BANNER_WAVE_MS,
     );
@@ -984,12 +953,15 @@ export class Hud {
     if (!this.banner.hidden && !counting) return;
 
     const seconds = Math.ceil(ticks / TICKS_PER_SECOND);
-    const text = `Elle sort dans ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+    const text = t().hud.wave.queenIn(`${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`);
+    const title = t().hud.wave.queenNight(this.world.clock()!.cycle);
 
     if (this.banner.hidden) {
-      this.showBanner('queen', `Nuit ${this.world.clock()!.cycle} — la Reine des flaques`, text, null, Infinity);
-    } else if (this.bannerText.textContent !== text) {
-      this.bannerText.textContent = text;
+      this.showBanner('queen', title, text, null, Infinity);
+    } else {
+      // Le titre ne change qu'avec la langue.
+      if (this.bannerTitle.textContent !== title) this.bannerTitle.textContent = title;
+      if (this.bannerText.textContent !== text) this.bannerText.textContent = text;
     }
   }
 
@@ -1059,15 +1031,17 @@ export class Hud {
     floater.dataset['refused'] = 'true';
     floater.style.left = `${Math.round(x)}px`;
     floater.style.top = `${Math.round(y)}px`;
-    floater.append(itemIcon(item, 18), 'assez');
+    floater.append(itemIcon(item, 18), t().hud.float.enough);
     this.floats.append(floater);
     window.setTimeout(() => floater.remove(), FLOAT_MS);
   }
 
   /** « Sac plein » dit où vider : la ville, le chantier qui attend ce qu'Adam porte, ou le sol. */
   private bagFullMessage(): string {
-    if (this.world.townStock()) return 'Sac plein — allez déposer en ville';
-    return carriesWanted(this.world) ? 'Sac plein — allez livrer le chantier' : 'Sac plein — tapez le sac, puis « Jeter »';
+    const text = t().hud.toast;
+
+    if (this.world.townStock()) return text.bagFullTown;
+    return carriesWanted(this.world) ? text.bagFullSite : text.bagFullDrop;
   }
 
   /** « Mairie bâtie ! » qui monte du toit d'un bâtiment achevé et s'efface. */
@@ -1119,7 +1093,8 @@ export class Hud {
   private updateQuest(): void {
     const { world } = this;
     const hall = world.entities.get(world.townHallId);
-    const name = LORE.buildings.townHall.name;
+    const name = t().buildings.townHall.label;
+    const words = t().hud.quest;
     let key: string;
 
     if (hall?.kind === 'site') {
@@ -1132,14 +1107,14 @@ export class Hud {
       this.quest.dataset['mode'] = 'build';
       this.questTitle.textContent = objectiveLabel(world.objective);
       this.questBody.replaceChildren(
-        text('hud-quest-goal', `Bâtir la ${name}`),
+        text('hud-quest-goal', words.buildHall),
         ...cost.map(([item, needed]) => meter(item, hall.delivered[item] ?? 0, needed)),
       );
 
       const have = cost.reduce((sum, [item, needed]) => sum + Math.min(hall.delivered[item] ?? 0, needed), 0);
       const need = cost.reduce((sum, [, needed]) => sum + needed, 0);
 
-      this.questStrip.replaceChildren(buildingIcon(hall.proto, 22), text('hud-strip-title', `Bâtir la ${name}`), text('hud-strip-value', `${have}/${need}`));
+      this.questStrip.replaceChildren(buildingIcon(hall.proto, 22), text('hud-strip-title', words.buildHall), text('hud-strip-value', `${have}/${need}`));
       return;
     }
 
@@ -1148,9 +1123,9 @@ export class Hud {
       if (key === this.lastQuest) return;
       this.lastQuest = key;
       this.quest.dataset['mode'] = 'fallen';
-      this.questTitle.textContent = 'Défaite';
-      this.questBody.replaceChildren(text('hud-quest-goal', `La ${name.toLowerCase()} est tombée.`));
-      this.questStrip.replaceChildren(uiIcon('heart', 18), text('hud-strip-title', `La ${name.toLowerCase()} est tombée.`));
+      this.questTitle.textContent = words.defeat;
+      this.questBody.replaceChildren(text('hud-quest-goal', words.hallFallen));
+      this.questStrip.replaceChildren(uiIcon('heart', 18), text('hud-strip-title', words.hallFallen));
       return;
     }
 
@@ -1165,7 +1140,7 @@ export class Hud {
     if (this.crewOpen && world.tickCount - this.crewSince >= CREW_FOLD_TICKS) this.crewOpen = false;
 
     // L'heure est à l'horloge de la tête ; la ligne ne parle que de l'attaque.
-    const status = mutants > 0 ? `Nuit ${world.night} · ${mutants} mutant${mutants > 1 ? 's' : ''}` : '';
+    const status = mutants > 0 ? words.status(world.night, mutants) : '';
 
     const quest = world.eve()?.state === 'idle' || world.eve()?.state === 'repair' ? currentQuest(world.questsDone) : null;
     const progress = quest ? questProgress(quest, world.entities.values()) : null;
@@ -1182,9 +1157,10 @@ export class Hud {
 
     // L'objectif reste affiché pendant l'attaque : seul le titre crie.
     this.quest.dataset['mode'] = mutants > 0 ? 'wave' : 'defend';
-    this.questTitle.textContent = mutants > 0 ? 'Attaque !' : objectiveLabel(world.objective);
+    this.questTitle.textContent = mutants > 0 ? words.attack : objectiveLabel(world.objective);
 
-    const goal = text('hud-quest-goal', objective?.title ?? 'Tenir le plus longtemps possible');
+    const title = objective ? t().objectives[world.objective]!.title : words.endless;
+    const goal = text('hud-quest-goal', title);
     const meters = goals.map((condition, i) => goalMeter(condition, reached[i]!.have, reached[i]!.need, waits[i]!));
 
     const hp = element('div', 'hud-meter hud-meter-hp');
@@ -1200,7 +1176,7 @@ export class Hud {
     const line = element('div', 'hud-quest-line');
     const chips = element('div', 'hud-quest-chips');
 
-    chips.append(chip('people', people + workers, 'Habitants'), this.crewChip(crew.total), chip('mutant', world.kills, 'Mutants abattus'));
+    chips.append(chip('people', people + workers, words.inhabitants), this.crewChip(crew.total), chip('mutant', world.kills, words.kills));
     if (status) line.append(text('hud-quest-wave', status));
     line.append(chips);
     this.questBody.replaceChildren(goal, ...meters, hp, line);
@@ -1209,7 +1185,7 @@ export class Hud {
     if (quest && progress) {
       const row = element('div', 'hud-quest-eve');
 
-      row.append(uiIcon('eve', 18), text('hud-quest-eve-label', QUESTS[quest].label), text('hud-meter-value', `${progress.have}/${progress.need}`));
+      row.append(uiIcon('eve', 18), text('hud-quest-eve-label', t().quests[quest].label), text('hud-meter-value', `${progress.have}/${progress.need}`));
       this.questBody.append(row);
     }
 
@@ -1229,7 +1205,7 @@ export class Hud {
       ...(stripWait
         ? [stripWait]
         : [
-            text('hud-strip-title', mutants > 0 ? 'Attaque !' : (objective?.title ?? 'Tenir le plus longtemps possible')),
+            text('hud-strip-title', mutants > 0 ? words.attack : title),
             ...(condition && mutants === 0 ? [text('hud-strip-value', `${reached[shown]!.have}/${reached[shown]!.need}`)] : []),
           ]),
       stripHp,
@@ -1248,7 +1224,7 @@ export class Hud {
     if (!dial) return;
 
     const left = clock(Math.ceil(dial.left / TICKS_PER_SECOND));
-    const detail = dial.night ? `Nuit ${dial.day} · aube dans ${left}` : `Jour ${dial.day} · nuit dans ${left}`;
+    const detail = dial.night ? t().hud.clock.night(dial.day, left) : t().hud.clock.day(dial.day, left);
     const tip = this.world.tickCount < this.clockTipUntil;
     const step = Math.round(dial.progress * DIAL_STEPS) % DIAL_STEPS;
     const key = `${step}:${dial.night}:${dial.warning}:${detail}:${tip}`;
@@ -1261,7 +1237,7 @@ export class Hud {
     if (String(step) !== lastStep || String(dial.night) !== lastNight || String(dial.warning) !== lastWarning) {
       this.dayClockDial.src = dayDialUrl(dayDialSvg(DIAL_ARCS, step / DIAL_STEPS, dial.night, dial.warning));
     }
-    this.dayClockDay.textContent = `J${dial.day}`;
+    this.dayClockDay.textContent = t().hud.clock.short(dial.day);
     this.dayClockTip.textContent = detail;
     this.dayClock.dataset['phase'] = dial.phase;
     this.dayClock.dataset['warning'] = String(dial.warning);
@@ -1287,7 +1263,7 @@ export class Hud {
     const node = text('hud-quest-chip hud-quest-crew', String(total), 'button');
 
     node.setAttribute('type', 'button');
-    node.setAttribute('aria-label', `${total} ouvrier${total > 1 ? 's' : ''} — voir le détail`);
+    node.setAttribute('aria-label', t().hud.quest.crew(total));
     node.setAttribute('aria-expanded', String(this.crewOpen));
     node.prepend(uiIcon('worker', 18));
     node.addEventListener('click', () => {
@@ -1325,7 +1301,12 @@ export class Hud {
 
     this.wanted = advice?.wants ?? null;
 
-    if (hint !== this.lastHint) {
+    // La langue vient de changer : le même conseil, dans l'autre langue, sans le relancer ni le déplier.
+    if (hint !== this.lastHint && this.hintLocale !== locale()) {
+      this.hintLocale = locale();
+      this.lastHint = hint;
+      if (hint !== '') this.hintText.textContent = hint;
+    } else if (hint !== this.lastHint) {
       this.lastHint = hint;
       this.hintSince = this.world.tickCount;
       // Le texte reste en place quand le conseil se tait : il part en se repliant.
@@ -1362,9 +1343,9 @@ export class Hud {
 
     if (shown) {
       const seconds = Math.ceil(((spell ? shown.end : shown.start) - world.tickCount) / TICKS_PER_SECOND);
-      const name = WEATHER[shown.id].label;
+      const name = t().weather[shown.id].label;
 
-      label = spell ? `${name} · ${clock(seconds)}` : `${name} dans ${seconds} s`;
+      label = spell ? `${name} · ${clock(seconds)}` : t().hud.weather.soon(name, seconds);
     }
 
     if (label === this.lastWeather) return;
@@ -1403,7 +1384,9 @@ export class Hud {
     const fill = element('div', 'hud-bag-fill');
     const ratio = inventory.total() / inventory.capacity;
 
-    title.append(uiIcon('bag', 20), text('hud-stock-name', 'Sac'), text('hud-bag-count', `${inventory.total()}/${inventory.capacity}`));
+    const label = t().hud.stock;
+
+    title.append(uiIcon('bag', 20), text('hud-stock-name', label.bag), text('hud-bag-count', `${inventory.total()}/${inventory.capacity}`));
     if (town !== null) {
       const summary = text('hud-bag-town', String(town));
 
@@ -1419,7 +1402,7 @@ export class Hud {
     title.dataset['full'] = String(inventory.freeSpace() <= 0);
     this.bag.setAttribute(
       'aria-label',
-      `Ouvrir le sac : ${inventory.total()} objets sur ${inventory.capacity}${town === null ? '' : `, ${town} en ville`}`,
+      town === null ? label.bagLabel(inventory.total(), inventory.capacity) : label.bagLabelTown(inventory.total(), inventory.capacity, town),
     );
     fill.style.setProperty('--fill', `${Math.round(ratio * 100)}%`);
     fill.dataset['full'] = String(inventory.freeSpace() <= 0);
@@ -1446,14 +1429,16 @@ export class Hud {
 
     const title = element('div', 'hud-bag-title');
 
-    title.append(uiIcon('town', 20), text('hud-stock-name', 'Ville'));
-    if (!stock) title.append(text('hud-town-state', 'à bâtir'));
+    const label = t().hud.stock;
+
+    title.append(uiIcon('town', 20), text('hud-stock-name', label.town));
+    if (!stock) title.append(text('hud-town-state', label.toBuild));
 
     const items = element('div', 'hud-stock-items');
 
     items.append(...entries.map(([item, amount]) => itemAmount(item, amount)));
     this.town.dataset['empty'] = String(entries.length === 0);
-    this.town.title = 'Stock de la ville : ce qui paie les constructions';
+    this.town.title = label.townTitle;
     this.town.replaceChildren(title, items);
   }
 
@@ -1465,13 +1450,14 @@ export class Hud {
 
     if (!objective) return;
 
-    const title = text('hud-celebration-title', (objective as ObjectiveProto).banner ?? 'Objectif réussi !');
+    const words = t().objectives[index]!;
+    const title = text('hud-celebration-title', words.banner || t().hud.objectiveDone);
 
     title.prepend(uiIcon('goal', 28));
     this.celebration.replaceChildren(
       title,
-      text('hud-celebration-goal', objective.title),
-      text('hud-celebration-text', objective.celebration),
+      text('hud-celebration-goal', words.title),
+      text('hud-celebration-text', words.celebration),
     );
     this.celebration.hidden = false;
     this.celebration.style.animation = 'none';
@@ -1534,30 +1520,42 @@ export class Hud {
   /* ---------------------------------------------------------------- victoire */
 
   private showVictory(): void {
+    this.renderVictory();
+    this.victory.hidden = false;
+    this.rainLeaves();
+  }
+
+  /** Le bilan de la victoire, dans la langue du moment. */
+  private renderVictory(): void {
     const { world } = this;
+    const label = t().hud.victory;
     const { adults, children, workers } = world.population();
     let buildings = 0;
 
     for (const entity of world.entities.values()) if (entity.kind !== 'site') buildings += 1;
 
     const rows: [string, string][] = [
-      ['Nuits tenues', String(world.stats.nightsSurvived)],
-      ['Mutants abattus', String(world.kills)],
-      ['Habitants', String(adults + children + workers)],
-      ['Bâtiments', String(buildings)],
-      ['Temps de jeu', clock(Math.floor(world.victoryTick / TICKS_PER_SECOND))],
+      [label.nights, String(world.stats.nightsSurvived)],
+      [label.kills, String(world.kills)],
+      [label.inhabitants, String(adults + children + workers)],
+      [label.buildings, String(buildings)],
+      [label.playTime, clock(Math.floor(world.victoryTick / TICKS_PER_SECOND))],
     ];
 
     this.victoryStats.replaceChildren(
-      ...rows.flatMap(([label, value]) => [text('', label, 'dt'), text('', value, 'dd')]),
+      ...rows.flatMap(([name, value]) => [text('', name, 'dt'), text('', value, 'dd')]),
     );
-    this.victory.hidden = false;
-    this.rainLeaves();
   }
 
   /* ---------------------------------------------------------------- défaite */
 
   private showDefeat(): void {
+    this.renderDefeat();
+    this.defeat.hidden = false;
+  }
+
+  /** Le bilan de la défaite et ses graines, dans la langue du moment. */
+  private renderDefeat(): void {
     const { world } = this;
     const rows = defeatRows(world);
 
@@ -1567,11 +1565,10 @@ export class Hud {
 
     // Les mêmes graines que `main.ts` verse au jardin : le barème est une fonction pure du bilan.
     const seeds = seedsFor(world.colonyScore());
-    const amount = text('overlay-seeds-amount', `+${seeds} graine${seeds > 1 ? 's' : ''}`);
+    const amount = text('overlay-seeds-amount', t().hud.defeat.seeds(seeds));
 
     amount.prepend(uiIcon('seed', 28));
-    this.defeatSeeds.replaceChildren(amount, text('overlay-seeds-hint', 'À planter au jardin des souvenirs, sur l’écran titre.'));
-    this.defeat.hidden = false;
+    this.defeatSeeds.replaceChildren(amount, text('overlay-seeds-hint', t().hud.defeat.seedsHint));
   }
 
   /* ------------------------------------------------------------------ debug */
@@ -1592,11 +1589,11 @@ export class Hud {
 
       const contents = entity.store
         .entries()
-        .map(([item, amount]) => `${ITEMS[item].label} ${amount}`)
+        .map(([item, amount]) => `${t().items[item]} ${amount}`)
         .join(', ');
       const stopped = (entity.kind === 'drill' || entity.kind === 'forge') && entity.blocked ? ' — arrêtée' : '';
 
-      lines.push(`#${entity.id} ${BUILDINGS[entity.proto].label} : ${contents || 'vide'}${stopped}`);
+      lines.push(`#${entity.id} ${t().buildings[entity.proto].label} : ${contents || 'vide'}${stopped}`);
     }
 
     this.stats.textContent = lines.join('\n');
@@ -1652,16 +1649,18 @@ function crewDetail({ byBuilding, porters, assigned, free, missing }: Workforce)
     return node;
   };
 
-  if (byBuilding.length === 0) detail.append(text('hud-quest-crew-label', 'Aucun ouvrier pour l’instant.', 'div'));
-  for (const { proto, count } of byBuilding) detail.append(row(buildingIcon(proto, 22), BUILDINGS[proto].label, count));
+  const label = t().hud.quest;
+
+  if (byBuilding.length === 0) detail.append(text('hud-quest-crew-label', label.noCrew, 'div'));
+  for (const { proto, count } of byBuilding) detail.append(row(buildingIcon(proto, 22), t().buildings[proto].label, count));
   if (byBuilding.length > 0) {
-    detail.append(row(uiIcon('worker', 22), 'Affectés', assigned), row(uiIcon('worker', 22), 'Libres', free));
+    detail.append(row(uiIcon('worker', 22), label.assigned, assigned), row(uiIcon('worker', 22), label.free, free));
   }
-  if (missing > 0) detail.append(row(uiIcon('worker', 22), 'Postes vides', missing));
+  if (missing > 0) detail.append(row(uiIcon('worker', 22), label.emptyPosts, missing));
   if (porters.busy + porters.idle > 0) {
     detail.append(
-      row(uiIcon('worker', 22), 'Porteurs occupés', porters.busy),
-      row(uiIcon('worker', 22), 'Porteurs en attente', porters.idle),
+      row(uiIcon('worker', 22), label.portersBusy, porters.busy),
+      row(uiIcon('worker', 22), label.portersIdle, porters.idle),
     );
   }
   return detail;
@@ -1674,7 +1673,7 @@ function isInhabitant(mobile: Mobile): mobile is Inhabitant {
 
 /** « Objectif 3/7 », ou « Après le Signal » une fois la chaîne bouclée : la partie sans fin. */
 function objectiveLabel(index: number): string {
-  return index < OBJECTIVES.length ? `Objectif ${index + 1}/${OBJECTIVES.length}` : 'Après le Signal';
+  return index < OBJECTIVES.length ? t().hud.quest.objective(index + 1, OBJECTIVES.length) : t().hud.quest.afterSignal;
 }
 
 /**
@@ -1700,12 +1699,16 @@ function goalMeter(goal: Goal, have: number, need: number, wait: GoalWait | null
 function stripTitle(goal: Goal, wait: GoalWait | null, label: string): HTMLElement | null {
   if (!wait) return null;
 
+  const words = t().hud.quest;
+  const time = clock(Math.ceil(wait.remainingTicks / TICKS_PER_SECOND));
   const short =
     wait.blockedBy === 'paused'
-      ? 'en pause'
+      ? words.stripPaused
       : wait.blockedBy
-        ? `${wait.missing} ${ITEMS[wait.blockedBy].label.toLowerCase()}${wait.missing > 1 ? 's' : ''}`
-        : `${goal.type === 'births' ? 'bébé' : 'nuit'} ${clock(Math.ceil(wait.remainingTicks / TICKS_PER_SECOND))}`;
+        ? words.stripMissing(wait.missing, t().items[wait.blockedBy])
+        : goal.type === 'births'
+          ? words.stripBaby(time)
+          : words.stripNight(time);
   const node = text('hud-strip-title', short);
 
   node.title = label;
@@ -1721,16 +1724,12 @@ function stripTitle(goal: Goal, wait: GoalWait | null, label: string): HTMLEleme
 function waitLabel(goal: Goal, wait: GoalWait | null): string {
   if (!wait) return '';
 
-  const nursery = LORE.buildings.nursery.name.toLowerCase();
+  const label = t().hud.quest;
 
-  if (wait.blockedBy === 'paused') return `la ${nursery} est en pause`;
-  if (wait.blockedBy) {
-    const label = ITEMS[wait.blockedBy].label.toLowerCase();
+  if (wait.blockedBy === 'paused') return label.nurseryPaused;
+  if (wait.blockedBy) return label.nurseryWaits(wait.missing, t().items[wait.blockedBy]);
 
-    return `la ${nursery} attend ${wait.missing} ${label}${wait.missing > 1 ? 's' : ''}`;
-  }
-
-  return goal.type === 'births' ? `bébé dans ${clock(Math.ceil(wait.remainingTicks / TICKS_PER_SECOND))}` : '';
+  return goal.type === 'births' ? label.babyIn(clock(Math.ceil(wait.remainingTicks / TICKS_PER_SECOND))) : '';
 }
 
 /** Ce que compte une condition d'objectif, en icône. */
@@ -1754,8 +1753,23 @@ function meter(item: ItemId, have: number, needed: number): HTMLElement {
 /** La récompense d'une quête, dite par le jeu. */
 function rewardLabel(reward: QuestReward): string {
   return reward.type === 'plan'
-    ? `Plan reçu : ${BUILDINGS[reward.building].label}`
-    : `Outil reçu : ${TOOLS[reward.tool].label}`;
+    ? t().hud.toast.planReceived(t().buildings[reward.building].label)
+    : t().hud.toast.toolReceived(t().tools[reward.tool]);
+}
+
+/** Ce que dit la bulle quand un tracé de route n'a pas été pavé en entier ; `paved` tuiles l'ont été. */
+function roadLabel(reason: RoadRejection, paved: number): string {
+  const text = t().hud.road;
+
+  if (reason !== 'noStone') return text[reason];
+  return paved > 0 ? text.noStone(paved) : text.noStoneAtAll;
+}
+
+/** Le nom d'un niveau : le bâtiment au niveau 1, son amélioration au-delà. */
+function levelLabel(id: BuildingId, level: number): string {
+  const words = t().buildings[id];
+
+  return level <= 1 ? words.label : (words.upgrades[level - 2]?.label ?? words.label);
 }
 
 /**
@@ -1766,9 +1780,9 @@ export function defeatRows(world: World): [string, string][] {
   const survived = Math.floor((world.defeatTick || world.tickCount) / TICKS_PER_SECOND);
 
   return [
-    ['Nuits survécues', String(world.stats.nightsSurvived)],
-    ['Mutants abattus', String(world.kills)],
-    ['Temps tenu', clock(survived)],
+    [t().hud.defeat.nights, String(world.stats.nightsSurvived)],
+    [t().hud.defeat.kills, String(world.kills)],
+    [t().hud.defeat.time, clock(survived)],
   ];
 }
 

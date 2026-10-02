@@ -5,22 +5,24 @@
  * travail : Foreuse », « Tom, 27 ans · sans travail ». Pur : testé sans DOM.
  */
 
-import { BUILDINGS } from '../data/buildings.ts';
+import { t } from '../i18n/locale.ts';
 import type { Occupation } from '../sim/world.ts';
 
 export function personText(name: string, age: number, occupation: Occupation): string {
-  return `${name}, ${age} ans · ${occupationText(occupation)}`;
+  return t().hud.person.line(name, age, occupationText(occupation));
 }
 
 function occupationText(occupation: Occupation): string {
+  const text = t().hud.person;
+
   switch (occupation.kind) {
     case 'child':
-      return occupation.days > 0 ? `enfant, travaille dans ${occupation.days} jour${occupation.days > 1 ? 's' : ''}` : 'enfant';
+      return occupation.days > 0 ? text.childDays(occupation.days) : text.child;
     case 'working':
-      return occupation.at ? `au travail : ${BUILDINGS[occupation.at].label}` : 'au travail';
+      return occupation.at ? text.workingAt(t().buildings[occupation.at].label) : text.working;
     case 'idle':
-      return 'sans travail';
+      return text.idle;
     case 'home':
-      return 'à la maison';
+      return text.home;
   }
 }

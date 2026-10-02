@@ -9,6 +9,7 @@
  */
 
 import { PERKS, PERK_IDS, type PerkId } from '../data/perks.ts';
+import { onLocale, t } from '../i18n/locale.ts';
 import { canPlant, type Garden } from '../sim/garden.ts';
 import { perkIcon, uiIcon } from './icons.ts';
 
@@ -38,17 +39,14 @@ export class GardenPanel {
     this.root = document.createElement('div');
     this.root.className = 'panel overlay-panel garden-panel';
     this.root.setAttribute('role', 'dialog');
-    this.root.setAttribute('aria-label', 'Jardin des souvenirs');
 
     const title = document.createElement('h2');
 
     title.className = 'overlay-title';
-    title.textContent = 'Jardin des souvenirs';
 
     const text = document.createElement('p');
 
     text.className = 'overlay-text';
-    text.textContent = 'Chaque colonie tombée laisse des graines. Plantées ici, elles aident toutes les colonies suivantes.';
 
     this.seeds = document.createElement('div');
     this.seeds.className = 'garden-seeds';
@@ -66,22 +64,32 @@ export class GardenPanel {
 
     back.type = 'button';
     back.className = 'button-secondary';
-    back.textContent = 'Retour';
     back.addEventListener('click', onClose);
 
     this.root.append(title, text, this.seeds, this.perks, this.pure, back);
-    this.render(garden);
+    onLocale(() => {
+      const { garden: words } = t().screens;
+
+      this.root.setAttribute('aria-label', words.title);
+      title.textContent = words.title;
+      text.textContent = words.text;
+      back.textContent = words.back;
+      this.render(this.garden);
+    });
   }
 
   private render(garden: Garden): void {
     this.garden = garden;
     this.onChange(garden);
 
-    this.seeds.replaceChildren(uiIcon('seed', 26), `${garden.seeds} graine${garden.seeds > 1 ? 's' : ''}`);
+    const words = t().screens.garden;
+
+    this.seeds.replaceChildren(uiIcon('seed', 26), words.seeds(garden.seeds));
 
     this.perks.replaceChildren(
       ...PERK_IDS.map((id) => {
         const perk = PERKS[id];
+        const text = t().perks[id];
         const row = document.createElement('li');
         const label = document.createElement('div');
         const name = document.createElement('strong');
@@ -89,8 +97,8 @@ export class GardenPanel {
 
         row.className = 'garden-perk';
         label.className = 'garden-perk-text';
-        name.textContent = perk.label;
-        description.textContent = perk.description;
+        name.textContent = text.label;
+        description.textContent = text.description;
         label.append(name, description);
 
         const planted = garden.planted.includes(id);
@@ -101,7 +109,7 @@ export class GardenPanel {
           const badge = document.createElement('span');
 
           badge.className = 'garden-planted';
-          badge.textContent = 'Planté';
+          badge.textContent = words.planted;
           row.append(perkIcon(id), label, badge);
           return row;
         }
@@ -111,7 +119,7 @@ export class GardenPanel {
         button.type = 'button';
         button.className = 'garden-plant';
         button.disabled = !canPlant(garden, id);
-        button.setAttribute('aria-label', `Planter ${perk.label} pour ${perk.cost} graines`);
+        button.setAttribute('aria-label', words.plant(text.label, perk.cost));
         button.append(uiIcon('seed', 18), String(perk.cost));
         button.addEventListener('click', () => this.render(this.actions.plant(id)));
         row.append(perkIcon(id), label, button);
@@ -122,7 +130,7 @@ export class GardenPanel {
     this.pure.setAttribute('aria-checked', String(garden.pure));
     this.pure.replaceChildren(
       Object.assign(document.createElement('span'), { className: 'garden-switch' }),
-      'Partie pure — sans bonus, pour les défis',
+      words.pure,
     );
   }
 }

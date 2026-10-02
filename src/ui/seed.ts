@@ -8,6 +8,8 @@
  * ensuite.
  */
 
+import { onLocale, t } from '../i18n/locale.ts';
+
 /** Le paramètre d'URL qui porte la seed. */
 const SEED_PARAM = 'seed';
 
@@ -61,24 +63,26 @@ export function seedLine(seed: number): HTMLElement {
   const label = document.createElement('span');
 
   label.className = 'seed-label';
-  label.textContent = `Carte n° ${formatSeed(seed)}`;
 
   const share = document.createElement('button');
-  const idle = 'Partager cette carte';
   let reset = 0;
 
   share.type = 'button';
   share.className = 'seed-share';
-  share.textContent = idle;
   share.addEventListener('click', () => {
     void shareMap(seed).then((outcome) => {
       if (outcome === 'shared') return;
-      share.textContent = outcome === 'copied' ? 'Lien copié !' : 'Copie impossible';
+      share.textContent = outcome === 'copied' ? t().screens.seed.copied : t().screens.seed.copyFailed;
       window.clearTimeout(reset);
       reset = window.setTimeout(() => {
-        share.textContent = idle;
+        share.textContent = t().screens.seed.share;
       }, FEEDBACK_MS);
     });
+  });
+  // La ligne vit aussi longtemps que son écran (pause, défaite) : elle suit la langue.
+  onLocale(() => {
+    label.textContent = t().screens.seed.map(formatSeed(seed));
+    share.textContent = t().screens.seed.share;
   });
 
   line.append(label, share);
@@ -95,7 +99,7 @@ async function shareMap(seed: number): Promise<'shared' | 'copied' | 'failed'> {
 
   if (typeof navigator.share === 'function') {
     try {
-      await navigator.share({ title: document.title, text: `Carte n° ${formatSeed(seed)}`, url });
+      await navigator.share({ title: document.title, text: t().screens.seed.map(formatSeed(seed)), url });
       return 'shared';
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') return 'shared';

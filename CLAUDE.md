@@ -410,7 +410,7 @@ pas décodé, le son retombe sur sa synthèse Web Audio (`synth.ts`). La
 musique de fond est un fichier (`public/audio/music/`,
 Ogg Vorbis puis repli `.m4a` pour Safari ; `audio/music.ts`) : préchargée
 sans retarder l'écran titre, bouclée par un `AudioBufferSourceNode`, coupée
-onglet caché, interrupteur « Musique » dans la pause (`mobile-factory:music`).
+onglet caché, interrupteur « Musique » dans les réglages (`mobile-factory:music`).
 Un nouvel effet = une entrée dans `SOUNDS` (`synth.ts`), une dans
 `SAMPLES` (`samples.ts`) avec ses fichiers et leur crédit, et une
 ligne dans `wireAudio()` (`main.ts`), qui est la seule table événement → son.
@@ -446,6 +446,16 @@ Rien ne joue avant un geste du joueur.
 - Le contenu est de la donnée (`src/data/*.ts`, `as const satisfies`).
   `validatePrototypes()` tourne au démarrage en dev et dans les tests.
 - Pas d'ECS, pas de moteur physique, pas de multijoueur.
+- **Langue** (FR / EN) : tout texte visible passe par `t()` (`src/i18n/locale.ts`).
+  Le dictionnaire français (`src/i18n/fr/`) fait foi et reprend les textes
+  de `data/` ; l'anglais (`src/i18n/en/`) doit en avoir chaque clé (typecheck,
+  `i18n.test.ts` : mêmes clés, aucun mot de français). `sim/` et `data/`
+  n'importent jamais `i18n/` : la simulation émet des ids, l'UI traduit. Un
+  libellé fixe se réécrit dans un `onLocale` du constructeur ; un cache de
+  rendu met la langue dans sa clé. Le choix se fait au menu Réglages (bouton
+  engrenage, `ui/settingsPanel.ts` : langue, sons, musique ; il arrête
+  l'horloge) et se garde sous `mobile-factory:locale`
+  (`storage/localLocale.ts`), langue du navigateur au premier lancement.
 
 ## Partie de test
 

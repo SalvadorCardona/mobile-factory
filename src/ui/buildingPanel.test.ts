@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BUILDINGS, buildingLevel, nextUpgrade, type BuildingId } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
+import { setLocale } from '../i18n/locale.ts';
 import { World } from '../sim/world.ts';
 import { panelDescription, siteCoverageText, siteNeedLabel, upgradeEffect } from './buildingPanel.ts';
 
@@ -67,6 +68,15 @@ describe('siteNeedLabel', () => {
 
   it('se tait sur la ville tant que la mairie n’est pas debout', () => {
     expect(siteNeedLabel({ ...line, inTown: null })).toBe('Pierre : 0/8 livrés, 2 en route');
+  });
+
+  it('parle anglais quand la langue change', () => {
+    setLocale('en');
+    try {
+      expect(siteNeedLabel({ ...line, inTown: 5 })).toMatch(/^[^:]+: 0\/8 delivered, 2 on the way, 5 in town$/);
+    } finally {
+      setLocale('fr');
+    }
   });
 
   it('un objet complet est dit livré', () => {

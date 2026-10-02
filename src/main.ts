@@ -40,8 +40,10 @@ import { STEP_MS, World } from './sim/world.ts';
 import { LocalGarden } from './storage/localGarden.ts';
 import { LocalRecord } from './storage/localRecord.ts';
 import { LocalSave, type LoadResult } from './storage/localSave.ts';
+import { LocalLocale } from './storage/localLocale.ts';
 import { LocalZoom } from './storage/localZoom.ts';
 import { TILE_SIZE } from './core/grid.ts';
+import { detectLocale, onLocale, setLocale, t } from './i18n/locale.ts';
 import { BuildingPanel } from './ui/buildingPanel.ts';
 import { CaravanPanel } from './ui/caravanPanel.ts';
 import { InventoryPanel } from './ui/inventoryPanel.ts';
@@ -50,6 +52,7 @@ import { JoystickView } from './ui/joystick.ts';
 import { BuildMenu } from './ui/buildMenu.ts';
 import { Hud } from './ui/hud.ts';
 import { PauseScreen, TitleScreen } from './ui/screens.ts';
+import { SettingsPanel } from './ui/settingsPanel.ts';
 import { formatSeed, parseSeed } from './ui/seed.ts';
 import { testBanner, testScenarioOf } from './ui/testRoute.ts';
 import { ZoomControls } from './ui/zoomControls.ts';
@@ -98,9 +101,9 @@ const ITEM_PARTICLES: Record<ItemId, ParticleStyle> = {
 const AUTOSAVE_MS = 5000;
 
 /** Ce que l'écran titre dit, discrètement, d'une sauvegarde qu'il n'a pas pu reprendre. */
-const LOAD_NOTICES: Partial<Record<LoadResult['status'], string>> = {
-  version: 'Ancienne sauvegarde d’une autre version : nouvelle partie.',
-  corrupt: 'Sauvegarde illisible : nouvelle partie.',
+const LOAD_NOTICES: Partial<Record<LoadResult['status'], () => string>> = {
+  version: () => t().screens.title.oldSave,
+  corrupt: () => t().screens.title.corruptSave,
 };
 
 /** Le compte à rebours d'une vague commence à tant de secondes : c'est là qu'elle s'annonce. */
@@ -135,6 +138,15 @@ async function main(): Promise<void> {
   // Le contrôle d'intégrité des prototypes ne tourne qu'en dev : en production
   // les données sont figées au build, et TypeScript a déjà tout vérifié.
   if (import.meta.env.DEV) assertPrototypes();
+
+  // La langue d'abord : tout ce qui suit s'écrit dans elle. Au premier lancement, celle du navigateur.
+  const localePrefs = LocalLocale.browser();
+
+  setLocale(localePrefs.load() ?? detectLocale(navigator.languages ?? [navigator.language]));
+  onLocale((locale) => {
+    document.documentElement.lang = locale;
+    document.title = t().common.pageTitle;
+  });
 
   // La musique se télécharge pendant que l'écran titre se monte, sans le retarder.
   prefetchMusic();
@@ -258,6 +270,20 @@ async function main(): Promise<void> {
   // L'écran de victoire arrête l'horloge jusqu'à « Continuer sans fin ».
   let celebrating = false;
 
+  // Les réglages ouverts arrêtent l'horloge, comme la pause, sans en montrer l'écran.
+  const settings = new SettingsPanel({
+    setLocale: (locale) => {
+      setLocale(locale);
+      localePrefs.save(locale);
+    },
+    toggleSound: () => settings.setSound(!audio.toggleMuted()),
+    toggleMusic: () => settings.setMusic(audio.toggleMusic()),
+    onToggle: (open) => {
+      accumulator = 0;
+      if (open) audio.play('open');
+    },
+  });
+
   const autosave = wireSave(world, saves, () => started);
   const garden = wireGarden(world, scenario ? new LocalGarden(null) : LocalGarden.browser());
   const record = wireRecord(world, scenario ? new LocalRecord(null) : LocalRecord.browser());
@@ -277,6 +303,7 @@ async function main(): Promise<void> {
       window.umami?.track(loaded.status === 'ok' ? 'partie-reprise' : 'partie-demarree');
     },
     onRestart: () => autosave.restart(),
+    onSettings: () => settings.show(),
   });
 
   function setPaused(value: boolean): void {
@@ -296,6 +323,7 @@ async function main(): Promise<void> {
   });
 
   hud.pauseButton.addEventListener('click', () => setPaused(!paused));
+  hud.settingsButton.addEventListener('click', () => settings.toggle());
   hud.root.append(pause.root);
 
   if (scenario) {
@@ -305,6 +333,8 @@ async function main(): Promise<void> {
   } else {
     hud.root.append(title.root);
   }
+  // Par-dessus tout, écran titre compris : la langue se choisit avant même de jouer.
+  hud.root.append(settings.root);
   mount.append(hud.root);
 
   /*
@@ -317,7 +347,7 @@ async function main(): Promise<void> {
     (event) => {
       if (isTyping(event.target)) return;
 
-      const canOpen = started && !paused && !world.defeated;
+      const canOpen = started && !paused && !settings.open && !world.defeated;
 
       if (buildMenu.handleKey(event.code, event.repeat, canOpen)) {
         event.preventDefault();
@@ -336,17 +366,19 @@ async function main(): Promise<void> {
   });
   window.addEventListener('pagehide', () => autosave.now());
   window.addEventListener('keydown', (event) => {
-    if (event.code === 'KeyP') setPaused(!paused);
+    if (event.code === 'KeyP' && !settings.open) setPaused(!paused);
     // Échap ferme d'abord ce qui est au premier plan ; la pause, si rien ne l'est.
     if (event.code === 'Escape') {
       const action = escapeAction({
+        settingsOpen: settings.open,
         paused,
         menuOpen: buildMenu.isOpen,
         panelOpen: panel.open || trade.open,
         inventoryOpen: inventory.open,
       });
 
-      if (action === 'closeMenu') buildMenu.close();
+      if (action === 'closeSettings') settings.close();
+      else if (action === 'closeMenu') buildMenu.close();
       else if (action === 'closePanel') {
         panel.close();
         trade.close();
@@ -355,7 +387,7 @@ async function main(): Promise<void> {
       else setPaused(action === 'pause');
     }
     // Le sac, comme dans la plupart des jeux sur PC : I, lu par position comme ZQSD.
-    if (event.code === 'KeyI' && !isTyping(event.target) && started && !paused) inventory.toggle();
+    if (event.code === 'KeyI' && !isTyping(event.target) && started && !paused && !settings.open) inventory.toggle();
     if (event.code === 'Backquote' && import.meta.env.DEV) hud.toggleDebug();
   });
 
@@ -396,11 +428,11 @@ async function main(): Promise<void> {
   // La molette zoome sous le curseur ; ni elle ni le pinch d'un pavé tactile ne zooment la page.
   bindWheelZoom(
     renderer.canvas,
-    () => started && !paused,
+    () => started && !paused && !settings.open,
     ({ factor, immediate }, x, y) => renderer.zoomBy(factor, { x, y }, immediate),
   );
 
-  wireAudio(world, audio, hud, pause);
+  wireAudio(world, audio, settings);
   wireParticles(world, renderer);
   wireAlarm(world, renderer, hud);
   // Le joueur vise ou lit : un bâtiment armé, le menu, une fenêtre ou le sac ouverts.
@@ -416,14 +448,16 @@ async function main(): Promise<void> {
   let lastAxisY = 0;
 
   renderer.app.ticker.add((ticker) => {
-    if (started && !paused && !celebrating) accumulator += Math.min(ticker.deltaMS, MAX_FRAME_MS);
+    const running = started && !paused && !settings.open;
+
+    if (running && !celebrating) accumulator += Math.min(ticker.deltaMS, MAX_FRAME_MS);
 
     while (accumulator >= STEP_MS && !celebrating) {
       pushAxisIfChanged();
       world.tick();
       accumulator -= STEP_MS;
     }
-    if (started && !paused) autosave.update(ticker.deltaMS);
+    if (running) autosave.update(ticker.deltaMS);
 
     const roadTool = placement.roadTool();
 
@@ -456,7 +490,7 @@ async function main(): Promise<void> {
     trade.update();
     // Un menu, une fenêtre ou la pause par-dessus : le joystick s'efface et
     // lâche son doigt ; il revient à la fermeture.
-    stick.setEnabled(started && !paused && !world.defeated && !buildMenu.isOpen && !panel.open && !inventory.open && !trade.open);
+    stick.setEnabled(running && !world.defeated && !buildMenu.isOpen && !panel.open && !inventory.open && !trade.open);
     if (hud.root.dataset['stick'] !== String(stick.shown)) hud.root.dataset['stick'] = String(stick.shown);
   });
 
@@ -506,7 +540,7 @@ async function main(): Promise<void> {
  * Un son par événement de simulation. Le moteur ne connaît pas le monde,
  * le monde ne connaît pas le moteur : la table est ici, et nulle part ailleurs.
  */
-function wireAudio(world: World, audio: AudioEngine, hud: Hud, pause: PauseScreen): void {
+function wireAudio(world: World, audio: AudioEngine, settings: SettingsPanel): void {
   // Les navigateurs mobiles exigent un geste avant le moindre son : le
   // premier doigt posé n'importe où déverrouille tout, musique comprise.
   // On réessaie à chaque geste tant que le contexte n'a pas démarré — iOS
@@ -527,10 +561,8 @@ function wireAudio(world: World, audio: AudioEngine, hud: Hud, pause: PauseScree
     if (!document.hidden) for (const type of GESTURES) window.addEventListener(type, unlock);
   });
 
-  hud.setMuted(audio.muted);
-  hud.audioButton.addEventListener('click', () => hud.setMuted(audio.toggleMuted()));
-  pause.setMusic(audio.musicOn);
-  pause.musicButton.addEventListener('click', () => pause.setMusic(audio.toggleMusic()));
+  settings.setSound(!audio.muted);
+  settings.setMusic(audio.musicOn);
 
   // Une partie rechargée au crépuscule ou en pleine vague : l'oreille le sait aussitôt.
   const phase = world.clock()?.phase;
@@ -914,11 +946,11 @@ function readSeed(): number {
  * reprend sur la sienne. L'écran titre le dit, et « Nouvelle partie » ouvre
  * la carte du lien.
  */
-function linkNotice(world: World): string | undefined {
+function linkNotice(world: World): (() => string) | undefined {
   const linked = parseSeed(window.location.search);
 
   if (linked === null || linked === world.seed) return undefined;
-  return `Le lien mène à la carte n° ${formatSeed(linked)} : « Nouvelle partie » pour la jouer.`;
+  return () => t().screens.title.linkedMap(formatSeed(linked));
 }
 
 void main();

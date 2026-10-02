@@ -18,7 +18,7 @@
  */
 
 import { BUILDINGS } from '../data/buildings.ts';
-import { ITEM_IDS, ITEMS, type ItemId } from '../data/items.ts';
+import { ITEM_IDS, type ItemId } from '../data/items.ts';
 import { RECIPES } from '../data/recipes.ts';
 import { consumerRecipe, isConsumer, isStarving } from './consumers.ts';
 import { labNeeds } from './research.ts';
@@ -44,20 +44,16 @@ const TICKS_PER_MINUTE = 20 * 60;
  * Une alerte : une pénurie (une recette attend ce que la ville n'a pas) ou
  * un surplus (un gros stock que rien n'utilise). `target` est le bâtiment
  * concerné — celui qui attend, ou celui qui produit en trop —, vers lequel
- * le repère de bord pointe.
+ * le repère de bord pointe. Des faits, pas de phrase : l'UI les dit dans la
+ * langue du joueur.
+ * - pénurie : `waiting`, la sorte de bâtiment qui attend, et `stock`, ce que
+ *   la ville en a ;
+ * - surplus : `rate`, le débit net arrondi en unités par minute (0 ou moins :
+ *   il ne monte pas), et `stock`.
  */
-export interface FlowAlert {
-  kind: 'shortage' | 'surplus';
-  item: ItemId;
-  text: string;
-  target: EntityId;
-}
-
-/** Comment dire « le bâtiment attend » : avec son article. */
-const WAITING: Partial<Record<Entity['kind'], string>> = {
-  forge: 'la forge attend',
-  nursery: 'la nurserie attend',
-};
+export type FlowAlert =
+  | { kind: 'shortage'; item: ItemId; target: EntityId; waiting: (Nursery | Forge)['kind']; stock: number }
+  | { kind: 'surplus'; item: ItemId; target: EntityId; rate: number; stock: number };
 
 export class TownFlows {
   /** Les échantillons, du plus ancien au plus récent : une quantité par objet, dans l'ordre d'`ITEM_IDS`. */
@@ -115,8 +111,9 @@ export class TownFlows {
         alerts.push({
           kind: 'shortage',
           item,
-          text: `${ITEMS[item].label} : ${WAITING[entity.kind]} (${town.count(item)} en ville)`,
           target: entity.id,
+          waiting: entity.kind,
+          stock: town.count(item),
         });
       }
     }
@@ -133,14 +130,14 @@ export class TownFlows {
       if (stock <= SURPLUS_STOCK || short.has(item) || used(world, town, item)) continue;
 
       const rate = Math.round(this.netRate(item));
-      const amount = rate > 0 ? `${formatRate(rate)}/min` : `${stock} en ville`;
 
       found.push({
         alert: {
           kind: 'surplus',
           item,
-          text: `${ITEMS[item].label} : ${amount}, personne ne l’utilise`,
           target: producerOf(world, item) ?? world.townHallId,
+          rate,
+          stock,
         },
         rate,
         stock,
