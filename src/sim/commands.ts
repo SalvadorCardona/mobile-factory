@@ -62,6 +62,12 @@ export type Command =
    */
   | { type: 'dropItem'; item?: ItemId }
   /**
+   * Le joueur a vu le bâtiment nouvellement débloqué : sa carte du menu de
+   * construction perd son badge « Nouveau ». Choisir la carte l'envoie ;
+   * poser le bâtiment le fait aussi.
+   */
+  | { type: 'seeBuilding'; building: BuildingId }
+  /**
    * Choisit la recherche que mène le labo. Ses prérequis doivent être finis,
    * et aucune recherche ne doit déjà tourner ; une recherche qui attendait
    * encore son coût est remplacée — ce qui était déposé reste au coffre.
@@ -269,8 +275,8 @@ export type PlacementRejection =
   | 'nearHall'
   /**
    * Pas encore débloqué : il faut d'abord le plan, qu'Ève donne en récompense
-   * d'une quête, voir tomber d'autres nuits (`unlockNight`), ou finir
-   * l'acte I (`unlockObjective`).
+   * d'une quête, la recherche du labo qui le débloque (`RESEARCH.unlocks`),
+   * ou finir l'acte I (`unlockObjective`).
    */
   | 'locked'
   /** Un seul par colonie, et il y en a déjà un — chantier compris. */

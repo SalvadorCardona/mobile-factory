@@ -5,14 +5,16 @@
  * garde l'état (`researchDone`, le labo et sa recherche en cours) et lit les
  * effets à un seul endroit, `World.bonus(stat)`, qui renvoie
  * `researchBonus()` : l'arc, le sac, la marche, les porteurs, la récolte, les
- * foreuses et les fermes le consultent au moment d'agir. Les données
+ * foreuses et les fermes le consultent au moment d'agir. Une recherche qui
+ * débloque des bâtiments (`unlocks`) est lue par `World.isUnlocked`. Les données
  * (`WEAPONS`, `PORTERS`, `RECIPES`…) ne sont jamais réécrites : une
  * recherche finie ne change que ce qu'on ajoute à leur valeur.
  */
 
+import type { BuildingId } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
 import { RECIPES } from '../data/recipes.ts';
-import { RESEARCH, type ResearchId, type ResearchStat } from '../data/research.ts';
+import { RESEARCH, RESEARCH_IDS, type ResearchId, type ResearchStat } from '../data/research.ts';
 import { WEAPONS } from '../data/weapons.ts';
 import { PORTERS } from '../data/workers.ts';
 import { INVENTORY_CAPACITY, PLAYER_SPEED_TILES } from './player.ts';
@@ -37,9 +39,14 @@ export function researchBonus(done: readonly ResearchId[], stat: ResearchStat): 
   for (const id of done) {
     const { effect } = RESEARCH[id];
 
-    if (effect.stat === stat) bonus += effect.amount;
+    if (effect?.stat === stat) bonus += effect.amount;
   }
   return bonus;
+}
+
+/** La recherche qui débloque ce bâtiment, ou `null` s'il ne s'obtient pas au labo. */
+export function unlockingResearch(building: BuildingId): ResearchId | null {
+  return RESEARCH_IDS.find((id) => (RESEARCH[id].unlocks as readonly BuildingId[]).includes(building)) ?? null;
 }
 
 /** Le coût d'une recherche, objet par objet. */

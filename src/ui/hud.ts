@@ -60,6 +60,7 @@ import { SIGNAL_WAVES } from '../data/artDirection.ts';
 import { OBJECTIVES, type Goal } from '../data/objectives.ts';
 import { seedsFor } from '../data/perks.ts';
 import { QUESTS, type QuestReward } from '../data/quests.ts';
+import { RESEARCH } from '../data/research.ts';
 import { WEATHER, WEATHER_CALENDAR } from '../data/weather.ts';
 import { dayDialSvg, type UiIcon } from '../art/ui.ts';
 import type { AtlasStats } from '../render/spriteLibrary.ts';
@@ -622,8 +623,18 @@ export class Hud {
     });
     world.events.on('researchStarted', ({ research }) => this.notify(t().hud.toast.researchStarted(t().research[research].label), 'info'));
     world.events.on('researchCompleted', ({ research }) =>
-      this.notify(t().hud.toast.researchCompleted(effectLine(research, world.researchDone, world.perks)), 'good'),
+      this.notify(
+        t().hud.toast.researchCompleted(
+          RESEARCH[research].effect === null ? t().research[research].label : effectLine(research, world.researchDone, world.perks),
+        ),
+        'good',
+      ),
     );
+    world.events.on('buildingsUnlocked', ({ buildings }) => {
+      const labels = buildings.map((building) => t().buildings[building].label).join(', ');
+
+      this.notify(t().hud.toast.buildingsUnlocked(buildings.length, labels), 'good');
+    });
     world.events.on('researchRejected', ({ reason }) => {
       if (reason === 'busy') this.notify(t().hud.toast.researchBusy, 'bad');
       if (reason === 'locked') this.notify(t().hud.toast.researchLocked, 'bad');

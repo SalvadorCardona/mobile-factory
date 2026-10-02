@@ -89,6 +89,7 @@ export const hud: Messages['hud'] = {
     toolReceived: (tool: string): string => `Tool received: ${tool}`,
     researchStarted: (research: string): string => `${research}: research begins`,
     researchCompleted: (effect: string): string => `Research complete — ${effect}`,
+    buildingsUnlocked: (n, labels) => (n > 1 ? `New buildings unlocked: ${labels}` : `New building unlocked: ${labels}`),
     researchBusy: 'Research already running — one at a time',
     researchLocked: 'Another research comes before this one',
     researchNothing: 'Nothing in the bag or in town this research needs',

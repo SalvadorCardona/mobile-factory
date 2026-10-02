@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_SIZE } from '../core/grid.ts';
 import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
+import { unlockingResearch } from './research.ts';
 import { ENEMIES } from '../data/enemies.ts';
 import { ITEM_IDS, type ItemId } from '../data/items.ts';
 import { DAY_CYCLE } from '../data/dayNight.ts';
@@ -600,7 +601,7 @@ describe('four à charbon', () => {
   it('la recette : 3 bois → 1 charbon en 8 s, un ouvrier, un coffre de 10, débloqué avec la forge', () => {
     expect(RECIPES.burnCharcoal).toMatchObject({ building: 'charcoalKiln', duration: 20 * 8, inputs: { wood: 3 }, outputs: { coal: 1 } });
     expect(BUILDINGS.charcoalKiln).toMatchObject({ kind: 'forge', cost: { stone: 10, wood: 6 }, workers: 1, storage: 10 });
-    expect(BUILDINGS.charcoalKiln.unlockNight).toBe(BUILDINGS.forge.unlockNight);
+    expect(unlockingResearch('charcoalKiln')).toBe(unlockingResearch('forge'));
   });
 
   it('30 bois en ville : 10 charbons cuits en 80 s et rapportés à la mairie — rien de perdu ni de dupliqué', () => {

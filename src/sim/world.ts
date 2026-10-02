@@ -47,7 +47,7 @@
 import { Emitter } from '../core/events.ts';
 import { CHUNK_TILES, TILE_SIZE, coordKey, distanceSq, floorDiv, type TileCoord } from '../core/grid.ts';
 import { mulberry32, type StatefulRng } from '../core/rng.ts';
-import { BUILDINGS, REPAIR, RUIN, buildingLevel, nextUpgrade, type BuildingId, type BuildingProto } from '../data/buildings.ts';
+import { BUILDINGS, MENU_BUILDING_IDS, REPAIR, RUIN, buildingLevel, nextUpgrade, type BuildingId, type BuildingProto } from '../data/buildings.ts';
 import { CARAVAN, RARE_OFFERS, type RareOfferId } from '../data/caravan.ts';
 import { CLINIC } from '../data/clinic.ts';
 import { DAWN_REWARD, SURVIVORS } from '../data/dayNight.ts';
@@ -152,6 +152,7 @@ import {
   missingRequirements,
   researchBonus,
   researchCost,
+  unlockingResearch,
 } from './research.ts';
 import { TownFlows } from './flows.ts';
 import { ResourceIndex } from './resources.ts';
@@ -511,6 +512,8 @@ export type WorldEvents = {
   researchStarted: { id: EntityId; research: ResearchId; endTick: number };
   /** La recherche est finie : son effet vaut désormais pour toute la partie. */
   researchCompleted: { id: EntityId; research: ResearchId };
+  /** Ces bâtiments viennent d'entrer au menu de construction : une recherche, un plan, un objectif. */
+  buildingsUnlocked: { buildings: BuildingId[] };
   /** Une commande sur le labo a été refusée. */
   researchRejected: { id: EntityId; reason: ResearchRejection };
   /** `amount` objets viennent d'entrer au labo, pris dans le sac d'Adam ou dans le stock de la ville. */
@@ -601,6 +604,18 @@ export class World {
    * elle, est l'état du labo (`Lab.research`).
    */
   public researchDone: ResearchId[] = [];
+
+  /**
+   * Bâtiments dont la carte du menu a perdu son badge « Nouveau » : choisis
+   * ou posés, ou proposés d'emblée quand la mairie a ouvert le menu.
+   */
+  public seenBuildings = new Set<BuildingId>();
+
+  /** Ce que le menu proposait au tick d'avant ; `null` avant le premier. Pas de l'état : il se relit. */
+  private menuKnown: Set<BuildingId> | null = null;
+
+  /** Ce dont dépendait le menu au dernier compte : tant que rien n'en change, `watchUnlocks` ne recompte pas. */
+  private unlockStamp: { hall: boolean; research: number; quests: number; objective: number } | null = null;
 
   /**
    * Combien de fois chaque offre rare de la caravane a été prise : leur
@@ -753,6 +768,7 @@ export class World {
       perks: [...this.perks],
       giftedSites: [...this.giftedSites],
       researchDone: [...this.researchDone],
+      seenBuildings: [...this.seenBuildings],
       rareTrades: { ...this.rareTrades },
       objective: this.objective,
       victory: this.victory,
@@ -809,6 +825,7 @@ export class World {
     this.perks = [...state.perks];
     this.giftedSites = [...state.giftedSites];
     this.researchDone = [...state.researchDone];
+    this.seenBuildings = new Set(state.seenBuildings);
     this.rareTrades = { ...state.rareTrades };
     this.objective = state.objective;
     this.victory = state.victory;
@@ -903,6 +920,7 @@ export class World {
     }
 
     this.checkObjectives();
+    this.watchUnlocks();
     this.flows.observe(this.tickCount, this.townStock());
   }
 
@@ -929,8 +947,13 @@ export class World {
           break;
         }
         this.openSite(command.building, command.tx, command.ty);
+        this.seenBuildings.add(command.building);
         break;
       }
+
+      case 'seeBuilding':
+        if (this.inMenu(command.building)) this.seenBuildings.add(command.building);
+        break;
 
       case 'transferToSite':
         this.transfer(command.id);
@@ -2144,7 +2167,7 @@ export class World {
     // Grand sac : le sac grandit sur-le-champ, avec tout ce qu'il contient.
     const { effect } = RESEARCH[research];
 
-    if (effect.stat === 'bagCapacity') {
+    if (effect?.stat === 'bagCapacity') {
       const { inventory } = this.player;
 
       this.player.inventory = Store.fromJSON(inventory.capacity + effect.amount, inventory.toJSON());
@@ -2336,12 +2359,59 @@ export class World {
 
   /**
    * Le bâtiment est-il débloqué ? Il faut son plan, s'il en demande un (quêtes
-   * d'Ève), et avoir vu tomber la nuit `unlockNight`.
+   * d'Ève), la recherche qui le débloque, s'il s'obtient au labo, et
+   * l'objectif `unlockObjective`, s'il en attend un.
    */
   public isUnlocked(building: BuildingId): boolean {
     const proto: BuildingProto = BUILDINGS[building];
+    const research = unlockingResearch(building);
 
-    return isUnlocked(building, this.questsDone) && this.night >= proto.unlockNight && this.objective >= (proto.unlockObjective ?? 0);
+    return (
+      isUnlocked(building, this.questsDone) &&
+      (research === null || this.researchDone.includes(research)) &&
+      this.objective >= (proto.unlockObjective ?? 0)
+    );
+  }
+
+  /**
+   * Le bâtiment est-il au menu de construction ? Un bâtiment du menu,
+   * débloqué, une fois la mairie debout : avant, tout le bois lui revient.
+   * Ce qui n'y est pas ne s'y montre pas, même grisé.
+   */
+  public inMenu(building: BuildingId): boolean {
+    return BUILDINGS[building].menu && this.warehouse() !== null && this.isUnlocked(building);
+  }
+
+  /** Sa carte porte-t-elle le badge « Nouveau » ? Au menu, et pas encore choisie ni posée. */
+  public isNewInMenu(building: BuildingId): boolean {
+    return this.inMenu(building) && !this.seenBuildings.has(building);
+  }
+
+  /**
+   * Ce qui entre au menu depuis le tick d'avant, et que le joueur n'a pas
+   * encore vu : `buildingsUnlocked`. Ce que la mairie ouvre d'emblée est vu
+   * dès qu'elle est bâtie (`complete`). Au premier tick après un
+   * chargement, rien n'est annoncé.
+   */
+  private watchUnlocks(): void {
+    // Le menu ne bouge qu'avec la mairie, les recherches, les quêtes et l'objectif : sans eux, rien à recompter.
+    const hall = this.warehouse() !== null;
+    const stamp = this.unlockStamp;
+
+    if (stamp && stamp.hall === hall && stamp.research === this.researchDone.length && stamp.quests === this.questsDone && stamp.objective === this.objective) {
+      return;
+    }
+    this.unlockStamp = { hall, research: this.researchDone.length, quests: this.questsDone, objective: this.objective };
+
+    const known = this.menuKnown;
+    const menu = MENU_BUILDING_IDS.filter((id) => this.inMenu(id));
+
+    this.menuKnown = new Set(menu);
+    if (known === null) return;
+
+    const fresh = menu.filter((id) => !known.has(id) && !this.seenBuildings.has(id));
+
+    if (fresh.length > 0) this.events.emit('buildingsUnlocked', { buildings: fresh });
   }
 
   /**
@@ -2561,6 +2631,8 @@ export class World {
         if (building.id === this.townHallId) {
           this.cycleStartTick = this.tickCount;
           this.nextWaveHeading = this.rng() * Math.PI * 2;
+          // Le menu s'ouvre : ce qu'il propose d'emblée est le départ, pas une découverte — ni badge ni annonce.
+          for (const id of MENU_BUILDING_IDS) if (this.inMenu(id)) this.seenBuildings.add(id);
         }
         break;
     }

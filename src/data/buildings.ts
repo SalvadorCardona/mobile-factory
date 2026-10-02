@@ -88,12 +88,6 @@ export interface BuildingProto {
    * qu'une fois le plan donné par Ève, en récompense d'une quête (`data/quests.ts`).
    */
   plan: boolean;
-  /**
-   * Nuit à voir tomber avant de pouvoir le poser. Le menu montre la carte, grisée,
-   * dès le début : le joueur sait à quoi servira le charbon avant d'en avoir
-   * besoin, sans avoir trop de choix trop tôt.
-   */
-  unlockNight: number;
   /** Sprite du bâtiment : son chantier, sa version finie, sa version endommagée. */
   sprite: SpriteId;
   /** Arme automatique du bâtiment, ou `null` s'il n'en porte pas. */
@@ -145,7 +139,6 @@ export const BUILDINGS = {
     menu: false,
     unique: true,
     plan: false,
-    unlockNight: 0,
     sprite: 'townHall',
     weapon: null,
     upgrades: [],
@@ -167,7 +160,6 @@ export const BUILDINGS = {
     menu: true,
     unique: false,
     plan: false,
-    unlockNight: 0,
     sprite: 'lumberCamp',
     weapon: null,
     upgrades: [],
@@ -190,7 +182,6 @@ export const BUILDINGS = {
     menu: true,
     unique: false,
     plan: false,
-    unlockNight: 0,
     sprite: 'quarry',
     weapon: null,
     upgrades: [],
@@ -212,7 +203,6 @@ export const BUILDINGS = {
     menu: true,
     unique: false,
     plan: false,
-    unlockNight: 0,
     sprite: 'logisticsPost',
     weapon: null,
     upgrades: [],
@@ -234,7 +224,6 @@ export const BUILDINGS = {
     menu: true,
     unique: false,
     plan: false,
-    unlockNight: 0,
     sprite: 'constructionPost',
     weapon: null,
     upgrades: [],
@@ -256,7 +245,6 @@ export const BUILDINGS = {
     menu: true,
     unique: false,
     plan: false,
-    unlockNight: 0,
     sprite: 'drill',
     weapon: null,
     upgrades: [],
@@ -279,7 +267,6 @@ export const BUILDINGS = {
     menu: true,
     unique: false,
     plan: false,
-    unlockNight: 0,
     sprite: 'nursery',
     weapon: null,
     upgrades: [],
@@ -301,7 +288,6 @@ export const BUILDINGS = {
     menu: true,
     unique: false,
     plan: true,
-    unlockNight: 0,
     sprite: 'builderHouse',
     weapon: null,
     upgrades: [],
@@ -323,7 +309,6 @@ export const BUILDINGS = {
     menu: true,
     unique: false,
     plan: false,
-    unlockNight: 0,
     sprite: 'farm',
     weapon: null,
     upgrades: [],
@@ -345,7 +330,6 @@ export const BUILDINGS = {
     menu: true,
     unique: false,
     plan: false,
-    unlockNight: 0,
     sprite: 'watchtower',
     weapon: 'towerBow',
     // Le coût est celui de l'ancienne tour renforcée, moins la tour de planches déjà debout.
@@ -378,7 +362,6 @@ export const BUILDINGS = {
     menu: true,
     unique: false,
     plan: false,
-    unlockNight: 1,
     sprite: 'forge',
     weapon: null,
     upgrades: [],
@@ -401,7 +384,6 @@ export const BUILDINGS = {
     menu: true,
     unique: false,
     plan: false,
-    unlockNight: 1,
     sprite: 'charcoalKiln',
     weapon: null,
     upgrades: [],
@@ -423,7 +405,6 @@ export const BUILDINGS = {
     menu: true,
     unique: false,
     plan: false,
-    unlockNight: 1,
     sprite: 'clinic',
     weapon: null,
     upgrades: [],
@@ -446,7 +427,6 @@ export const BUILDINGS = {
     menu: true,
     unique: true,
     plan: false,
-    unlockNight: 0,
     sprite: 'lab',
     weapon: null,
     upgrades: [],
@@ -471,7 +451,6 @@ export const BUILDINGS = {
     menu: true,
     unique: true,
     plan: false,
-    unlockNight: 0,
     // Après « Tenir 5 nuits » : l'objectif 7.
     unlockObjective: 6,
     hallDistance: 8,

@@ -4,8 +4,10 @@
  * En haut, la recherche choisie : son coût déposé objet par objet (ce qui
  * manque en rouge), puis, une fois payée, sa barre de progression et le
  * temps qui reste. Dessous, toutes les recherches, groupées par thème
- * (Combat, Récolte, Ville), dans une liste qui défile : leur effet chiffré
- * (« Dégâts de l'arc : 1 → 1,5 »), leur coût en icônes — rouge ce qui
+ * (Bâtiments, Combat, Récolte, Ville), dans une liste qui défile : leur effet
+ * chiffré (« Dégâts de l'arc : 1 → 1,5 ») ou les bâtiments qu'elles font
+ * entrer au menu de construction, vignette et nom — c'est ici qu'on découvre
+ * ce qui arrive ensuite —, leur coût en icônes — rouge ce qui
  * manque, sac et ville comptés ensemble —, leur état : terminée, en cours,
  * verrouillée par un prérequis (nommé), ou disponible, avec « Lancer ».
  *
@@ -16,13 +18,14 @@
  * reconstruite que si ce qu'elle affiche a changé.
  */
 
+import type { BuildingId } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
 import { RESEARCH, RESEARCH_IDS, RESEARCH_THEMES, type ResearchId, type ResearchTheme } from '../data/research.ts';
 import { locale, onLocale, t } from '../i18n/locale.ts';
 import { labNeeds, researchCost, researchStatus, type ResearchStatus } from '../sim/research.ts';
 import type { Lab } from '../sim/types.ts';
 import type { World } from '../sim/world.ts';
-import { itemAmount } from './icons.ts';
+import { buildingIcon, itemAmount } from './icons.ts';
 import { effectLine, statusLine } from './researchText.ts';
 
 export class ResearchPanel {
@@ -206,7 +209,8 @@ export class ResearchPanel {
 
     row.dataset['status'] = status;
     name.textContent = t().research[id].label;
-    effect.textContent = effectLine(id, world.researchDone, world.perks);
+    if (RESEARCH[id].effect === null) effect.append(...this.unlocks(id));
+    else effect.textContent = effectLine(id, world.researchDone, world.perks);
     state.textContent = status === 'running' ? t().researchPanel.running : statusLine(id, status, world.researchDone);
     head.append(name);
 
@@ -233,6 +237,21 @@ export class ResearchPanel {
     }
     row.append(state);
     return row;
+  }
+
+  /** « Débloque : » puis chaque bâtiment, vignette et nom : ce qui entrera au menu de construction. */
+  private unlocks(id: ResearchId): (HTMLElement | string)[] {
+    const buildings: readonly BuildingId[] = RESEARCH[id].unlocks;
+
+    return [
+      t().researchPanel.unlocks,
+      ...buildings.map((building) => {
+        const chip = element('span', 'research-unlock');
+
+        chip.append(buildingIcon(building, 28), t().buildings[building].label);
+        return chip;
+      }),
+    ];
   }
 
   /** Ce que la colonie possède d'un objet, à la portée d'Adam : son sac et le stock de la ville. */

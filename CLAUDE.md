@@ -37,7 +37,7 @@ menthe ; à sec — la ville n'en a plus, rien en route —, en corail. Elle
 s'efface au dézoom et au marteau. Sa fenêtre détaille livré / en route /
 en ville ; tout se déduit de `World.siteLedger` (`sim/siteLedger.ts`).
 Une nurserie ou une forge heurtée (ou « Transférer » : le sac, puis la ville
-dans son rayon) reçoit ce que sa recette consomme ; la forge (débloquée à la nuit 1, `unlockNight`)
+dans son rayon) reçoit ce que sa recette consomme ; la forge (débloquée au labo, recherche « Fonderie »)
 fond fer + charbon en plaques de fer, qui renforcent la tour de guet :
 sa fenêtre propose « Renforcer » (niveaux d'amélioration, `upgrades` de
 `data/buildings.ts`, commande `upgradeBuilding`, payée sac puis ville).
@@ -196,7 +196,7 @@ une ; quatre renforcées, elle tombe avant l'aube).
 La **nurserie** fait naître un enfant toutes les trois minutes, contre six
 nourritures (recette `raiseChild`) : sans elles, elle attend.
 
-**Clinique** (`src/data/clinic.ts`, débloquée après la vague 1) — tant
+**Clinique** (`src/data/clinic.ts`, débloquée au labo, « Médecine de fortune ») — tant
 qu'elle a une place, un mutant vaincu peut tomber **assommé** (étoiles, pas
 de butin) au lieu de s'évaporer : mobile `patient`, ni ennemi ni cible.
 Adam le touche, il le suit en boitillant jusqu'à la porte ; après une
@@ -231,8 +231,13 @@ rebours tourne ; une à la fois. Le coût mêle objets communs et **butin
 d'ennemis** : gelée de mutant, croc de loup, pince de crabe, objets qu'on ne
 récolte nulle part. Un effet est un modificateur additif sur une
 statistique, lu en un seul point, `World.bonus(stat)` ; les données ne
-bougent pas. `researchDone` est de l'état ; la recherche en cours est celle
-du labo. La fenêtre du labo est le panneau Recherche (`ui/researchPanel.ts`).
+bougent pas. Une recherche peut aussi **débloquer des bâtiments**
+(`unlocks` : la Fonderie, forge et four à charbon ; la Médecine de fortune,
+la clinique), lus par `World.isUnlocked` ; aucun objectif ni quête n'en
+demande un (`validatePrototypes()`), et Ève envoie au labo quand il faut
+des plaques. `researchDone` est de l'état ; la recherche en cours est celle
+du labo. La fenêtre du labo est le panneau Recherche (`ui/researchPanel.ts`) :
+chaque recherche y dit ce qu'elle débloque, vignette et nom.
 
 **Objectifs** — la partie est une chaîne d'objectifs en données
 (`src/data/objectives.ts`, jugés par `src/sim/objectives.ts`) : mairie,
@@ -334,7 +339,11 @@ Les règles, en résumé :
 - `src/ui/icons.ts` sert icônes d'objets, vignettes de bâtiments et
   pictogrammes (`src/art/ui.ts`) en `data:` URL SVG pour le DOM. Le menu de construction est un tiroir derrière un
   seul bouton, « Bâtir » — aucun autre bouton ne porte ce libellé ; armer un bâtiment passe la carte en mode construction
-  (grille + emprises, `render/ghostLayer.ts`).
+  (grille + emprises, `render/ghostLayer.ts`). Le bouton n'apparaît qu'une fois la mairie
+  debout, et le tiroir ne montre que ce qui se bâtit (`World.inMenu`) : ni carte grisée ni
+  cadenas. Ce qui vient d'y entrer (labo, plan, objectif) porte « Nouveau » jusqu'à ce qu'on
+  le choisisse ou le pose (`seeBuilding`, `World.seenBuildings`, sauvegardé) et s'annonce en
+  toast (`buildingsUnlocked`).
 - La fenêtre d'un bâtiment (`ui/buildingPanel.ts`) laisse voir le jeu : vignette
   et nom en tête, phrase d'ambiance derrière (i), points de vie en une ligne
   (cœur, barre, nombre), ce qui se compte en puces pictogramme + nombre — un

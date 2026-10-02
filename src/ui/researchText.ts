@@ -9,6 +9,7 @@
  * des nombres viennent du dictionnaire de la langue du moment (`t()`).
  */
 
+import type { BuildingId } from '../data/buildings.ts';
 import { bagBonus, type PerkId } from '../data/perks.ts';
 import { RESEARCH, RESEARCH_STATS, type ResearchId, type ResearchStat } from '../data/research.ts';
 import { STAT_BASE, missingRequirements, researchBonus, type ResearchStatus } from '../sim/research.ts';
@@ -37,14 +38,26 @@ export function statValue(stat: ResearchStat, done: readonly ResearchId[], perks
 /**
  * L'effet chiffré d'une recherche : la statistique sans elle, puis avec —
  * « Dégâts de l'arc : 1 → 1,5 ». Une recherche finie se lit pareil : ce
- * qu'elle a changé.
+ * qu'elle a changé. Une recherche qui ne fait que débloquer dit quoi :
+ * « Débloque : Forge, Four à charbon ».
  */
 export function effectLine(id: ResearchId, done: readonly ResearchId[], perks: readonly PerkId[] = []): string {
-  const { stat, amount } = RESEARCH[id].effect;
+  const { effect } = RESEARCH[id];
+
+  if (effect === null) return unlocksLine(id);
+
+  const { stat, amount } = effect;
   const others = done.filter((other) => other !== id);
   const before = statValue(stat, others, perks);
 
   return t().researchPanel.effect(t().researchStats[stat].label, formatStat(stat, before), formatStat(stat, before + amount));
+}
+
+/** Les bâtiments qu'une recherche fait entrer au menu de construction, ou `''`. */
+export function unlocksLine(id: ResearchId): string {
+  const unlocks: readonly BuildingId[] = RESEARCH[id].unlocks;
+
+  return unlocks.length === 0 ? '' : `${t().researchPanel.unlocks} ${unlocks.map((building) => t().buildings[building].label).join(', ')}`;
 }
 
 /** L'état d'une recherche en une ligne, sous son effet. */

@@ -21,12 +21,7 @@ export const menu: Messages['menu'] = {
   road: 'Road',
   roadEffect: (speed) => `Adam and the workers go ${speed}x faster on it. Swipe from tile to tile`,
   roadMeta: 'per tile · no site',
-  locked: {
-    hall: 'Unlocked after the town hall',
-    unique: 'One per colony',
-    objective: (n) => `After goal ${n}`,
-    night: (n) => `From night ${n}`,
-  },
+  newBadge: 'New',
   place: 'Place',
   placeAgain: 'Place again',
   remove: 'Remove',

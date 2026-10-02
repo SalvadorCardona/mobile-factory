@@ -110,6 +110,9 @@ export const hud = {
     toolReceived: (tool: string): string => `Outil reçu : ${tool}`,
     researchStarted: (research: string): string => `${research} : la recherche commence`,
     researchCompleted: (effect: string): string => `Recherche terminée — ${effect}`,
+    /** `labels` : les bâtiments entrés au menu, déjà joints. */
+    buildingsUnlocked: (n: number, labels: string): string =>
+      n > 1 ? `Nouveaux bâtiments débloqués : ${labels}` : `Nouveau bâtiment débloqué : ${labels}`,
     researchBusy: 'Une recherche tourne déjà — une seule à la fois',
     researchLocked: 'Il manque une recherche avant celle-ci',
     researchNothing: 'Rien dans le sac ni en ville que cette recherche attende',
