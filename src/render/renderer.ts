@@ -8,8 +8,8 @@
  * Deux conteneurs seulement :
  * - `world`, translaté par la caméra, où vit tout ce qui a des coordonnées
  *   monde : le sol baké, l'eau qui bouge par-dessus, le rayon de coupe d'une
- *   cabane, les ombres portées (et celles des particules, leurs flaques),
- *   puis le conteneur trié en profondeur (bâtiments, arbres, rochers, personnages), les particules, la
+ *   cabane, les ombres portées (et celles des particules, leurs flaques), le
+ *   cadre de sélection au sol, puis le conteneur trié en profondeur (bâtiments, arbres, rochers, personnages), les particules, la
  *   nuit (une passe de teinte et ses lueurs) et le fantôme de construction ;
  * - `hud`, en pixels écran, où vivent la météo, les ondes du Signal et les repères de bord (le
  *   joystick, lui, est dans le DOM : `ui/joystick.ts`).
@@ -34,6 +34,7 @@ import { IndicatorLayer, indicatorSources, type ScreenRect } from './indicatorLa
 import { NightLayer } from './nightLayer.ts';
 import { ParticleLayer } from './particles.ts';
 import { ResourceLayer } from './resourceLayer.ts';
+import { SelectionLayer } from './selectionLayer.ts';
 import { SignalLayer } from './signalLayer.ts';
 import { SpriteLibrary, type AtlasStats } from './spriteLibrary.ts';
 import { TerrainTiles, terrainSources } from './terrainTiles.ts';
@@ -56,7 +57,8 @@ export class GameRenderer {
   private readonly resourceLayer: ResourceLayer;
   private readonly ghostLayer: GhostLayer;
   private readonly workReach: WorkReachLayer;
-  /** Le bâtiment dont la fenêtre est ouverte : une cabane y montre son rayon de coupe. */
+  private readonly selection: SelectionLayer;
+  /** Le bâtiment dont la fenêtre est ouverte : un cadre l'entoure, une cabane y montre son rayon de coupe. */
   private selected: EntityId | null = null;
   private readonly nightLayer: NightLayer;
   public readonly particles: ParticleLayer;
@@ -89,6 +91,7 @@ export class GameRenderer {
     this.indicators = new IndicatorLayer(world, library);
     this.ghostLayer = new GhostLayer(world, library);
     this.workReach = new WorkReachLayer(world);
+    this.selection = new SelectionLayer(world);
     this.nightLayer = new NightLayer(app.renderer, world);
     this.weather = new WeatherLayer(world, library);
     this.particles = new ParticleLayer(library);
@@ -103,6 +106,7 @@ export class GameRenderer {
       this.shadows,
       this.particles.ground,
       this.weather.ground,
+      this.selection.container,
       this.entityLayer.container,
       this.particles.container,
       this.nightLayer.container,
@@ -292,6 +296,7 @@ export class GameRenderer {
     if (road) this.ghostLayer.updateRoad(road.tool, road.trail, this.app.ticker.deltaMS);
     else this.ghostLayer.update(armed, ghost, block, this.app.ticker.deltaMS);
     this.workReach.update(building ? ghost : null, this.selected);
+    this.selection.update(this.selected, this.app.ticker.deltaMS);
     this.weather.update(this.camera, this.app.ticker.deltaMS, alpha);
     this.signal.update(this.camera, this.app.ticker.deltaMS);
     this.indicators.update(this.camera, this.app.ticker.deltaMS, alpha);
@@ -324,6 +329,7 @@ export class GameRenderer {
     this.entityLayer.destroy();
     this.ghostLayer.destroy();
     this.workReach.destroy();
+    this.selection.destroy();
     this.nightLayer.destroy();
     this.indicators.destroy();
     this.weather.destroy();

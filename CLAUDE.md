@@ -339,7 +339,9 @@ Les règles, en résumé :
   et nom en tête, phrase d'ambiance derrière (i), points de vie en une ligne
   (cœur, barre, nombre), ce qui se compte en puces pictogramme + nombre — un
   tap affiche le libellé, aussi en `aria-label` —, le coffre en pictogramme
-  au-dessus de ses objets.
+  au-dessus de ses objets. Sur la carte, un cadre jaune en contour seul
+  entoure au sol l'emprise du bâtiment ouvert (`render/selectionLayer.ts`,
+  rebond puis respiration) ; un tap dans le vide ferme la fenêtre.
 
 ## Système de sprites
 
