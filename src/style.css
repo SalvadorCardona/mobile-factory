@@ -3681,3 +3681,25 @@ button.hud-stock:active {
   z-index: 50;
   pointer-events: none;
 }
+
+/*
+ * « Partie de test » (`…/test`) : une petite capsule corail tout en haut,
+ * par-dessus le panneau de quête, pour ne jamais la prendre pour sa vraie
+ * partie. Elle ne capte aucun tap.
+ */
+.test-banner {
+  position: absolute;
+  top: calc(var(--safe-top) + 2px);
+  left: 50%;
+  z-index: 5;
+  transform: translateX(-50%);
+  padding: 1px 10px 2px;
+  border-radius: 999px;
+  background: var(--coral);
+  box-shadow: 0 2px 0 var(--coral-shade);
+  color: var(--paper);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  pointer-events: none;
+}
