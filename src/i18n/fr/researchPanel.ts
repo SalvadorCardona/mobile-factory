@@ -12,6 +12,8 @@ export const researchPanel = {
   /** L'état d'une ligne de la liste, recherche en cours. */
   running: 'En cours',
   launch: 'Lancer',
+  /** Devant les bâtiments qu'une recherche fait entrer au menu de construction. */
+  unlocks: 'Débloque :',
   /** Un bonus en pour cent, déjà formaté : « +50 % ». */
   percent: (value: string): string => `+${value} %`,
   zeroPercent: '0 %',

@@ -276,6 +276,8 @@ export const content: Content = {
       repairFetch: 'The town hall is damaged! Bring back wood and charge into it: that fixes it.',
       quarry: 'Out of stone in town? Place a quarry: its workers cut it from the ruins.',
       coming: 'Hang in there: {n} more night{s} and I’m coming with my machine!',
+      labForge: 'To reinforce our towers, we’ll need iron plates. Build a lab: that’s where we’ll learn to forge.',
+      foundry: 'At the lab, start the Foundry: the forge and the charcoal kiln will show up in “Build”.',
       forge: 'The forge is unlocked! Iron and coal in, iron plates out.',
       kiln: 'Forge hungry for coal? A charcoal kiln bakes your spare wood: three logs, one coal.',
       waitBirth: 'The baby arrives in {time}.',
@@ -316,11 +318,20 @@ export const content: Content = {
     farmYield: { label: 'Food per harvest', unit: '' },
   },
   researchThemes: {
+    building: 'Buildings',
     combat: 'Combat',
     harvest: 'Harvest',
     town: 'Town',
   },
   research: {
+    metalworking: {
+      label: 'Foundry',
+      description: 'A stone crucible, a makeshift bellows: iron gives in and melts.',
+    },
+    fieldMedicine: {
+      label: 'Makeshift medicine',
+      description: 'Mutant goo under the magnifier: what changes them can be cured.',
+    },
     sharpArrows: {
       label: 'Fang arrows',
       description: 'Wolf fangs for arrowheads: they bite.',
@@ -403,5 +414,6 @@ export const content: Content = {
   },
   testScenarios: {
     base: 'Small base',
+    lab: 'Lab',
   },
 };

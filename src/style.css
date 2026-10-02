@@ -2046,15 +2046,42 @@ button.hud-stock:active {
   color: var(--muted);
 }
 
-.build-card-lock {
-  display: none;
-  align-self: flex-start;
-  padding: 2px 10px;
+/*
+ * « Nouveau » : une capsule menthe après le nom d'un bâtiment qui vient
+ * d'entrer au menu, jusqu'à ce qu'on le choisisse ou le pose. La couleur et
+ * sa face dessous, comme les boutons ; aucun contour.
+ */
+.build-card-new {
+  display: inline-block;
+  margin: 0 0 3px 6px;
+  padding: 1px 10px;
+  vertical-align: middle;
   border-radius: 999px;
-  background: var(--paper-shade);
-  color: var(--violet-shade);
-  font-size: 14px;
-  font-weight: 600;
+  background: var(--mint);
+  box-shadow: 0 3px 0 var(--mint-shade);
+  color: var(--paper);
+  font-size: 13px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+/* Une carte hors du menu — pas encore débloquée, ou unique et déjà posée — ne se montre pas. */
+.build-card[hidden],
+.build-card-new[hidden] {
+  display: none;
+}
+
+/* Le bouton « Bâtir » porte une pastille tant qu'une carte est nouvelle : on sait qu'il faut l'ouvrir. */
+.build-toggle[data-new='true']::after {
+  content: '';
+  position: absolute;
+  top: -4px;
+  right: 6px;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--mint);
+  box-shadow: 0 3px 0 var(--mint-shade);
 }
 
 /* Sur grand écran, chaque carte porte son effet : la ligne du pied ne sert qu'au téléphone. */
@@ -2110,8 +2137,9 @@ button.hud-stock:active {
     height: 16px;
   }
 
-  .build-card-lock {
-    padding: 1px 8px;
+  .build-card-new {
+    margin-left: 4px;
+    padding: 0 8px;
     font-size: 12px;
   }
 
@@ -2123,22 +2151,6 @@ button.hud-stock:active {
     line-height: 1.2;
     color: var(--muted);
   }
-}
-
-/* Avant la mairie, ou avant sa vague : la carte se lit, mais ne se choisit pas. */
-.build-card[aria-disabled='true'] {
-  background: var(--paper-shade);
-  box-shadow: 0 4px 0 var(--violet-light);
-}
-
-.build-card[aria-disabled='true'] .icon-building,
-.build-card[aria-disabled='true'] .build-card-cost {
-  opacity: 0.45;
-}
-
-.build-card[aria-disabled='true'] .build-card-lock {
-  display: block;
-  background: var(--paper);
 }
 
 .build-armed {
@@ -2793,6 +2805,24 @@ button.hud-stock:active {
   font-weight: 600;
   color: var(--ink-light);
   font-variant-numeric: tabular-nums;
+}
+
+/* Un bâtiment que la recherche débloque : sa vignette et son nom, en capsule. */
+.research-unlock {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 4px 0 0 6px;
+  padding: 2px 10px 2px 2px;
+  border-radius: 999px;
+  background: var(--paper-shade);
+  color: var(--ink);
+  vertical-align: middle;
+}
+
+.research-unlock .icon-building {
+  border-radius: 999px;
+  background: var(--grass);
 }
 
 .research-launch {

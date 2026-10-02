@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_SIZE } from '../core/grid.ts';
 import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
+import { unlockingResearch } from './research.ts';
 import type { ItemId } from '../data/items.ts';
 import { RECIPES } from '../data/recipes.ts';
 import { decodeSave, encodeSave, type SavedEntity } from './save.ts';
@@ -85,7 +86,7 @@ function stoneIn(entity: Entity | undefined): number {
 describe('carrière', () => {
   it('se bâtit en bois seul : c’est elle qui donne la pierre qui manque', () => {
     expect(Object.keys(BUILDINGS.quarry.cost)).toEqual(['wood']);
-    expect(BUILDINGS.quarry.unlockNight).toBe(0);
+    expect(unlockingResearch('quarry')).toBeNull();
     expect(BUILDINGS.quarry.plan).toBe(false);
   });
 

@@ -1,7 +1,8 @@
 /**
  * Recherches du labo — contenu pur.
  *
- * Une recherche = un coût, une durée, des prérequis et un effet. Le coût
+ * Une recherche = un coût, une durée, des prérequis, et un effet ou des
+ * bâtiments à débloquer. Le coût
  * mêle objets communs (bois, pierre, minerai…) et butin d'ennemis (gelée de
  * mutant, croc de loup, pince de crabe, cœur de la Reine) : le combat nourrit
  * la progression.
@@ -16,10 +17,16 @@
  * `World.bonus(stat)` (`sim/research.ts`). Les données du jeu, elles, ne
  * bougent jamais.
  *
+ * Une recherche peut aussi **débloquer des bâtiments** (`unlocks`) : la
+ * forge et le four à charbon, la clinique. Tant qu'elle n'est pas finie, ils
+ * n'apparaissent pas au menu de construction ; le labo est l'endroit où l'on
+ * découvre ce qui arrive ensuite (`World.isUnlocked`).
+ *
  * `validatePrototypes()` vérifie les objets, les quantités, les prérequis
  * (connus, sans cycle) et que le coffre du labo contient le plus gros coût.
  */
 
+import type { BuildingId } from './buildings.ts';
 import type { ItemId } from './items.ts';
 
 /**
@@ -70,6 +77,7 @@ export const RESEARCH_STATS = {
 
 /** Les thèmes du panneau : la liste se lit groupée, dans cet ordre. */
 export const RESEARCH_THEMES = {
+  building: 'Bâtiments',
   combat: 'Combat',
   harvest: 'Récolte',
   town: 'Ville',
@@ -88,11 +96,33 @@ export interface ResearchProto {
   duration: number;
   /** Recherches à finir d'abord (ids de `RESEARCH`, vérifiés par `validatePrototypes()`). */
   requires: readonly string[];
-  /** Le modificateur ajouté à `stat` une fois la recherche finie. */
-  effect: { stat: ResearchStat; amount: number };
+  /** Le modificateur ajouté à `stat` une fois la recherche finie, ou `null` pour une recherche qui ne fait que débloquer. */
+  effect: { stat: ResearchStat; amount: number } | null;
+  /** Bâtiments qui n'entrent au menu de construction qu'une fois la recherche finie. */
+  unlocks: readonly BuildingId[];
 }
 
 export const RESEARCH = {
+  metalworking: {
+    label: 'Fonderie',
+    description: 'Un creuset de pierre, un soufflet de fortune : le fer se laisse fondre.',
+    theme: 'building',
+    cost: { stone: 10, ironOre: 8 },
+    duration: 20 * 45,
+    requires: [],
+    effect: null,
+    unlocks: ['forge', 'charcoalKiln'],
+  },
+  fieldMedicine: {
+    label: 'Médecine de fortune',
+    description: 'De la gelée de mutant sous la loupe : ce qui les change se soigne.',
+    theme: 'building',
+    cost: { food: 6, mutantGoo: 2 },
+    duration: 20 * 45,
+    requires: [],
+    effect: null,
+    unlocks: ['clinic'],
+  },
   sharpArrows: {
     label: 'Flèches à croc',
     description: 'Des crocs de loup en pointe de flèche : ça mord.',
@@ -101,6 +131,7 @@ export const RESEARCH = {
     duration: 20 * 45,
     requires: [],
     effect: { stat: 'bowDamage', amount: 0.5 },
+    unlocks: [],
   },
   quickDraw: {
     label: 'Tir rapide',
@@ -110,6 +141,7 @@ export const RESEARCH = {
     duration: 20 * 60,
     requires: ['sharpArrows'],
     effect: { stat: 'bowCooldown', amount: -4 },
+    unlocks: [],
   },
   irradiatedArrows: {
     label: 'Flèches irradiées',
@@ -119,6 +151,7 @@ export const RESEARCH = {
     duration: 20 * 90,
     requires: ['sharpArrows'],
     effect: { stat: 'bowDamage', amount: 1 },
+    unlocks: [],
   },
   bigBag: {
     label: 'Sac renforcé',
@@ -128,6 +161,7 @@ export const RESEARCH = {
     duration: 20 * 45,
     requires: [],
     effect: { stat: 'bagCapacity', amount: 15 },
+    unlocks: [],
   },
   walkingBoots: {
     label: 'Bottes de marche',
@@ -137,6 +171,7 @@ export const RESEARCH = {
     duration: 20 * 45,
     requires: [],
     effect: { stat: 'walkSpeed', amount: 0.9 },
+    unlocks: [],
   },
   sturdyPorters: {
     label: 'Porteurs endurants',
@@ -146,6 +181,7 @@ export const RESEARCH = {
     duration: 20 * 60,
     requires: ['walkingBoots'],
     effect: { stat: 'porterCarry', amount: 2 },
+    unlocks: [],
   },
   sharpAxes: {
     label: 'Haches affûtées',
@@ -155,6 +191,7 @@ export const RESEARCH = {
     duration: 20 * 45,
     requires: [],
     effect: { stat: 'woodYield', amount: 0.5 },
+    unlocks: [],
   },
   fastDrills: {
     label: 'Foreuses rapides',
@@ -164,6 +201,7 @@ export const RESEARCH = {
     duration: 20 * 60,
     requires: ['sharpAxes'],
     effect: { stat: 'drillTicks', amount: -10 },
+    unlocks: [],
   },
   fertileFarms: {
     label: 'Fermes fertiles',
@@ -173,6 +211,7 @@ export const RESEARCH = {
     duration: 20 * 60,
     requires: [],
     effect: { stat: 'farmYield', amount: 2 },
+    unlocks: [],
   },
 } as const satisfies Record<string, ResearchProto>;
 

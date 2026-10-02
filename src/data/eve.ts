@@ -55,7 +55,14 @@ export const EVE_LINES = {
     quarry: 'Plus de pierre en ville ? Pose une carrière : ses ouvriers la taillent dans les ruines.',
     /** Par radio, entre deux nuits, tant qu'elle n'est pas là. `{n}` : nuits restantes. */
     coming: 'Tiens bon : encore {n} nuit{s} et j’arrive avec ma machine !',
-    /** Une fois la forge débloquée, tant qu'elle n'est pas bâtie : le charbon sert enfin. */
+    /**
+     * La première nuit passée, la forge pas encore débloquée : les plaques de
+     * fer (tour renforcée, antenne) passent par elle, et elle par le labo.
+     * `labForge` sans labo, `foundry` une fois qu'il y en a un.
+     */
+    labForge: 'Pour renforcer nos tours, il faudra des plaques de fer. Bâtis un labo : c’est là qu’on trouvera comment forger.',
+    foundry: 'Au labo, lance la Fonderie : la forge et le four à charbon arriveront dans « Bâtir ».',
+    /** Une fois la forge débloquée au labo, tant qu'elle n'est pas bâtie : le charbon sert enfin. */
     forge: 'La forge est débloquée ! Fer et charbon dedans, plaques de fer dehors.',
     /** La forge bâtie, plus de charbon en ville et pas de four à charbon : le bois en trop s'y change en charbon. */
     kiln: 'Ta forge a faim de charbon ? Un four à charbon cuit ton bois en trop : trois bûches, un charbon.',

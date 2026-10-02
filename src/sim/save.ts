@@ -16,7 +16,7 @@
  */
 
 import { CHUNK_TILES } from '../core/grid.ts';
-import { BUILDINGS, maxLevel, type BuildingId } from '../data/buildings.ts';
+import { BUILDINGS, MENU_BUILDING_IDS, maxLevel, type BuildingId } from '../data/buildings.ts';
 import { RARE_OFFERS, type RareOfferId } from '../data/caravan.ts';
 import { ENEMIES, WILDLIFE, type EnemyId, type WildlifeId } from '../data/enemies.ts';
 import { ITEMS, type ItemId } from '../data/items.ts';
@@ -53,7 +53,7 @@ import { World } from './world.ts';
  * `WorldState` ; une migration de l'ancienne version se branche alors dans
  * `decodeSave`, sinon l'ancienne sauvegarde est ignorée.
  */
-export const SAVE_VERSION = 7;
+export const SAVE_VERSION = 8;
 
 /** Une entité telle qu'elle est rangée : son coffre devient un simple stock. */
 export type SavedEntity = Stored<Entity>;
@@ -100,6 +100,8 @@ export interface WorldState {
   giftedSites: BuildingId[];
   /** Recherches finies, dans l'ordre. Absent des sauvegardes d'avant le labo : aucune. */
   researchDone: ResearchId[];
+  /** Bâtiments du menu dont la carte a perdu son badge « Nouveau ». */
+  seenBuildings: BuildingId[];
   /** Offres rares de la caravane déjà prises, par offre. Absent des sauvegardes d'avant elle : aucune. */
   rareTrades: Partial<Record<RareOfferId, number>>;
   /** Index de l'objectif en cours ; `OBJECTIVES.length` une fois la chaîne bouclée. */
@@ -167,12 +169,13 @@ export function decodeSave(text: string): DecodedSave {
   if (!isRecord(file) || typeof file['version'] !== 'number') return { ok: false, reason: 'corrupt' };
   const version = file['version'];
 
-  if (version !== SAVE_VERSION && version !== 6 && version !== 5 && version !== 4) return { ok: false, reason: 'version' };
+  if (version !== SAVE_VERSION && version !== 7 && version !== 6 && version !== 5 && version !== 4) return { ok: false, reason: 'version' };
 
   try {
     const v5 = version === 4 ? migrateV4(file['state']) : file['state'];
     const v6 = version === 4 || version === 5 ? migrateV5(v5) : v5;
-    const state = version === SAVE_VERSION ? v6 : migrateV6(v6);
+    const v7 = version <= 6 ? migrateV6(v6) : v6;
+    const state = version === SAVE_VERSION ? v7 : migrateV7(v7);
 
     return { ok: true, world: deserialize(state), savedAt: finite(file['savedAt']) };
   } catch {
@@ -270,6 +273,25 @@ function migrateV6(raw: unknown): unknown {
   return { ...raw, player, mobiles };
 }
 
+/**
+ * Version 7 : la forge, le four à charbon et la clinique se débloquaient à
+ * la tombée de la première nuit ; ils s'obtiennent désormais au labo. Une
+ * colonie qui a déjà vu une nuit garde ce qu'elle avait : les recherches
+ * qui les débloquent sont tenues pour finies. Et rien n'est « Nouveau » au
+ * menu d'une partie déjà commencée : tout y a été vu.
+ */
+function migrateV7(raw: unknown): unknown {
+  if (!isRecord(raw)) return raw;
+
+  const done: unknown[] = Array.isArray(raw['researchDone']) ? raw['researchDone'] : [];
+  const granted = typeof raw['night'] === 'number' && raw['night'] >= 1 ? NIGHT_ONE_RESEARCH.filter((id) => !done.includes(id)) : [];
+
+  return { ...raw, researchDone: [...done, ...granted], seenBuildings: [...MENU_BUILDING_IDS] };
+}
+
+/** Les recherches qui débloquent ce que la première nuit débloquait en version 7. */
+const NIGHT_ONE_RESEARCH: readonly ResearchId[] = ['metalworking', 'fieldMedicine'];
+
 /** Les mobiles qui ont un âge. */
 const INHABITANTS: readonly string[] = ['kid', 'eve', 'worker', 'lumberjack'];
 
@@ -325,6 +347,7 @@ function parseState(raw: unknown): WorldState {
     perks: array(state['perks'] ?? []).map((id) => oneOf(id, PERKS) as PerkId),
     giftedSites: array(state['giftedSites'] ?? []).map((id) => oneOf(id, BUILDINGS) as BuildingId),
     researchDone: [...new Set(array(state['researchDone'] ?? []).map((id) => oneOf(id, RESEARCH) as ResearchId))],
+    seenBuildings: [...new Set(array(state['seenBuildings'] ?? []).map((id) => oneOf(id, BUILDINGS) as BuildingId))],
     rareTrades: parseRareTrades(state['rareTrades'] ?? {}),
     ...parseObjectives(state),
     player: parsePlayer(state['player']),

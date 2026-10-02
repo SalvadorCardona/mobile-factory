@@ -25,13 +25,8 @@ export const menu = {
   /** Ce que fait la route ; `speed` est déjà formaté (« 1,6 »). */
   roadEffect: (speed: string): string => `Adam et les ouvriers y vont ${speed} fois plus vite. Glissez de tuile en tuile`,
   roadMeta: 'par tuile · sans chantier',
-  /** Pourquoi une carte est grisée. */
-  locked: {
-    hall: 'Débloqué après la mairie',
-    unique: 'Un seul par colonie',
-    objective: (n: number): string => `Après l’objectif ${n}`,
-    night: (n: number): string => `Dès la nuit ${n}`,
-  },
+  /** Le badge d'une carte qui vient d'entrer au menu, jusqu'à ce qu'on la choisisse ou la pose. */
+  newBadge: 'Nouveau',
   place: 'Poser',
   placeAgain: 'Poser encore',
   remove: 'Retirer',

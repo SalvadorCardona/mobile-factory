@@ -32,7 +32,6 @@ import { Placement } from './input/placement.ts';
 import { PointerRouter } from './input/pointer.ts';
 import { Pinch, bindWheelZoom } from './input/zoom.ts';
 import { GameRenderer } from './render/renderer.ts';
-import { isUnlocked } from './sim/eve.ts';
 import { activePerks, harvestSeeds, plant, type Garden } from './sim/garden.ts';
 import { stageScenario } from './sim/testScenario.ts';
 import type { Entity } from './sim/types.ts';
@@ -196,13 +195,7 @@ async function main(): Promise<void> {
 
   const debug = import.meta.env.DEV && new URLSearchParams(window.location.search).has('debug');
   const hud = new Hud(world, debug);
-  const buildMenu = new BuildMenu(
-    world,
-    placement,
-    MENU_BUILDING_IDS,
-    () => audio.play('open'),
-    (id) => isUnlocked(id, world.questsDone),
-  );
+  const buildMenu = new BuildMenu(world, placement, MENU_BUILDING_IDS, () => audio.play('open'));
   // La fenêtre d'un bâtiment, le sac et le troc occupent la même place : l'un ferme les autres.
   const panel = new BuildingPanel(world, () => {
     inventory.close();

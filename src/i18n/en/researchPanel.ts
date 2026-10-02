@@ -13,6 +13,7 @@ export const researchPanel: Messages['researchPanel'] = {
   transferBag: 'Transfer from the bag, bump the lab, or let the porters do it.',
   running: 'Underway',
   launch: 'Start',
+  unlocks: 'Unlocks:',
   percent: (value) => `+${value}%`,
   zeroPercent: '0%',
   effect: (stat, before, after) => `${stat}: ${before} → ${after}`,

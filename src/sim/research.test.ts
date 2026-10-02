@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_SIZE } from '../core/grid.ts';
-import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
+import { BUILDINGS, MENU_BUILDING_IDS, type BuildingId } from '../data/buildings.ts';
 import { ENEMIES, WILDLIFE } from '../data/enemies.ts';
 import type { ItemId } from '../data/items.ts';
 import { RESEARCH, RESEARCH_IDS, type ResearchId } from '../data/research.ts';
@@ -8,7 +8,7 @@ import { validatePrototypes } from '../data/validate.ts';
 import { WEAPONS } from '../data/weapons.ts';
 import type { ResearchRejection } from './commands.ts';
 import { INVENTORY_CAPACITY } from './player.ts';
-import { STAT_BASE, researchBonus, researchCost, researchStatus } from './research.ts';
+import { STAT_BASE, researchBonus, researchCost, researchStatus, unlockingResearch } from './research.ts';
 import { SAVE_VERSION, decodeSave, encodeSave, type SavedEntity } from './save.ts';
 import { isWalkable, terrainAt } from './terrain.ts';
 import type { Arrow, Lab, Mutant } from './types.ts';
@@ -114,10 +114,10 @@ function finish(world: World, research: ResearchId): void {
 }
 
 describe('recherches — données', () => {
-  it('passe la validation, de six à dix recettes', () => {
+  it('passe la validation, de six à douze recherches', () => {
     expect(validatePrototypes()).toEqual([]);
     expect(RESEARCH_IDS.length).toBeGreaterThanOrEqual(6);
-    expect(RESEARCH_IDS.length).toBeLessThanOrEqual(10);
+    expect(RESEARCH_IDS.length).toBeLessThanOrEqual(12);
   });
 
   it('mêle objets communs et butin : le combat nourrit la recherche, la récolte aussi', () => {
@@ -411,5 +411,138 @@ describe('recherche — sauvegarde', () => {
     if (!decoded.ok) throw new Error(decoded.reason);
     expect(decoded.world.researchDone).toEqual([]);
     expect(decoded.world.lab()).toBeNull();
+  });
+});
+
+describe('recherche — bâtiments débloqués', () => {
+  /** Les bâtiments que le menu propose, dans l'ordre des données. */
+  function menu(world: World): BuildingId[] {
+    return MENU_BUILDING_IDS.filter((id) => world.inMenu(id));
+  }
+
+  function unlocked(world: World): BuildingId[][] {
+    const found: BuildingId[][] = [];
+
+    world.events.on('buildingsUnlocked', ({ buildings }) => found.push(buildings));
+    return found;
+  }
+
+  it('une nouvelle partie ne propose rien avant la mairie, puis seulement ce qui est là au départ, sans badge', () => {
+    const world = new World(drySeed());
+    const events = unlocked(world);
+
+    world.tick();
+    expect(menu(world)).toEqual([]);
+
+    fill(world, BUILDINGS.townHall.cost);
+    world.push({ type: 'transferToSite', id: world.townHallId });
+    world.tick();
+
+    const start = menu(world);
+
+    expect(start).toContain('lab');
+    expect(start).toContain('watchtower');
+    for (const id of ['forge', 'charcoalKiln', 'clinic', 'builderHouse', 'antenna'] as const) expect(start).not.toContain(id);
+    expect(start.filter((id) => world.isNewInMenu(id))).toEqual([]);
+    expect(events).toEqual([]);
+  });
+
+  it('chaque bâtiment débloqué au labo l’est par une seule recherche, qui le dit', () => {
+    expect(unlockingResearch('forge')).toBe('metalworking');
+    expect(unlockingResearch('charcoalKiln')).toBe('metalworking');
+    expect(unlockingResearch('clinic')).toBe('fieldMedicine');
+    expect(unlockingResearch('lab')).toBeNull();
+  });
+
+  it('finir la Fonderie fait entrer la forge et le four au menu, avec badge et annonce', () => {
+    const { world } = withLab();
+    const events = unlocked(world);
+
+    expect(world.inMenu('forge')).toBe(false);
+    expect(world.canPlace('forge', 0, 0)).toBe('locked');
+
+    finish(world, 'metalworking');
+
+    expect(events).toEqual([['forge', 'charcoalKiln']]);
+    expect(world.inMenu('forge')).toBe(true);
+    expect(world.isNewInMenu('forge')).toBe(true);
+    expect(world.isNewInMenu('charcoalKiln')).toBe(true);
+
+    // Choisir la carte efface son badge ; poser l'autre aussi.
+    world.push({ type: 'seeBuilding', building: 'forge' });
+    world.tick();
+    expect(world.isNewInMenu('forge')).toBe(false);
+
+    const { tx, ty } = spot(world, 'charcoalKiln');
+
+    world.push({ type: 'placeBuilding', building: 'charcoalKiln', tx, ty });
+    world.tick();
+    expect(world.isNewInMenu('charcoalKiln')).toBe(false);
+    // Une seule annonce : le tick d'après ne refête rien.
+    expect(events).toHaveLength(1);
+  });
+
+  it('« vu » ne vaut que pour un bâtiment au menu : on n’efface pas d’avance le badge de la clinique', () => {
+    const { world } = withLab();
+
+    world.push({ type: 'seeBuilding', building: 'clinic' });
+    world.tick();
+    expect(world.seenBuildings.has('clinic')).toBe(false);
+  });
+
+  it('les badges et les déblocages survivent au rechargement, sans nouvelle annonce', () => {
+    const { world } = withLab();
+
+    finish(world, 'metalworking');
+    world.push({ type: 'seeBuilding', building: 'forge' });
+    world.tick();
+
+    const decoded = decodeSave(encodeSave(world, 0));
+
+    if (!decoded.ok) throw new Error(decoded.reason);
+
+    const restored = decoded.world;
+    const events = unlocked(restored);
+
+    restored.tick();
+    expect(restored.inMenu('forge')).toBe(true);
+    expect(restored.isNewInMenu('forge')).toBe(false);
+    expect(restored.isNewInMenu('charcoalKiln')).toBe(true);
+    expect(events).toEqual([]);
+  });
+
+  /** Une sauvegarde version 7 : ni `seenBuildings`, ni les recherches qui débloquent. */
+  function version7(world: World, night: number): string {
+    const file = JSON.parse(encodeSave(world, 0)) as { version: number; state: Record<string, unknown> };
+
+    file.version = 7;
+    file.state['night'] = night;
+    delete file.state['seenBuildings'];
+    return JSON.stringify(file);
+  }
+
+  it('une vieille partie qui a vu une nuit garde forge, four et clinique, et rien n’y est « Nouveau »', () => {
+    const { world } = withLab();
+    const decoded = decodeSave(version7(world, 2));
+
+    if (!decoded.ok) throw new Error(decoded.reason);
+
+    const loaded = decoded.world;
+    const events = unlocked(loaded);
+
+    loaded.tick();
+    expect(loaded.researchDone).toEqual(['metalworking', 'fieldMedicine']);
+    expect(menu(loaded)).toEqual(expect.arrayContaining(['forge', 'charcoalKiln', 'clinic']));
+    expect(MENU_BUILDING_IDS.filter((id) => loaded.isNewInMenu(id))).toEqual([]);
+    expect(events).toEqual([]);
+  });
+
+  it('une vieille partie d’avant la première nuit les trouvera au labo', () => {
+    const { world } = withLab();
+    const decoded = decodeSave(version7(world, 0));
+
+    if (!decoded.ok) throw new Error(decoded.reason);
+    expect(decoded.world.researchDone).toEqual([]);
+    expect(decoded.world.inMenu('forge')).toBe(false);
   });
 });

@@ -22,18 +22,18 @@
  * peut le payer — le sac d'Adam et le stock de la ville : vert ce qu'il y a
  * déjà, orange ce qui manque.
  *
- * Tant que la mairie est en chantier, les cartes sont grisées et disent
- * « Débloqué après la mairie » : un débutant ne dépense pas son premier bois
- * ailleurs. Elles restent focalisables (`aria-disabled`, pas `disabled`) pour
- * que le clavier et le lecteur d'écran les parcourent quand même.
+ * Le menu ne montre que ce qui se bâtit : ni carte grisée, ni cadenas
+ * (`World.inMenu`). Tant que la mairie est en chantier, le bouton « Bâtir »
+ * lui-même reste caché : un débutant ne dépense pas son premier bois
+ * ailleurs. Ensuite, un bâtiment n'y entre qu'une fois débloqué — sa
+ * recherche finie au labo (forge, four, clinique), son plan donné par Ève,
+ * son objectif atteint (l'antenne) — et un bâtiment unique déjà posé en sort.
+ * Ce qui reste à découvrir se lit au labo, pas ici.
  *
- * `unlocked` est la liste complète des bâtiments du menu ; `available` dit,
- * à chaque frame, lesquels le joueur peut bâtir. Un bâtiment à plan reste
- * caché tant qu'Ève n'a pas donné le plan (`data/quests.ts`).
- *
- * Un bâtiment qui attend sa nuit (`unlockNight`) garde sa carte, grisée de
- * la même façon, avec son coût et « Dès la nuit N » : le joueur voit à
- * quoi servira le charbon avant de pouvoir poser la forge.
+ * Un bâtiment qui vient d'entrer porte « Nouveau » jusqu'à ce qu'on choisisse
+ * sa carte (commande `seeBuilding`) ou qu'on le pose ; le bouton « Bâtir »
+ * a une pastille tant qu'il en reste un. L'annonce, elle, est un toast du HUD
+ * (`buildingsUnlocked`).
  *
  * Les cartes se rangent à l'ouverture du tiroir, par utilité du moment
  * (`buildOrder.ts`) : la tour de guet en tête au crépuscule et la nuit, puis
@@ -60,7 +60,7 @@
  */
 
 import { gridStep, type GridMove } from '../core/gridNav.ts';
-import { BUILDINGS, type BuildingProto, type BuildingId } from '../data/buildings.ts';
+import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
 import { ROADS } from '../data/roads.ts';
 import type { Placement } from '../input/placement.ts';
@@ -109,8 +109,7 @@ export class BuildMenu {
   private readonly toolButton: HTMLButtonElement;
   private readonly cards = new Map<BuildingId, HTMLButtonElement>();
   private readonly roadCard: HTMLButtonElement;
-  private readonly roadLock: HTMLElement;
-  private readonly locks = new Map<BuildingId, HTMLElement>();
+  private readonly badges = new Map<BuildingId, HTMLElement>();
   private readonly costs: { item: ItemId; amount: number; element: HTMLElement }[] = [];
   /** Les libellés fixes des cartes, réécrits à chaque changement de langue. */
   private readonly relabels: (() => void)[] = [];
@@ -121,19 +120,12 @@ export class BuildMenu {
   private readonly world: World;
   private readonly placement: Placement;
   private readonly onOpen: () => void;
-  private readonly available: (id: BuildingId) => boolean;
 
-  public constructor(
-    world: World,
-    placement: Placement,
-    unlocked: readonly BuildingId[],
-    onOpen: () => void = () => {},
-    available: (id: BuildingId) => boolean = () => true,
-  ) {
+  /** `buildings` : tous les bâtiments du menu ; chacun ne se montre qu'une fois débloqué. */
+  public constructor(world: World, placement: Placement, buildings: readonly BuildingId[], onOpen: () => void = () => {}) {
     this.world = world;
     this.placement = placement;
     this.onOpen = onOpen;
-    this.available = available;
     this.root = document.createElement('div');
     this.root.className = 'build-menu';
 
@@ -173,14 +165,13 @@ export class BuildMenu {
     this.list = document.createElement('div');
     this.list.className = 'build-drawer-list';
 
-    for (const id of unlocked) {
+    for (const id of buildings) {
       const card = this.card(id);
 
       this.cards.set(id, card);
       this.list.append(card);
     }
 
-    this.roadLock = document.createElement('div');
     this.roadCard = this.road();
     this.list.append(this.roadCard);
 
@@ -255,7 +246,7 @@ export class BuildMenu {
     });
   }
 
-  /** Une carte : vignette, nom, effet, coût et ouvriers en puces, emprise. */
+  /** Une carte : vignette, nom et badge « Nouveau », effet, coût et ouvriers en puces, emprise. */
   private card(id: BuildingId): HTMLButtonElement {
     const proto = BUILDINGS[id];
     const card = button('', () => {
@@ -263,7 +254,8 @@ export class BuildMenu {
         this.swallowClick = false;
         return;
       }
-      if (this.lockReason(id) !== null) return;
+      if (!this.shown(id)) return;
+      if (this.world.isNewInMenu(id)) this.world.push({ type: 'seeBuilding', building: id });
       this.close();
       this.placement.select(id);
     });
@@ -283,6 +275,14 @@ export class BuildMenu {
 
     name.className = 'build-card-name';
     body.append(name);
+
+    const badge = document.createElement('span');
+
+    badge.className = 'build-card-new';
+    badge.textContent = t().menu.newBadge;
+    badge.hidden = true;
+    this.badges.set(id, badge);
+    name.append(badge);
 
     const effect = document.createElement('div');
 
@@ -344,12 +344,6 @@ export class BuildMenu {
     footer.append(cost, meta);
     body.append(footer);
 
-    const lock = document.createElement('div');
-
-    lock.className = 'build-card-lock';
-    this.locks.set(id, lock);
-    body.append(lock);
-
     card.append(body);
     return card;
   }
@@ -394,8 +388,7 @@ export class BuildMenu {
     meta.className = 'build-card-meta';
     footer.className = 'build-card-footer';
     footer.append(cost, meta);
-    this.roadLock.className = 'build-card-lock';
-    body.append(name, effect, footer, this.roadLock);
+    body.append(name, effect, footer);
     card.append(body);
     this.relabels.push(() => {
       icon.alt = t().screens.road;
@@ -441,7 +434,7 @@ export class BuildMenu {
     const phase = this.world.clock()?.phase;
     const order = buildOrder([...this.cards.keys()], {
       threat: phase === 'dusk' || phase === 'night',
-      locked: (id) => this.lockReason(id) !== null,
+      locked: (id) => !this.shown(id),
       affordable: (id) => this.affordable(id),
     });
 
@@ -516,7 +509,7 @@ export class BuildMenu {
         if (!repeat) this.placement.cancel();
         return true;
       }
-      if (code !== 'Space' || !canOpen || this.placement.mode !== 'idle') return false;
+      if (code !== 'Space' || !canOpen || this.placement.mode !== 'idle' || !this.unlocked()) return false;
       if (!repeat) this.open(true);
       return true;
     }
@@ -578,40 +571,33 @@ export class BuildMenu {
     return this.world.entities.get(this.world.townHallId)?.kind === 'townHall';
   }
 
-  /** Pourquoi la carte est grisée, ou `null` si le joueur peut la choisir. */
-  private lockReason(id: BuildingId): string | null {
-    const { locked } = t().menu;
-
-    if (!this.unlocked()) return locked.hall;
-    if (this.world.atLimit(id)) return locked.unique;
-
-    const { unlockNight, unlockObjective }: BuildingProto = BUILDINGS[id];
-
-    if (unlockObjective !== undefined && this.world.objective < unlockObjective) return locked.objective(unlockObjective);
-    return this.world.night < unlockNight ? locked.night(unlockNight) : null;
+  /** La carte est-elle au menu ? Débloquée, et pas un bâtiment unique déjà posé. */
+  private shown(id: BuildingId): boolean {
+    return this.world.inMenu(id) && !this.world.atLimit(id);
   }
 
   /** Recalcule l'état visible. Appelé à chaque changement de placement et à chaque frame. */
   public refresh(): void {
     const armed = this.placement.armedBuilding();
 
+    let fresh = false;
+
     for (const [id, card] of this.cards) {
-      const reason = this.lockReason(id);
-      const locked = String(reason !== null);
-      const lock = this.locks.get(id);
+      const shown = this.shown(id);
+      const isNew = shown && this.world.isNewInMenu(id);
+      const badge = this.badges.get(id);
 
       card.dataset['active'] = String(armed === id);
-      card.hidden = !this.available(id);
-      if (card.getAttribute('aria-disabled') !== locked) card.setAttribute('aria-disabled', locked);
-      if (lock && reason !== null && lock.textContent !== reason) lock.textContent = reason;
+      if (card.hidden === shown) card.hidden = !shown;
+      if (badge && badge.hidden === isNew) badge.hidden = !isNew;
+      fresh ||= isNew;
     }
 
     const roadTool = this.placement.roadTool();
-    const roadLocked = String(!this.unlocked());
 
     this.roadCard.dataset['active'] = String(roadTool !== null);
-    if (this.roadCard.getAttribute('aria-disabled') !== roadLocked) this.roadCard.setAttribute('aria-disabled', roadLocked);
-    setText(this.roadLock, this.unlocked() ? '' : t().menu.locked.hall);
+    if (this.roadCard.hidden === this.unlocked()) this.roadCard.hidden = !this.unlocked();
+    this.toggleButton.dataset['new'] = String(fresh);
 
     // Le sac et la ville ne comptent que tiroir ouvert : fermé, personne ne voit les coûts.
     if (this.opened) {
@@ -628,7 +614,7 @@ export class BuildMenu {
     const idle = this.placement.mode === 'idle';
     const placing = this.placement.mode === 'placing';
 
-    this.toggleButton.hidden = !idle || this.opened;
+    this.toggleButton.hidden = !idle || this.opened || !this.unlocked();
     this.armedBar.hidden = idle;
     this.armedBar.dataset['placing'] = String(placing);
 

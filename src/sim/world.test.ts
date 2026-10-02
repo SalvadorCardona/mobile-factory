@@ -1214,7 +1214,7 @@ describe('forge', () => {
   const SMELT = RECIPES.smeltPlate;
   const FORGE = BUILDINGS.forge;
 
-  it('reste verrouillée tant que les premières vagues ne sont pas passées', () => {
+  it('reste verrouillée tant que la Fonderie n’est pas trouvée au labo', () => {
     const world = new World(7);
     const origin = worldToTile(world.player.x, world.player.y);
     const rejected: PlacementRejection[] = [];
@@ -1227,14 +1227,14 @@ describe('forge', () => {
     world.tick();
     expect(rejected).toEqual(['locked']);
 
-    world.night = FORGE.unlockNight;
+    world.researchDone.push('metalworking');
     expect(world.isUnlocked('forge')).toBe(true);
   });
 
   it('fond fer et charbon en plaques, à la cadence de la recette, puis s’arrête faute d’entrées', () => {
     const world = new World(7);
 
-    world.night = FORGE.unlockNight;
+    world.researchDone.push('metalworking');
 
     const forge = buildNear(world, 'forge');
     const produced: ItemId[] = [];
@@ -1276,7 +1276,7 @@ describe('forge', () => {
   it('fait de la place dans le sac pour le fer et le charbon qu’elle accepte', () => {
     const world = new World(7);
 
-    world.night = FORGE.unlockNight;
+    world.researchDone.push('metalworking');
 
     const forge = buildNear(world, 'forge');
     const coal = world.accepts(forge, 'coal');
@@ -1289,7 +1289,7 @@ describe('forge', () => {
   it('ne rend que ses plaques, et garde le fer et le charbon au four', () => {
     const world = new World(7);
 
-    world.night = FORGE.unlockNight;
+    world.researchDone.push('metalworking');
 
     const forge = buildNear(world, 'forge');
 
@@ -1313,7 +1313,7 @@ describe('forge', () => {
   it('partage son coffre entre fer et charbon, au prorata de la recette', () => {
     const world = new World(7);
 
-    world.night = FORGE.unlockNight;
+    world.researchDone.push('metalworking');
 
     const forge = buildNear(world, 'forge');
 
@@ -1328,7 +1328,7 @@ describe('forge', () => {
   it('se remplit au contact d’Adam, puis lui rend ses plaques', () => {
     const world = new World(7);
 
-    world.night = FORGE.unlockNight;
+    world.researchDone.push('metalworking');
 
     const forge = buildNear(world, 'forge');
 

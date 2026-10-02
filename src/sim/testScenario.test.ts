@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BUILDINGS } from '../data/buildings.ts';
+import { BUILDINGS, MENU_BUILDING_IDS } from '../data/buildings.ts';
 import { TEST_SCENARIOS, type TestScenarioId } from '../data/testScenario.ts';
 import { validatePrototypes } from '../data/validate.ts';
 import { encodeSave } from './save.ts';
@@ -43,6 +43,13 @@ describe('parties de test', () => {
     }
     expect(Object.fromEntries(world.townStock()!.entries())).toEqual(scenario.town);
     expect(Object.fromEntries(world.player.inventory.entries())).toEqual(scenario.bag);
+  });
+
+  it.each(IDS)('%s ouvre le menu sans badge « Nouveau » : la base est le départ', (id) => {
+    const world = stageScenario(TEST_SCENARIOS[id]);
+
+    world.tick();
+    expect(MENU_BUILDING_IDS.filter((building) => world.isNewInMenu(building))).toEqual([]);
   });
 
   it('la petite base : trois bâtiments qui emploient, et un chantier à moitié livré', () => {

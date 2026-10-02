@@ -66,6 +66,18 @@ export const TEST_SCENARIOS = {
     bag: { wood: 6, stone: 4 },
     adam: { dx: 1, dy: 4 },
   },
+  /**
+   * Le labo fini à côté d'Adam, et de quoi payer la Fonderie en ville : on
+   * la lance, on transfère, et la forge entre au menu de construction.
+   */
+  lab: {
+    label: 'Labo',
+    seed: 100,
+    buildings: [{ building: 'lab', dx: 4, dy: 5 }],
+    town: { wood: 40, stone: 30, ironOre: 12, food: 12 },
+    bag: {},
+    adam: { dx: 3, dy: 4 },
+  },
 } as const satisfies Record<string, TestScenarioProto>;
 
 export type TestScenarioId = keyof typeof TEST_SCENARIOS;

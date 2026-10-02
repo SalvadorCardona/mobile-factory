@@ -125,7 +125,14 @@ export function tutorialAdvice(world: World, progress: HintProgress, towers: boo
     return say(lines.coming.replace('{n}', String(left)).replace('{s}', t().common.plural(left)));
   }
 
-  // La forge se débloque à la tombée d'une nuit : le charbon, jusque-là sans usage, devient un objectif.
+  // Les plaques de fer passent par la forge, et la forge par le labo : après la première nuit, Ève y envoie.
+  if (mutants === 0 && world.night > 0 && !world.isUnlocked('forge')) {
+    const lab = [...world.entities.values()].some((entity) => entity.proto === 'lab');
+
+    return say(lab ? lines.foundry : lines.labForge);
+  }
+
+  // La forge débloquée au labo : le charbon, jusque-là sans usage, devient un objectif.
   const forged = [...world.entities.values()].some((entity) => entity.proto === 'forge');
 
   if (mutants === 0 && world.isUnlocked('forge') && !forged) return say(lines.forge, 'coal');

@@ -79,9 +79,6 @@ export function validatePrototypes(): string[] {
     if (building.minWorkers < 0 || !Number.isInteger(building.minWorkers) || building.minWorkers > building.workers) {
       errors.push(`BUILDINGS.${id} : minimum d'ouvriers hors de [0, ${building.workers}]`);
     }
-    if (building.unlockNight < 0 || !Number.isInteger(building.unlockNight)) {
-      errors.push(`BUILDINGS.${id} : nuit de déblocage invalide`);
-    }
     if (building.weapon !== null && !(building.weapon in WEAPONS)) {
       errors.push(`BUILDINGS.${id} : arme inconnue « ${String(building.weapon)} »`);
     }
@@ -528,13 +525,19 @@ export function validatePrototypes(): string[] {
 /**
  * Les recherches : un coût d'objets connus en quantités entières, qui tient
  * dans le coffre du labo ; une durée ; des prérequis connus, sans boucle ;
- * un effet non nul sur une statistique connue. Et un labo pour les mener.
+ * un effet non nul sur une statistique connue, ou des bâtiments à débloquer.
+ * Et un labo pour les mener.
+ *
+ * Un bâtiment débloqué au labo ne l'est que par une recherche, n'attend ni
+ * plan ni objectif, et aucune quête ni aucun objectif ne demande de le bâtir :
+ * jamais le joueur ne bute sur un bâtiment absent du menu.
  */
 function researchErrors(): string[] {
   const errors: string[] = [];
   const labs = Object.entries(BUILDINGS).filter(([, building]) => building.kind === 'lab');
   const room = Math.min(...labs.map(([, building]) => building.storage));
   const entries = Object.entries(RESEARCH) as [string, ResearchProto][];
+  const unlockedBy = new Map<string, string>();
 
   if (labs.length === 0) errors.push('RESEARCH : aucun labo pour mener les recherches');
   for (const [id, building] of labs) {
@@ -550,8 +553,23 @@ function researchErrors(): string[] {
       if (!Number.isInteger(amount) || amount <= 0) errors.push(`RESEARCH.${id} : coût nul ou fractionnaire en « ${itemId} »`);
     }
     if (sum(research.cost) > room) errors.push(`RESEARCH.${id} : le coffre du labo ne peut pas contenir son coût`);
-    if (!(research.effect.stat in RESEARCH_STATS)) errors.push(`RESEARCH.${id} : statistique inconnue « ${research.effect.stat} »`);
-    if (research.effect.amount === 0) errors.push(`RESEARCH.${id} : effet nul`);
+    if (research.effect === null && research.unlocks.length === 0) errors.push(`RESEARCH.${id} : ni effet ni déblocage`);
+    if (research.effect !== null) {
+      if (!(research.effect.stat in RESEARCH_STATS)) errors.push(`RESEARCH.${id} : statistique inconnue « ${research.effect.stat} »`);
+      if (research.effect.amount === 0) errors.push(`RESEARCH.${id} : effet nul`);
+    }
+    for (const building of research.unlocks) {
+      const proto: BuildingProto | undefined = BUILDINGS[building];
+
+      if (!proto) {
+        errors.push(`RESEARCH.${id} : débloque un bâtiment inconnu « ${building} »`);
+        continue;
+      }
+      if (!proto.menu || proto.kind === 'lab') errors.push(`RESEARCH.${id} : « ${building} » ne peut pas se débloquer au labo`);
+      if (proto.plan || proto.unlockObjective !== undefined) errors.push(`RESEARCH.${id} : « ${building} » a déjà sa condition de déblocage`);
+      if (unlockedBy.has(building)) errors.push(`RESEARCH.${id} : « ${building} » déjà débloqué par ${unlockedBy.get(building)}`);
+      unlockedBy.set(building, id);
+    }
     for (const required of research.requires) {
       if (!(required in RESEARCH)) errors.push(`RESEARCH.${id} : prérequis inconnu « ${required} »`);
       if (required === id) errors.push(`RESEARCH.${id} : se demande elle-même`);
@@ -572,6 +590,18 @@ function researchErrors(): string[] {
   }
   for (const [id] of entries) {
     if (!done.has(id)) errors.push(`RESEARCH.${id} : prérequis en boucle, ou jamais accessibles`);
+  }
+
+  // Un objectif ou une quête qui demande un bâtiment caché au menu bloquerait la partie.
+  const asked = [
+    ...QUEST_IDS.map((quest) => [`QUESTS.${quest}`, QUESTS[quest].goal.building] as const),
+    ...OBJECTIVES.flatMap((objective, index) =>
+      objective.goals.flatMap((goal) => (goal.type === 'build' ? [[`OBJECTIVES[${index}]`, goal.building] as const] : [])),
+    ),
+  ];
+
+  for (const [at, building] of asked) {
+    if (unlockedBy.has(building)) errors.push(`${at} : demande « ${building} », qui n'arrive qu'au labo`);
   }
 
   const labels = new Set<string>();
