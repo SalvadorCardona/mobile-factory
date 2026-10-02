@@ -59,6 +59,7 @@ import { BUILDERS, LOGISTICIANS, LUMBERJACKS } from '../data/workers.ts';
 import { floorCost } from '../sim/antenna.ts';
 import { forgeRecipe } from '../sim/consumers.ts';
 import { canPause } from '../sim/staffing.ts';
+import type { SiteLine } from '../sim/siteLedger.ts';
 import type { Building, Entity, EntityId, Forge, Nursery } from '../sim/types.ts';
 import { TICKS_PER_SECOND, repairCost, siteMissing, type SiteCoverage, type World } from '../sim/world.ts';
 import type { UiIcon } from '../art/ui.ts';
@@ -406,6 +407,7 @@ export class BuildingPanel {
     this.research.root.hidden = !lab;
     if (entity.kind === 'lab') this.research.update(entity);
 
+    delete this.items.dataset['layout'];
     if (entity.kind === 'site') {
       const total = Object.values(proto.cost).reduce((sum, amount) => sum + amount, 0);
       const missing = siteMissing(entity);
@@ -442,12 +444,11 @@ export class BuildingPanel {
       }
       if (proto.workers > 0) stats.push({ icon: 'worker', value: String(proto.workers), label: `Ouvriers qu’il emploiera : ${proto.workers}` });
 
-      this.setItems(
-        (Object.entries(proto.cost) as [ItemId, number][]).map(([item, needed]) =>
-          itemAmount(item, needed, entity.delivered[item] ?? 0),
-        ),
-        `site:${entity.id}:${JSON.stringify(entity.delivered)}`,
-      );
+      // Objet par objet : livré / requis, puis ce qui est en route et ce que la ville en a.
+      const ledger = this.world.siteLedger(entity);
+
+      this.setItems(ledger.map(siteNeedRow), `site:${entity.id}:${JSON.stringify(ledger)}`);
+      this.items.dataset['layout'] = 'ledger';
       this.transferButton.hidden = building;
       this.transferButton.textContent = this.world.townStock() ? 'Transférer' : 'Transférer le sac';
       this.transferButton.disabled = !inReach || !canGive;
@@ -913,6 +914,49 @@ export class BuildingPanel {
   public destroy(): void {
     this.root.remove();
   }
+}
+
+/**
+ * La ligne d'un objet du chantier : son icône et « livré/requis », puis, s'il
+ * en manque, deux puces — en route (porteurs, bâtisseurs) et en ville. Un
+ * objet que la ville n'a plus et que personne n'apporte est marqué à sec.
+ */
+function siteNeedRow(line: SiteLine): HTMLElement {
+  const row = document.createElement('div');
+
+  row.className = 'site-need';
+  row.setAttribute('role', 'img');
+  row.setAttribute('aria-label', siteNeedLabel(line));
+  row.title = siteNeedLabel(line);
+  row.dataset['dry'] = String(line.dry);
+  row.append(itemAmount(line.item, line.needed, line.delivered));
+  if (line.done) return row;
+
+  row.append(siteNeedChip('worker', line.incoming, 'coming'));
+  if (line.inTown !== null) row.append(siteNeedChip('town', line.inTown, 'town'));
+  return row;
+}
+
+function siteNeedChip(icon: UiIcon, value: number, kind: string): HTMLElement {
+  const chip = document.createElement('span');
+
+  chip.className = 'site-need-chip';
+  chip.dataset['kind'] = kind;
+  chip.dataset['empty'] = String(value === 0);
+  chip.append(uiIcon(icon, 16), String(value));
+  return chip;
+}
+
+/** « Pierre : 0/8 livrés, 2 en route, aucune en ville » — le libellé d'une ligne. */
+export function siteNeedLabel(line: SiteLine): string {
+  const label = ITEMS[line.item].label;
+
+  if (line.done) return `${label} : ${line.delivered}/${line.needed}, tout est livré`;
+
+  const parts = [`${label} : ${line.delivered}/${line.needed} livrés`, `${line.incoming} en route`];
+
+  if (line.inTown !== null) parts.push(line.inTown === 0 ? 'plus rien en ville' : `${line.inTown} en ville`);
+  return parts.join(', ');
 }
 
 /**
