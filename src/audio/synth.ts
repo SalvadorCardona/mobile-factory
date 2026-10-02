@@ -1,10 +1,11 @@
 /**
- * Synthèse des effets sonores.
+ * Synthèse des effets sonores : le repli.
  *
- * Aucun fichier audio : chaque son est fabriqué à la volée avec des
- * oscillateurs et du bruit filtré. C'est cohérent avec la direction
- * artistique — des sons de console 16 bits pour du pixel art 16 bits — et ça
- * ne coûte ni téléchargement ni décodage sur un téléphone.
+ * Chaque son a d'abord un échantillon enregistré (`samples.ts` : jingles
+ * acoustiques et bruitages réels, plus proches de la DA vectorielle « post-apo
+ * joyeux » que des bips de console). Mais un fichier peut tarder — réseau
+ * lent — ou ne pas se décoder : en attendant, le son est fabriqué ici à la
+ * volée, avec des oscillateurs et du bruit filtré, sans rien télécharger.
  *
  * Chaque fonction reçoit le contexte, la destination et l'instant de départ,
  * et branche ce qu'il faut. Les nœuds se libèrent seuls à la fin (`stop`).

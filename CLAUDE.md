@@ -395,12 +395,17 @@ Les règles, en résumé :
 
 ## Son
 
-Les bruitages sont synthétisés en Web Audio (`src/audio/`) : pas de fichier
-pour eux. Seule la musique de fond est un fichier (`public/audio/music/`,
+Chaque son est un échantillon de `public/audio/sfx/` (`.ogg`, repli `.m4a`) :
+jingles acoustiques générés avec Lyria 3, bruitages réels CC0 (sources dans
+son `CREDITS.md`). `audio/samples.ts` les charge au premier geste, un par
+un, et tient la table des gains et des variantes ; tant qu'un fichier n'est
+pas décodé, le son retombe sur sa synthèse Web Audio (`synth.ts`). La
+musique de fond est un fichier (`public/audio/music/`,
 Ogg Vorbis puis repli `.m4a` pour Safari ; `audio/music.ts`) : préchargée
 sans retarder l'écran titre, bouclée par un `AudioBufferSourceNode`, coupée
 onglet caché, interrupteur « Musique » dans la pause (`mobile-factory:music`).
-Un nouvel effet = une entrée dans `SOUNDS` (`synth.ts`) et une
+Un nouvel effet = une entrée dans `SOUNDS` (`synth.ts`), une dans
+`SAMPLES` (`samples.ts`) avec ses fichiers et leur crédit, et une
 ligne dans `wireAudio()` (`main.ts`), qui est la seule table événement → son.
 Rien ne joue avant un geste du joueur.
 

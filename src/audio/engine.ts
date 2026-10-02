@@ -16,6 +16,9 @@
  * qu'on ne veut pas reprendre à chaque partie. Couper la musique laisse les
  * bruitages.
  *
+ * Un son joue son échantillon enregistré s'il est décodé (`samples.ts`,
+ * préchargé au premier geste), sa synthèse (`synth.ts`) sinon.
+ *
  * Onglet caché, le contexte est suspendu (`setHidden`) : plus de musique en
  * arrière-plan, et elle reprend où elle en était au retour.
  */
@@ -23,6 +26,7 @@
 import { Music } from './music.ts';
 import { NightLayer } from './nightLayer.ts';
 import { DAWN_RAMP_S, DAY_MOOD, DUSK_RAMP_S, TENSION_FADE_S, nightLevels, nightMood, type NightMoment } from './nightMood.ts';
+import { SampleBank, type PickedSample } from './samples.ts';
 import { SOUNDS, type SoundName } from './synth.ts';
 
 const MUTE_KEY = 'mobile-factory:muted';
@@ -36,6 +40,7 @@ export class AudioEngine {
   private master: GainNode | null = null;
   private sfx: GainNode | null = null;
   private music: Music | null = null;
+  private samples: SampleBank | null = null;
   private mood = DAY_MOOD;
   /** La couche de tension : elle n'existe que la nuit, son activé. */
   private tension: NightLayer | null = null;
@@ -82,6 +87,12 @@ export class AudioEngine {
       this.sfx.gain.value = 0.8;
       this.sfx.connect(this.master);
 
+      const ctx = this.ctx;
+
+      // Les échantillons ne se demandent qu'ici : l'écran titre ne les attend pas.
+      this.samples = new SampleBank({ decode: (bytes) => ctx.decodeAudioData(bytes) });
+      void this.samples.preload();
+
       this.music = new Music(this.ctx, this.master);
       // Une partie rechargée en pleine nuit : la nuit est déjà là, sans rampe.
       this.music.setNight(this.mood.night, 0);
@@ -118,7 +129,23 @@ export class AudioEngine {
     if (now - last < DEDUPE_MS) return;
     this.lastPlayed.set(name, now);
 
-    SOUNDS[name](this.ctx, this.sfx, this.ctx.currentTime);
+    const sample = this.samples?.pick(name);
+
+    if (sample) this.playSample(sample);
+    else SOUNDS[name](this.ctx, this.sfx, this.ctx.currentTime);
+  }
+
+  private playSample({ buffer, gain, rate }: PickedSample): void {
+    if (!this.ctx || !this.sfx) return;
+
+    const source = this.ctx.createBufferSource();
+    const level = this.ctx.createGain();
+
+    source.buffer = buffer;
+    source.playbackRate.value = rate;
+    level.gain.value = gain;
+    source.connect(level).connect(this.sfx);
+    source.start(this.ctx.currentTime);
   }
 
   /** Un moment de la nuit : crépuscule, vague, vague repoussée, aube. */
