@@ -1,14 +1,14 @@
 /**
  * Joystick virtuel hybride.
  *
- * Au repos, il est toujours au même endroit, en bas d'écran, et toujours
- * affiché : le joueur sait où poser le pouce avant même d'avoir touché
- * l'écran. Toutes les coordonnées sont des **décalages** en pixels CSS depuis
+ * Au repos, il est toujours au même endroit, en bas d'écran, au milieu, et
+ * toujours affiché : le joueur sait où poser le pouce avant même d'avoir
+ * touché l'écran. Toutes les coordonnées sont des **décalages** en pixels CSS depuis
  * ce centre de repos ; où il est à l'écran, c'est l'affaire de `ui/joystick.ts`.
  *
- * Un pouce qui rate l'anneau n'est pas perdu : posé ailleurs dans le quart
- * bas-gauche (`CAPTURE_ZONE`), il y fait sauter l'anneau, et ce point devient
- * le centre (`originX`, `originY`) tant qu'il est tenu. Sortie nulle au
+ * Un pouce qui rate l'anneau n'est pas perdu : posé ailleurs dans le bas de
+ * l'écran, au milieu (`CAPTURE_ZONE`), il y fait sauter l'anneau, et ce point
+ * devient le centre (`originX`, `originY`) tant qu'il est tenu. Sortie nulle au
  * contact, puis on marche dans le sens où le doigt glisse — jamais à
  * contresens parce qu'il est resté au-dessus du centre de repos. Posé dans
  * le creux de l'anneau, rien ne saute : c'est le joystick fixe.
@@ -39,15 +39,16 @@ export const TOUCH_RADIUS = 84;
 export const RING_RIM = 6;
 
 /**
- * Le quart bas-gauche de l'écran, en fractions de sa taille : un doigt posé
- * sur la carte à gauche de `maxX` et sous `minY` prend le joystick, même loin
- * de l'anneau. Les boutons du HUD, dans le DOM, gardent leurs doigts.
+ * Le bas de l'écran, au milieu, en fractions de sa taille : un doigt posé
+ * sur la carte entre `minX` et `maxX` et sous `minY` prend le joystick, même
+ * loin de l'anneau — centré comme lui. Les boutons du HUD, dans le DOM,
+ * gardent leurs doigts.
  */
-export const CAPTURE_ZONE = { maxX: 0.5, minY: 0.55 } as const;
+export const CAPTURE_ZONE = { minX: 0.25, maxX: 0.75, minY: 0.55 } as const;
 
 /** Le point (`x`, `y`) d'un écran `width` × `height` est-il dans la zone de prise ? */
 export function inCaptureZone(x: number, y: number, width: number, height: number): boolean {
-  return x >= 0 && x < width * CAPTURE_ZONE.maxX && y > height * CAPTURE_ZONE.minY && y <= height;
+  return x >= width * CAPTURE_ZONE.minX && x < width * CAPTURE_ZONE.maxX && y > height * CAPTURE_ZONE.minY && y <= height;
 }
 
 export interface StickOutput {
@@ -137,9 +138,9 @@ export interface StickFrame {
 }
 
 /**
- * Les doigts du canvas posés dans le quart bas-gauche, à côté de l'anneau :
+ * Les doigts du canvas posés en bas au milieu, à côté de l'anneau :
  * un consommateur du routeur (`input/pointer.ts`), interrogé **après** le
- * repère de la mairie et l'inspection — un tap sur un bâtiment du coin
+ * repère de la mairie et l'inspection — un tap sur un bâtiment proche
  * reste un tap. Un doigt posé sur l'anneau lui-même n'arrive pas ici : le
  * joystick du DOM, au-dessus du canvas, le prend avant.
  */

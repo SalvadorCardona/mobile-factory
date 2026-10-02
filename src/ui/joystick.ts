@@ -1,5 +1,5 @@
 /**
- * Le joystick à l'écran : un anneau blanc voilé en bas à gauche, et au
+ * Le joystick à l'écran : un anneau blanc voilé en bas, au milieu, et au
  * centre un bouton blanc — le point qu'on fait glisser pour marcher.
  *
  * Il est dans le DOM, au-dessus du canvas, et pas dans la scène Pixi : un
@@ -12,16 +12,18 @@
  * visible (`STICK_RADIUS`) : le pouce n'a pas à viser juste. Le doigt capturé
  * peut ensuite sortir de la zone, et même de l'écran, sans être perdu.
  *
- * Un pouce qui rate l'anneau mais tombe dans le quart bas-gauche, lui,
- * arrive sur le canvas : `canvasFinger()` le prend pour le routeur, après
- * les taps sur la carte. L'anneau saute alors sous le doigt (80 ms) et y
+ * Un pouce qui rate l'anneau mais tombe dans le bas de l'écran, au milieu,
+ * lui, arrive sur le canvas : `canvasFinger()` le prend pour le routeur,
+ * après les taps sur la carte. L'anneau saute alors sous le doigt (80 ms) et y
  * reste tant qu'il est tenu ; relâché, il revient à sa place (150 ms).
  *
  * Au repos il est voilé ; tenu, il est plein. Relâché, le bouton revient au
  * centre avec un petit ressort — des transitions CSS, pas de l'état.
  *
- * Une barre qui s'ouvre en bas d'écran par-dessus lui (celle du placement)
- * le fait monter au-dessus d'elle : il ne cache rien, et rien ne le cache.
+ * Une barre du bas qui le croiserait (le bouton « Bâtir » d'un écran
+ * étroit, la barre du placement) le fait monter au-dessus d'elle : il ne
+ * cache rien, et rien ne le cache. Relu à chaque redimensionnement, donc
+ * aussi quand l'écran tourne.
  *
  * Il ne s'affiche qu'au doigt : ni à la souris, ni sur un écran sans tactile.
  * Le mode suit le dernier appui (`pointerType`), et part de `pointer: coarse`.
@@ -84,29 +86,36 @@ export class JoystickView {
   }
 
   /**
-   * Ce qui peut s'ouvrir en bas d'écran, à gauche : le joystick se pose
-   * au-dessus. Relu quand leur taille change — ouvrir, fermer, une ligne de
-   * plus —, jamais à chaque frame.
+   * Ce qui peut s'ouvrir en bas d'écran : le joystick se pose au-dessus de
+   * ce qui croise sa colonne, au milieu de `scope` (le HUD, qui le contient).
+   * Relu quand leur taille change — ouvrir, fermer, une ligne de plus — et
+   * quand l'écran change — redimensionné, tourné —, jamais à chaque frame.
+   * `--stick-lift` va sur `scope` : les bulles s'y règlent aussi.
    */
-  public avoid(nodes: readonly Element[]): void {
-    const observer = new ResizeObserver(() => {
+  public avoid(nodes: readonly Element[], scope: HTMLElement): void {
+    const measure = (): void => {
+      const box = scope.getBoundingClientRect();
+      const middle = box.left + box.width / 2;
       let lift = 0;
 
       for (const node of nodes) {
         const rect = node.getBoundingClientRect();
+        const crosses = rect.left < middle + TOUCH_RADIUS && rect.right > middle - TOUCH_RADIUS;
 
-        if (rect.height > 0 && rect.left < TOUCH_RADIUS * 2) lift = Math.max(lift, window.innerHeight - rect.top);
+        if (rect.height > 0 && crosses) lift = Math.max(lift, box.bottom - rect.top);
       }
-      this.root.style.setProperty('--stick-lift', `${Math.round(lift)}px`);
-    });
+      scope.style.setProperty('--stick-lift', `${Math.round(lift)}px`);
+    };
+    const observer = new ResizeObserver(measure);
 
     for (const node of nodes) observer.observe(node);
+    window.addEventListener('resize', measure);
   }
 
   /**
    * Le consommateur des doigts du canvas posés à côté de l'anneau, dans le
-   * quart bas-gauche. `enabled` : `false` quand la carte veut ces doigts —
-   * un bâtiment armé se pose aussi dans le coin.
+   * bas de l'écran, au milieu. `enabled` : `false` quand la carte veut ces doigts —
+   * un bâtiment armé se pose aussi là.
    */
   public canvasFinger(canvas: HTMLCanvasElement, enabled: () => boolean): PointerConsumer {
     return new StickCapture(

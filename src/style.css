@@ -1298,18 +1298,34 @@ button.hud-stock:active {
 /* -------------------------------------------------------------- joystick */
 
 /*
- * Toujours au même endroit, en bas à gauche au-dessus de la zone de
- * sécurité : la zone tactile (plus large) est un disque transparent, l'anneau
- * voilé et le bouton blanc sont centrés dedans. Anneau et bouton suivent la
- * DA des cartes : blanc (qui est son propre reflet), face avant lavande
- * pleine en bas, aucun contour. Un voile indigo léger dessous le détache du sable
- * et de l'eau claire.
+ * Toujours au même endroit, au milieu de l'écran, décollé du bas et de la
+ * zone de sécurité (la barre de gestes) : la zone tactile (plus large) est un
+ * disque transparent, l'anneau voilé et le bouton blanc sont centrés dedans.
+ * Anneau et bouton suivent la DA des cartes : blanc (qui est son propre
+ * reflet), face avant lavande pleine en bas, aucun contour. Un voile indigo
+ * léger dessous le détache du sable et de l'eau claire.
  */
+.hud {
+  /*
+   * Le bas de la zone du joystick. `--stick-lift` (`JoystickView.avoid`) : la
+   * hauteur d'une barre du bas qu'il croiserait — le bouton « Bâtir » d'un
+   * écran étroit, la barre du placement —, posé sur le HUD pour que les
+   * bulles le lisent aussi.
+   */
+  --stick-bottom: max(calc(var(--safe-bottom) + 24px), calc(var(--stick-lift, 0px) + 2px));
+}
+
+/* Écran couché : la carte de l'objectif descend bas, l'anneau se tient plus près du bord. */
+@media (max-height: 499px) {
+  .hud {
+    --stick-bottom: max(calc(var(--safe-bottom) + 10px), calc(var(--stick-lift, 0px) + 2px));
+  }
+}
+
 .joystick {
   position: absolute;
-  left: calc(var(--safe-left) + 6px);
-  /* `--stick-lift` : la hauteur d'une barre ouverte en dessous (`JoystickView.avoid`). */
-  bottom: max(calc(var(--safe-bottom) + 6px), calc(var(--stick-lift, 0px) + 2px));
+  left: calc(50% - var(--stick-zone) / 2);
+  bottom: var(--stick-bottom);
   width: var(--stick-zone);
   height: var(--stick-zone);
   display: grid;
@@ -1365,13 +1381,16 @@ button.hud-stock:active {
   transition: none;
 }
 
-/* Le joystick occupe le coin : les bulles et le debug montent au-dessus de lui. */
+/*
+ * Le joystick occupe le bas, au milieu : les bulles et le debug montent
+ * au-dessus de son anneau (la zone tactile déborde de 28 px, transparente).
+ */
 .hud[data-stick='true'] .hud-toasts {
-  bottom: calc(var(--safe-bottom) + 190px);
+  bottom: calc(var(--stick-bottom) + 150px);
 }
 
 .hud[data-stick='true'] .hud-stats {
-  bottom: calc(var(--safe-bottom) + 190px);
+  bottom: calc(var(--stick-bottom) + 150px);
 }
 
 /* ---------------------------------------------------------------- bulles */
