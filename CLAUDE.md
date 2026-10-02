@@ -31,6 +31,11 @@ chantier ouvre sa fenêtre : « Transférer » y vide d'un coup ce qu'il attend
 rayon d'un poste de construction, où ses bâtisseurs le bâtissent ensuite.
 « Annuler le chantier » (`cancelSite`, pas la mairie) rend le livré à la
 ville, ou le pose au sol sans mairie.
+Sous la barre d'un chantier, une rangée d'icônes dit chaque objet du coût
+en « livré/requis » (`render/siteNeeds.ts`) : complet, estompé et pastille
+menthe ; à sec — la ville n'en a plus, rien en route —, en corail. Elle
+s'efface au dézoom et au marteau. Sa fenêtre détaille livré / en route /
+en ville ; tout se déduit de `World.siteLedger` (`sim/siteLedger.ts`).
 Une nurserie ou une forge heurtée (ou « Transférer » : le sac, puis la ville
 dans son rayon) reçoit ce que sa recette consomme ; la forge (débloquée à la nuit 1, `unlockNight`)
 fond fer + charbon en plaques de fer, qui renforcent la tour de guet :

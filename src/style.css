@@ -2441,6 +2441,43 @@ button.hud-stock:active {
   display: none;
 }
 
+/* Le relevé d'un chantier : un objet par ligne — livré / requis, en route, en ville. */
+.building-panel-items[data-layout='ledger'] {
+  flex-direction: column;
+  gap: 4px;
+}
+
+.site-need {
+  display: grid;
+  grid-template-columns: minmax(96px, auto) 1fr 1fr;
+  align-items: center;
+  gap: 10px;
+}
+
+.site-need-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.site-need-chip[data-empty='true'] {
+  opacity: 0.45;
+}
+
+/* La ville n'en a plus et personne n'en apporte : à Adam d'en rapporter. */
+.site-need[data-dry='true'] .site-need-chip[data-kind='town'] {
+  color: var(--danger);
+  opacity: 1;
+}
+
+.site-need[data-dry='true'] .item-amount {
+  color: var(--danger);
+}
+
 .building-panel-actions {
   display: flex;
   gap: 10px;

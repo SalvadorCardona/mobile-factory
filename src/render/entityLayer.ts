@@ -23,6 +23,11 @@
  * devant quand il est en dessous. Les arbres et les rochers
  * (`resourceLayer.ts`) et les mobiles partagent ce conteneur.
  *
+ * Sous la barre d'un chantier, la rangée de ce qu'il attend (`siteNeeds.ts`) :
+ * chaque objet du coût et son compteur, les complets estompés, ceux que la
+ * ville n'a plus en corail. Elle s'efface au marteau des bâtisseurs, et au
+ * dézoom, où elle deviendrait illisible.
+ *
  * Un bâtiment amélioré (`buildingUpgraded`) change de sprite sur place : celui
  * de son niveau (`BUILDINGS[proto].upgrades`), et il rebondit comme à l'achèvement.
  *
@@ -47,6 +52,7 @@ import { siteMissing, type World } from '../sim/world.ts';
 import { PLAYER_MAX_HP } from '../sim/player.ts';
 import { MobileLayer, drawHp } from './mobileLayer.ts';
 import { type HeldTool, Puppet } from './puppet.ts';
+import { NEEDS_MIN_ZOOM, SiteNeeds } from './siteNeeds.ts';
 import type { SpriteLibrary } from './spriteLibrary.ts';
 import type { TerrainTiles } from './terrainTiles.ts';
 
@@ -58,6 +64,9 @@ const PROGRESS_FG = hex(PALETTE.yellow.shade);
 /** La construction au marteau, une fois tout livré : la teinte du cercle du poste de construction. */
 const BUILD_FG = hex(PALETTE.violet.base);
 const HP_FG = hex(PALETTE.coral.base);
+const BAR_HEIGHT = 8;
+/** La rangée des objets d'un chantier commence autant de pixels sous la barre. */
+const NEEDS_DIP = 2;
 
 /**
  * Le « pop » d'un bâtiment achevé, en trois temps, ancré au pied : écrasé,
@@ -129,6 +138,8 @@ interface EntityView {
   shown: string;
   /** Dernier état dessiné de la barre : ne retessèle que s'il change. */
   barKey: string;
+  /** Sous la barre d'un chantier, ce qu'il attend encore ; `null` pour un bâtiment fini. */
+  needs: SiteNeeds | null;
 }
 
 export class EntityLayer {
@@ -279,6 +290,14 @@ export class EntityLayer {
     bar.visible = false;
     root.addChild(bar);
 
+    let needs: SiteNeeds | null = null;
+
+    if (entity.kind === 'site') {
+      needs = new SiteNeeds(this.library);
+      needs.root.visible = false;
+      root.addChild(needs.root);
+    }
+
     let full: Sprite | null = null;
 
     if (entity.kind === 'drill' || entity.kind === 'farm' || entity.kind === 'quarry' || entity.kind === 'lumberCamp') {
@@ -326,6 +345,7 @@ export class EntityLayer {
       baseX: 0,
       shown,
       barKey: '',
+      needs,
     };
   }
 
@@ -377,11 +397,23 @@ export class EntityLayer {
     // Une capsule blanche et son remplissage, flottant au-dessus du bâtiment — comme la maquette.
     const width = Math.min(72, entity.width * TILE_SIZE - 12);
     const x = (entity.width * TILE_SIZE - width) / 2;
-    const y = entity.height * TILE_SIZE - SPRITES[spriteOf(entity)].height - 12;
+    const y = barTop(entity);
     const fill = Math.max(0, Math.min(1, ratio)) * (width - 4);
 
-    view.bar.clear().roundRect(x, y, width, 8, 4).fill(BAR_TRACK);
+    view.bar.clear().roundRect(x, y, width, BAR_HEIGHT, 4).fill(BAR_TRACK);
     if (fill > 0) view.bar.roundRect(x + 2, y + 2, Math.max(4, fill), 4, 2).fill(color);
+  }
+
+  /** La rangée des objets attendus, juste sous la barre — tant qu'il en reste à livrer et qu'elle se lit. */
+  private showNeeds(view: EntityView, entity: Entity, zoom: number, deltaMs: number): void {
+    if (!view.needs) return;
+
+    const shown = entity.kind === 'site' && zoom >= NEEDS_MIN_ZOOM && !this.world.awaitsBuilders(entity);
+
+    view.needs.root.visible = shown;
+    if (!shown) return;
+
+    view.needs.update(this.world.siteLedger(entity), (entity.width * TILE_SIZE) / 2, barTop(entity) + BAR_HEIGHT + NEEDS_DIP, deltaMs);
   }
 
   /** Un outil d'Adam, le temps d'un geste — sauf s'il vise : l'arc passe avant, sans clignoter. */
@@ -390,7 +422,7 @@ export class EntityLayer {
   }
 
   /** `alpha` est la fraction du pas de simulation déjà écoulée, dans [0, 1[. */
-  public update(alpha: number, ticker: Ticker): void {
+  public update(alpha: number, ticker: Ticker, zoom: number): void {
     const { player } = this.world;
     const x = player.prevX + (player.x - player.prevX) * alpha;
     const y = player.prevY + (player.y - player.prevY) * alpha;
@@ -430,6 +462,7 @@ export class EntityLayer {
       }
 
       this.drawBar(view, entity);
+      this.showNeeds(view, entity, zoom, ticker.deltaMS);
       this.showFull(view, entity, ticker.lastTime);
       this.showPause(view, entity, ticker.lastTime);
       this.feel(view, ticker.deltaMS);
@@ -580,6 +613,11 @@ function footSprite(texture: Sprite['texture'], entity: Entity): Sprite {
   sprite.anchor.set(0, 1);
   sprite.y = entity.height * TILE_SIZE;
   return sprite;
+}
+
+/** Le haut de la barre, au-dessus du toit, dans le repère du bâtiment. */
+function barTop(entity: Entity): number {
+  return entity.height * TILE_SIZE - SPRITES[spriteOf(entity)].height - 12;
 }
 
 /** Le sprite d'un chantier est celui du prototype ; celui d'un bâtiment fini, celui de son niveau. */

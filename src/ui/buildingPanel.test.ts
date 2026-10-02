@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BUILDINGS, buildingLevel, nextUpgrade, type BuildingId } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
 import { World } from '../sim/world.ts';
-import { panelDescription, siteCoverageText, upgradeEffect } from './buildingPanel.ts';
+import { panelDescription, siteCoverageText, siteNeedLabel, upgradeEffect } from './buildingPanel.ts';
 
 describe('panelDescription', () => {
   it('chaque bâtiment a deux textes distincts, chantier et bâtiment fini', () => {
@@ -54,5 +54,22 @@ describe('siteCoverageText', () => {
     expect(siteCoverageText('town')).toMatch(/stock de la ville/);
     expect(siteCoverageText('both')).toMatch(/^Sac et ville/);
     expect(siteCoverageText('short')).toMatch(/^Chantier en cours/);
+  });
+});
+
+describe('siteNeedLabel', () => {
+  const line = { item: 'stone', needed: 8, delivered: 0, missing: 8, incoming: 2, inTown: 0, done: false, dry: false } as const;
+
+  it('dit le livré, le requis, ce qui est en route et ce que la ville en a', () => {
+    expect(siteNeedLabel(line)).toBe('Pierre : 0/8 livrés, 2 en route, plus rien en ville');
+    expect(siteNeedLabel({ ...line, inTown: 5 })).toBe('Pierre : 0/8 livrés, 2 en route, 5 en ville');
+  });
+
+  it('se tait sur la ville tant que la mairie n’est pas debout', () => {
+    expect(siteNeedLabel({ ...line, inTown: null })).toBe('Pierre : 0/8 livrés, 2 en route');
+  });
+
+  it('un objet complet est dit livré', () => {
+    expect(siteNeedLabel({ ...line, delivered: 8, missing: 0, incoming: 0, done: true })).toBe('Pierre : 8/8, tout est livré');
   });
 });

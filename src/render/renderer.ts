@@ -286,7 +286,7 @@ export class GameRenderer {
     const block = building && ghost ? this.world.placementBlock(ghost.building, ghost.tx, ghost.ty) : null;
 
     this.resourceLayer.update(this.camera, this.app.ticker.deltaMS, block?.reason === 'resource' ? block.tiles : []);
-    this.entityLayer.update(alpha, this.app.ticker);
+    this.entityLayer.update(alpha, this.app.ticker, this.camera.zoom);
     this.particles.update(this.app.ticker.deltaMS);
     this.nightLayer.update(alpha);
     if (road) this.ghostLayer.updateRoad(road.tool, road.trail, this.app.ticker.deltaMS);
