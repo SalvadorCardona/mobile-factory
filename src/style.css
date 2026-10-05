@@ -907,6 +907,52 @@ button.hud-stock:active {
 }
 
 /*
+ * Sur un écran large, la ville quitte la colonne de droite pour la colonne
+ * de gauche, vide : un bandeau d'une ligne en haut à gauche, « Ville » puis
+ * ses objets côte à côte. Il s'arrête avant la quête ; ce qui ne tient pas
+ * défile de côté (la molette aussi), sans jamais revenir à la ligne.
+ */
+@media (min-width: 1024px) and (min-height: 500px) {
+  .hud .hud-town {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: auto;
+    max-width: calc((100% - 380px) / 2 - 10px);
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 14px;
+    pointer-events: auto;
+  }
+
+  .hud-town .hud-bag-title {
+    flex: none;
+  }
+
+  .hud-town .hud-stock-items {
+    display: flex;
+    min-width: 0;
+    gap: 12px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    white-space: nowrap;
+  }
+
+  .hud-town .hud-stock-items::-webkit-scrollbar {
+    display: none;
+  }
+
+  .hud-town .hud-stock-items[data-more='true'] {
+    mask-image: linear-gradient(90deg, black calc(100% - 28px), transparent);
+  }
+
+  .hud-town .item-amount {
+    flex: none;
+  }
+}
+
+/*
  * La population de la ville : au travail, inactifs, enfants. Seul le compteur
  * d'inactifs se tape ; il passe en corail dès qu'un ouvrier glande.
  */

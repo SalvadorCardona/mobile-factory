@@ -325,6 +325,17 @@ export class Hud {
     this.bag = element('button', 'panel hud-stock hud-bag');
     this.bag.type = 'button';
     this.town = element('div', 'panel hud-stock hud-town');
+    // Le bandeau d'un écran large défile de côté : la molette aussi, et son
+    // bord droit s'estompe tant qu'il reste des objets cachés.
+    this.town.addEventListener('wheel', (event) => {
+      const items = this.townItems();
+
+      if (!items || items.scrollWidth <= items.clientWidth) return;
+      event.preventDefault();
+      items.scrollLeft += event.deltaX + event.deltaY;
+    }, { passive: false });
+    this.town.addEventListener('scroll', () => this.markTownOverflow(), true);
+    window.addEventListener('resize', () => this.markTownOverflow());
     this.people = element('div', 'panel hud-people');
     this.people.hidden = true;
     this.person = element('div', 'hud-speech hud-person');
@@ -1450,7 +1461,24 @@ export class Hud {
     items.append(...entries.map(([item, amount]) => itemAmount(item, amount)));
     this.town.dataset['empty'] = String(entries.length === 0);
     this.town.title = label.townTitle;
+
+    const scroll = this.townItems()?.scrollLeft ?? 0;
+
     this.town.replaceChildren(title, items);
+    items.scrollLeft = scroll;
+    this.markTownOverflow();
+  }
+
+  private townItems(): HTMLElement | null {
+    return this.town.querySelector<HTMLElement>('.hud-stock-items');
+  }
+
+  /** Le bandeau de la ville cache-t-il encore des objets à droite ? */
+  private markTownOverflow(): void {
+    const items = this.townItems();
+
+    if (!items) return;
+    items.dataset['more'] = String(items.scrollLeft + items.clientWidth < items.scrollWidth - 1);
   }
 
   /* ------------------------------------------------------------ célébration */
