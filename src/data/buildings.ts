@@ -171,6 +171,7 @@ export const BUILDINGS = {
   },
   foresterHouse: {
     label: LORE.buildings.foresterHouse.name,
+    sign: LORE.buildings.foresterHouse.sign,
     siteDescription: LORE.buildings.foresterHouse.site,
     description: LORE.buildings.foresterHouse.description,
     effect: LORE.buildings.foresterHouse.effect,

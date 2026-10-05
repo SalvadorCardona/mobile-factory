@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_SIZE, coordKey } from '../core/grid.ts';
 import { BUILDINGS } from '../data/buildings.ts';
+import { COLONY } from '../data/inhabitants.ts';
 import { RESOURCES, SAPLING } from '../data/resources.ts';
 import { FORESTERS } from '../data/workers.ts';
 import { countPlot, plotTiles } from './forester.ts';
@@ -92,12 +93,12 @@ function fell(world: World, tx: number, ty: number): void {
 }
 
 describe('maison du forestier', () => {
-  it('loge un forestier, compté dans la population', () => {
+  it('loge un forestier, pris parmi les ouvriers de la colonie', () => {
     const world = colony();
 
     expect(foresters(world)).toHaveLength(BUILDINGS.foresterHouse.workers);
     expect(foresters(world)[0]!.homeId).toBe(houseOf(world).id);
-    expect(world.population().workers).toBe(BUILDINGS.foresterHouse.workers);
+    expect(world.population().workers).toBe(COLONY.startingWorkers);
   });
 
   it('remplit le carré pousse par pousse, rang par rang, dans l’ordre', () => {

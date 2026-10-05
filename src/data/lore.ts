@@ -118,6 +118,7 @@ export const LORE = {
     },
     foresterHouse: {
       name: 'Maison du forestier',
+      sign: 'Forestier',
       site: 'Une brouette de jeunes plants et une bêche plantée dans la terre : la maison attend ses murs.',
       description:
         'Une maisonnette au toit couvert de mousse, ses pots de semis et son arrosoir. ' +

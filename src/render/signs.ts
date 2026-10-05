@@ -36,7 +36,7 @@ export function signMode(zoom: number, item: ItemId | null): SignMode {
 /** L'objet qui dit la fonction d'un bâtiment ; `output` : ce qu'extrait une foreuse, `null` à sec. */
 export function signItem(id: BuildingId, kind: BuildingKind, output: ItemId | null): ItemId | null {
   if (kind === 'drill') return output;
-  if (kind === 'lumberCamp') return RESOURCES.tree.item;
+  if (kind === 'lumberCamp' || kind === 'foresterHouse') return RESOURCES.tree.item;
 
   const recipe = recipeOf(id);
 
