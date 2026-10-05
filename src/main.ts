@@ -179,7 +179,7 @@ async function main(): Promise<void> {
 
   // En dev seulement : le monde sous la main dans la console du navigateur,
   // pour provoquer une vague ou une naissance sans attendre trois minutes.
-  if (import.meta.env.DEV) Object.assign(window, { mobileFactory: { world } });
+  if (import.meta.env.DEV) Object.assign(window, { mobileFactory: { world, audio } });
 
   const joystick = new Joystick();
   const stick = new JoystickView(joystick);
@@ -283,6 +283,8 @@ async function main(): Promise<void> {
     toggleSound: () => settings.setSound(!audio.toggleMuted()),
     toggleMusic: () => settings.setMusic(audio.toggleMusic()),
     toggleSigns: () => showSigns(!signsOn),
+    setSfxVolume: (volume) => audio.setSfxVolume(volume),
+    setMusicVolume: (volume) => audio.setMusicVolume(volume),
     onToggle: (open) => {
       accumulator = 0;
       if (open) audio.play('open');
@@ -319,6 +321,7 @@ async function main(): Promise<void> {
     paused = value;
     pause.visible = value;
     accumulator = 0;
+    audio.setPaused(value);
   }
 
   world.events.on('victory', () => {
@@ -571,6 +574,7 @@ function wireAudio(world: World, audio: AudioEngine, settings: SettingsPanel): v
 
   settings.setSound(!audio.muted);
   settings.setMusic(audio.musicOn);
+  settings.setVolumes(audio.sfxVolume, audio.musicVolume);
 
   // Une partie rechargée au crépuscule ou en pleine vague : l'oreille le sait aussitôt.
   const phase = world.clock()?.phase;

@@ -1,13 +1,15 @@
 /**
  * Le menu des réglages, derrière le bouton engrenage du HUD : la langue, les
- * sons, la musique, les pancartes des bâtiments. Rien qui touche à la partie — ce sont des préférences de
+ * sons, la musique et un volume pour chacun des deux, les pancartes des
+ * bâtiments. Rien qui touche à la partie — ce sont des préférences de
  * l'appareil, gardées hors de la sauvegarde.
  *
  * Ouvert, il arrête l'horloge (`main.ts` lit `open`) ; il se ferme par sa
  * croix, par un tap sur le voile autour, ou par Échap (`escape.ts`).
  *
- * Il ne décide de rien : il dit à `main.ts` la langue choisie, ou qu'il faut
- * basculer le son, la musique ou les pancartes, et `main.ts` lui renvoie l'état réel.
+ * Il ne décide de rien : il dit à `main.ts` la langue choisie, un volume
+ * qui bouge, ou qu'il faut basculer le son, la musique ou les pancartes, et
+ * `main.ts` lui renvoie l'état réel.
  */
 
 import { LOCALES, messagesOf, onLocale, t, type Locale } from '../i18n/locale.ts';
@@ -18,6 +20,9 @@ export interface SettingsActions {
   toggleSound(): void;
   toggleMusic(): void;
   toggleSigns(): void;
+  /** Un curseur de volume a bougé : de 0 à 1, à chaque cran pendant qu'on le glisse. */
+  setSfxVolume(volume: number): void;
+  setMusicVolume(volume: number): void;
   /** Ouvert ou fermé : l'horloge s'arrête, le son de fenêtre joue. */
   onToggle(open: boolean): void;
 }
@@ -31,6 +36,8 @@ export class SettingsPanel {
   private readonly soundButton: HTMLButtonElement;
   private readonly musicButton: HTMLButtonElement;
   private readonly signsButton: HTMLButtonElement;
+  private readonly sfxVolume: VolumeSlider;
+  private readonly musicVolume: VolumeSlider;
   private readonly actions: SettingsActions;
   private sound = true;
   private music = true;
@@ -101,7 +108,20 @@ export class SettingsPanel {
     this.signsButton.className = 'button-secondary settings-toggle';
     this.signsButton.addEventListener('click', () => actions.toggleSigns());
 
-    this.panel.append(head, languageLabel, languages, this.soundButton, this.musicButton, this.signsButton);
+
+    this.sfxVolume = new VolumeSlider((volume) => actions.setSfxVolume(volume));
+    this.musicVolume = new VolumeSlider((volume) => actions.setMusicVolume(volume));
+
+    this.panel.append(
+      head,
+      languageLabel,
+      languages,
+      this.soundButton,
+      this.sfxVolume.root,
+      this.musicButton,
+      this.musicVolume.root,
+      this.signsButton,
+    );
     this.root.append(this.panel);
 
     onLocale((current) => {
@@ -114,6 +134,8 @@ export class SettingsPanel {
       this.setSound(this.sound);
       this.setMusic(this.music);
       this.setSigns(this.signs);
+      this.sfxVolume.setName(text.sfxVolume);
+      this.musicVolume.setName(text.musicVolume);
     });
   }
 
@@ -148,11 +170,65 @@ export class SettingsPanel {
   public setMusic(on: boolean): void {
     this.music = on;
     toggleLabel(this.musicButton, on, uiIcon(on ? 'musicOn' : 'musicOff', 22), t().settings.music);
+    this.musicVolume.setEnabled(on);
+  }
+
+  /** Les curseurs suivent les volumes du moteur audio, de 0 à 1. */
+  public setVolumes(sfx: number, music: number): void {
+    this.sfxVolume.setValue(sfx);
+    this.musicVolume.setValue(music);
   }
 
   public setSigns(on: boolean): void {
     this.signs = on;
     toggleLabel(this.signsButton, on, uiIcon(on ? 'signOn' : 'signOff', 22), t().settings.signs);
+  }
+}
+
+/** Un curseur de volume, son nom au-dessus et son pourcentage à droite. */
+class VolumeSlider {
+  public readonly root: HTMLLabelElement;
+
+  private readonly name: HTMLSpanElement;
+  private readonly percent: HTMLSpanElement;
+  private readonly input: HTMLInputElement;
+
+  public constructor(onChange: (volume: number) => void) {
+    this.root = document.createElement('label');
+    this.root.className = 'settings-volume';
+    this.name = document.createElement('span');
+    this.name.className = 'settings-volume-name';
+    this.percent = document.createElement('span');
+    this.percent.className = 'settings-volume-percent';
+    this.input = document.createElement('input');
+    this.input.type = 'range';
+    this.input.min = '0';
+    this.input.max = '100';
+    this.input.step = '5';
+    this.input.addEventListener('input', () => {
+      this.showPercent();
+      onChange(Number(this.input.value) / 100);
+    });
+    this.root.append(this.name, this.percent, this.input);
+  }
+
+  public setName(name: string): void {
+    this.name.textContent = name;
+  }
+
+  public setValue(volume: number): void {
+    this.input.value = String(Math.round(volume * 100));
+    this.showPercent();
+  }
+
+  /** Musique coupée : son curseur s'estompe, mais reste réglable. */
+  public setEnabled(on: boolean): void {
+    this.root.classList.toggle('settings-volume-off', !on);
+  }
+
+  private showPercent(): void {
+    this.percent.textContent = `${this.input.value} %`;
+    this.input.setAttribute('aria-valuetext', `${this.input.value} %`);
   }
 }
 

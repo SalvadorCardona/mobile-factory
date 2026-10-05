@@ -18,6 +18,8 @@ export const settings: Messages['settings'] = {
   sound: 'Sounds',
   music: 'Music',
   signs: 'Building signs',
+  sfxVolume: 'Sound effects volume',
+  musicVolume: 'Music volume',
   toggle: (name, on) => `${name}: ${on ? 'on' : 'off'}`,
   languageName: 'English',
 };

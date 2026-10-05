@@ -3273,6 +3273,31 @@ button.hud-stock:active {
   color: var(--muted);
 }
 
+/* Un volume : son nom et son pourcentage sur une ligne, le curseur dessous, en capsule. */
+.settings-volume {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 12px;
+  margin: -2px 4px 4px;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
+  color: var(--muted);
+}
+
+.settings-volume-off {
+  opacity: 0.5;
+}
+
+.settings-volume input {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 28px;
+  margin: 0;
+  accent-color: var(--violet);
+  cursor: pointer;
+}
+
 /* Un écran qui pose une question cache son panneau : `hidden` doit l'emporter sur `display: flex`. */
 .overlay-panel[hidden],
 .title-panel[hidden] {

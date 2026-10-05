@@ -24,6 +24,9 @@ export const settings = {
   music: 'Musique',
   /** Les pancartes des bâtiments, sur la carte. */
   signs: 'Pancartes',
+  /** Les curseurs de volume, sous chaque interrupteur. */
+  sfxVolume: 'Volume des bruitages',
+  musicVolume: 'Volume de la musique',
   /** Un interrupteur : « Musique : oui ». */
   toggle: (name: string, on: boolean): string => `${name} : ${on ? 'oui' : 'non'}`,
   /** Le nom de chaque langue, écrit dans la langue elle-même : c'est ainsi qu'on la reconnaît. */

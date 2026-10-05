@@ -437,10 +437,19 @@ jingles acoustiques générés avec Lyria 3, bruitages réels CC0 (sources dans
 son `CREDITS.md`). `audio/samples.ts` les charge au premier geste, un par
 un, et tient la table des gains et des variantes ; tant qu'un fichier n'est
 pas décodé, le son retombe sur sa synthèse Web Audio (`synth.ts`). La
-musique de fond est un fichier (`public/audio/music/`,
-Ogg Vorbis puis repli `.m4a` pour Safari ; `audio/music.ts`) : préchargée
-sans retarder l'écran titre, bouclée par un `AudioBufferSourceNode`, coupée
-onglet caché, interrupteur « Musique » dans les réglages (`mobile-factory:music`).
+musique de fond, ce sont trois boucles (`public/audio/music/`, crédits dans
+son `CREDITS.md` ; Ogg Vorbis puis repli `.m4a` pour Safari ;
+`audio/music.ts`) : le thème du jour, préchargé sans retarder l'écran titre ;
+la nuit calme et le combat, composés par `npm run music:night`
+(`tools/music.ts`, même tempo et même longueur, le combat calé sur la nuit),
+téléchargés à la première nuit seulement. `musicState` (`audio/nightMood.ts`)
+tire le morceau des moments de la nuit — crépuscule → nuit, vague → combat,
+dernière vague tuée → nuit, aube → jour — et le passage est un fondu
+enchaîné (`MUSIC_FADE_S`) ; musique allumée, la couche de tension
+synthétique se tait. Bouclée par un `AudioBufferSourceNode`, coupée onglet
+caché, baissée en pause ; interrupteur « Musique » et deux volumes
+(musique, bruitages) dans les réglages (`mobile-factory:music`,
+`…:music-volume`, `…:sfx-volume`).
 Un nouvel effet = une entrée dans `SOUNDS` (`synth.ts`), une dans
 `SAMPLES` (`samples.ts`) avec ses fichiers et leur crédit, et une
 ligne dans `wireAudio()` (`main.ts`), qui est la seule table événement → son.

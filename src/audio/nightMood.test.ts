@@ -5,10 +5,13 @@ import {
   DAY_MOOD,
   DRONE,
   MUSIC_DAY,
+  MUSIC_FADE_S,
   MUSIC_NIGHT,
   PULSE_GAIN,
   nightLevels,
+  musicState,
   nightMood,
+  type MusicState,
   type NightMoment,
   type NightMood,
 } from './nightMood.ts';
@@ -67,5 +70,39 @@ describe('humeur de la nuit', () => {
 
     expect(mood).toEqual(DAY_MOOD);
     expect(nightLevels(mood, 60)).toEqual(nightLevels(DAY_MOOD, 0));
+  });
+});
+
+describe('morceau de la nuit', () => {
+  it('jour → nuit → combat → nuit → jour, au fil des moments', () => {
+    const moments: NightMoment[] = ['dusk', 'wave', 'cleared', 'dawn'];
+    const states: MusicState[] = [];
+
+    moments.reduce((mood, moment, at) => {
+      const next = nightMood(mood, moment, at);
+
+      states.push(musicState(next));
+      return next;
+    }, DAY_MOOD);
+
+    expect([musicState(DAY_MOOD), ...states]).toEqual(['day', 'night', 'combat', 'night', 'day']);
+  });
+
+  it('une seconde vague dans la même nuit relance le combat', () => {
+    expect(musicState(play([['dusk', 10], ['wave', 20], ['cleared', 50], ['wave', 80]]))).toBe('combat');
+  });
+
+  it("une vague repoussée au jour ou deux fois de suite ne change pas le morceau", () => {
+    expect(musicState(play([['cleared', 5]]))).toBe('day');
+    expect(musicState(play([['dusk', 10], ['wave', 20], ['cleared', 50], ['cleared', 51]]))).toBe('night');
+  });
+
+  it("l'aube coupe le combat, et une partie perdue revient au jour", () => {
+    expect(musicState(play([['dusk', 10], ['wave', 20], ['dawn', 60]]))).toBe('day');
+  });
+
+  it('le combat entre plus vite que les retours au calme', () => {
+    expect(MUSIC_FADE_S.combat).toBeLessThan(MUSIC_FADE_S.night);
+    expect(MUSIC_FADE_S.day).toBeGreaterThan(0);
   });
 });
