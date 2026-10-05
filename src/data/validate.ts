@@ -19,7 +19,7 @@ import { BUILDINGS, RUIN, type BuildingProto } from './buildings.ts';
 import { DAWN_REWARD, DAY_CYCLE } from './dayNight.ts';
 import { ENEMIES, LOOT_DROPS, NIGHT_PLAN, WAVES, WILDLIFE, WILDLIFE_SPAWN, type LootTable, type WaveSpec, type WildlifeProto } from './enemies.ts';
 import { EVE } from './eve.ts';
-import { ICON_SIZE, ITEM_ICONS } from './icons.ts';
+import { ICON_SIZE, ITEM_ICONS, PRESTIGE_ICON } from './icons.ts';
 import { ITEMS } from './items.ts';
 import { OBJECTIVES, type ObjectiveProto } from './objectives.ts';
 import { PERKS, type PerkProto } from './perks.ts';
@@ -48,6 +48,11 @@ export function validatePrototypes(): string[] {
     }
     for (const problem of auditSvg(icon)) errors.push(`ITEM_ICONS.${id} : ${problem}`);
   }
+
+  if (!PRESTIGE_ICON.includes(`width="${ICON_SIZE}" height="${ICON_SIZE}"`)) {
+    errors.push(`PRESTIGE_ICON : l'icône doit faire ${ICON_SIZE} × ${ICON_SIZE}`);
+  }
+  for (const problem of auditSvg(PRESTIGE_ICON)) errors.push(`PRESTIGE_ICON : ${problem}`);
 
   for (const [id, building] of Object.entries(BUILDINGS)) {
     if (building.width <= 0 || building.height <= 0) {

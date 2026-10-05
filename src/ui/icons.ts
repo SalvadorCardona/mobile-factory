@@ -14,7 +14,7 @@
 import { ROAD_THUMB } from '../art/road.ts';
 import { UI_ICONS, type UiIcon } from '../art/ui.ts';
 import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
-import { ITEM_ICONS } from '../data/icons.ts';
+import { ITEM_ICONS, PRESTIGE_ICON } from '../data/icons.ts';
 import type { ItemId } from '../data/items.ts';
 import { PERKS, type PerkId } from '../data/perks.ts';
 import { SPRITES } from '../data/sprites.ts';
@@ -54,6 +54,15 @@ export function itemIcon(item: ItemId, size = 20): HTMLImageElement {
 
   element.alt = t().items[item];
   element.title = t().items[item];
+  return element;
+}
+
+/** Un `<img>` de l'icône du Prestige (`data/prestige.ts`), libellée comme une icône d'objet. */
+export function prestigeIcon(size = 20): HTMLImageElement {
+  const element = image(url('prestige', PRESTIGE_ICON), 'icon', size, size);
+
+  element.alt = t().hud.stock.prestige;
+  element.title = t().hud.stock.prestige;
   return element;
 }
 

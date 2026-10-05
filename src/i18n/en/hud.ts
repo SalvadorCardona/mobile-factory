@@ -105,6 +105,7 @@ export const hud: Messages['hud'] = {
     built: (building: string): string => `${building} built!`,
     upgraded: (level: string): string => `${level}!`,
     enough: 'enough',
+    prestige: (amount: number): string => `+${amount} Prestige`,
   },
   wave: {
     night: (night: number): string => `Night ${night}`,
@@ -169,6 +170,8 @@ export const hud: Messages['hud'] = {
     town: 'Town',
     toBuild: 'to build',
     townTitle: 'Town stock: what pays for construction',
+    prestige: 'Prestige',
+    prestigeLabel: (amount: number): string => `Colony prestige: ${amount}`,
   },
   hintBulb: 'Show the tip',
   pause: 'Pause',
