@@ -14,6 +14,7 @@
 
 import { PALETTE, RADIUS, circle, cushion, line, pill, polygon, rect, shadedBlock, shadedPill, svg } from './artDirection.ts';
 import type { ItemId } from './items.ts';
+import { PRESTIGE } from './prestige.ts';
 
 /** Côté d'une icône, dans son propre repère. */
 export const ICON_SIZE = 24;
@@ -128,3 +129,29 @@ export const ITEM_ICONS: Record<ItemId, string> = {
     circle(8.4, 14.6, 1.7, ink.base),
   ),
 };
+
+/** Les sommets d'une étoile à cinq branches, pointe en haut. */
+function star(cx: number, cy: number, outer: number, inner: number): number[] {
+  return Array.from({ length: 10 }, (_, i) => {
+    const r = i % 2 === 0 ? outer : inner;
+    const angle = -Math.PI / 2 + (i * Math.PI) / 5;
+
+    return [Math.round((cx + r * Math.cos(angle)) * 10) / 10, Math.round((cy + r * Math.sin(angle)) * 10) / 10];
+  }).flat();
+}
+
+/**
+ * Le Prestige (`data/prestige.ts`) : une médaille jaune de la colonie à son
+ * ruban corail, une étoile claire gravée au milieu. Pas un objet du sac,
+ * donc hors de `ITEM_ICONS`.
+ */
+export const PRESTIGE_ICON = svg(
+  S,
+  S,
+  polygon([6, 1.5, 10.5, 1.5, 13, 10, 8.5, 10], PALETTE.coral.shade),
+  polygon([13.5, 1.5, 18, 1.5, 15.5, 10, 11, 10], PALETTE.coral.base),
+  circle(12, 15.5, 7.5, PALETTE[PRESTIGE.tone].shade),
+  circle(11.5, 15, 6.8, PALETTE[PRESTIGE.tone].base),
+  polygon(star(11.5, 15.3, 4.6, 2), PALETTE[PRESTIGE.tone].light),
+  pill(6.2, 10.6, 3.6, 1.8, PALETTE[PRESTIGE.tone].light),
+);

@@ -273,6 +273,14 @@ nuit à tenir : `goalWait`/`objectiveWait`) affiche son temps restant, ou en
 corail ce qui la retient ; Ève enchaîne alors sur de quoi s'occuper
 (réparer, une tour, l'objet le plus bas en ville, une recherche).
 
+**Prestige** (`src/data/prestige.ts`, icône `PRESTIGE_ICON`) — un compteur
+de la colonie (`World.prestige`, sauvegardé ; absent d'une vieille
+sauvegarde : 0), ni porté ni stocké. Chaque bâtiment achevé rapporte
+`BUILD_PRESTIGE` une seule fois par emplacement (`prestigeSites` : une
+ruine rebâtie ne paie pas), chaque ennemi vaincu `KILL_PRESTIGE` ;
+événement `prestigeGained`, « +N Prestige » flottant, carte sous la ville
+au HUD. Rien ne le dépense encore.
+
 **Faune** — en plus des mutants, des **crabes** vivent sur le sable et des
 **loups** au cœur des forêts (`WILDLIFE`, `src/data/enemies.ts` ;
 `src/sim/wildlife.ts`). Leurs tanières se tirent de la seed par chunk ; une

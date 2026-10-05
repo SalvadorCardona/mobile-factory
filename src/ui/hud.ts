@@ -75,7 +75,7 @@ import { currentObjective, goalProgress, goalWait, type GoalWait } from '../sim/
 import { TICKS_PER_SECOND, type Inhabitant, type Workforce, type World } from '../sim/world.ts';
 import { locale, onLocale, t } from '../i18n/locale.ts';
 import { carriesWanted, harvestRefusedText, tutorialAdvice, type Advice } from './hint.ts';
-import { buildingIcon, dayDialUrl, itemAmount, itemIcon, uiIcon } from './icons.ts';
+import { buildingIcon, dayDialUrl, itemAmount, itemIcon, prestigeIcon, uiIcon } from './icons.ts';
 import { effectLine } from './researchText.ts';
 import { personText } from './personText.ts';
 import { mapUrl, seedLine } from './seed.ts';
@@ -86,6 +86,9 @@ const ALARM_MS = 2500;
 /** Motif de vibration de l'alarme, et le délai minimal entre deux vibrations, en ms. */
 const ALARM_VIBRATION = [140, 80, 140];
 const ALARM_VIBRATION_EVERY_MS = 4000;
+
+/** Durée de vie d'un « +N Prestige », en ms (cf. `.hud-float-prestige` dans le CSS). */
+const PRESTIGE_FLOAT_MS = 1600;
 
 /** Durée de vie d'un gain flottant, en ms (cf. `hud-float-up` dans le CSS). */
 const FLOAT_MS = 1000;
@@ -180,6 +183,9 @@ export class Hud {
   public readonly bag: HTMLButtonElement;
   /** Le stock de la ville, compact. */
   private readonly town: HTMLElement;
+  /** Le Prestige de la colonie : son icône et son compte. */
+  private readonly prestige: HTMLElement;
+  private lastPrestige = '';
   /** La population de la ville : au travail, inactifs, enfants. */
   private readonly people: HTMLElement;
   private lastPeople = '';
@@ -336,6 +342,9 @@ export class Hud {
     }, { passive: false });
     this.town.addEventListener('scroll', () => this.markTownOverflow(), true);
     window.addEventListener('resize', () => this.markTownOverflow());
+    this.prestige = element('div', 'panel hud-prestige');
+    this.prestige.hidden = true;
+    this.prestige.setAttribute('role', 'status');
     this.people = element('div', 'panel hud-people');
     this.people.hidden = true;
     this.person = element('div', 'hud-speech hud-person');
@@ -429,7 +438,7 @@ export class Hud {
     const side = element('div', 'hud-side');
 
     this.quest.append(fold);
-    side.append(buttons, this.town, this.people, this.bag);
+    side.append(buttons, this.town, this.prestige, this.people, this.bag);
     this.top.append(this.quest, side, this.weather);
 
     this.root.append(
@@ -466,6 +475,7 @@ export class Hud {
       this.lastClock = '';
       this.lastBag = '';
       this.lastTown = '';
+      this.lastPrestige = '';
       this.lastPeople = '';
       this.lastWeather = '';
       if (!this.defeat.hidden) this.renderDefeat();
@@ -530,6 +540,7 @@ export class Hud {
 
       if (entity) this.celebrate(entity, t().hud.float.built(t().buildings[entity.proto].label));
     });
+    world.events.on('prestigeGained', ({ amount, x, y }) => this.floatPrestige(amount, x, y));
     world.events.on('buildingUpgraded', ({ id, level, fromBag }) => {
       const entity = world.entities.get(id);
 
@@ -1044,6 +1055,18 @@ export class Hud {
     window.setTimeout(() => floater.remove(), FLOAT_MS);
   }
 
+  /** « +N Prestige » qui monte du bâtiment achevé ou de l'ennemi vaincu, en `x`, `y` pixels monde. */
+  private floatPrestige(amount: number, worldX: number, worldY: number): void {
+    const { x, y } = this.project(worldX, worldY - 28);
+    const floater = element('span', 'hud-float hud-float-prestige');
+
+    floater.style.left = `${Math.round(x)}px`;
+    floater.style.top = `${Math.round(y)}px`;
+    floater.append(t().hud.float.prestige(amount), prestigeIcon(18));
+    this.floats.append(floater);
+    window.setTimeout(() => floater.remove(), PRESTIGE_FLOAT_MS);
+  }
+
   /** L'icône de l'objet refusé, qui tressaute au-dessus d'Adam : il n'en prend plus. */
   private refused(item: ItemId): void {
     const { player } = this.world;
@@ -1086,6 +1109,7 @@ export class Hud {
     this.updateHint();
     this.updateBag();
     this.updateTown();
+    this.updatePrestige();
     this.updatePeople();
     this.updateSpeech();
     this.updatePerson();
@@ -1479,6 +1503,22 @@ export class Hud {
 
     if (!items) return;
     items.dataset['more'] = String(items.scrollLeft + items.clientWidth < items.scrollWidth - 1);
+  }
+
+  /** Le Prestige : caché tant que la colonie n'en a pas, puis toujours là, à côté de la ville. */
+  private updatePrestige(): void {
+    const { prestige } = this.world;
+    const key = String(prestige);
+
+    if (key === this.lastPrestige) return;
+    this.lastPrestige = key;
+
+    const label = t().hud.stock;
+
+    this.prestige.hidden = prestige <= 0;
+    this.prestige.title = label.prestige;
+    this.prestige.setAttribute('aria-label', label.prestigeLabel(prestige));
+    this.prestige.replaceChildren(prestigeIcon(20), text('hud-prestige-name', label.prestige), text('hud-prestige-count', key));
   }
 
   /* ------------------------------------------------------------ célébration */

@@ -131,6 +131,8 @@ export const hud = {
     upgraded: (level: string): string => `${level} !`,
     /** L'objet refusé à la récolte : il en a assez. */
     enough: 'assez',
+    /** Le Prestige gagné, qui monte du bâtiment ou de l'ennemi. */
+    prestige: (amount: number): string => `+${amount} Prestige`,
   },
   /** Le bandeau des vagues et de la Reine. */
   wave: {
@@ -210,6 +212,8 @@ export const hud = {
     town: 'Ville',
     toBuild: 'à bâtir',
     townTitle: 'Stock de la ville : ce qui paie les constructions',
+    prestige: 'Prestige',
+    prestigeLabel: (amount: number): string => `Prestige de la colonie : ${amount}`,
   },
   hintBulb: 'Afficher le conseil',
   pause: 'Pause',

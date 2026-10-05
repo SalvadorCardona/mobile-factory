@@ -70,6 +70,7 @@ import {
 import { EVE } from '../data/eve.ts';
 import { AGES } from '../data/inhabitants.ts';
 import { TOWN_PLENTY, type ItemId } from '../data/items.ts';
+import { BUILD_PRESTIGE, KILL_PRESTIGE } from '../data/prestige.ts';
 import {
   PERKS,
   bagBonus,
@@ -448,6 +449,8 @@ export type WorldEvents = {
   beastHit: { id: MobileId; proto: WildlifeId; hp: number; x: number; y: number };
   /** Une bête est tombée ; son butin suit, en `lootDropped`. */
   beastDied: { id: MobileId; proto: WildlifeId; x: number; y: number };
+  /** Du Prestige gagné (`data/prestige.ts`) : `x`, `y`, en pixels monde, d'où il monte ; `total` est le nouveau compte. */
+  prestigeGained: { amount: number; total: number; x: number; y: number };
   /** Une bête a frappé Adam ; `hp` est ce qui lui reste. */
   playerHurt: { by: MobileId; hp: number };
   /** Adam est tombé : il se réveille à la mairie, remis sur pied. */
@@ -585,6 +588,15 @@ export class World {
 
   /** Mutants abattus depuis le début de la partie — le score de l'écran de fin. */
   public kills = 0;
+
+  /** Le Prestige de la colonie (`data/prestige.ts`) : il ne fait que monter, rien ne le dépense encore. */
+  public prestige = 0;
+
+  /**
+   * Les emplacements déjà payés en Prestige, `"bâtiment@tx,ty"` : un bâtiment
+   * abattu puis rebâti au même endroit ne rapporte qu'une fois.
+   */
+  private readonly prestigeSites = new Set<string>();
 
   /** Tick où la mairie est tombée ; 0 tant qu'elle tient. */
   public defeatTick = 0;
@@ -762,6 +774,8 @@ export class World {
       nextWaveHeading: this.nextWaveHeading,
       ...(this.nextWaveTarget !== null && { nextWaveTarget: this.nextWaveTarget }),
       kills: this.kills,
+      prestige: this.prestige,
+      prestigeSites: [...this.prestigeSites],
       defeated: this.defeated,
       defeatTick: this.defeatTick,
       questsDone: this.questsDone,
@@ -819,6 +833,9 @@ export class World {
     this.nextWaveHeading = state.nextWaveHeading;
     this.nextWaveTarget = state.nextWaveTarget ?? null;
     this.kills = state.kills;
+    this.prestige = state.prestige;
+    this.prestigeSites.clear();
+    for (const key of state.prestigeSites) this.prestigeSites.add(key);
     this.defeated = state.defeated;
     this.defeatTick = state.defeatTick;
     this.questsDone = state.questsDone;
@@ -856,6 +873,10 @@ export class World {
 
       this.entities.set(entity.id, entity);
       this.chunks.occupy(entity.id, entity.tx, entity.ty, entity.width, entity.height);
+    }
+    // Une sauvegarde d'avant le Prestige : ses bâtiments debout ne rapporteront plus rien, même rebâtis.
+    for (const entity of this.entities.values()) {
+      if (entity.kind !== 'site') this.prestigeSites.add(prestigeKey(entity));
     }
 
     this.mobiles.clear();
@@ -2567,6 +2588,7 @@ export class World {
     this.dirtyTile(site.tx, site.ty);
     this.duty = null;
     this.events.emit('buildingCompleted', { id: site.id });
+    this.awardBuilding(building);
 
     // Le bâtiment est debout : ses bâtisseurs posent le marteau et repartent.
     for (const worker of this.workers()) {
@@ -3287,6 +3309,7 @@ export class World {
     }
     this.mobiles.delete(mutant.id);
     this.kills += 1;
+    this.gainPrestige(KILL_PRESTIGE[mutant.proto], mutant.x, mutant.y);
 
     // La Reine et ses larves ne tombent jamais assommées : pas de tirage, le PRNG ne bouge pas.
     const clinic = ENEMIES[mutant.proto].stunnable ? this.freeClinic(mutant.x, mutant.y) : null;
@@ -3720,6 +3743,7 @@ export class World {
     }
 
     this.events.emit('beastDied', { id: beast.id, proto: beast.proto, x: beast.x, y: beast.y });
+    this.gainPrestige(KILL_PRESTIGE[beast.proto], beast.x, beast.y);
     this.dropLoot(proto.loot, beast.x, beast.y);
   }
 
@@ -5042,6 +5066,23 @@ export class World {
     }
   }
 
+  /* ------------------------------------------------------------- prestige */
+
+  /** Un bâtiment achevé rapporte son Prestige, une seule fois par emplacement : rebâtir une ruine ne paie pas. */
+  private awardBuilding(building: Building): void {
+    const key = prestigeKey(building);
+
+    if (this.prestigeSites.has(key)) return;
+    this.prestigeSites.add(key);
+    this.gainPrestige(BUILD_PRESTIGE[building.proto], (building.tx + building.width / 2) * TILE_SIZE, building.ty * TILE_SIZE);
+  }
+
+  private gainPrestige(amount: number, x: number, y: number): void {
+    if (amount <= 0) return;
+    this.prestige += amount;
+    this.events.emit('prestigeGained', { amount, total: this.prestige, x, y });
+  }
+
   /* ------------------------------------------------- pause et effectifs */
 
   /** La commande `pauseBuilding` : un producteur s'arrête, ou repart. Sans effet sur un bâtiment qui ne produit rien. */
@@ -5460,4 +5501,9 @@ function clamp(value: number, min: number, max: number): number {
 /** Le centre de l'emprise d'un bâtiment, en pixels monde : ce que vise la Reine qui le chasse. */
 function footprintCenter(entity: { tx: number; ty: number; width: number; height: number }): { x: number; y: number } {
   return { x: (entity.tx + entity.width / 2) * TILE_SIZE, y: (entity.ty + entity.height / 2) * TILE_SIZE };
+}
+
+/** La clé d'un emplacement payé en Prestige : le bâtiment et le coin de son emprise. */
+function prestigeKey(entity: { proto: BuildingId; tx: number; ty: number }): string {
+  return `${entity.proto}@${entity.tx},${entity.ty}`;
 }

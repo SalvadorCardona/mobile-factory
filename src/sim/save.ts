@@ -90,6 +90,10 @@ export interface WorldState {
   /** Le bâtiment que vise la prochaine vague, une fois annoncée. Absent : pas encore tirée. */
   nextWaveTarget?: EntityId;
   kills: number;
+  /** Le Prestige de la colonie. Absent des sauvegardes d'avant lui : 0. */
+  prestige: number;
+  /** Emplacements déjà payés en Prestige, `"bâtiment@tx,ty"`. Absent d'avant le Prestige : aucun. */
+  prestigeSites: string[];
   defeated: boolean;
   defeatTick: number;
   /** Quêtes d'Ève déjà finies. Absent des sauvegardes d'avant Ève : 0. */
@@ -340,6 +344,9 @@ function parseState(raw: unknown): WorldState {
     nextWaveHeading: finite(state['nextWaveHeading']),
     ...(state['nextWaveTarget'] !== undefined && { nextWaveTarget: int(state['nextWaveTarget']) }),
     kills: int(state['kills']),
+    // Absents d'une sauvegarde d'avant le Prestige : la colonie repart de zéro, ses bâtiments déjà payés.
+    prestige: state['prestige'] === undefined ? 0 : int(state['prestige']),
+    prestigeSites: [...new Set(array(state['prestigeSites'] ?? []).map(string))],
     defeated: bool(state['defeated']),
     defeatTick: int(state['defeatTick']),
     questsDone: state['questsDone'] === undefined ? 0 : int(state['questsDone']),
