@@ -5,7 +5,25 @@
  * d'un an à chaque aube — un cycle jour/nuit vaut une année. Un enfant sort
  * de la nurserie à 10 ans et joue jusqu'à 14 ; il devient alors ouvrier, tout
  * seul. Personne ne vieillit au-delà : ni vieillesse ni mort par l'âge.
+ *
+ * Les ouvriers ne viennent que de là : la colonie part avec
+ * `COLONY.startingWorkers` adultes, et chaque enfant devenu grand en ajoute
+ * un. Un bâtiment n'en crée aucun — il les emploie. Le rythme des naissances
+ * est la durée de la recette `raiseChild` (`data/recipes.ts`), la durée de
+ * l'enfance `AGES.work - AGES.nursery` aubes.
  */
+
+/** La colonie au départ. */
+export const COLONY = {
+  /** Les ouvriers adultes d'une nouvelle partie, à répartir entre les bâtiments qui emploient. */
+  startingWorkers: 10,
+} as const;
+
+/** La nurserie. */
+export const NURSERY_CARE = {
+  /** Enfants qu'une nurserie élève à la fois : pleine, elle attend qu'un grand parte travailler. */
+  capacity: 4,
+} as const;
 
 export const AGES = {
   /** Années ajoutées à chaque aube : un cycle jour/nuit, une année. */

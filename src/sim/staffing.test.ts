@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
+import { COLONY } from '../data/inhabitants.ts';
 import { RECIPES } from '../data/recipes.ts';
 import { decodeSave, encodeSave, type SavedEntity } from './save.ts';
 import { allocateStaff, canPause, clampStaff } from './staffing.ts';
@@ -208,15 +209,29 @@ describe('ouvriers de la ville', () => {
     const world = colony();
     const farm = find(world, 'farm');
 
-    expect(world.workforce()).toMatchObject({ total: 4, assigned: 4, free: 0, missing: 0 });
+    const free = COLONY.startingWorkers - BUILDINGS.farm.workers;
+
+    expect(world.workforce()).toMatchObject({ total: COLONY.startingWorkers, assigned: 4, free, missing: 0 });
 
     world.push({ type: 'setWorkers', id: farm.id, count: 1 });
     world.tick();
-    expect(world.workforce()).toMatchObject({ total: 4, assigned: 1, free: 3, missing: 0 });
+    expect(world.workforce()).toMatchObject({ total: COLONY.startingWorkers, assigned: 1, free: free + 3, missing: 0 });
 
     world.push({ type: 'setWorkers', id: farm.id, count: 4 });
     world.tick();
-    expect(world.workforce()).toMatchObject({ assigned: 4, free: 0 });
+    expect(world.workforce()).toMatchObject({ assigned: 4, free });
+  });
+
+  it('une colonie à court d’ouvriers laisse des postes vides', () => {
+    const state = colony().snapshot();
+
+    state.colonists = 2;
+
+    const world = World.restore(state);
+    const farm = find(world, 'farm');
+
+    expect(world.staffing(farm)).toMatchObject({ wanted: 4, filled: 2 });
+    expect(world.workforce()).toMatchObject({ total: 2, assigned: 2, free: 0, missing: 2 });
   });
 });
 

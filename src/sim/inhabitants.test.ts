@@ -2,13 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { TILE_SIZE } from '../core/grid.ts';
 import { BUILDINGS } from '../data/buildings.ts';
 import { DAY_CYCLE } from '../data/dayNight.ts';
-import { AGES } from '../data/inhabitants.ts';
+import { AGES, COLONY, NURSERY_CARE } from '../data/inhabitants.ts';
 import type { ItemId } from '../data/items.ts';
 import { IDLE } from '../data/workers.ts';
+import { CYCLE_TICKS, ticksToDawn } from './dayNight.ts';
 import { ADAM_SALT, adultAge, nameOf, yearsToWork } from './inhabitants.ts';
 import { SAVE_VERSION, decodeSave, encodeSave, type SavedEntity } from './save.ts';
 import { isWalkable, terrainAt } from './terrain.ts';
-import type { Kid, Mobile, Worker } from './types.ts';
+import type { Kid, Mobile, Nursery, Worker } from './types.ts';
 import { World } from './world.ts';
 
 type Stock = Partial<Record<ItemId, number>>;
@@ -37,6 +38,8 @@ interface Layout {
   house?: boolean;
   /** Une foreuse finie, coffre déjà garni : du travail pour les porteurs. */
   drill?: Stock;
+  /** Les ouvriers de la colonie ; par défaut, ceux d'une nouvelle partie. */
+  colonists?: number;
 }
 
 /** Une colonie posée d'un coup — mairie, nurserie, et ce que demande `layout` —, le cycle jour/nuit lancé. */
@@ -79,6 +82,7 @@ function colony(layout: Layout): World {
   state.nextId = nextId;
   state.mobiles = mobiles;
   state.nextMobileId += mobiles.length;
+  if (layout.colonists !== undefined) state.colonists = layout.colonists;
   // Plein jour, au début du premier cycle — 0 voudrait dire « pas de cycle ».
   state.tick = Math.max(state.tick, 1);
   state.cycleStartTick = state.tick;
@@ -119,6 +123,14 @@ describe('âge des habitants', () => {
       expect(worker.age).toBe(adultAge(world.seed, worker.id));
       expect(worker.grown).toBe(false);
     }
+  });
+
+  it('une nouvelle partie compte dix ouvriers, sans un bâtiment pour les loger', () => {
+    const world = new World(1);
+
+    expect(world.colonists).toBe(COLONY.startingWorkers);
+    expect(world.population().workers).toBe(10);
+    expect(world.workforce()).toMatchObject({ total: 10, assigned: 0, free: 10 });
   });
 
   it('ajoute une année à chacun à chaque aube : un cycle jour/nuit, un an', () => {
@@ -167,34 +179,78 @@ describe('travail à 14 ans', () => {
     expect(world.population().children).toBe(1);
   });
 
-  it('en fait un ouvrier à 14 ans, sous le même id, et il se met au travail', () => {
-    const world = colony({ kidAge: AGES.work - 1, drill: { ironOre: 30 } });
+  it('à 14 ans, il rejoint les ouvriers de la colonie et prend le poste qui manquait', () => {
+    // Trois ouvriers pour une maison qui en veut quatre : un poste vide.
+    const world = colony({ house: true, kidAge: AGES.work - 1, colonists: 3 });
+    const house = [...world.entities.values()].find((entity) => entity.kind === 'house')!;
     const [kid] = kids(world);
     const grown: { id: number; name: string }[] = [];
 
     world.events.on('kidGrewUp', ({ id, name }) => grown.push({ id, name }));
+    expect(world.staffing(house)).toMatchObject({ wanted: 4, filled: 3 });
+    expect(workers(world)).toHaveLength(3);
     const workersBefore = world.population().workers;
 
     toDawn(world);
 
     expect(grown).toEqual([{ id: kid!.id, name: nameOf(world.seed, kid!.id) }]);
     expect(kids(world)).toHaveLength(0);
-
-    const worker = world.mobiles.get(kid!.id);
-
-    expect(worker).toMatchObject({ kind: 'worker', grown: true, age: AGES.work });
+    expect(world.colonists).toBe(4);
     expect(world.population()).toMatchObject({ children: 0, workers: workersBefore + 1 });
+    expect(world.staffing(house)).toMatchObject({ wanted: 4, filled: 4 });
 
-    // Dès l'aube passée, la foreuse pleine lui donne de quoi porter.
-    run(world, 400);
-    expect(world.mobiles.get(kid!.id)).toMatchObject({ kind: 'worker' });
-    expect(world.townStock()?.count('ironOre')).toBeGreaterThan(0);
+    // La maison loge le quatrième porteur.
+    world.tick();
+    expect(workers(world).filter((worker) => worker.homeId === house.id)).toHaveLength(4);
   });
 
   it('compte les jours qui restent à un enfant', () => {
     expect(yearsToWork(AGES.nursery)).toBe(4);
     expect(yearsToWork(AGES.work - 1)).toBe(1);
     expect(yearsToWork(AGES.work)).toBe(0);
+  });
+});
+
+describe('nurserie', () => {
+  it('pleine, elle n’a plus d’enfant ni ne mange, et repart quand un grand part travailler', () => {
+    const world = colony({ kidAge: AGES.work - 1 });
+    const nursery = [...world.entities.values()].find((entity): entity is Nursery => entity.kind === 'nursery')!;
+    const [eldest] = kids(world);
+
+    // Trois cadets de plus : la nurserie est pleine.
+    for (let i = 1; i < NURSERY_CARE.capacity; i += 1) {
+      const id = 10_000 + i;
+
+      world.mobiles.set(id, { ...eldest!, id, age: AGES.nursery });
+    }
+    nursery.store.add('food', 12);
+    nursery.nextBirthTick = world.tickCount + 1;
+    world.push({ type: 'pauseBuilding', id: nursery.id, paused: true });
+    world.tick();
+    world.push({ type: 'pauseBuilding', id: nursery.id, paused: false });
+    run(world, 5);
+
+    expect(nursery.born).toBe(1);
+    expect(nursery.store.count('food')).toBe(12);
+    expect(world.nurseryKids(nursery)).toHaveLength(NURSERY_CARE.capacity);
+
+    // L'aîné a 14 ans : il part travailler, sa place se libère, un bébé naît.
+    toDawn(world);
+    expect(world.mobiles.has(eldest!.id)).toBe(false);
+    expect(nursery.born).toBe(2);
+    expect(world.nurseryKids(nursery)).toHaveLength(NURSERY_CARE.capacity);
+  });
+
+  it('dit le temps avant le prochain ouvrier : l’aube où le plus âgé aura 14 ans', () => {
+    const world = colony({ kidAge: AGES.work - 2 });
+    const nursery = [...world.entities.values()].find((entity): entity is Nursery => entity.kind === 'nursery')!;
+    const clock = world.clock()!;
+
+    expect(world.nextAdultTicks(nursery)).toBe(ticksToDawn(clock) + CYCLE_TICKS);
+
+    const empty = colony({});
+
+    expect(empty.nextAdultTicks([...empty.entities.values()].find((entity): entity is Nursery => entity.kind === 'nursery')!)).toBeNull();
   });
 });
 
@@ -209,17 +265,19 @@ describe('ouvriers inactifs', () => {
     for (const worker of workers(world)) expect(world.occupation(worker)).toEqual({ kind: 'idle' });
   });
 
-  it('remet au travail, dès qu’on lui rend son poste, l’ouvrier qui glandait', () => {
+  it('retire de son poste l’ouvrier, qui rentre libre ; le lui rendre le remet au travail', () => {
     const world = colony({ house: true, drill: { ironOre: 40 } });
     const house = [...world.entities.values()].find((entity) => entity.kind === 'house')!;
 
     world.push({ type: 'setWorkers', id: house.id, count: 0 });
     run(world, 200);
-    expect(world.idleWorkers()).toHaveLength(4);
+    // Retirés de leur poste, ils sont rentrés : des ouvriers libres de la colonie, pas des oisifs dehors.
+    expect(workers(world)).toHaveLength(0);
+    expect(world.workforce()).toMatchObject({ assigned: 0, free: world.colonists });
 
     world.push({ type: 'setWorkers', id: house.id, count: 4 });
     run(world, 60);
-    expect(world.idleWorkers().length).toBeLessThan(4);
+    expect(workers(world)).toHaveLength(4);
     expect(workers(world).some((worker) => world.occupation(worker).kind === 'working')).toBe(true);
   });
 
@@ -263,6 +321,7 @@ describe('sauvegarde des âges', () => {
       if ('age' in mobile) expect(decoded.world.mobiles.get(mobile.id)).toMatchObject({ age: mobile.age });
     }
     expect(kids(decoded.world).map((kid) => kid.age)).toEqual([12]);
+    expect(decoded.world.colonists).toBe(world.colonists);
   });
 
   it('charge une sauvegarde d’avant les âges : tout le monde est adulte, l’enfant est devenu ouvrier', () => {
@@ -273,6 +332,7 @@ describe('sauvegarde des âges', () => {
     // Une version 6 : ni âge, ni `grown`.
     file.version = 6;
     delete (file.state['player'] as Record<string, unknown>)['age'];
+    delete file.state['colonists'];
     for (const mobile of file.state['mobiles'] as Record<string, unknown>[]) {
       delete mobile['age'];
       delete mobile['grown'];
@@ -287,7 +347,10 @@ describe('sauvegarde des âges', () => {
 
     expect(loaded.player.age).toBe(adultAge(loaded.seed, ADAM_SALT));
     expect(kids(loaded)).toHaveLength(0);
-    expect(loaded.mobiles.get(kid!.id)).toMatchObject({ kind: 'worker', grown: true });
+    expect(loaded.mobiles.has(kid!.id)).toBe(false);
+    // Les ouvriers de la maison, gardés, et l'enfant devenu grand.
+    expect(loaded.colonists).toBe(BUILDINGS.builderHouse.workers + 1);
+    expect(workers(loaded)).toHaveLength(BUILDINGS.builderHouse.workers);
     for (const mobile of loaded.mobiles.values()) {
       if (!('age' in mobile)) continue;
       expect(mobile.age).toBeGreaterThanOrEqual(AGES.adultMin);

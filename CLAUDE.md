@@ -90,9 +90,12 @@ bakées avec le sol : un pavage rebake le bloc.
 recette (`src/data/recipes.ts`) ; `validatePrototypes()` refuse une
 ressource qu'on récolterait pour rien.
 
-**Ouvriers** — chaque bâtiment déclare `workers` ; la maison des
-constructeurs et la ferme en emploient quatre, comptés dans la population
-une fois le bâtiment fini. Ceux de la maison sont des **porteurs** (mobile
+**Ouvriers** — la colonie part avec dix ouvriers adultes
+(`World.colonists`, `COLONY` de `data/inhabitants.ts`, sauvegardé) et n'en
+gagne qu'à la nurserie : un bâtiment n'en crée aucun. Chaque bâtiment
+déclare les `workers` qu'il emploie (maison des constructeurs et ferme :
+quatre), pris parmi eux ; il ne loge que ses postes pourvus, et un ouvrier
+retiré rentre chez lui puis redevient libre. Ceux de la maison sont des **porteurs** (mobile
 `worker`, `src/sim/workers.ts`, `PORTERS` dans `src/data/workers.ts`) : ils
 vident foreuses, fermes et cabanes de bûcheron dans la mairie et livrent les chantiers,
 la forge et la nurserie depuis la mairie (`sim/consumers.ts` ; une machine en
@@ -139,8 +142,9 @@ le soir (crépuscule, nuit) ou pendant une vague.
 sauvegardé, qui prend un an à chaque aube (`ageInhabitants`) ; un adulte
 arrivé tout fait a un âge haché de la seed et de son id, son prénom aussi
 (`nameOf`, jamais stocké). L'enfant sort de la nurserie à 10 ans et n'est
-affecté à rien ; à 14, il devient un porteur `grown` sous le même id, logé à
-sa nurserie, hors des postes comme un ex-mutant (toast « Lina a 14 ans… »).
+affecté à rien ; à 14, il rejoint les ouvriers de la colonie (`colonists`
++ 1, toast « Lina a 14 ans… ») — le porteur `grown` ne survit que dans les
+anciennes sauvegardes.
 Un ouvrier dehors sans tâche depuis `IDLE.graceTicks` est **inactif**
 (`World.isIdle`, compte non sauvegardé) : le rendu le fait glander (assis,
 adossé, s'étire, bâille avec bulle « zzz »), le HUD compte au travail /
@@ -195,7 +199,9 @@ tombe aux nuits 8–10 ; l'usine isolée, AFK, y laisse des plumes en six nuits,
 deux tours par bâtiment la sauvent ; deux tours de base, la Reine en rase
 une ; quatre renforcées, elle tombe avant l'aube).
 La **nurserie** fait naître un enfant toutes les trois minutes, contre six
-nourritures (recette `raiseChild`) : sans elles, elle attend.
+nourritures (recette `raiseChild`) : sans elles, elle attend ; pleine
+(`NURSERY_CARE.capacity`, quatre enfants), aussi. Sa fenêtre montre ses
+enfants et le temps avant le prochain ouvrier (`World.nextAdultTicks`).
 
 **Clinique** (`src/data/clinic.ts`, débloquée au labo, « Médecine de fortune ») — tant
 qu'elle a une place, un mutant vaincu peut tomber **assommé** (étoiles, pas

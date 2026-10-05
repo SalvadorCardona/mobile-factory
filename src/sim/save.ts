@@ -117,6 +117,8 @@ export interface WorldState {
   signalNights?: number;
   /** La nuit dont toutes les vagues marchent sur l'antenne — celle qui suit un étage fini. 0 : aucune. */
   lureNight?: number;
+  /** Les ouvriers adultes de la colonie. Absent d'avant eux : ceux qu'employaient les bâtiments finis. */
+  colonists?: number;
   stats: WorldStats;
   /** Les compteurs au début de l'objectif en cours. */
   objectiveBase: WorldStats;
@@ -356,6 +358,7 @@ function parseState(raw: unknown): WorldState {
     researchDone: [...new Set(array(state['researchDone'] ?? []).map((id) => oneOf(id, RESEARCH) as ResearchId))],
     seenBuildings: [...new Set(array(state['seenBuildings'] ?? []).map((id) => oneOf(id, BUILDINGS) as BuildingId))],
     rareTrades: parseRareTrades(state['rareTrades'] ?? {}),
+    ...(state['colonists'] !== undefined && { colonists: int(state['colonists']) }),
     ...parseObjectives(state),
     player: parsePlayer(state['player']),
     resources: parseResources(state['resources']),
