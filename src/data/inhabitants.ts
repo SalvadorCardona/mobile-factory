@@ -13,11 +13,19 @@
  * l'enfance `AGES.work - AGES.nursery` aubes.
  */
 
+import type { ItemId } from './items.ts';
+
 /** La colonie au départ. */
 export const COLONY = {
   /** Les ouvriers adultes d'une nouvelle partie, à répartir entre les bâtiments qui emploient. */
   startingWorkers: 10,
-} as const;
+  /**
+   * Ce qui tombe en ville quand la mairie est bâtie : de quoi faire tenir les
+   * dix premiers ouvriers le temps de poser un puits et de lancer une ferme —
+   * trois repas chacun, quatre gorgées (`data/needs.ts`).
+   */
+  startingStock: { food: 30, water: 40 },
+} as const satisfies { startingWorkers: number; startingStock: Partial<Record<ItemId, number>> };
 
 /** La nurserie. */
 export const NURSERY_CARE = {

@@ -2,15 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { TILE_SIZE } from '../core/grid.ts';
 import { BUILDINGS } from '../data/buildings.ts';
 import { DAY_CYCLE } from '../data/dayNight.ts';
-import { AGES } from '../data/inhabitants.ts';
+import { AGES, COLONY } from '../data/inhabitants.ts';
 import type { ItemId } from '../data/items.ts';
-import { NEEDS, START_FOOD } from '../data/needs.ts';
+import { NEEDS } from '../data/needs.ts';
+import { RECIPES, recipeOf } from '../data/recipes.ts';
 import { doorOf } from './jobs.ts';
-import { canGrow, drainNeeds, fullNeeds, needState, needsPace, pacedTick, urgentNeed } from './needs.ts';
+import { canGrow, deprivedNeed, drainNeeds, fullNeeds, needState, needsPace, pacedTick, stuntingNeed, urgentNeed } from './needs.ts';
 import { freshNeeds } from './needs.ts';
 import { decodeSave, encodeSave, type SavedEntity } from './save.ts';
 import { isWalkable, terrainAt } from './terrain.ts';
-import type { Kid, Mobile, Worker } from './types.ts';
+import type { Entity, Kid, Mobile, Worker } from './types.ts';
 import { World } from './world.ts';
 
 type Stock = Partial<Record<ItemId, number>>;
@@ -124,13 +125,13 @@ describe('jauges', () => {
     expect(needState('hunger', 1)).toBe('sated');
     expect(needState('hunger', HUNGER.seekBelow - 0.01)).toBe('wanting');
     expect(needState('hunger', HUNGER.weakBelow - 0.01)).toBe('deprived');
-    expect(urgentNeed({ hunger: 1 })).toBeNull();
-    expect(urgentNeed({ hunger: 0.2 })).toBe('hunger');
-    expect(needsPace({ hunger: 0.2 })).toBe(1);
-    expect(needsPace({ hunger: HUNGER.weakBelow / 2 })).toBe(HUNGER.weakPace);
-    expect(needsPace({ hunger: 0 })).toBe(0);
-    expect(canGrow({ hunger: 1 })).toBe(true);
-    expect(canGrow({ hunger: 0.2 })).toBe(false);
+    expect(urgentNeed({ hunger: 1, thirst: 1 })).toBeNull();
+    expect(urgentNeed({ hunger: 0.2, thirst: 1 })).toBe('hunger');
+    expect(needsPace({ hunger: 0.2, thirst: 1 })).toBe(1);
+    expect(needsPace({ hunger: HUNGER.weakBelow / 2, thirst: 1 })).toBe(HUNGER.weakPace);
+    expect(needsPace({ hunger: 0, thirst: 1 })).toBe(0);
+    expect(canGrow({ hunger: 1, thirst: 1 })).toBe(true);
+    expect(canGrow({ hunger: 0.2, thirst: 1 })).toBe(false);
   });
 
   it('un affamé à mi-allure ne compte qu’un tick sur deux', () => {
@@ -277,7 +278,8 @@ describe('faim', () => {
     world.push({ type: 'transferToSite', id: world.townHallId });
     world.tick();
 
-    expect(world.townStock()?.count('food')).toBe(START_FOOD);
+    expect(world.townStock()?.count('food')).toBe(COLONY.startingStock.food);
+    expect(world.townStock()?.count('water')).toBe(COLONY.startingStock.water);
   });
 });
 
@@ -332,5 +334,243 @@ describe('faim — sauvegarde', () => {
 
     expect(people.length).toBeGreaterThan(1);
     for (const mobile of people) expect(mobile).toMatchObject({ needs: { hunger: 1 }, meal: null });
+  });
+});
+
+const THIRST = NEEDS.thirst;
+
+describe('soif', () => {
+  it('baisse plus vite que la faim, au travail comme au repos', () => {
+    const resting = fullNeeds();
+    const working = fullNeeds();
+
+    for (let i = 0; i < 600; i += 1) {
+      drainNeeds(resting, false);
+      drainNeeds(working, true);
+    }
+    expect(resting.thirst).toBeCloseTo(1 - 600 / THIRST.restTicks);
+    expect(working.thirst).toBeLessThan(resting.thirst);
+    expect(resting.thirst).toBeLessThan(resting.hunger);
+    expect(working.thirst).toBeLessThan(working.hunger);
+  });
+
+  it('baisse avec le temps de jeu pour chaque ouvrier et chaque enfant', () => {
+    const world = colony({ food: 10, water: 10 });
+
+    run(world, 200);
+    for (const mobile of [kid(world), ...workers(world)]) {
+      expect(mobile.needs.thirst).toBeLessThan(1);
+      expect(mobile.needs.thirst).toBeLessThan(mobile.needs.hunger);
+    }
+  });
+
+  it('un ouvrier assoiffé va boire à la mairie, remonte sa jauge, et la ville compte une eau de moins', () => {
+    const world = colony({ water: 10 });
+    const worker = workers(world)[0]!;
+    let drank = 0;
+
+    world.events.on('needMet', ({ id, need }) => {
+      if (id === worker.id && need === 'thirst') drank += 1;
+    });
+    worker.needs.thirst = THIRST.seekBelow - 0.05;
+
+    for (let i = 0; i < 20 * 30 && drank === 0; i += 1) {
+      world.tick();
+      if (worker.meal) expect(world.townStock()!.available('water')).toBe(10 - THIRST.meal);
+    }
+
+    expect(drank).toBe(1);
+    expect(worker.needs.thirst).toBe(1);
+    expect(worker.meal).toBeNull();
+    expect(world.townStock()!.count('water')).toBe(10 - THIRST.meal);
+  });
+
+  it('sans eau, il ralentit sous le seuil, puis s’arrête à bout — et repart quand l’eau arrive', () => {
+    const world = colony({ food: 50 });
+    const hall = world.warehouse()!;
+
+    place(world, hall.tx + 12, hall.ty + 8);
+    world.townStock()!.add('stone', 30);
+    for (let i = 0; i < 20 * 20 && !workers(world).some((mobile) => mobile.job); i += 1) world.tick();
+
+    const worker = workers(world).find((mobile) => mobile.job)!;
+
+    expect(worker).toBeDefined();
+
+    const stride = (): number => {
+      const { x, y } = worker;
+
+      world.tick();
+      return Math.hypot(worker.x - x, worker.y - y);
+    };
+
+    const fresh = stride();
+
+    worker.needs.thirst = THIRST.weakBelow / 2;
+    const weak = stride();
+
+    expect(weak).toBeCloseTo(fresh * THIRST.weakPace, 5);
+    expect(worker.meal).toBeNull();
+
+    worker.needs.thirst = 0;
+    const { x, y } = worker;
+
+    run(world, 100);
+    expect([worker.x, worker.y]).toEqual([x, y]);
+    expect(worker.moving).toBe(false);
+    expect(worker.job).not.toBeNull();
+
+    world.townStock()!.add('water', 5);
+    for (let i = 0; i < 20 * 60 && worker.needs.thirst < 1; i += 1) world.tick();
+    expect(worker.needs.thirst).toBe(1);
+  });
+
+  it('assoiffé et affamé, il comble d’abord le besoin le plus bas', () => {
+    const needs = { hunger: HUNGER.seekBelow - 0.05, thirst: THIRST.seekBelow - 0.2 };
+
+    expect(urgentNeed(needs)).toBe('thirst');
+    expect(deprivedNeed({ hunger: 0.1, thirst: 0.05 })).toBe('thirst');
+    expect(deprivedNeed({ hunger: 0.05, thirst: 1 })).toBe('hunger');
+    expect(deprivedNeed(fullNeeds())).toBeNull();
+  });
+
+  it('un enfant assoiffé ne grandit pas à l’aube', () => {
+    const world = colony({});
+    let stunted: string | null = null;
+
+    world.events.on('growthStunted', ({ need }) => {
+      stunted = need;
+    });
+    kid(world).needs.thirst = THIRST.seekBelow - 0.1;
+    toDawn(world);
+    expect(kid(world).age).toBe(12);
+    expect(stunted).toBe('thirst');
+    expect(stuntingNeed({ hunger: 1, thirst: 0.1 })).toBe('thirst');
+  });
+
+  it('l’alerte dit que l’eau va manquer, et son tap montre les assoiffés', () => {
+    const world = colony({ food: 50 });
+    const worker = workers(world)[0]!;
+
+    expect(world.needAlert()).toBeNull();
+    worker.needs.thirst = THIRST.seekBelow - 0.05;
+    expect(world.needAlert()).toMatchObject({ need: 'thirst', item: 'water', wanting: 1, minutes: 0 });
+    expect(world.wantingInhabitants('thirst').map((mobile) => mobile.id)).toEqual([worker.id]);
+    expect(world.wantingInhabitants('hunger')).toEqual([]);
+
+    world.townStock()!.add('water', 50);
+    expect(world.needAlert()).toBeNull();
+  });
+
+  it('la nouvelle partie part avec de l’eau et de la nourriture, réglées dans les données', () => {
+    expect(COLONY.startingStock.water).toBeGreaterThan(0);
+    expect(COLONY.startingStock.food).toBeGreaterThan(0);
+
+    // Dix ouvriers au travail, sans puits : l'eau de départ tient plusieurs minutes, le temps d'en bâtir un.
+    const drinksPerMinute = (COLONY.startingWorkers * 20 * 60) / (THIRST.workTicks * (1 - THIRST.seekBelow));
+
+    expect(COLONY.startingStock.water / drinksPerMinute).toBeGreaterThanOrEqual(5);
+  });
+});
+
+describe('puits', () => {
+  /** Pose le puits à côté de la mairie et le bâtit d'un « Transférer », Adam à côté. */
+  function buildWell(world: World): Entity {
+    const hall = world.warehouse()!;
+    const tx = hall.tx + 5;
+    const ty = hall.ty + 1;
+
+    for (let y = ty - 1; y <= ty + 2; y += 1) for (let x = tx - 1; x <= tx + 2; x += 1) world.resources.clear(x, y);
+    world.player.x = world.player.prevX = (tx + 1) * TILE_SIZE;
+    world.player.y = world.player.prevY = (ty + 3.5) * TILE_SIZE;
+    expect(world.canPlace('well', tx, ty)).toBeNull();
+    world.push({ type: 'placeBuilding', building: 'well', tx, ty });
+    world.tick();
+
+    const site = [...world.entities.values()].find((entity) => entity.proto === 'well')!;
+
+    for (const [item, amount] of Object.entries(BUILDINGS.well.cost) as [ItemId, number][]) world.player.inventory.add(item, amount);
+    world.push({ type: 'transferToSite', id: site.id });
+    world.tick();
+    return world.entities.get(site.id)!;
+  }
+
+  function waterOf(world: World): number {
+    let water = 0;
+
+    for (const entity of world.entities.values()) if (entity.kind !== 'site') water += entity.store.count('water');
+    for (const mobile of world.mobiles.values()) {
+      if (mobile.kind === 'worker' && mobile.job?.carried && mobile.job.item === 'water') water += mobile.job.amount;
+    }
+    return water;
+  }
+
+  it('tire de l’eau dans son coffre, n’importe où, à la cadence de sa recette', () => {
+    const world = colony({ food: 50 });
+
+    // Un ouvrier libre pour le treuil.
+    world.colonists += BUILDINGS.well.workers;
+
+    const well = buildWell(world);
+
+    expect(well.kind).toBe('quarry');
+    expect(recipeOf('well')).toBe(RECIPES.drawWater);
+
+    const before = waterOf(world);
+
+    run(world, RECIPES.drawWater.duration);
+    expect(waterOf(world) - before).toBeGreaterThanOrEqual(RECIPES.drawWater.outputs.water);
+  });
+
+  it('sans ouvrier, il ne tire rien', () => {
+    const world = colony({ food: 50 });
+    const well = buildWell(world);
+
+    if (well.kind === 'site') throw new Error('le puits ne s’est pas achevé');
+    world.push({ type: 'setWorkers', id: well.id, count: 0 });
+    run(world, 3 * RECIPES.drawWater.duration);
+    expect(well.store.count('water')).toBe(0);
+  });
+});
+
+describe('soif — sauvegarde', () => {
+  it('la jauge de soif et la gorgée en route se sauvegardent', () => {
+    const world = colony({ water: 10 });
+    const worker = workers(world)[0]!;
+
+    worker.needs.thirst = THIRST.seekBelow - 0.05;
+    for (let i = 0; i < 40 && !worker.meal; i += 1) world.tick();
+    expect(worker.meal).toBe('thirst');
+
+    const decoded = decodeSave(encodeSave(world, 0));
+
+    if (!decoded.ok) throw new Error(decoded.reason);
+
+    const loaded = decoded.world.mobiles.get(worker.id) as Worker;
+
+    expect(loaded.needs.thirst).toBeCloseTo(worker.needs.thirst);
+    expect(loaded.meal).toBe('thirst');
+    expect(decoded.world.townStock()!.available('water')).toBe(10 - THIRST.meal);
+  });
+
+  it('une sauvegarde d’avant l’eau : un petit stock en ville, et des habitants désaltérés', () => {
+    const world = colony({ food: 10, wood: 4 });
+    const file = JSON.parse(encodeSave(world, 0)) as { version: number; state: { mobiles: Record<string, unknown>[] } };
+
+    // Une version 8 : ni eau, ni soif.
+    file.version = 8;
+    for (const mobile of file.state.mobiles) {
+      if (mobile['needs']) delete (mobile['needs'] as Record<string, unknown>)['thirst'];
+    }
+
+    const decoded = decodeSave(JSON.stringify(file));
+
+    if (!decoded.ok) throw new Error(decoded.reason);
+    expect(decoded.world.townStock()!.toJSON()).toEqual({ food: 10, wood: 4, water: COLONY.startingStock.water });
+
+    const people = [...decoded.world.mobiles.values()].filter((mobile) => mobile.kind === 'kid' || mobile.kind === 'worker');
+
+    expect(people.length).toBeGreaterThan(1);
+    for (const mobile of people) expect(mobile).toMatchObject({ needs: { thirst: 1 } });
   });
 });

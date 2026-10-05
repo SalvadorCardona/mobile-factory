@@ -5,13 +5,15 @@
  * Son nom — le prénom d'un habitant (`nameOf`), le surnom d'un ennemi
  * (`foeName`) —, son âge, son portrait (le sprite de son pantin), ses points
  * de vie s'il en a, et ce que le jeu sait de lui : son métier ou son
- * espèce, ce qu'il fait, où il loge, ce qu'il porte. Rien d'inventé : tout
+ * espèce, ce qu'il fait, où il loge, ce qu'il porte, sa faim et sa soif.
+ * Rien d'inventé : tout
  * se lit dans le monde. Pur : testé sans DOM.
  */
 
 import type { BuildingId } from '../data/buildings.ts';
 import { ENEMIES, WILDLIFE } from '../data/enemies.ts';
 import type { ItemId } from '../data/items.ts';
+import { NEED_IDS, type NeedId } from '../data/needs.ts';
 import type { SpriteId } from '../data/sprites.ts';
 import { foeName, nameOf } from '../sim/inhabitants.ts';
 import type { EntityId, Mobile, MobileId } from '../sim/types.ts';
@@ -39,6 +41,8 @@ export interface CreatureView {
   lines: string[];
   /** Ce qu'il porte, s'il porte quelque chose. */
   carry: { item: ItemId; amount: number } | null;
+  /** Ses jauges, une par besoin — la faim, la soif — de 0 à 1 ; aucune pour un ennemi. */
+  needs: { need: NeedId; value: number }[];
 }
 
 export function isCreature(mobile: Mobile): mobile is Creature {
@@ -69,7 +73,15 @@ function inhabitantView(world: World, person: Inhabitant): CreatureView {
   ];
 
   if (carry) lines.push(text.carrying(t().panel.recipeAmount(carry.amount, t().items[carry.item])));
-  return { name: nameOf(world.seed, person.id), portrait: portraitOf(person), age: person.age, hp: null, lines, carry };
+  return {
+    name: nameOf(world.seed, person.id),
+    portrait: portraitOf(person),
+    age: person.age,
+    hp: null,
+    lines,
+    carry,
+    needs: NEED_IDS.map((need) => ({ need, value: person.needs[need] })),
+  };
 }
 
 function foeView(world: World, foe: Extract<Creature, { kind: 'mutant' | 'beast' }>): CreatureView {
@@ -94,6 +106,7 @@ function foeView(world: World, foe: Extract<Creature, { kind: 'mutant' | 'beast'
     hp: { value: Math.max(0, Math.ceil(foe.hp)), max: foe.kind === 'mutant' ? ENEMIES[foe.proto].hp : WILDLIFE[foe.proto].hp },
     lines,
     carry: null,
+    needs: [],
   };
 }
 

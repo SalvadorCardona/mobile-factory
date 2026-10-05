@@ -127,6 +127,11 @@ export const panel = {
     working: 'Les pioches entament la ruine.',
   },
 
+  well: {
+    noOne: 'À l’arrêt : personne au treuil — ajoutez un ouvrier.',
+    working: 'Le seau remonte, plein.',
+  },
+
   house: {
     sleeping: 'Les ouvriers dorment ici entre deux journées.',
   },

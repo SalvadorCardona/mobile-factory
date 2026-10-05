@@ -52,12 +52,12 @@ describe('parties de test', () => {
     expect(MENU_BUILDING_IDS.filter((building) => world.isNewInMenu(building))).toEqual([]);
   });
 
-  it('la petite base : trois bâtiments qui emploient, et un chantier à moitié livré', () => {
+  it('la petite base : quatre bâtiments qui emploient, et un chantier à moitié livré', () => {
     const world = stageScenario(TEST_SCENARIOS.base);
     const buildings = [...world.entities.values()].filter((entity) => entity.kind !== 'site' && entity.kind !== 'townHall');
     const sites = [...world.entities.values()].filter((entity) => entity.kind === 'site');
 
-    expect(buildings.map((entity) => entity.proto).sort()).toEqual(['constructionPost', 'farm', 'lumberCamp']);
+    expect(buildings.map((entity) => entity.proto).sort()).toEqual(['constructionPost', 'farm', 'lumberCamp', 'well']);
     expect(world.mobiles.size).toBeGreaterThan(0);
     expect([...world.mobiles.values()].filter((mobile) => mobile.kind === 'lumberjack')).toHaveLength(BUILDINGS.lumberCamp.workers);
 

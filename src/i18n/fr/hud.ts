@@ -98,7 +98,11 @@ export const hud = {
     patientAdmitted: 'Admis à la clinique : une nuit de soins',
     mutantHealed: 'Un ex-mutant sort de la clinique : un porteur de plus !',
     kidGrewUp: (name: string): string => `${name} a 14 ans, un ouvrier de plus`,
-    growthStunted: (name: string): string => `${name} a faim : pas d’anniversaire cette aube`,
+    /** Un enfant affamé ou assoiffé ne prend pas d'année : un message par besoin. */
+    growthStunted: {
+      hunger: (name: string): string => `${name} a faim : pas d’anniversaire cette aube`,
+      thirst: (name: string): string => `${name} a soif : pas d’anniversaire cette aube`,
+    },
     /** `weather` : le nom de la météo, avec sa majuscule ; `advice` : son conseil. */
     weatherSoon: (weather: string, seconds: number, advice: string): string => `${weather} dans ${seconds} s — ${advice}`,
     weatherEnded: (weather: string): string => `Fin : ${lower(weather)}`,
@@ -212,14 +216,18 @@ export const hud = {
     /** `weather` : son nom, avec sa majuscule. */
     soon: (weather: string, seconds: number): string => `${weather} dans ${seconds} s`,
   },
-  /** L'alerte de nourriture, sous la population : la ville va en manquer. */
+  /** L'alerte de nourriture ou d'eau, sous la population : la ville va en manquer. */
   needAlert: {
     soonShort: (minutes: number): string => `${minutes} min`,
     outShort: 'à sec',
-    soon: (item: string, minutes: number, wanting: number): string =>
-      `${item} : plus que ${minutes} min en ville${wanting > 0 ? ` — ${wanting} ${wanting > 1 ? 'ont' : 'a'} faim, taper pour voir` : ''}`,
-    out: (item: string, wanting: number): string =>
-      `${item} : la ville n’en a plus${wanting > 0 ? ` — ${wanting} ${wanting > 1 ? 'ont' : 'a'} faim, taper pour voir` : ''}`,
+    /** `who` : qui en manque déjà (`wanting`), vide si personne. */
+    soon: (item: string, minutes: number, who: string): string =>
+      `${item} : plus que ${minutes} min en ville${who ? ` — ${who}, taper pour voir` : ''}`,
+    out: (item: string, who: string): string => `${item} : la ville n’en a plus${who ? ` — ${who}, taper pour voir` : ''}`,
+    wanting: {
+      hunger: (count: number): string => `${count} ${count > 1 ? 'ont' : 'a'} faim`,
+      thirst: (count: number): string => `${count} ${count > 1 ? 'ont' : 'a'} soif`,
+    },
   },
   /** La population : au travail, inactifs, enfants. */
   people: {
@@ -289,9 +297,10 @@ export const hud = {
     workingAt: (building: string): string => `au travail : ${building}`,
     idle: 'sans travail',
     home: 'à la maison',
-    /** L'état d'un besoin, sous la ligne : « rassasié », « a faim », « affamé ». */
+    /** L'état d'un besoin, sous la ligne : « rassasié », « a faim », « affamé » ; « désaltéré », « a soif », « assoiffé ». */
     needs: {
       hunger: { sated: 'rassasié', wanting: 'a faim', deprived: 'affamé' },
+      thirst: { sated: 'désaltéré', wanting: 'a soif', deprived: 'assoiffé' },
     },
   },
 };

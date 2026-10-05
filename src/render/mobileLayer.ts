@@ -57,10 +57,11 @@ import { Container, Graphics, Sprite, type Texture, type Ticker } from 'pixi.js'
 import { TILE_SIZE, floorDiv } from '../core/grid.ts';
 import { PALETTE, hex } from '../data/artDirection.ts';
 import { ENEMIES, LOOT_DROPS, WILDLIFE } from '../data/enemies.ts';
+import type { NeedId } from '../data/needs.ts';
 import { SPRITES } from '../data/sprites.ts';
 import type { Mobile, MobileId, Mutant, Pickup } from '../sim/types.ts';
 import { terrainAt } from '../sim/terrain.ts';
-import { isDeprived } from '../sim/needs.ts';
+import { deprivedNeed } from '../sim/needs.ts';
 import type { Inhabitant, Laborer, World } from '../sim/world.ts';
 import { Puppet, type Lounge, type PuppetId } from './puppet.ts';
 import type { SpriteLibrary } from './spriteLibrary.ts';
@@ -75,6 +76,9 @@ const QUEEN_HP_WIDTH = 52;
 const QUEEN_PUDDLE = 2.6;
 
 const SPAWN_MS = 500;
+
+/** La bulle d'un habitant à bout d'un besoin : l'épi de la faim, la goutte de la soif. */
+const NEED_BUBBLES: Record<NeedId, 'hungry' | 'thirsty'> = { hunger: 'hungry', thirst: 'thirsty' };
 const DEATH_MS = 520;
 /** Un mort se tasse (hauteur à `DEATH_FLAT`) en autant de ms, puis s'efface à plat. */
 const DEATH_SQUASH_MS = 200;
@@ -187,8 +191,10 @@ interface MobileView {
   /** La glande en cours d'un ouvrier inactif, et ses ms restantes avant d'en changer. */
   lounge: Lounge | null;
   loungeLeft: number;
-  /** La bulle « affamé » d'un habitant à court de nourriture. */
+  /** La bulle « affamé » d'un habitant à court de nourriture, ou « assoiffé » à court d'eau. */
   hungry: Sprite | null;
+  /** Le besoin que dit sa bulle en ce moment : sa texture n'est changée que s'il change. */
+  need: NeedId;
 }
 
 /** Le vélo-cargo — une ombre, le cadre avec Ève en selle, deux roues qui tournent — ou la charrette du marchand. */
@@ -445,11 +451,20 @@ export class MobileLayer {
     this.mark(alpha, deltaMs);
   }
 
-  /** La bulle « affamé » flotte au-dessus de la tête d'un habitant à court de nourriture. */
+  /**
+   * La bulle « affamé » — ou « assoiffé » — flotte au-dessus de la tête d'un
+   * habitant à court de nourriture ou d'eau ; s'il manque des deux, celle du
+   * besoin le plus bas.
+   */
   private starve(view: MobileView, mobile: Inhabitant): void {
     const bubble = view.hungry!;
+    const need = deprivedNeed(mobile.needs);
 
-    bubble.visible = isDeprived(mobile.needs);
+    bubble.visible = need !== null;
+    if (need !== null && view.need !== need) {
+      view.need = need;
+      bubble.texture = this.library.part(NEED_BUBBLES[need], 'bubble');
+    }
     if (bubble.visible) bubble.y = (mobile.kind === 'kid' ? -30 : -40) + Math.sin(this.clock * 0.004 + mobile.id) * 2;
   }
 
@@ -671,7 +686,7 @@ export class MobileLayer {
       }
       sprite.anchor.set(SPRITES.arrow.anchorX, SPRITES.arrow.anchorY);
       root.addChild(sprite);
-      view = { root, puppet: null, hp: null, lastHp: 0, age: SPAWN_MS, tile: '', bike: null, stars: null, size: 1, puddle: 1, recoil: null, kind: mobile.kind, lounge: null, loungeLeft: 0, hungry: null };
+      view = { root, puppet: null, hp: null, lastHp: 0, age: SPAWN_MS, tile: '', bike: null, stars: null, size: 1, puddle: 1, recoil: null, kind: mobile.kind, lounge: null, loungeLeft: 0, hungry: null, need: 'hunger' };
     } else if (mobile.kind === 'pickup') {
       const tx = floorDiv(mobile.x, TILE_SIZE);
       const ty = floorDiv(mobile.y, TILE_SIZE);
@@ -690,14 +705,14 @@ export class MobileLayer {
       // Butin rechargé d'une sauvegarde : déjà posé, pas de saut.
       const fresh = LOOT_DROPS.lifetimeTicks - mobile.ttl < 20;
 
-      view = { root, puppet: null, hp: null, lastHp: 0, age: fresh ? 0 : LOOT_DROP_MS, tile: '', bike: null, stars: null, size: 1, puddle: 1, recoil: null, kind: mobile.kind, lounge: null, loungeLeft: 0, hungry: null };
+      view = { root, puppet: null, hp: null, lastHp: 0, age: fresh ? 0 : LOOT_DROP_MS, tile: '', bike: null, stars: null, size: 1, puddle: 1, recoil: null, kind: mobile.kind, lounge: null, loungeLeft: 0, hungry: null, need: 'hunger' };
     } else if (mobile.kind === 'caravan') {
       const cart = this.cart(this.tiles.shadow('grass'));
 
       // Rechargée garée, elle garde le sens où elle roulait.
       cart.figure.scale.x = mobile.facing === 'left' ? -1 : 1;
       root.addChild(cart.root);
-      view = { root, puppet: null, hp: null, lastHp: 0, age: SPAWN_MS, tile: '', bike: cart, stars: null, size: 1, puddle: 1, recoil: null, kind: mobile.kind, lounge: null, loungeLeft: 0, hungry: null };
+      view = { root, puppet: null, hp: null, lastHp: 0, age: SPAWN_MS, tile: '', bike: cart, stars: null, size: 1, puddle: 1, recoil: null, kind: mobile.kind, lounge: null, loungeLeft: 0, hungry: null, need: 'hunger' };
     } else {
       const foe = mobile.kind === 'mutant' || mobile.kind === 'beast';
       const { id, ...options } = puppetOf(mobile);
@@ -736,7 +751,7 @@ export class MobileLayer {
       }
       const puddle = mobile.kind === 'mutant' ? puddleSize(mobile) : 1;
 
-      view = { root, puppet, hp, lastHp: foe ? mobile.hp : 0, age: foe ? 0 : SPAWN_MS, tile: '', bike, stars, size: scale, puddle, recoil: null, kind: mobile.kind, lounge: null, loungeLeft: 0, hungry };
+      view = { root, puppet, hp, lastHp: foe ? mobile.hp : 0, age: foe ? 0 : SPAWN_MS, tile: '', bike, stars, size: scale, puddle, recoil: null, kind: mobile.kind, lounge: null, loungeLeft: 0, hungry, need: 'hunger' };
       if (mobile.kind === 'mutant' && mobile.emerge > 0) this.spill(mobile, puddle);
     }
 

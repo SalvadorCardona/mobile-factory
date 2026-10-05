@@ -49,7 +49,7 @@ export interface TestScenarioProto {
 export const TEST_SCENARIOS = {
   /**
    * Une petite base au matin du premier jour : la mairie et son stock, une
-   * cabane de bûcheron et une ferme qui tournent, un poste de construction
+   * cabane de bûcheron, une ferme et un puits qui tournent, un poste de construction
    * dont les bâtisseurs finissent le labo — bois livré, pierre en route, fer
    * manquant : il attend Adam.
    */
@@ -59,10 +59,11 @@ export const TEST_SCENARIOS = {
     buildings: [
       { building: 'lumberCamp', dx: -6, dy: 0 },
       { building: 'farm', dx: 6, dy: 0 },
+      { building: 'well', dx: 0, dy: 9 },
       { building: 'constructionPost', dx: -5, dy: 5 },
       { building: 'lab', dx: 4, dy: 5, delivered: { wood: 14, stone: 3 } },
     ],
-    town: { wood: 40, stone: 30, food: 12 },
+    town: { wood: 40, stone: 30, food: 12, water: 12 },
     bag: { wood: 6, stone: 4 },
     adam: { dx: 1, dy: 4 },
   },
@@ -74,7 +75,7 @@ export const TEST_SCENARIOS = {
     label: 'Labo',
     seed: 100,
     buildings: [{ building: 'lab', dx: 4, dy: 5 }],
-    town: { wood: 40, stone: 30, ironOre: 12, food: 12 },
+    town: { wood: 40, stone: 30, ironOre: 12, food: 12, water: 12 },
     bag: {},
     adam: { dx: 3, dy: 4 },
   },
@@ -86,7 +87,7 @@ export const TEST_SCENARIOS = {
     label: 'Forestier',
     seed: 100,
     buildings: [{ building: 'foresterHouse', dx: 0, dy: 9 }],
-    town: { wood: 40, stone: 30, food: 12 },
+    town: { wood: 40, stone: 30, food: 12, water: 12 },
     bag: {},
     adam: { dx: 4, dy: 8 },
   },

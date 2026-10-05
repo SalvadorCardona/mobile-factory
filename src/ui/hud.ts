@@ -56,7 +56,7 @@
 import { TILE_SIZE } from '../core/grid.ts';
 import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
-import { NEED_IDS, NEEDS, type NeedId } from '../data/needs.ts';
+import { NEED_IDS, type NeedId } from '../data/needs.ts';
 import { SIGNAL_WAVES } from '../data/artDirection.ts';
 import { OBJECTIVES, type Goal } from '../data/objectives.ts';
 import { seedsFor } from '../data/perks.ts';
@@ -69,7 +69,6 @@ import type { WaterStats } from '../render/waterLayer.ts';
 import type { RoadRejection } from '../sim/commands.ts';
 import type { Compass } from '../sim/enemies.ts';
 import { nameOf } from '../sim/inhabitants.ts';
-import { needState } from '../sim/needs.ts';
 import type { Entity, Mobile, MobileId } from '../sim/types.ts';
 import { DIAL_ARCS } from '../sim/dayNight.ts';
 import { currentQuest, questProgress } from '../sim/eve.ts';
@@ -79,7 +78,8 @@ import { locale, onLocale, t } from '../i18n/locale.ts';
 import { carriesWanted, harvestRefusedText, tutorialAdvice, type Advice } from './hint.ts';
 import { buildingIcon, dayDialUrl, itemAmount, itemIcon, prestigeIcon, uiIcon } from './icons.ts';
 import { effectLine } from './researchText.ts';
-import { needText, personText } from './personText.ts';
+import { needMeter } from './needMeter.ts';
+import { personText } from './personText.ts';
 import { mapUrl, seedLine } from './seed.ts';
 import { setTip, Tooltips } from './tooltip.ts';
 
@@ -197,6 +197,8 @@ export class Hud {
   /** L'alerte de nourriture : la ville va en manquer. Un tap montre qui a faim, puis le suivant. */
   private readonly hunger: HTMLButtonElement;
   private lastHunger = '';
+  /** Le besoin que dit l'alerte : son tap montre qui en manque. */
+  private hungerNeed: NeedId | undefined = undefined;
   private hungryCursor = 0;
   /** L'infobulle d'un habitant : son id, et l'heure (`performance.now()`) où elle s'efface. */
   private readonly person: HTMLElement;
@@ -633,7 +635,7 @@ export class Hud {
     world.events.on('patientAdmitted', () => this.notify(t().hud.toast.patientAdmitted, 'good'));
     world.events.on('mutantHealed', () => this.notify(t().hud.toast.mutantHealed, 'good'));
     world.events.on('kidGrewUp', ({ name }) => this.notify(t().hud.toast.kidGrewUp(name), 'good'));
-    world.events.on('growthStunted', ({ name }) => this.notify(t().hud.toast.growthStunted(name), 'bad'));
+    world.events.on('growthStunted', ({ name, need }) => this.notify(t().hud.toast.growthStunted[need](name), 'bad'));
     world.events.on('townHallDestroyed', () => this.showDefeat());
     world.events.on('weatherAnnounced', ({ id, seconds }) => {
       const { label, advice } = t().weather[id];
@@ -884,7 +886,7 @@ export class Hud {
   }
 
   /**
-   * L'alerte de nourriture, sous la population : la ville va en manquer —
+   * L'alerte de nourriture ou d'eau, sous la population : la ville va en manquer —
    * « 3 min » de stock au rythme où il fond, ou plus rien —, en corail. Elle
    * disparaît quand le stock tient.
    */
@@ -894,21 +896,23 @@ export class Hud {
 
     if (key === this.lastHunger) return;
     this.lastHunger = key;
+    this.hungerNeed = alert?.need;
     this.hunger.hidden = alert === null;
     if (!alert) return;
 
     const words = t().hud.needAlert;
     const item = t().items[alert.item];
-    const label = alert.minutes === 0 ? words.out(item, alert.wanting) : words.soon(item, alert.minutes, alert.wanting);
+    const who = alert.wanting > 0 ? words.wanting[alert.need](alert.wanting) : '';
+    const label = alert.minutes === 0 ? words.out(item, who) : words.soon(item, alert.minutes, who);
 
     this.hunger.title = label;
     this.hunger.setAttribute('aria-label', label);
     this.hunger.replaceChildren(itemIcon(alert.item, 18), text('hud-hunger-text', alert.minutes === 0 ? words.outShort : words.soonShort(alert.minutes)));
   }
 
-  /** Centre la caméra sur un habitant qui a faim — au tap suivant, sur le suivant — et dit qui il est. */
+  /** Centre la caméra sur un habitant qui a faim (ou soif) — au tap suivant, sur le suivant — et dit qui il est. */
   private focusHungry(): void {
-    const hungry = this.world.wantingInhabitants();
+    const hungry = this.world.wantingInhabitants(this.hungerNeed);
 
     if (hungry.length === 0) return;
 
@@ -1896,20 +1900,6 @@ function goalIcon(goal: Goal): HTMLElement {
     : goal.type === 'produce'
       ? tipped(itemIcon(goal.item, 18), t().items[goal.item])
       : uiIcon(goal.type === 'nights' ? 'mutant' : goal.type === 'quests' ? 'eve' : 'people', 18);
-}
-
-/**
- * Un besoin dans l'infobulle d'un habitant : l'icône de ce qui le comble, sa
- * jauge, son état — en menthe rassasié, en corail affamé.
- */
-function needMeter(need: NeedId, value: number): HTMLElement {
-  const row = element('div', 'hud-meter hud-person-need');
-  const state = needState(need, value);
-
-  row.dataset['done'] = String(state === 'sated');
-  row.dataset['blocked'] = String(state === 'deprived');
-  row.append(itemIcon(NEEDS[need].item, 18), bar(value), text('hud-meter-value', needText(need, state)));
-  return row;
 }
 
 /** Une ligne de quête : icône, barre, « 7/20 ». */

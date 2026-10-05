@@ -86,6 +86,7 @@ const ITEM_PARTICLES: Record<ItemId, ParticleStyle> = {
   ironOre: PARTICLES.iron,
   coal: PARTICLES.coal,
   food: PARTICLES.food,
+  water: PARTICLES.water,
   ironPlate: PARTICLES.iron,
   mutantGoo: PARTICLES.mutant,
   wolfFang: PARTICLES.bone,

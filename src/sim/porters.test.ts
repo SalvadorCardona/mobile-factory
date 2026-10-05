@@ -5,6 +5,7 @@ import { COLONY } from '../data/inhabitants.ts';
 import { unlockingResearch } from './research.ts';
 import { ENEMIES } from '../data/enemies.ts';
 import { ITEM_IDS, type ItemId } from '../data/items.ts';
+import { NEEDS } from '../data/needs.ts';
 import { DAY_CYCLE } from '../data/dayNight.ts';
 import { RECIPES } from '../data/recipes.ts';
 import { JOB_PRIORITY, WANDER } from '../data/workers.ts';
@@ -179,6 +180,14 @@ function expectCoveredPromises(world: World): void {
     const job = worker.job;
 
     if (job && !job.carried && job.from === hall.id) promisedOut.set(job.item, (promisedOut.get(job.item) ?? 0) + job.amount);
+  }
+  // Et la gorgée ou le repas qu'un habitant en route est venu prendre.
+  for (const mobile of world.mobiles.values()) {
+    if (!('meal' in mobile) || mobile.meal === null) continue;
+
+    const { item, meal } = NEEDS[mobile.meal];
+
+    promisedOut.set(item, (promisedOut.get(item) ?? 0) + meal);
   }
 
   for (const item of ITEM_IDS) {
@@ -656,7 +665,8 @@ describe('four à charbon', () => {
    * ville pleine de bois : la chaîne bois → charbon → plaque tourne seule.
    */
   it('forge + 2 fours + foreuse pendant 5 min : au moins 30 plaques, sans rien dupliquer', () => {
-    const world = colony({ hall: { wood: 300 }, houses: 2, forges: [{}], kilns: [{}, {}], drills: [{ ironOre: 1 }] });
+    // De l'eau pour cinq minutes : ce n'est pas la soif qu'on mesure ici.
+    const world = colony({ hall: { wood: 300, water: 100 }, houses: 2, forges: [{}], kilns: [{}, {}], drills: [{ ironOre: 1 }] });
     let plates = 0;
 
     world.events.on('forgeProduced', ({ item }) => {

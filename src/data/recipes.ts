@@ -9,7 +9,9 @@
  *
  * La carrière n'a pas d'entrée non plus : ses ouvriers taillent la pierre
  * dans les ruines du vieux monde, où qu'elle soit posée. Comme la ferme,
- * elle va d'autant plus vite qu'elle a d'ouvriers.
+ * elle va d'autant plus vite qu'elle a d'ouvriers. Le puits est une
+ * carrière sur sa propre recette (`drawWater`) : la nappe est partout, il
+ * tire son eau où qu'il soit, au même rythme.
  *
  * La nurserie a une recette sans sortie : ce qu'elle produit est un enfant,
  * pas un objet. Sa recette dit ce que coûte une naissance, et tous les
@@ -58,6 +60,13 @@ export const RECIPES = {
     duration: 20 * 15,
     inputs: {},
     outputs: { stone: 2 },
+  },
+  drawWater: {
+    label: 'Puisage',
+    building: 'well',
+    duration: 20 * 10,
+    inputs: {},
+    outputs: { water: 2 },
   },
   raiseChild: {
     label: 'Naissance',

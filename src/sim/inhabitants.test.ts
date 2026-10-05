@@ -340,7 +340,7 @@ describe('sauvegarde des âges', () => {
       delete mobile['age'];
       delete mobile['grown'];
     }
-    expect(SAVE_VERSION).toBe(8);
+    expect(SAVE_VERSION).toBe(9);
 
     const decoded = decodeSave(JSON.stringify(file));
 

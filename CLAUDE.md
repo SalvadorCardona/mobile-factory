@@ -86,8 +86,8 @@ marteau, `removeRoad`) rend la pierre ; une route bloque la pose d'un
 bâtiment (refus `road`). Dalles raccordées (`art/road.ts`, seize masques)
 bakées avec le sol : un pavage rebake le bloc.
 
-**Débouchés** — tout objet entre dans un coût de bâtiment ou une entrée de
-recette (`src/data/recipes.ts`) ; `validatePrototypes()` refuse une
+**Débouchés** — tout objet entre dans un coût de bâtiment, une entrée de
+recette (`src/data/recipes.ts`) ou un besoin (l'eau se boit) ; `validatePrototypes()` refuse une
 ressource qu'on récolterait pour rien.
 
 **Ouvriers** — la colonie part avec dix ouvriers adultes
@@ -167,19 +167,31 @@ portrait, nom, âge, métier ou espèce, ce qu'il fait, où il loge, ce qu'il
 porte, points de vie d'un ennemi. Un ennemi a un âge sauvegardé (bornes
 `age` de son proto, un an par aube) et un surnom haché (`foeName`, `FOE_NAMES`).
 
-**Faim** (`data/needs.ts`, `sim/needs.ts`) — ouvriers, bûcherons et
+**Faim et soif** (`data/needs.ts`, `sim/needs.ts`) — ouvriers, bûcherons et
 enfants ont une jauge par besoin (`Needful.needs`, sauvegardée ; une
-ancienne sauvegarde part rassasiée), qui baisse plus vite au travail qu'au
-repos. Sous `seekBelow`, l'habitant lâche sa tâche (son job garde ses
-réservations), part manger un `food` à la mairie — sa part réservée au
-départ (`meal`, rejouée au chargement) — et la reprend. Sans nourriture,
-sous `weakBelow` il va à mi-allure, à zéro il s'arrête (`stopsWork` ; pas
-de mort) ; un enfant affamé ne prend pas d'année à l'aube (`blocksGrowth`).
-La mairie bâtie verse `START_FOOD`. L'infobulle d'un habitant montre sa
-jauge (rassasié / a faim / affamé), une bulle corail flotte au-dessus d'un
-affamé (`art/hungry.ts`), et une capsule corail sous la population
-(`World.needAlert`) dit quand la ville va manquer ; son tap montre qui a
-faim. La soif sera une entrée de plus dans `NEEDS`.
+ancienne sauvegarde part rassasiée et désaltérée), qui baisse plus vite au
+travail qu'au repos — la soif deux fois plus vite que la faim. Sous
+`seekBelow`, l'habitant lâche sa tâche (son job garde ses réservations),
+part manger un `food` ou boire un `water` à la mairie, le besoin le plus
+bas d'abord — sa part réservée au départ (`meal`, rejouée au chargement) —
+et la reprend. Sans de quoi, sous `weakBelow` il va à mi-allure, à zéro il
+s'arrête (`stopsWork` ; pas de mort) ; un enfant affamé ou assoiffé ne
+prend pas d'année à l'aube (`blocksGrowth`). La mairie bâtie verse
+`COLONY.startingStock` (`data/inhabitants.ts` : nourriture et eau pour
+que les dix ouvriers tiennent le temps d'un puits et d'une ferme). La
+fenêtre d'un habitant (et son infobulle) montre ses jauges (rassasié / a
+faim / affamé, désaltéré / a soif / assoiffé ; `ui/needMeter.ts`), une
+bulle corail flotte au-dessus d'un affamé (`art/hungry.ts`, l'épi) ou d'un
+assoiffé (`art/thirsty.ts`, la goutte), et une capsule corail sous la
+population (`World.needAlert`, la plus pressante des deux) dit quand la
+ville va manquer ; son tap montre qui a faim ou soif.
+L'**eau** (`water`, goutte cyan — le bloc cyan clouté, c'est le minerai de
+fer) se tire au **puits** (`well`, un ouvrier) : une carrière sur sa
+propre recette (`drawWater`, trouvée par `recipeOf`), posée n'importe où
+— la nappe est partout, au même rythme ; l'eau de la carte peut être à 30
+tuiles du départ. Elle n'entre dans aucune recette : un besoin est son
+débouché (`validatePrototypes()`). Une sauvegarde d'avant l'eau (version 8)
+reçoit l'eau de départ dans sa mairie (`migrateV8`).
 
 **Jour et nuit** — dès que la mairie est debout, le cycle démarre
 (`src/data/dayNight.ts`, horloge pure dans `src/sim/dayNight.ts`) : une
@@ -547,7 +559,7 @@ Rien ne joue avant un geste du joueur.
 **`/mobile-factory/test`** — en local `http://localhost:5173/mobile-factory/test`,
 en ligne https://cardona.digital/mobile-factory/test — ouvre directement,
 sans écran titre, une petite base déjà bâtie (graine 100, matin du jour 1) :
-mairie et son stock, cabane de bûcheron, ferme, poste de construction, et le
+mairie et son stock, cabane de bûcheron, ferme, puits, poste de construction, et le
 chantier du labo à moitié livré (bois complet, pierre en route, fer manquant).
 Bandeau « Partie de test » en haut. Elle ne lit ni n'écrit aucun stockage
 (sauvegarde, jardin, record) et repart à l'identique à chaque rechargement.

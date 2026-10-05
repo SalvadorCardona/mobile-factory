@@ -177,6 +177,8 @@ export const PARTICLES = {
   bone: { shape: 'shard', colors: [PALETTE.paper.base, PALETTE.paper.shade], lifeMs: 300, gravity: 0.0012, spin: false },
   claw: { shape: 'shard', colors: [PALETTE.orange.base, PALETTE.orange.light, PALETTE.coral.base], lifeMs: 300, gravity: 0.0012, spin: false },
   fur: { shape: 'chip', colors: [PALETTE.violet.base, PALETTE.violet.light], lifeMs: 400, gravity: 0.0006, spin: true },
+  /** L'eau tirée du puits : des gouttes cyan, sans flaque. */
+  water: { shape: 'drop', colors: [PALETTE.cyan.base, PALETTE.cyan.light], lifeMs: 400, gravity: 0.0012, spin: false },
   mutant: { shape: 'drop', colors: [PALETTE.toxic.base], lifeMs: 450, gravity: 0.0012, spin: false, puddle: PALETTE.toxic.shade },
   /** La pluie acide qui ronge un bâtiment : des gouttes menthe, sans flaque. */
   acid: { shape: 'drop', colors: [PALETTE.mint.light, PALETTE.mint.base, PALETTE.cyan.light], lifeMs: 400, gravity: 0.0009, spin: false },

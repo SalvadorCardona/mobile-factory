@@ -44,6 +44,7 @@ import { LOGISTICS_POST } from '../art/logisticsPost.ts';
 import { LOOT } from '../art/loot.ts';
 import { LUMBER_CAMP } from '../art/lumberCamp.ts';
 import { HUNGRY } from '../art/hungry.ts';
+import { THIRSTY } from '../art/thirsty.ts';
 import { LUMBERJACK } from '../art/lumberjack.ts';
 import { MUTANT } from '../art/mutant.ts';
 import { NURSERY } from '../art/nursery.ts';
@@ -51,6 +52,7 @@ import { PATIENT } from '../art/patient.ts';
 import { DUST_RING, PARTICLE_FX } from '../art/particles.ts';
 import { PAUSED } from '../art/paused.ts';
 import { QUARRY } from '../art/quarry.ts';
+import { WELL } from '../art/well.ts';
 import { QUEEN_SPRITE } from '../art/queen.ts';
 import { PUDDLE } from '../art/puddle.ts';
 import { ROCK_COAL, ROCK_IRON, ROCK_STONE } from '../art/rocks.ts';
@@ -113,6 +115,8 @@ export const SPRITES = {
   paused: PAUSED,
   /** Bulle « affamé » au-dessus d'un habitant à court de nourriture. */
   hungry: HUNGRY,
+  /** Bulle « assoiffé » au-dessus d'un habitant à court d'eau. */
+  thirsty: THIRSTY,
   /** La fissure d'un bâtiment sous la moitié de ses points de vie. */
   crack: CRACK,
   /** La flaque d'où sortent les mutants d'une vague. */
@@ -145,6 +149,7 @@ export const SPRITES = {
   lumberCamp: LUMBER_CAMP,
   foresterHouse: FORESTER_HOUSE,
   quarry: QUARRY,
+  well: WELL,
   logisticsPost: LOGISTICS_POST,
   constructionPost: CONSTRUCTION_POST,
   /** L'Antenne, étage par étage ; l'émetteur a aussi sa version allumée (`lit`), après le Signal. */
