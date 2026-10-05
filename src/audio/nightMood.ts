@@ -1,7 +1,7 @@
 /**
  * L'humeur sonore de la nuit, en logique pure : quatre moments (crépuscule,
- * vague, vague repoussée, aube) et les niveaux qu'ils demandent à la
- * musique et à la couche de tension.
+ * vague, vague repoussée, aube), le morceau qu'ils demandent (`musicState` :
+ * jour, nuit, combat) et les niveaux de la couche de tension.
  *
  * Aucun `AudioContext` ici : le moteur pousse les moments, lit les niveaux
  * et pose ses rampes. Le temps est celui qu'on lui donne, en secondes — la
@@ -13,8 +13,9 @@
 export const NIGHT_BPM = 78;
 
 /**
- * La musique de jour, à mi-volume pour laisser la place aux bruitages, puis
- * « de l'autre côté du mur » : passe-bas fermé, volume baissé.
+ * Le thème du jour, à mi-volume pour laisser la place aux bruitages, puis
+ * « de l'autre côté du mur » — passe-bas fermé, volume baissé — tant que le
+ * morceau de nuit se télécharge.
  */
 export const MUSIC_DAY = { cutoff: 18000, volume: 0.5 } as const;
 export const MUSIC_NIGHT = { cutoff: 900, volume: 0.3 } as const;
@@ -23,9 +24,8 @@ export const MUSIC_NIGHT = { cutoff: 900, volume: 0.3 } as const;
 export const DRONE = { notes: [55, 82.4], gain: 0.06 } as const;
 export const PULSE_GAIN = 0.05;
 
-/** Durées des rampes, en secondes : la nuit se ferme en 4 s, l'aube rouvre en 3 s, la tension s'éteint en 2 s. */
+/** Durées des rampes de la couche de tension, en secondes : elle entre en 4 s, s'éteint en 2 s. */
 export const DUSK_RAMP_S = 4;
-export const DAWN_RAMP_S = 3;
 export const TENSION_FADE_S = 2;
 
 /** Après le dernier mutant, la pulsation garde la double croche encore ce temps-là. */
@@ -49,6 +49,15 @@ export interface NightLevels {
   /** Coups de grosse caisse par temps : 1 à la noire, 4 à la double croche. */
   stepsPerBeat: 1 | 4;
 }
+
+/** Les trois morceaux : le thème du jour, la nuit calme, le combat (la même nuit, batterie en plus). */
+export type MusicState = 'day' | 'night' | 'combat';
+
+/**
+ * Le fondu enchaîné vers chaque morceau, en secondes : le combat monte vite,
+ * les retours au calme et au jour prennent leur temps.
+ */
+export const MUSIC_FADE_S: Readonly<Record<MusicState, number>> = { day: 4, night: 4, combat: 2 };
 
 export const DAY_MOOD: NightMood = { night: false, wave: false, clearedAt: null };
 
@@ -79,4 +88,10 @@ export function nightLevels(mood: NightMood, now: number): NightLevels {
     pulse: PULSE_GAIN,
     stepsPerBeat: fast ? 4 : 1,
   };
+}
+
+/** Le morceau d'une humeur : le combat tant que des mutants sont dehors, la nuit calme sinon, le jour à l'aube. */
+export function musicState(mood: NightMood): MusicState {
+  if (!mood.night) return 'day';
+  return mood.wave ? 'combat' : 'night';
 }

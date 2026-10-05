@@ -8,13 +8,17 @@
  *    câblage (`main.ts`) qui abonne chaque événement de simulation à un son.
  *
  * La nuit a sa propre humeur (`nightMood.ts`) : le moteur la tient même
- * avant le premier geste, et l'applique dès qu'il a un contexte — passe-bas
- * sur la musique, couche de tension (`nightLayer.ts`) si le son est activé.
+ * avant le premier geste, et l'applique dès qu'il a un contexte — le
+ * morceau de nuit, puis celui du combat pendant une vague (`music.ts`).
+ * Musique coupée, c'est la couche de tension synthétique (`nightLayer.ts`)
+ * qui dit la nuit, si le son est activé ; musique allumée, elle se tait :
+ * sa pulsation se battrait avec la batterie du combat.
  *
- * Le réglage muet et celui de la musique survivent au rechargement
- * (`localStorage`) : couper le son dans un jeu mobile est une décision
- * qu'on ne veut pas reprendre à chaque partie. Couper la musique laisse les
- * bruitages.
+ * Le réglage muet, celui de la musique et les deux volumes (musique,
+ * bruitages) survivent au rechargement (`localStorage`) : couper le son
+ * dans un jeu mobile est une décision qu'on ne veut pas reprendre à chaque
+ * partie. Couper la musique laisse les bruitages. En pause, la musique
+ * recule sans s'arrêter (`setPaused`).
  *
  * Un son joue son échantillon enregistré s'il est décodé (`samples.ts`,
  * préchargé au premier geste), sa synthèse (`synth.ts`) sinon.
@@ -25,12 +29,26 @@
 
 import { Music } from './music.ts';
 import { NightLayer } from './nightLayer.ts';
-import { DAWN_RAMP_S, DAY_MOOD, DUSK_RAMP_S, TENSION_FADE_S, nightLevels, nightMood, type NightMoment } from './nightMood.ts';
+import {
+  DAY_MOOD,
+  DUSK_RAMP_S,
+  MUSIC_FADE_S,
+  TENSION_FADE_S,
+  musicState,
+  nightLevels,
+  nightMood,
+  type NightMoment,
+} from './nightMood.ts';
 import { SampleBank, type PickedSample } from './samples.ts';
 import { SOUNDS, type SoundName } from './synth.ts';
 
 const MUTE_KEY = 'mobile-factory:muted';
 const MUSIC_KEY = 'mobile-factory:music';
+const MUSIC_VOLUME_KEY = 'mobile-factory:music-volume';
+const SFX_VOLUME_KEY = 'mobile-factory:sfx-volume';
+
+/** Le bus des bruitages, à plein volume du joueur : un peu sous le maître. */
+const SFX_GAIN = 0.8;
 
 /** Deux sons identiques à moins de cet intervalle : le second est ignoré. */
 const DEDUPE_MS = 35;
@@ -47,11 +65,16 @@ export class AudioEngine {
   private readonly lastPlayed = new Map<SoundName, number>();
   private mutedFlag: boolean;
   private musicFlag: boolean;
+  private musicLevel: number;
+  private sfxLevel: number;
+  private paused = false;
   private hidden = false;
 
   public constructor() {
     this.mutedFlag = readFlag(MUTE_KEY, false);
     this.musicFlag = readFlag(MUSIC_KEY, true);
+    this.musicLevel = readLevel(MUSIC_VOLUME_KEY);
+    this.sfxLevel = readLevel(SFX_VOLUME_KEY);
   }
 
   public get muted(): boolean {
@@ -61,6 +84,16 @@ export class AudioEngine {
   /** Vrai si la musique de fond est voulue (réglage du joueur, indépendant du muet). */
   public get musicOn(): boolean {
     return this.musicFlag;
+  }
+
+  /** Volume de la musique choisi par le joueur, de 0 à 1. */
+  public get musicVolume(): number {
+    return this.musicLevel;
+  }
+
+  /** Volume des bruitages choisi par le joueur, de 0 à 1. */
+  public get sfxVolume(): number {
+    return this.sfxLevel;
   }
 
   /** Vrai une fois le contexte créé et démarré par un geste. */
@@ -84,7 +117,7 @@ export class AudioEngine {
       this.master.connect(this.ctx.destination);
 
       this.sfx = this.ctx.createGain();
-      this.sfx.gain.value = 0.8;
+      this.sfx.gain.value = SFX_GAIN * this.sfxLevel;
       this.sfx.connect(this.master);
 
       const ctx = this.ctx;
@@ -93,9 +126,10 @@ export class AudioEngine {
       this.samples = new SampleBank({ decode: (bytes) => ctx.decodeAudioData(bytes) });
       void this.samples.preload();
 
-      this.music = new Music(this.ctx, this.master);
+      this.music = new Music(this.ctx, this.master, this.musicLevel);
       // Une partie rechargée en pleine nuit : la nuit est déjà là, sans rampe.
-      this.music.setNight(this.mood.night, 0);
+      this.music.setState(musicState(this.mood), 0);
+      this.music.setDucked(this.paused);
       this.syncTension(DUSK_RAMP_S);
     }
 
@@ -117,7 +151,28 @@ export class AudioEngine {
     writeFlag(MUSIC_KEY, this.musicFlag);
     if (this.musicFlag) this.music?.start();
     else this.music?.stop();
+    this.syncTension(DUSK_RAMP_S);
     return this.musicFlag;
+  }
+
+  /** Le volume de la musique, de 0 à 1, gardé pour la prochaine partie. */
+  public setMusicVolume(volume: number): void {
+    this.musicLevel = clampLevel(volume);
+    writeValue(MUSIC_VOLUME_KEY, String(this.musicLevel));
+    this.music?.setVolume(this.musicLevel);
+  }
+
+  /** Le volume des bruitages, de 0 à 1, gardé pour la prochaine partie. */
+  public setSfxVolume(volume: number): void {
+    this.sfxLevel = clampLevel(volume);
+    writeValue(SFX_VOLUME_KEY, String(this.sfxLevel));
+    if (this.sfx && this.ctx) this.sfx.gain.setTargetAtTime(SFX_GAIN * this.sfxLevel, this.ctx.currentTime, 0.02);
+  }
+
+  /** Le jeu se met en pause ou reprend : la musique recule, puis revient. */
+  public setPaused(paused: boolean): void {
+    this.paused = paused;
+    this.music?.setDucked(paused);
   }
 
   public play(name: SoundName): void {
@@ -148,15 +203,20 @@ export class AudioEngine {
     source.start(this.ctx.currentTime);
   }
 
-  /** Un moment de la nuit : crépuscule, vague, vague repoussée, aube. */
+  /**
+   * Un moment de la nuit : crépuscule, vague, vague repoussée, aube. Le
+   * morceau suit (jour, nuit, combat), en fondu ; un moment qui ne change
+   * pas de morceau ne relance rien.
+   */
   public night(moment: NightMoment): void {
     const wasNight = this.mood.night;
 
     this.mood = nightMood(this.mood, moment, this.ctx?.currentTime ?? 0);
-    if (this.mood.night === wasNight) return;
 
-    this.music?.setNight(this.mood.night, this.mood.night ? DUSK_RAMP_S : DAWN_RAMP_S);
-    this.syncTension(this.mood.night ? DUSK_RAMP_S : TENSION_FADE_S);
+    const state = musicState(this.mood);
+
+    this.music?.setState(state, MUSIC_FADE_S[state]);
+    if (this.mood.night !== wasNight) this.syncTension(this.mood.night ? DUSK_RAMP_S : TENSION_FADE_S);
   }
 
   public toggleMuted(): boolean {
@@ -176,9 +236,9 @@ export class AudioEngine {
     this.syncTension(muted ? TENSION_FADE_S : DUSK_RAMP_S);
   }
 
-  /** Crée la couche de tension s'il fait nuit et que le son est activé, l'éteint sinon. */
+  /** Crée la couche de tension s'il fait nuit, le son activé et la musique coupée ; l'éteint sinon. */
   private syncTension(fadeS: number): void {
-    const wanted = this.mood.night && !this.mutedFlag && this.ctx !== null && this.master !== null;
+    const wanted = this.mood.night && !this.mutedFlag && !this.musicFlag && this.ctx !== null && this.master !== null;
 
     if (wanted && !this.tension && this.ctx && this.master) {
       this.tension = new NightLayer(this.ctx, this.master, (now) => nightLevels(this.mood, now));
@@ -209,8 +269,28 @@ function readFlag(key: string, fallback: boolean): boolean {
 }
 
 function writeFlag(key: string, value: boolean): void {
+  writeValue(key, String(value));
+}
+
+/** Un volume gardé, de 0 à 1 ; plein volume s'il n'y en a pas, ou s'il est illisible. */
+function readLevel(key: string): number {
   try {
-    window.localStorage.setItem(key, String(value));
+    const value = window.localStorage.getItem(key);
+    const level = value === null ? NaN : Number(value);
+
+    return Number.isFinite(level) ? clampLevel(level) : 1;
+  } catch {
+    return 1;
+  }
+}
+
+function clampLevel(volume: number): number {
+  return Math.min(1, Math.max(0, volume));
+}
+
+function writeValue(key: string, value: string): void {
+  try {
+    window.localStorage.setItem(key, value);
   } catch {
     // Mode privé ou stockage plein : le réglage ne survit pas, tant pis.
   }
