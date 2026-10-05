@@ -81,6 +81,7 @@ import { buildingIcon, dayDialUrl, itemAmount, itemIcon, prestigeIcon, uiIcon } 
 import { effectLine } from './researchText.ts';
 import { needText, personText } from './personText.ts';
 import { mapUrl, seedLine } from './seed.ts';
+import { setTip, Tooltips } from './tooltip.ts';
 
 /** Durée de l'alarme après le dernier coup reçu par la mairie hors de l'écran, en ms. */
 const ALARM_MS = 2500;
@@ -208,6 +209,8 @@ export class Hud {
   private readonly floats: HTMLElement;
   private readonly stats: HTMLElement;
   private readonly toasts: HTMLElement;
+  /** Le libellé des icônes, au survol, au focus et à l'appui long (`tooltip.ts`). */
+  private readonly tips: Tooltips;
   private readonly countdown: HTMLElement;
   private readonly banner: HTMLElement;
   private readonly bannerArrow: HTMLElement;
@@ -397,7 +400,7 @@ export class Hud {
     this.settingsButton.type = 'button';
     this.settingsButton.setAttribute('aria-haspopup', 'dialog');
     this.settingsButton.append(uiIcon('settings'));
-    onLocale(() => this.settingsButton.setAttribute('aria-label', t().settings.title));
+    onLocale(() => setTip(this.settingsButton, t().settings.title));
     buttons.append(this.pauseButton, this.settingsButton);
 
     this.defeat = element('div', 'overlay hud-defeat');
@@ -467,14 +470,15 @@ export class Hud {
       this.victory,
       this.defeat,
     );
+    this.tips = new Tooltips(this.root);
 
     // Les libellés fixes se réécrivent au changement de langue ; les rendus
     // en cache repartent de zéro, et un écran de fin ouvert se réécrit.
     onLocale(() => {
       const text = t().hud;
 
-      this.hintBulb.setAttribute('aria-label', text.hintBulb);
-      this.pauseButton.setAttribute('aria-label', text.pause);
+      setTip(this.hintBulb, text.hintBulb);
+      setTip(this.pauseButton, text.pause);
       defeatTitle.textContent = text.defeat.title;
       defeatText.textContent = text.defeat.text;
       replay.textContent = text.defeat.replay;
@@ -859,18 +863,16 @@ export class Hud {
     const count = (icon: 'toil' | 'child', value: number, label: string): HTMLElement => {
       const node = text('hud-people-count', String(value));
 
-      node.title = label;
-      node.setAttribute('aria-label', label);
       node.prepend(uiIcon(icon, 18));
+      setTip(node, label);
       return node;
     };
     const lazy = text('hud-people-count hud-people-idle', String(idle), 'button');
 
     lazy.setAttribute('type', 'button');
     lazy.dataset['alert'] = String(idle > 0);
-    lazy.title = label.idle(idle);
-    lazy.setAttribute('aria-label', lazy.title);
     lazy.prepend(uiIcon('idle', 18));
+    setTip(lazy, label.idle(idle));
     lazy.addEventListener('click', () => this.focusIdle());
 
     this.people.hidden = working + idle + children === 0;
@@ -1183,6 +1185,7 @@ export class Hud {
     this.updateWeather();
     this.placeCelebration();
     this.updateQueenBanner();
+    this.tips.refresh();
     this.root.dataset['danger'] = String(this.mutantCount() > 0 && !this.world.defeated);
     if (!this.banner.hidden) this.aimBanner();
     if (this.root.dataset['alarm'] === 'true' && (performance.now() > this.alarmUntil || this.world.defeated)) {
@@ -1310,7 +1313,7 @@ export class Hud {
     const stripHp = element('div', 'hud-strip-hp');
 
     stripHp.append(bar(hall.hp / max));
-    stripHp.title = `${name} ${hall.hp}/${max}`;
+    setTip(stripHp, `${name} ${hall.hp}/${max}`);
     stripHp.dataset['low'] = hp.dataset['low'];
     this.questStrip.dataset['urgent'] = String(mutants > 0);
     this.questStrip.replaceChildren(
@@ -1355,7 +1358,7 @@ export class Hud {
     this.dayClock.dataset['phase'] = dial.phase;
     this.dayClock.dataset['warning'] = String(dial.warning);
     this.dayClock.dataset['tip'] = String(tip);
-    this.dayClock.setAttribute('aria-label', detail);
+    setTip(this.dayClock, detail);
   }
 
   /** Déplie la quête repliée pour `ticks`, sans raccourcir un dépliage plus long. */
@@ -1376,9 +1379,9 @@ export class Hud {
     const node = text('hud-quest-chip hud-quest-crew', String(total), 'button');
 
     node.setAttribute('type', 'button');
-    node.setAttribute('aria-label', t().hud.quest.crew(total));
     node.setAttribute('aria-expanded', String(this.crewOpen));
     node.prepend(uiIcon('worker', 18));
+    setTip(node, t().hud.quest.crew(total));
     node.addEventListener('click', () => {
       this.crewOpen = !this.crewOpen;
       this.crewSince = this.world.tickCount;
@@ -1500,16 +1503,19 @@ export class Hud {
     const label = t().hud.stock;
 
     title.append(uiIcon('bag', 20), text('hud-stock-name', label.bag), text('hud-bag-count', `${inventory.total()}/${inventory.capacity}`));
+    setTip(title, label.bagTip(inventory.total(), inventory.capacity));
     if (town !== null) {
       const summary = text('hud-bag-town', String(town));
 
       summary.prepend(uiIcon('town', 18));
+      setTip(summary, label.townTotal(town));
       title.append(summary);
     }
     if (wanted) {
       const chip = itemAmount(wanted, inventory.count(wanted));
 
       chip.classList.add('hud-bag-wanted');
+      setTip(chip, label.wanted(t().items[wanted], inventory.count(wanted)));
       title.append(chip);
     }
     title.dataset['full'] = String(inventory.freeSpace() <= 0);
@@ -1522,7 +1528,7 @@ export class Hud {
 
     const items = element('div', 'hud-stock-items');
 
-    items.append(...entries.map(([item, amount]) => itemAmount(item, amount)));
+    items.append(...entries.map(([item, amount]) => tipped(itemAmount(item, amount), label.inBag(t().items[item], amount))));
     this.bag.dataset['empty'] = String(entries.length === 0);
     this.bag.replaceChildren(title, fill, items);
   }
@@ -1546,13 +1552,12 @@ export class Hud {
 
     title.append(uiIcon('town', 20), text('hud-stock-name', label.town));
     if (!stock) title.append(text('hud-town-state', label.toBuild));
+    setTip(title, label.townTitle);
 
     const items = element('div', 'hud-stock-items');
 
-    items.append(...entries.map(([item, amount]) => itemAmount(item, amount)));
+    items.append(...entries.map(([item, amount]) => tipped(itemAmount(item, amount), label.inTown(t().items[item], amount))));
     this.town.dataset['empty'] = String(entries.length === 0);
-    this.town.title = label.townTitle;
-
     const scroll = this.townItems()?.scrollLeft ?? 0;
 
     this.town.replaceChildren(title, items);
@@ -1780,8 +1785,14 @@ function bar(ratio: number): HTMLElement {
 function chip(icon: 'people' | 'mutant', value: number, label: string): HTMLElement {
   const node = text('hud-quest-chip', String(value));
 
-  node.title = label;
   node.prepend(uiIcon(icon, 18));
+  setTip(node, label);
+  return node;
+}
+
+/** `node`, avec son libellé (`setTip`). */
+function tipped(node: HTMLElement, label: string): HTMLElement {
+  setTip(node, label);
   return node;
 }
 
@@ -1857,7 +1868,7 @@ function stripTitle(goal: Goal, wait: GoalWait | null, label: string): HTMLEleme
           : words.stripNight(time);
   const node = text('hud-strip-title', short);
 
-  node.title = label;
+  setTip(node, label);
   node.dataset['blocked'] = String(wait.blockedBy !== null);
   return node;
 }
@@ -1881,9 +1892,9 @@ function waitLabel(goal: Goal, wait: GoalWait | null): string {
 /** Ce que compte une condition d'objectif, en icône. */
 function goalIcon(goal: Goal): HTMLElement {
   return goal.type === 'build'
-    ? buildingIcon(goal.building, 22)
+    ? tipped(buildingIcon(goal.building, 22), t().buildings[goal.building].label)
     : goal.type === 'produce'
-      ? itemIcon(goal.item, 18)
+      ? tipped(itemIcon(goal.item, 18), t().items[goal.item])
       : uiIcon(goal.type === 'nights' ? 'mutant' : goal.type === 'quests' ? 'eve' : 'people', 18);
 }
 
@@ -1906,7 +1917,7 @@ function meter(item: ItemId, have: number, needed: number): HTMLElement {
   const row = element('div', 'hud-meter');
 
   row.dataset['done'] = String(have >= needed);
-  row.append(itemIcon(item, 18), bar(have / needed), text('hud-meter-value', `${have}/${needed}`));
+  row.append(tipped(itemIcon(item, 18), t().items[item]), bar(have / needed), text('hud-meter-value', `${have}/${needed}`));
   return row;
 }
 

@@ -223,8 +223,8 @@ export const hud = {
   },
   /** La population : au travail, inactifs, enfants. */
   people: {
-    working: (n: number): string => `${n} au travail`,
-    idle: (n: number): string => `${n} inactif${s(n)}${n > 0 ? ' — taper pour en voir un' : ''}`,
+    working: (n: number): string => `${n} ouvrier${s(n)} au travail`,
+    idle: (n: number): string => `${n} ouvrier${s(n)} inactif${s(n)}${n > 0 ? ' — taper pour en voir un' : ''}`,
     children: (n: number): string => `${n} enfant${s(n)}`,
   },
   /** Le sac et la ville, en version compacte. */
@@ -235,7 +235,13 @@ export const hud = {
       `Ouvrir le sac : ${total} objets sur ${capacity}, ${town} en ville`,
     town: 'Ville',
     toBuild: 'à bâtir',
-    townTitle: 'Stock de la ville : ce qui paie les constructions',
+    townTitle: 'Ville — le stock de la mairie, qui paie les constructions',
+    /** Les libellés des icônes, au survol ou à l'appui long ; `item` : le nom de l'objet, avec sa majuscule. */
+    bagTip: (total: number, capacity: number): string => `Sac — ${total} objet${s(total)} sur ${capacity}`,
+    townTotal: (total: number): string => `Ville — ${total} objet${s(total)} en stock`,
+    inBag: (item: string, amount: number): string => `${item} — ${amount} dans le sac`,
+    inTown: (item: string, amount: number): string => `${item} — ${amount} en ville`,
+    wanted: (item: string, amount: number): string => `${item} — Ève en demande, ${amount} dans le sac`,
     prestige: 'Prestige',
     prestigeLabel: (amount: number): string => `Prestige de la colonie : ${amount}`,
   },
