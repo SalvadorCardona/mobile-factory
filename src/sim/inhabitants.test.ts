@@ -5,12 +5,13 @@ import { DAY_CYCLE } from '../data/dayNight.ts';
 import { AGES, COLONY, NURSERY_CARE } from '../data/inhabitants.ts';
 import type { ItemId } from '../data/items.ts';
 import { IDLE } from '../data/workers.ts';
+import { ENEMIES, FOE_NAMES, WILDLIFE } from '../data/enemies.ts';
 import { CYCLE_TICKS, ticksToDawn } from './dayNight.ts';
-import { ADAM_SALT, adultAge, nameOf, yearsToWork } from './inhabitants.ts';
+import { ADAM_SALT, adultAge, foeAge, foeName, nameOf, yearsToWork } from './inhabitants.ts';
 import { freshNeeds } from './needs.ts';
 import { SAVE_VERSION, decodeSave, encodeSave, type SavedEntity } from './save.ts';
 import { isWalkable, terrainAt } from './terrain.ts';
-import type { Kid, Mobile, Nursery, Worker } from './types.ts';
+import type { Beast, Kid, Mobile, Nursery, Worker } from './types.ts';
 import { World } from './world.ts';
 
 type Stock = Partial<Record<ItemId, number>>;
@@ -145,7 +146,8 @@ describe('âge des habitants', () => {
     toDawn(world);
     expect(world.player.age).toBe(adam + AGES.yearsPerCycle);
     for (const mobile of world.mobiles.values()) {
-      if ('age' in mobile) expect(mobile.age).toBe(before.get(mobile.id)! + AGES.yearsPerCycle);
+      // Une bête sortie de sa tanière entre-temps n'avait pas d'âge à comparer.
+      if ('age' in mobile && before.has(mobile.id)) expect(mobile.age).toBe(before.get(mobile.id)! + AGES.yearsPerCycle);
     }
   });
 
@@ -366,5 +368,56 @@ describe('sauvegarde des âges', () => {
 
     file.state.player.age = -3;
     expect(decodeSave(JSON.stringify(file))).toEqual({ ok: false, reason: 'corrupt' });
+  });
+});
+
+describe('âge et surnom des ennemis', () => {
+  it('tire l’âge de chaque espèce entre ses bornes, et le surnom dans la liste, de la seed et de l’id', () => {
+    for (const proto of [...Object.values(ENEMIES), ...Object.values(WILDLIFE)]) {
+      for (let id = 1; id < 200; id += 1) {
+        const age = foeAge(7, id, proto.age);
+
+        expect(age).toBeGreaterThanOrEqual(proto.age.min);
+        expect(age).toBeLessThanOrEqual(proto.age.max);
+        expect(foeAge(7, id, proto.age)).toBe(age);
+      }
+    }
+    expect(FOE_NAMES).toContain(foeName(7, 12));
+    expect(foeName(7, 12)).toBe(foeName(7, 12));
+    expect(new Set(Array.from({ length: 50 }, (_, id) => foeName(7, id))).size).toBeGreaterThan(5);
+  });
+
+  it('fait vieillir une bête à l’aube, et sauvegarde son âge', () => {
+    const world = colony({});
+    const x = world.player.x + 3 * TILE_SIZE;
+    const y = world.player.y;
+    const wolf: Beast = {
+      kind: 'beast', id: 5_000, proto: 'wolf', x, y, prevX: x, prevY: y, facing: 'down', moving: false,
+      hp: WILDLIFE.wolf.hp, age: 4, denId: 0, homeX: x, homeY: y, state: 'roam', dirX: 0, dirY: 0, wanderTicks: 0, attackCooldown: 0,
+    };
+
+    world.mobiles.set(wolf.id, wolf);
+    toDawn(world);
+    expect(world.mobiles.get(wolf.id)).toMatchObject({ age: 4 + AGES.yearsPerCycle });
+
+    const decoded = decodeSave(encodeSave(world, 0));
+
+    if (!decoded.ok) throw new Error('sauvegarde illisible');
+    expect(decoded.world.mobiles.get(wolf.id)).toMatchObject({ age: 4 + AGES.yearsPerCycle });
+  });
+
+  it('charge une sauvegarde d’avant l’âge des ennemis : le plus jeune de son espèce', () => {
+    const world = colony({});
+    const file = JSON.parse(encodeSave(world, 0)) as { state: { mobiles: Record<string, unknown>[] } };
+
+    file.state.mobiles.push({
+      kind: 'mutant', id: 6_000, proto: 'brute', x: 0, y: 0, prevX: 0, prevY: 0, facing: 'down', moving: false,
+      hp: 5, attackCooldown: 0, emerge: 0,
+    });
+
+    const decoded = decodeSave(JSON.stringify(file));
+
+    if (!decoded.ok) throw new Error(`sauvegarde refusée : ${decoded.reason}`);
+    expect(decoded.world.mobiles.get(6_000)).toMatchObject({ kind: 'mutant', age: ENEMIES.brute.age.min });
   });
 });

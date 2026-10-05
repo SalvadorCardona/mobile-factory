@@ -118,7 +118,7 @@ import type { WildlifeId } from '../data/enemies.ts';
 import { baseCenter, canDamage, hitsBase, inBaseZone, isStanding, onBase, placeEnemyBases } from './enemyBases.ts';
 import { compassOf, spawnPoint, stepMutant, stepQueen, surfacePoint, type Compass, type MutantStep } from './enemies.ts';
 import { createEve, currentQuest, harvestYieldWithTools, isUnlocked, mostDamaged, questProgress, rideHome, walkTo } from './eve.ts';
-import { ADAM_SALT, adultAge, canWork, nameOf, yearsToWork } from './inhabitants.ts';
+import { ADAM_SALT, adultAge, canWork, foeAge, nameOf, yearsToWork } from './inhabitants.ts';
 import { KID_SPRINT, stepKid } from './kids.ts';
 import { canGrow, drainNeeds, freshNeeds, needState, needsPace, pacedTick, urgentNeed } from './needs.ts';
 import { rollLoot, stepPickup } from './loot.ts';
@@ -4193,9 +4193,10 @@ export class World {
 
       if (this.isSolid(tx, ty) || habitatAt(this.seed, tx, ty) !== proto.habitat) x = homeX;
 
+      const id = this.nextMobileId++;
       const beast: Beast = {
         kind: 'beast',
-        id: this.nextMobileId++,
+        id,
         proto: den.species,
         x,
         y,
@@ -4204,6 +4205,7 @@ export class World {
         facing: 'down',
         moving: false,
         hp: proto.hp,
+        age: foeAge(this.seed, id, proto.age),
         denId: den.id,
         homeX,
         homeY,
@@ -4454,12 +4456,13 @@ export class World {
 
   /**
    * Une année de plus pour chaque habitant — un cycle jour/nuit vaut un an —
-   * et l'enfant qui a l'âge de travailler devient ouvrier.
+   * et l'enfant qui a l'âge de travailler devient ouvrier. Les ennemis
+   * encore là vieillissent aussi.
    */
   private ageInhabitants(): void {
     this.player.age += AGES.yearsPerCycle;
     for (const mobile of [...this.mobiles.values()]) {
-      if (mobile.kind !== 'kid' && mobile.kind !== 'eve' && mobile.kind !== 'worker' && mobile.kind !== 'lumberjack') continue;
+      if (mobile.kind === 'arrow' || mobile.kind === 'pickup' || mobile.kind === 'patient' || mobile.kind === 'caravan') continue;
       // Un enfant qui a faim ne grandit pas : il attend sa prochaine aube le ventre plein.
       if (mobile.kind === 'kid' && !canGrow(mobile.needs)) {
         this.events.emit('growthStunted', { id: mobile.id, name: nameOf(this.seed, mobile.id) });
@@ -4509,9 +4512,10 @@ export class World {
       point = spawnPoint(this.rng, this.target, this.nextWaveHeading);
     }
 
+    const id = this.nextMobileId++;
     const mutant: Mutant = {
       kind: 'mutant',
-      id: this.nextMobileId++,
+      id,
       proto,
       x: point.x,
       y: point.y,
@@ -4520,6 +4524,7 @@ export class World {
       facing: 'down',
       moving: false,
       hp: ENEMIES[proto].hp,
+      age: foeAge(this.seed, id, ENEMIES[proto].age),
       attackCooldown: 0,
       emerge,
       // La mairie se lit par défaut : seul un autre bâtiment s'écrit.

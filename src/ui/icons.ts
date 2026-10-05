@@ -5,10 +5,10 @@
  * visuel du jeu est déjà un SVG, il n'y a rien à baker : le navigateur le
  * dessine lui-même, net à toutes les densités d'écran.
  *
- * Trois sources : les icônes d'objets (`data/icons.ts`, une par objet,
+ * Quatre sources : les icônes d'objets (`data/icons.ts`, une par objet,
  * garanti par le type), le bâtiment fini de chaque sprite, pour que le menu
- * de construction montre ce qu'on va poser, et les pictogrammes de
- * l'interface (`art/ui.ts`).
+ * de construction montre ce qu'on va poser, le portrait d'une créature
+ * (ses morceaux de face), et les pictogrammes de l'interface (`art/ui.ts`).
  */
 
 import { ROAD_THUMB } from '../art/road.ts';
@@ -17,7 +17,8 @@ import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
 import { ITEM_ICONS, PRESTIGE_ICON } from '../data/icons.ts';
 import type { ItemId } from '../data/items.ts';
 import { PERKS, type PerkId } from '../data/perks.ts';
-import { SPRITES } from '../data/sprites.ts';
+import { embed, svg } from '../data/artDirection.ts';
+import { SPRITES, type SpriteId } from '../data/sprites.ts';
 import { t } from '../i18n/locale.ts';
 
 const cache = new Map<string, string>();
@@ -46,6 +47,25 @@ export function buildingIconUrl(building: BuildingId): string {
 /** URL de la vignette d'une base mutante : son campement. */
 export function enemyBaseIconUrl(): string {
   return url('enemyBase', SPRITES.enemyBase.parts.built);
+}
+
+/** Les morceaux d'un portrait de créature, du fond vers l'avant : les pieds, le corps de face, les pinces d'un crabe. Pas le halo d'un mutant, que seul le rendu fait respirer en transparence. */
+const PORTRAIT_PARTS = ['foot', 'down', 'claws'] as const;
+
+/**
+ * URL du portrait d'une créature — habitant ou ennemi — pour la fenêtre :
+ * les morceaux de son sprite, posés l'un sur l'autre dans leur cadre commun,
+ * comme le pantin immobile qui regarde vers nous.
+ */
+export function creatureIconUrl(sprite: SpriteId): string {
+  const { width, height, parts } = SPRITES[sprite];
+  const layers = PORTRAIT_PARTS.flatMap((part) => {
+    const source = (parts as Record<string, string>)[part];
+
+    return source === undefined ? [] : [embed(source, 0, 0)];
+  });
+
+  return url(`creature:${sprite}`, svg(width, height, ...layers));
 }
 
 /** URL du cadran de l'horloge du HUD (`dayDialSvg`) : il bouge sans cesse, rien à garder en cache. */

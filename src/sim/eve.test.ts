@@ -127,6 +127,7 @@ describe('Ève', () => {
       facing: 'down',
       moving: false,
       hp: 999,
+      age: 30,
       attackCooldown: 0,
       emerge: 0,
     });

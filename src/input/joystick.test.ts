@@ -166,7 +166,7 @@ describe('pouce posé à côté de l’anneau', () => {
     const world = { entities: new Map([[7, building]]), mobiles: new Map(), eve: () => undefined, enemyBases: [] } as unknown as World;
     const pointers = new PointerDispatch();
 
-    pointers.add(new Inspect(world, (x, y) => ({ x, y }), () => true, (id) => opened.push(id)));
+    pointers.add(new Inspect(world, (x, y) => ({ x, y }), () => true, (selection) => opened.push(selection.id)));
     pointers.add(new StickCapture(joystick, () => PHONE));
 
     pointers.down(at(150, 580));

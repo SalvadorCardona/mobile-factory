@@ -189,6 +189,33 @@ export const panel = {
     open: 'Un mutant vaincu peut tomber assommé — touchez-le, il vous suivra jusqu’ici.',
   },
 
+  /** La fenêtre d'une créature — un habitant ou un ennemi —, tapée sur la carte (`ui/creatureView.ts`). */
+  creature: {
+    age: (years: number): string => `${years} an${s(years)} — un de plus à chaque aube`,
+    /** Ce qu'il est : son métier, ou son espèce pour un ennemi. */
+    role: {
+      porter: 'Porteur',
+      logistician: 'Logisticien',
+      builder: 'Bâtisseur',
+      lumberjack: 'Bûcheron',
+      child: 'Enfant',
+      exMutant: 'Ex-mutant, porteur',
+      survivor: 'Survivant, porteur',
+    },
+    home: (building: string): string => `Logé : ${building}`,
+    homeless: 'Sans logis',
+    carrying: (load: string): string => `Porte : ${load}`,
+    /** Un mutant : sa cible, ou la flaque dont il sort. */
+    emerging: 'Sort de sa flaque',
+    marchesOn: (building: string): string => `Marche sur : ${building}`,
+    /** Une bête, selon son humeur (`BeastState`). */
+    beast: {
+      roam: 'Flâne autour de sa tanière',
+      chase: 'Charge Adam !',
+      return: 'Rentre à sa tanière',
+    },
+  },
+
   crew: {
     less: 'Un ouvrier de moins',
     more: 'Un ouvrier de plus',

@@ -225,12 +225,12 @@ async function main(): Promise<void> {
     (x, y) => renderer.screenToWorld(x, y),
     // Pendant que la carte glisse d'elle-même, un tap viserait un point qui bouge : il n'ouvre rien.
     () => placement.mode === 'idle' && !renderer.cameraDrifting,
-    (id) => panel.show(id),
+    // Un bâtiment, un habitant ou un ennemi : la même fenêtre.
+    (selection) => (selection.kind === 'building' ? panel.show(selection.id) : panel.showCreature(selection.id)),
     () => {
       hud.talkToEve();
       audio.play('open');
     },
-    (id) => hud.showPerson(id),
     () => panel.open,
     () => panel.close(),
     (id) => panel.showBase(id),
@@ -418,8 +418,9 @@ async function main(): Promise<void> {
 
   // Ordre d'interrogation des doigts du canvas : le repère de la mairie
   // d'abord (il ne revendique qu'un doigt posé dessus), l'inspection ensuite
-  // (elle ne revendique qu'un tap sur un bâtiment), le placement en dernier
-  // (il ne revendique rien tant qu'aucun bâtiment n'est armé). Le joystick
+  // (elle ne revendique qu'un tap sur un bâtiment ou une créature), le
+  // placement en dernier (il ne revendique rien tant qu'aucun bâtiment
+  // n'est armé). Le joystick
   // est dans le DOM, au-dessus du canvas, et garde ses doigts pour lui —
   // Adam marche au pouce pendant que l'autre doigt vise. Un pouce qui rate
   // l'anneau, en bas au milieu, passe après les taps : l'anneau

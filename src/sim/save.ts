@@ -555,11 +555,14 @@ function parseMobile(raw: unknown): Mobile {
 
   switch (mobile['kind']) {
     case 'mutant': {
+      const proto = oneOf(mobile['proto'], ENEMIES) as EnemyId;
       const mutant: Mutant = {
         ...base,
         kind: 'mutant',
-        proto: oneOf(mobile['proto'], ENEMIES) as EnemyId,
+        proto,
         hp: finite(mobile['hp']),
+        // Absent d'une sauvegarde d'avant l'âge des ennemis : le plus jeune de son espèce.
+        age: mobile['age'] === undefined ? ENEMIES[proto].age.min : age(mobile['age']),
         attackCooldown: int(mobile['attackCooldown']),
         emerge: int(mobile['emerge']),
         // Absente d'une sauvegarde d'avant les cibles de vague : la mairie.
@@ -574,11 +577,15 @@ function parseMobile(raw: unknown): Mobile {
       const state = mobile['state'];
 
       if (!BEAST_STATES.includes(state as BeastState)) throw new SaveError(`humeur inconnue : ${String(state)}`);
+
+      const proto = oneOf(mobile['proto'], WILDLIFE) as WildlifeId;
+
       return {
         ...base,
         kind: 'beast',
-        proto: oneOf(mobile['proto'], WILDLIFE) as WildlifeId,
+        proto,
         hp: finite(mobile['hp']),
+        age: mobile['age'] === undefined ? WILDLIFE[proto].age.min : age(mobile['age']),
         denId: int(mobile['denId']),
         homeX: finite(mobile['homeX']),
         homeY: finite(mobile['homeY']),

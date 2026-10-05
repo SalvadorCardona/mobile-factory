@@ -1,5 +1,6 @@
 /**
- * Les habitants : leur âge, leur prénom, ce qu'ils font.
+ * Les habitants : leur âge, leur prénom, ce qu'ils font. Les ennemis aussi
+ * ont un âge (de l'état, qui avance à l'aube) et un surnom (haché).
  *
  * L'âge est de l'état (il avance à l'aube, `World.dawn`) ; le prénom ne
  * l'est pas : il se relit dans la seed et l'id, qu'un enfant garde en
@@ -9,6 +10,7 @@
  */
 
 import { hash3 } from '../core/rng.ts';
+import { FOE_NAMES, type AgeRange } from '../data/enemies.ts';
 import { AGES, NAMES } from '../data/inhabitants.ts';
 import type { MobileId } from './types.ts';
 
@@ -25,6 +27,20 @@ export function adultAge(seed: number, id: MobileId): number {
 /** Le prénom d'un habitant, tiré de la seed et de son id. */
 export function nameOf(seed: number, id: MobileId): string {
   return NAMES[hash3(seed, id, 0x4a3e) % NAMES.length]!;
+}
+
+/**
+ * L'âge d'un ennemi — mutant ou bête — à son apparition, tiré de la seed et
+ * de son id entre les bornes de son espèce : un hachage, pas le PRNG du
+ * monde, pour ne pas changer la suite des vagues.
+ */
+export function foeAge(seed: number, id: MobileId, range: AgeRange): number {
+  return range.min + (hash3(seed, id, 0x0f0e) % (range.max - range.min + 1));
+}
+
+/** Le surnom d'un ennemi, tiré de la seed et de son id : jamais sauvegardé. */
+export function foeName(seed: number, id: MobileId): string {
+  return FOE_NAMES[hash3(seed, id, 0x0f0a) % FOE_NAMES.length]!;
 }
 
 /** Les aubes qu'il reste à un enfant avant de travailler ; 0 s'il a l'âge. */

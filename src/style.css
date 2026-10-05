@@ -2452,6 +2452,7 @@ button.hud-stock:active {
 .building-panel-lines[hidden],
 .building-panel-stats[hidden],
 .building-panel-stock[hidden],
+.building-panel-meter[hidden],
 .building-panel-meter-icon[hidden] {
   display: none;
 }

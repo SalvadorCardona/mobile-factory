@@ -28,6 +28,7 @@ function beastAt(proto: WildlifeId, x: number, y: number, id = 900): Beast {
     facing: 'down',
     moving: false,
     hp: WILDLIFE[proto].hp,
+    age: 3,
     denId: 0,
     homeX: x,
     homeY: y,
@@ -51,6 +52,7 @@ function mutantAt(x: number, y: number, id = 800): Mutant {
     facing: 'down',
     moving: false,
     hp: ENEMIES.mutant.hp,
+    age: 30,
     attackCooldown: 0,
     emerge: 0,
   };

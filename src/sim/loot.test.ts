@@ -34,6 +34,7 @@ function beastNextTo(world: World, proto: WildlifeId, tiles = 3, id = 9001): Bea
     facing: 'down',
     moving: false,
     hp: WILDLIFE[proto].hp,
+    age: 3,
     denId: 0,
     homeX: x,
     homeY: y,
