@@ -98,6 +98,7 @@ function crabNextTo(world: World, id = 9001): Beast {
     facing: 'down',
     moving: false,
     hp: WILDLIFE.crab.hp,
+    age: 3,
     denId: 0,
     homeX: x,
     homeY: y,
@@ -126,6 +127,7 @@ function mutantNextTo(world: World, proto: 'mutant' | 'brute', id = 9002): Mutan
     facing: 'down',
     moving: false,
     hp: ENEMIES[proto].hp,
+    age: 30,
     attackCooldown: 0,
     emerge: 0,
   };
