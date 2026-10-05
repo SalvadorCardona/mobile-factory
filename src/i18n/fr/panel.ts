@@ -213,6 +213,7 @@ export const panel = {
       logistician: 'Logisticien',
       builder: 'Bâtisseur',
       lumberjack: 'Bûcheron',
+      forester: 'Forestier',
       child: 'Enfant',
       exMutant: 'Ex-mutant, porteur',
       survivor: 'Survivant, porteur',

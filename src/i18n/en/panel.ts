@@ -186,6 +186,7 @@ export const panel: Messages['panel'] = {
       logistician: 'Logistician',
       builder: 'Builder',
       lumberjack: 'Lumberjack',
+      forester: 'Forester',
       child: 'Child',
       exMutant: 'Ex-mutant, porter',
       survivor: 'Survivor, porter',
