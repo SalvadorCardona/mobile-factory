@@ -30,6 +30,7 @@ export type BuildingKind =
   | 'clinic'
   | 'lab'
   | 'lumberCamp'
+  | 'foresterHouse'
   | 'depot'
   | 'yard'
   | 'antenna';
@@ -165,6 +166,29 @@ export const BUILDINGS = {
     unique: false,
     plan: false,
     sprite: 'lumberCamp',
+    weapon: null,
+    upgrades: [],
+  },
+  foresterHouse: {
+    label: LORE.buildings.foresterHouse.name,
+    sign: LORE.buildings.foresterHouse.sign,
+    siteDescription: LORE.buildings.foresterHouse.site,
+    description: LORE.buildings.foresterHouse.description,
+    effect: LORE.buildings.foresterHouse.effect,
+    kind: 'foresterHouse',
+    width: 2,
+    height: 2,
+    // Du bois pour en faire repousser : la pierre, rare, n'y entre presque pas.
+    cost: { wood: 10, stone: 2 },
+    storage: 0,
+    logisticRadius: 0,
+    hp: 40,
+    workers: 1,
+    minWorkers: 0,
+    menu: true,
+    unique: false,
+    plan: false,
+    sprite: 'foresterHouse',
     weapon: null,
     upgrades: [],
   },

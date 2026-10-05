@@ -19,16 +19,16 @@ import { hash3 } from '../core/rng.ts';
 import { CLINIC } from '../data/clinic.ts';
 import { ROADS } from '../data/roads.ts';
 import { NEEDS } from '../data/needs.ts';
-import { BUILDERS, EX_MUTANT, LOGISTICIANS, LUMBERJACKS, PORTERS, WANDER } from '../data/workers.ts';
+import { BUILDERS, EX_MUTANT, FORESTERS, LOGISTICIANS, LUMBERJACKS, PORTERS, WANDER } from '../data/workers.ts';
 import { KID_SPEED_TILES } from './kids.ts';
 import { facingOf } from './motion.ts';
 import { needsPace } from './needs.ts';
 import type { RoadTest } from './roads.ts';
 import { isWalkable, terrainAt } from './terrain.ts';
-import type { Kid, Lumberjack, Patient, Wandering, Worker } from './types.ts';
+import type { Forester, Kid, Lumberjack, Patient, Wandering, Worker } from './types.ts';
 
-/** Ce qui marche en ligne droite : un ouvrier, un bûcheron, un patient — et un enfant qui va manger. */
-type Walker = Worker | Lumberjack | Patient | Kid;
+/** Ce qui marche en ligne droite : un ouvrier, un bûcheron, un forestier, un patient — et un enfant qui va manger. */
+type Walker = Worker | Lumberjack | Forester | Patient | Kid;
 
 /** Pas d'échantillonnage d'une ligne droite, en pixels : moins d'un quart de tuile, aucun coin d'eau n'échappe. */
 const LINE_STEP = TILE_SIZE / 4;
@@ -42,6 +42,7 @@ function speedOf(walker: Walker): number {
 function baseSpeed(walker: Exclude<Walker, Patient>): number {
   if (walker.kind === 'kid') return KID_SPEED_TILES;
   if (walker.kind === 'lumberjack') return LUMBERJACKS.speed;
+  if (walker.kind === 'forester') return FORESTERS.speed;
   if (walker.logistician) return LOGISTICIANS.speed;
   if (walker.builder) return BUILDERS.speed;
   return walker.exMutant ? EX_MUTANT.speed : PORTERS.speed;
@@ -121,7 +122,7 @@ export function clearLine(seed: number, x0: number, y0: number, x1: number, y1: 
  * reste où il est jusqu'au tirage suivant.
  */
 export function wander(
-  walker: (Worker | Lumberjack) & Wandering,
+  walker: (Worker | Lumberjack | Forester) & Wandering,
   home: { x: number; y: number },
   seed: number,
   tick: number,

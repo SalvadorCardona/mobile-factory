@@ -116,6 +116,16 @@ export const LORE = {
         'dans son coffre, que les porteurs vident à la mairie.',
       effect: '2 bûcherons coupent seuls les arbres alentour.',
     },
+    foresterHouse: {
+      name: 'Maison du forestier',
+      sign: 'Forestier',
+      site: 'Une brouette de jeunes plants et une bêche plantée dans la terre : la maison attend ses murs.',
+      description:
+        'Une maisonnette au toit couvert de mousse, ses pots de semis et son arrosoir. ' +
+        'Le forestier y vit : il plante tout autour un carré de jeunes arbres, rang par rang, ' +
+        'et replante chaque case que les bûcherons ont coupée.',
+      effect: '1 forestier plante et replante une forêt autour.',
+    },
     logisticsPost: {
       name: 'Poste de logistique',
       sign: 'Logistique',

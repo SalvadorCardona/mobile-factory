@@ -183,8 +183,8 @@ export function isOnEve(eve: Eve, x: number, y: number): boolean {
 }
 
 /**
- * La créature dessinée sous un point monde — un enfant, un ouvrier ou un
- * bûcheron dehors, un mutant sorti de sa flaque, une bête —, la plus basse
+ * La créature dessinée sous un point monde — un enfant, un ouvrier, un
+ * bûcheron ou un forestier dehors, un mutant sorti de sa flaque, une bête —, la plus basse
  * à l'écran si elles se recouvrent, comme le tri en profondeur du rendu.
  */
 export function creatureAt(mobiles: Iterable<Mobile>, x: number, y: number): MobileId | undefined {
@@ -205,7 +205,8 @@ function isUnder(mobile: Mobile, x: number, y: number): boolean {
   switch (mobile.kind) {
     case 'kid':
     case 'worker':
-    case 'lumberjack': {
+    case 'lumberjack':
+    case 'forester': {
       if (mobile.kind !== 'kid' && mobile.inside) return false;
 
       const top = mobile.kind === 'kid' ? KID_TOP : PERSON_TOP;

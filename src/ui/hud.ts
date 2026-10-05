@@ -1823,9 +1823,9 @@ function crewDetail({ byBuilding, porters, assigned, free, missing }: Workforce)
   return detail;
 }
 
-/** Un enfant, un ouvrier, un bûcheron : ce qui a un prénom et une infobulle. */
+/** Un enfant, un ouvrier, un bûcheron, un forestier : ce qui a un prénom et une infobulle. */
 function isInhabitant(mobile: Mobile): mobile is Inhabitant {
-  return mobile.kind === 'kid' || mobile.kind === 'worker' || mobile.kind === 'lumberjack';
+  return mobile.kind === 'kid' || mobile.kind === 'worker' || mobile.kind === 'lumberjack' || mobile.kind === 'forester';
 }
 
 /** « Objectif 3/7 », ou « Après le Signal » une fois la chaîne bouclée : la partie sans fin. */

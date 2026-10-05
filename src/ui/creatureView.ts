@@ -1,6 +1,6 @@
 /**
  * Ce que la fenêtre d'un bâtiment montre quand on tape une créature : un
- * habitant (enfant, ouvrier, bûcheron) ou un ennemi (mutant, bête).
+ * habitant (enfant, ouvrier, bûcheron, forestier) ou un ennemi (mutant, bête).
  *
  * Son nom — le prénom d'un habitant (`nameOf`), le surnom d'un ennemi
  * (`foeName`) —, son âge, son portrait (le sprite de son pantin), ses points
@@ -20,13 +20,13 @@ import { t } from '../i18n/locale.ts';
 import { occupationText } from './personText.ts';
 
 /** Le métier d'un habitant, tel que la fenêtre le nomme. */
-type Role = 'porter' | 'logistician' | 'builder' | 'lumberjack' | 'child' | 'exMutant' | 'survivor';
+type Role = 'porter' | 'logistician' | 'builder' | 'lumberjack' | 'forester' | 'child' | 'exMutant' | 'survivor';
 
 /** Ce qu'on peut ouvrir dans la fenêtre : un bâtiment (ou chantier), ou une créature. */
 export type Selection = { kind: 'building'; id: EntityId } | { kind: 'creature'; id: MobileId };
 
 /** Une créature qui a une fenêtre : un habitant ou un ennemi. */
-export type Creature = Extract<Mobile, { kind: 'kid' | 'worker' | 'lumberjack' | 'mutant' | 'beast' }>;
+export type Creature = Extract<Mobile, { kind: 'kid' | 'worker' | 'lumberjack' | 'forester' | 'mutant' | 'beast' }>;
 
 export interface CreatureView {
   name: string;
@@ -46,6 +46,7 @@ export function isCreature(mobile: Mobile): mobile is Creature {
     mobile.kind === 'kid' ||
     mobile.kind === 'worker' ||
     mobile.kind === 'lumberjack' ||
+    mobile.kind === 'forester' ||
     mobile.kind === 'mutant' ||
     mobile.kind === 'beast'
   );
@@ -108,6 +109,7 @@ function mutantGoal(world: World, mutant: Extract<Mobile, { kind: 'mutant' }>): 
 function roleOf(person: Inhabitant): Role {
   if (person.kind === 'kid') return 'child';
   if (person.kind === 'lumberjack') return 'lumberjack';
+  if (person.kind === 'forester') return 'forester';
   if (person.logistician) return 'logistician';
   if (person.builder) return 'builder';
   if (person.exMutant) return 'exMutant';
@@ -133,6 +135,8 @@ function portraitOf(creature: Creature): SpriteId {
       return 'kid';
     case 'lumberjack':
       return 'lumberjack';
+    case 'forester':
+      return 'forester';
     case 'worker':
       if (creature.logistician) return 'logistician';
       if (creature.builder) return 'builder';

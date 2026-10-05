@@ -34,6 +34,7 @@ export const PRESTIGE = {
 export const BUILD_PRESTIGE = {
   townHall: 5,
   lumberCamp: 2,
+  foresterHouse: 2,
   quarry: 2,
   logisticsPost: 3,
   constructionPost: 3,

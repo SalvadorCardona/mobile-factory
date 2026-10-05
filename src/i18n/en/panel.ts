@@ -119,6 +119,21 @@ export const panel: Messages['panel'] = {
     working: 'Axes ringing out.',
   },
 
+  foresterHouse: {
+    saplings: (count: number): string => `${count} sapling${s(count)} growing`,
+    trees: (count: number): string => `${count} grown tree${s(count)}, ready to cut`,
+    free: (count: number): string => `${count} free tile${s(count)} to plant`,
+    plot: (side: number): string => `Forest: a ${side} × ${side} square around the house.`,
+    paused: 'Paused: the forester puts down the spade and loafs around.',
+    noOne: 'Stopped: no forester. Add a worker. Nothing gets planted.',
+    toPlot: 'The forester is heading to the next tile.',
+    planting: 'The forester is putting a sapling in the ground.',
+    asleep: 'The forester is asleep and will replant tomorrow.',
+    seeking: 'The forester is looking for a free tile.',
+    full: 'Forest complete: the forester will replant whatever the lumberjacks cut.',
+    nowhere: 'No tile to plant here: water, rock, roads or buildings.',
+  },
+
   depot: {
     radius: (tiles: number): string => `Radius: logisticians empty producers within ${tiles} tiles`,
     none: 'No producer in range: they loaf around.',
@@ -171,6 +186,7 @@ export const panel: Messages['panel'] = {
       logistician: 'Logistician',
       builder: 'Builder',
       lumberjack: 'Lumberjack',
+      forester: 'Forester',
       child: 'Child',
       exMutant: 'Ex-mutant, porter',
       survivor: 'Survivor, porter',

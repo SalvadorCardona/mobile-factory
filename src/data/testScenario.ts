@@ -78,6 +78,18 @@ export const TEST_SCENARIOS = {
     bag: {},
     adam: { dx: 3, dy: 4 },
   },
+  /**
+   * La maison du forestier sous la mairie, son carré d'herbe nue : on
+   * regarde le forestier le planter rang par rang, puis les pousses grandir.
+   */
+  forest: {
+    label: 'Forestier',
+    seed: 100,
+    buildings: [{ building: 'foresterHouse', dx: 0, dy: 9 }],
+    town: { wood: 40, stone: 30, food: 12 },
+    bag: {},
+    adam: { dx: 4, dy: 8 },
+  },
 } as const satisfies Record<string, TestScenarioProto>;
 
 export type TestScenarioId = keyof typeof TEST_SCENARIOS;

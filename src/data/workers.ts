@@ -69,6 +69,25 @@ export const LUMBERJACKS = {
 } as const;
 
 /**
+ * Forestiers — l'ouvrier de la maison du forestier (`BUILDINGS.foresterHouse`).
+ *
+ * Il plante un carré de forêt autour de la maison, case par case, rang par
+ * rang depuis le coin haut-gauche : marcher jusqu'à la première case libre,
+ * y planter une pousse, passer à la suivante. Un arbre coupé libère sa case,
+ * il la replante. La pousse grandit seule (`SAPLING`, `data/resources.ts`).
+ */
+export const FORESTERS = {
+  /** Côté du carré, en tuiles, centré sur la maison : c'est le carré affiché. */
+  plot: 6,
+  /** Vitesse de marche, en tuiles par seconde : celle d'un bûcheron. */
+  speed: 2.2,
+  /** Ticks pour planter une pousse, une fois sur la case. */
+  plantTicks: 40,
+  /** Ticks avant qu'un forestier sans case libre cherche à nouveau. */
+  retryTicks: 40,
+} as const;
+
+/**
  * Logisticiens — les ouvriers du poste de logistique (`BUILDINGS.logisticsPost`).
  *
  * En boucle : choisir, parmi les producteurs (foreuses, fermes, cabanes de

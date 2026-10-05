@@ -77,13 +77,14 @@ import { NURSERY_CARE } from '../data/inhabitants.ts';
 import type { ItemId } from '../data/items.ts';
 import { RECIPES, type RecipeProto } from '../data/recipes.ts';
 import { WEAPONS } from '../data/weapons.ts';
-import { BUILDERS, LOGISTICIANS, LUMBERJACKS } from '../data/workers.ts';
+import { BUILDERS, FORESTERS, LOGISTICIANS, LUMBERJACKS } from '../data/workers.ts';
 import { floorCost } from '../sim/antenna.ts';
 import { forgeRecipe } from '../sim/consumers.ts';
 import { canDamage, isStanding } from '../sim/enemyBases.ts';
+import { countPlot, type PlotCount } from '../sim/forester.ts';
 import { canPause } from '../sim/staffing.ts';
 import type { SiteLine } from '../sim/siteLedger.ts';
-import type { Building, EnemyBase, Entity, EntityId, Forge, MobileId, Nursery } from '../sim/types.ts';
+import type { Building, EnemyBase, Entity, EntityId, Forester, Forge, MobileId, Nursery } from '../sim/types.ts';
 import { TICKS_PER_SECOND, repairCost, siteMissing, type SiteCoverage, type World } from '../sim/world.ts';
 import type { UiIcon } from '../art/ui.ts';
 import { onLocale, t } from '../i18n/locale.ts';
@@ -788,6 +789,20 @@ export class BuildingPanel {
           );
           break;
 
+        case 'foresterHouse': {
+          const tiles = this.world.forestPlot(entity);
+          const count = countPlot(tiles);
+
+          stats.push(
+            { icon: 'seed', value: String(count.saplings), label: text.foresterHouse.saplings(count.saplings) },
+            { icon: 'tree', value: String(count.trees), label: text.foresterHouse.trees(count.trees) },
+            { icon: 'plot', value: String(count.free), label: text.foresterHouse.free(count.free) },
+          );
+          lines.push(text.foresterHouse.plot(FORESTERS.plot));
+          lines.push(entity.paused ? text.foresterHouse.paused : stopped ? text.foresterHouse.noOne : foresterLine(this.world.foresterOf(entity), count));
+          break;
+        }
+
         case 'depot': {
           const served = this.world.depotProducers(entity);
 
@@ -1333,4 +1348,14 @@ function clock(ticks: number): string {
   const rest = seconds % 60;
 
   return t().panel.duration(minutes, rest);
+}
+
+/** Ce que fait le forestier : il marche vers sa case, il plante, il dort, ou il n'a plus rien à planter — et pourquoi. */
+function foresterLine(forester: Forester | undefined, count: PlotCount): string {
+  const text = t().panel.foresterHouse;
+
+  if (forester?.state === 'toPlot') return text.toPlot;
+  if (forester?.state === 'plant') return text.planting;
+  if (count.free === 0) return count.saplings + count.trees === 0 ? text.nowhere : text.full;
+  return forester?.inside ? text.asleep : text.seeking;
 }

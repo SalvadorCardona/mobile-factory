@@ -365,6 +365,25 @@ export const UI_ICONS = {
     group('translate(12 7) rotate(-35)', pill(0, -1.8, 6.5, 3.6, mint.base)),
     shadedPill(5.5, 12, 13, 9, 2.5, 'yellow'),
   ),
+  /** Un arbre adulte : coussins de feuillage sur un tronc indigo — ce que la forêt du forestier a de bon à couper. */
+  tree: svg(
+    S,
+    S,
+    rect(10.5, 12, 3, 9, ink.base, 1.5),
+    pill(4, 9, 16, 6, mint.shade),
+    pill(4, 9, 16, 4.3, mint.base),
+    pill(6.5, 3.5, 11, 6, mint.shade),
+    pill(6.5, 3.5, 11, 4.3, mint.base),
+    pill(8.5, 4.4, 4, 1.5, mint.light),
+  ),
+  /** Une case libre du carré : une tuile de terre retournée, en 3/4, prête pour la bêche. */
+  plot: svg(
+    S,
+    S,
+    shadedBlock(3.5, 8, 17, 11, 3, 'orange', 4),
+    line(7, 11.5, 17, 11.5, orange.shade),
+    line(14.5, 6, 17.5, 2.5, ink.base),
+  ),
   /** Le sac à dos violet d'Adam, pour le bonus « Grand sac ». */
   bag: svg(
     S,
