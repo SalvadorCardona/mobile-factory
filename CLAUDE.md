@@ -151,6 +151,20 @@ adossé, s'étire, bâille avec bulle « zzz »), le HUD compte au travail /
 inactifs / enfants (`World.census`), et un tap sur les inactifs y jette un
 coup d'œil, puis le suivant ; un tap sur un habitant montre son infobulle.
 
+**Faim** (`data/needs.ts`, `sim/needs.ts`) — ouvriers, bûcherons et
+enfants ont une jauge par besoin (`Needful.needs`, sauvegardée ; une
+ancienne sauvegarde part rassasiée), qui baisse plus vite au travail qu'au
+repos. Sous `seekBelow`, l'habitant lâche sa tâche (son job garde ses
+réservations), part manger un `food` à la mairie — sa part réservée au
+départ (`meal`, rejouée au chargement) — et la reprend. Sans nourriture,
+sous `weakBelow` il va à mi-allure, à zéro il s'arrête (`stopsWork` ; pas
+de mort) ; un enfant affamé ne prend pas d'année à l'aube (`blocksGrowth`).
+La mairie bâtie verse `START_FOOD`. L'infobulle d'un habitant montre sa
+jauge (rassasié / a faim / affamé), une bulle corail flotte au-dessus d'un
+affamé (`art/hungry.ts`), et une capsule corail sous la population
+(`World.needAlert`) dit quand la ville va manquer ; son tap montre qui a
+faim. La soif sera une entrée de plus dans `NEEDS`.
+
 **Jour et nuit** — dès que la mairie est debout, le cycle démarre
 (`src/data/dayNight.ts`, horloge pure dans `src/sim/dayNight.ts`) : une
 journée sans mutant (~3 min), un crépuscule (carte teintée indigo, lampions

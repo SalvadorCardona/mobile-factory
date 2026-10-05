@@ -40,6 +40,7 @@ import { LOGISTICIAN } from '../art/logistician.ts';
 import { LOGISTICS_POST } from '../art/logisticsPost.ts';
 import { LOOT } from '../art/loot.ts';
 import { LUMBER_CAMP } from '../art/lumberCamp.ts';
+import { HUNGRY } from '../art/hungry.ts';
 import { LUMBERJACK } from '../art/lumberjack.ts';
 import { MUTANT } from '../art/mutant.ts';
 import { NURSERY } from '../art/nursery.ts';
@@ -104,6 +105,8 @@ export const SPRITES = {
   storeFull: STORE_FULL,
   /** Bulle « en pause » au-dessus d'un producteur que le joueur a arrêté. */
   paused: PAUSED,
+  /** Bulle « affamé » au-dessus d'un habitant à court de nourriture. */
+  hungry: HUNGRY,
   /** La fissure d'un bâtiment sous la moitié de ses points de vie. */
   crack: CRACK,
   /** La flaque d'où sortent les mutants d'une vague. */

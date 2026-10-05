@@ -72,6 +72,7 @@ export const hud: Messages['hud'] = {
     patientAdmitted: 'Admitted to the clinic: one night of care',
     mutantHealed: 'An ex-mutant leaves the clinic: one more porter!',
     kidGrewUp: (name: string): string => `${name} is 14, one more worker`,
+    growthStunted: (name: string): string => `${name} is hungry: no birthday this dawn`,
     weatherSoon: (weather: string, seconds: number, advice: string): string => `${weather} in ${seconds} s — ${advice}`,
     weatherEnded: (weather: string): string => `Over: ${lower(weather)}`,
     knockedOut: 'Adam passed out — he wakes up at the town hall',
@@ -157,6 +158,13 @@ export const hud: Messages['hud'] = {
   weather: {
     soon: (weather: string, seconds: number): string => `${weather} in ${seconds} s`,
   },
+  needAlert: {
+    soonShort: (minutes: number): string => `${minutes} min`,
+    outShort: 'out',
+    soon: (item: string, minutes: number, wanting: number): string =>
+      `${item}: only ${minutes} min left in town${wanting > 0 ? ` — ${wanting} hungry, tap to see` : ''}`,
+    out: (item: string, wanting: number): string => `${item}: the town has none left${wanting > 0 ? ` — ${wanting} hungry, tap to see` : ''}`,
+  },
   people: {
     working: (n: number): string => `${n} working`,
     idle: (n: number): string => `${n} idle${n > 0 ? ' — tap to see one' : ''}`,
@@ -211,5 +219,8 @@ export const hud: Messages['hud'] = {
     workingAt: (building: string): string => `working: ${building}`,
     idle: 'no job',
     home: 'at home',
+    needs: {
+      hunger: { sated: 'well fed', wanting: 'hungry', deprived: 'starving' },
+    },
   },
 };

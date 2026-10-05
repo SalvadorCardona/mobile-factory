@@ -18,25 +18,40 @@ import { TILE_SIZE, distanceSq, floorDiv } from '../core/grid.ts';
 import { hash3 } from '../core/rng.ts';
 import { CLINIC } from '../data/clinic.ts';
 import { ROADS } from '../data/roads.ts';
+import { NEEDS } from '../data/needs.ts';
 import { BUILDERS, EX_MUTANT, LOGISTICIANS, LUMBERJACKS, PORTERS, WANDER } from '../data/workers.ts';
+import { KID_SPEED_TILES } from './kids.ts';
 import { facingOf } from './motion.ts';
+import { needsPace } from './needs.ts';
 import type { RoadTest } from './roads.ts';
 import { isWalkable, terrainAt } from './terrain.ts';
-import type { Lumberjack, Patient, Wandering, Worker } from './types.ts';
+import type { Kid, Lumberjack, Patient, Wandering, Worker } from './types.ts';
 
-/** Ce qui marche en ligne droite : un ouvrier, un bûcheron, un patient. */
-type Walker = Worker | Lumberjack | Patient;
+/** Ce qui marche en ligne droite : un ouvrier, un bûcheron, un patient — et un enfant qui va manger. */
+type Walker = Worker | Lumberjack | Patient | Kid;
 
 /** Pas d'échantillonnage d'une ligne droite, en pixels : moins d'un quart de tuile, aucun coin d'eau n'échappe. */
 const LINE_STEP = TILE_SIZE / 4;
 
-/** Vitesse de marche, en tuiles par seconde : un porteur, un ex-mutant, un bûcheron, un patient qui boitille. */
+/** Vitesse de marche, en tuiles par seconde : un porteur, un ex-mutant, un bûcheron, un enfant, un patient qui boitille. */
 function speedOf(walker: Walker): number {
   if (walker.kind === 'patient') return CLINIC.limpSpeed;
+  return baseSpeed(walker) * paceOf(walker);
+}
+
+function baseSpeed(walker: Exclude<Walker, Patient>): number {
+  if (walker.kind === 'kid') return KID_SPEED_TILES;
   if (walker.kind === 'lumberjack') return LUMBERJACKS.speed;
   if (walker.logistician) return LOGISTICIANS.speed;
   if (walker.builder) return BUILDERS.speed;
   return walker.exMutant ? EX_MUTANT.speed : PORTERS.speed;
+}
+
+/** Affamé, il traîne les pieds ; en route pour manger, il se traîne au moins à l'allure d'un affamé. */
+function paceOf(walker: Exclude<Walker, Patient>): number {
+  const pace = needsPace(walker.needs);
+
+  return walker.meal === null ? pace : Math.max(pace, NEEDS[walker.meal].weakPace);
 }
 
 /** Ce qu'un ouvrier porte en un voyage : un ex-mutant, plus fort, ou un logisticien, du métier, en prend davantage. */

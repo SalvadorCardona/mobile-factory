@@ -17,7 +17,9 @@ import type { RareOfferId } from '../data/caravan.ts';
 import type { EnemyId, WildlifeId } from '../data/enemies.ts';
 import type { ItemId } from '../data/items.ts';
 import type { ResearchId } from '../data/research.ts';
+import type { NeedId } from '../data/needs.ts';
 import type { JobPriority } from '../data/workers.ts';
+import type { Needs } from './needs.ts';
 import type { Store } from './store.ts';
 
 export type EntityId = number;
@@ -357,11 +359,26 @@ export interface Arrow extends Moving {
 }
 
 /**
+ * Ce que tout habitant — enfant, ouvrier, bûcheron — porte de ses besoins
+ * (`data/needs.ts`) : ses jauges, et le repas qu'il est allé chercher.
+ */
+export interface Needful {
+  /** Une jauge par besoin, de 0 (à bout) à 1 (comblé). */
+  needs: Needs;
+  /**
+   * Le besoin qu'il est allé combler à la mairie, `null` sinon. Sa part du
+   * stock de la ville lui est réservée au départ ; la réservation, qui n'est
+   * pas sauvegardée, se rejoue au chargement — comme les jobs.
+   */
+  meal: NeedId | null;
+}
+
+/**
  * Un enfant : il joue autour de sa nurserie et n'en va jamais loin. Il en
  * sort à `AGES.nursery` ans ; à `AGES.work`, il devient ouvrier — un
  * porteur logé à sa nurserie, sous le même id.
  */
-export interface Kid extends Moving {
+export interface Kid extends Moving, Needful {
   kind: 'kid';
   /** Son âge, en années : une de plus à chaque aube. */
   age: number;
@@ -450,7 +467,7 @@ export interface Wandering {
  * Un bâtisseur est un ouvrier logé au poste de construction : il livre les
  * chantiers du rayon de son poste depuis la mairie, puis les bâtit (`build`).
  */
-export interface Worker extends Moving, Wandering {
+export interface Worker extends Moving, Wandering, Needful {
   kind: 'worker';
   /** Son âge, en années : une de plus à chaque aube. */
   age: number;
@@ -497,7 +514,7 @@ export type LumberjackState = 'idle' | 'toTree' | 'chop' | 'toCamp' | 'wait';
  * `tree` est réservé dès qu'il est choisi, et la réservation, qui n'est pas
  * sauvegardée, se rejoue depuis les bûcherons au chargement — comme les jobs.
  */
-export interface Lumberjack extends Moving, Wandering {
+export interface Lumberjack extends Moving, Wandering, Needful {
   kind: 'lumberjack';
   /** Son âge, en années : une de plus à chaque aube. */
   age: number;

@@ -1055,6 +1055,69 @@ button.hud-stock:active {
   display: none;
 }
 
+.hud-person-line {
+  display: block;
+}
+
+/* Un besoin sous la ligne : icône, jauge, état. */
+.hud-person-need {
+  margin-top: 4px;
+  font-size: 13px;
+}
+
+.hud-person-need .hud-meter-value {
+  min-width: 0;
+}
+
+/*
+ * L'alerte de nourriture, sous la population : une capsule corail — ce qui
+ * va manquer et le temps qu'il reste. Un tap montre qui a faim.
+ */
+.hud .hud-hunger {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 124px;
+  padding: 4px 8px;
+  border: none;
+  background: var(--coral);
+  box-shadow: 0 3px 0 var(--coral-shade);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--paper);
+  cursor: pointer;
+  animation: hunger-pulse 1.6s ease-in-out infinite;
+}
+
+.hud-hunger[hidden] {
+  display: none;
+}
+
+.hud-hunger .icon {
+  width: 18px;
+  height: 18px;
+}
+
+.hud-hunger:active {
+  transform: translateY(2px);
+  box-shadow: none;
+}
+
+@keyframes hunger-pulse {
+  50% {
+    transform: scale(1.04);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud .hud-hunger {
+    animation: none;
+  }
+}
+
 /* Le résumé de la pastille (ville, objet réclamé) ne sert que sur un téléphone. */
 .hud-bag-town,
 .hud-bag-wanted {
@@ -1086,6 +1149,12 @@ button.hud-stock:active {
     width: 104px;
     padding: 4px 6px;
     border-radius: 18px;
+  }
+
+  .hud .hud-hunger {
+    width: 104px;
+    padding: 3px 6px;
+    font-size: 14px;
   }
 
   .hud-people-count,

@@ -20,12 +20,14 @@ import { BUILDINGS, MENU_BUILDING_IDS, maxLevel, type BuildingId } from '../data
 import { RARE_OFFERS, type RareOfferId } from '../data/caravan.ts';
 import { ENEMIES, WILDLIFE, type EnemyId, type WildlifeId } from '../data/enemies.ts';
 import { ITEMS, type ItemId } from '../data/items.ts';
+import { NEED_IDS, NEEDS, type NeedId } from '../data/needs.ts';
 import { OBJECTIVES } from '../data/objectives.ts';
 import { JOB_PRIORITY, type JobPriority } from '../data/workers.ts';
 import { PERKS, type PerkId } from '../data/perks.ts';
 import { RESEARCH, type ResearchId } from '../data/research.ts';
 import type { SchedulerSnapshot } from './scheduler.ts';
 import { ADAM_SALT, adultAge } from './inhabitants.ts';
+import { freshNeeds, fullNeeds } from './needs.ts';
 import { canPause, clampStaff } from './staffing.ts';
 import type { Store, StoreSnapshot } from './store.ts';
 import type {
@@ -39,6 +41,7 @@ import type {
   LumberjackState,
   Mobile,
   Mutant,
+  Needful,
   PatientState,
   Player,
   TradeOffer,
@@ -592,6 +595,7 @@ function parseMobile(raw: unknown): Mobile {
         ...base,
         kind: 'kid',
         age: age(mobile['age']),
+        ...needful(mobile),
         homeId: int(mobile['homeId']),
         homeX: finite(mobile['homeX']),
         homeY: finite(mobile['homeY']),
@@ -624,6 +628,7 @@ function parseMobile(raw: unknown): Mobile {
         ...base,
         kind: 'worker',
         age: age(mobile['age']),
+        ...needful(mobile),
         homeId: int(mobile['homeId']),
         // Absent des sauvegardes d'avant la clinique : aucun ex-mutant.
         exMutant: mobile['exMutant'] === undefined ? false : bool(mobile['exMutant']),
@@ -649,6 +654,7 @@ function parseMobile(raw: unknown): Mobile {
         ...base,
         kind: 'lumberjack',
         age: age(mobile['age']),
+        ...needful(mobile),
         homeId: int(mobile['homeId']),
         inside: bool(mobile['inside']),
         state: state as LumberjackState,
@@ -696,6 +702,26 @@ function parseMobile(raw: unknown): Mobile {
     default:
       throw new SaveError(`mobile inconnu : ${String(mobile['kind'])}`);
   }
+}
+
+/**
+ * Les jauges d'un habitant et le repas qu'il est allé chercher. Absentes des
+ * sauvegardes d'avant les besoins : il arrive rassasié.
+ */
+function needful(raw: Json): Needful {
+  if (raw['needs'] === undefined) return freshNeeds();
+
+  const saved = record(raw['needs']);
+  const needs = fullNeeds();
+
+  // Un besoin venu après la sauvegarde part plein.
+  for (const id of NEED_IDS) {
+    if (saved[id] !== undefined) needs[id] = Math.min(1, Math.max(0, finite(saved[id])));
+  }
+
+  const meal = raw['meal'] === undefined || raw['meal'] === null ? null : (oneOf(raw['meal'], NEEDS) as NeedId);
+
+  return { needs, meal };
 }
 
 /** La flânerie d'un ouvrier. Absente des sauvegardes d'avant elle : il repart de là où il est. */

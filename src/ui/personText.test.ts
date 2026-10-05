@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BUILDINGS } from '../data/buildings.ts';
 import { setLocale } from '../i18n/locale.ts';
-import { personText } from './personText.ts';
+import { needText, personText } from './personText.ts';
 
 describe('infobulle d’un habitant', () => {
   it('dit le prénom, l’âge et ce qu’il fait', () => {
@@ -12,10 +12,17 @@ describe('infobulle d’un habitant', () => {
     expect(personText('Tom', 27, { kind: 'home' })).toBe('Tom, 27 ans · à la maison');
   });
 
+  it('dit l’état de sa faim : rassasié, a faim, affamé', () => {
+    expect(needText('hunger', 'sated')).toBe('rassasié');
+    expect(needText('hunger', 'wanting')).toBe('a faim');
+    expect(needText('hunger', 'deprived')).toBe('affamé');
+  });
+
   it('se dit aussi en anglais', () => {
     setLocale('en');
     try {
       expect(personText('Tom', 27, { kind: 'idle' })).toBe('Tom, 27 · no job');
+      expect(needText('hunger', 'deprived')).toBe('starving');
     } finally {
       setLocale('fr');
     }

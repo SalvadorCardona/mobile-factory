@@ -7,6 +7,7 @@ import type { ItemId } from '../data/items.ts';
 import { IDLE } from '../data/workers.ts';
 import { CYCLE_TICKS, ticksToDawn } from './dayNight.ts';
 import { ADAM_SALT, adultAge, nameOf, yearsToWork } from './inhabitants.ts';
+import { freshNeeds } from './needs.ts';
 import { SAVE_VERSION, decodeSave, encodeSave, type SavedEntity } from './save.ts';
 import { isWalkable, terrainAt } from './terrain.ts';
 import type { Kid, Mobile, Nursery, Worker } from './types.ts';
@@ -73,7 +74,7 @@ function colony(layout: Layout): World {
     const x = (nursery.tx + 1) * TILE_SIZE;
     const y = (nursery.ty + nursery.height + 1) * TILE_SIZE;
 
-    mobiles.push({ kind: 'kid', id: state.nextMobileId, age: layout.kidAge, x, y, prevX: x, prevY: y, facing: 'down', moving: false, homeId: nursery.id, homeX: x, homeY: y, dirX: 0, dirY: 0, wanderTicks: 0 });
+    mobiles.push({ kind: 'kid', id: state.nextMobileId, age: layout.kidAge, x, y, prevX: x, prevY: y, facing: 'down', moving: false, homeId: nursery.id, homeX: x, homeY: y, dirX: 0, dirY: 0, wanderTicks: 0, ...freshNeeds() });
   }
 
   // Adam à l'écart, immobile.
