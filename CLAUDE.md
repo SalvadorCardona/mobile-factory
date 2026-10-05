@@ -59,7 +59,8 @@ prend que ce qui rentre, le réservé reste au coffre, un coffre filtré grise
 le reste. Les chantiers
 puisent dans les deux, la ville seulement dans son rayon (`logisticRadius`,
 `sim/warehouse.ts`, le cercle jaune du mode construction). Le HUD
-les montre en deux cartes compactes ; le sac (tap, ou touche I) ouvre
+les montre en deux cartes compactes (sur un écran large, la ville en bandeau
+d'une ligne en haut à gauche, qui défile de côté) ; le sac (tap, ou touche I) ouvre
 `ui/inventoryPanel.ts`, sans pause, comme la fenêtre d'un bâtiment. Sa
 section Ville est un tableau de bord (`sim/flows.ts`, `World.flows`) : débit
 net par objet sur deux minutes (anneau d'échantillons, pas sauvegardé) et
