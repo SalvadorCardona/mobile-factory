@@ -43,6 +43,11 @@ export function buildingIconUrl(building: BuildingId): string {
   return url(`building:${building}`, SPRITES[BUILDINGS[building].sprite].parts.built);
 }
 
+/** URL de la vignette d'une base mutante : son campement. */
+export function enemyBaseIconUrl(): string {
+  return url('enemyBase', SPRITES.enemyBase.parts.built);
+}
+
 /** URL du cadran de l'horloge du HUD (`dayDialSvg`) : il bouge sans cesse, rien à garder en cache. */
 export function dayDialUrl(svg: string): string {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;

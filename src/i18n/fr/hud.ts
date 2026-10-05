@@ -34,6 +34,7 @@ export const hud = {
     locked: 'Pas encore débloqué — il faut son plan, ou tenir encore une nuit',
     unique: 'Un seul par colonie — il y en a déjà un',
     nearHall: `Trop près de la mairie — l’antenne se dresse à ${BUILDINGS.antenna.hallDistance} cases au moins`,
+    enemyZone: 'Une base mutante tient cette zone — abattez-la d’abord',
   },
   /** Ce que dit la bulle quand un tracé de route n'a pas été pavé en entier. */
   road: {
@@ -43,6 +44,13 @@ export const hud = {
     terrain: 'Pas de route sur l’eau',
     occupied: 'Une route ne passe pas sous un bâtiment',
     resource: 'Arbres et rochers sautés : dégagez-les pour paver',
+    enemyZone: 'Pas de route dans la zone d’une base mutante',
+  },
+  /** Pourquoi un arc n'a pas été forgé (`GearRejection`, hors `missing`). */
+  gear: {
+    outOfReach: 'Trop loin de la forge — rapprochez-vous',
+    maxLevel: 'Vous avez déjà le meilleur arc',
+    missingItems: 'Il manque de quoi forger cet arc — ni dans le sac, ni en ville',
   },
   /** Pourquoi une réparation n'a pas eu lieu (`RepairRejection`, hors `missing`). */
   repair: {
@@ -119,6 +127,12 @@ export const hud = {
     antennaRaised: (floor: number, night: number): string =>
       `Étage ${floor} debout ! La nuit ${night}, toutes les vagues marcheront sur l’antenne.`,
     antennaFell: (floor: number): string => `L’antenne a perdu un étage — elle retombe à l’étage ${floor}`,
+    /** `gear` : l'arc qu'il faut, avec sa majuscule. */
+    betterGear: (gear: string, level: number): string => `Il vous faut un meilleur équipement : ${gear} (niveau ${level}) — forgez-le à la forge`,
+    enemyZone: (level: number): string => `Zone d’une base mutante (niveau ${level}) : ni récolte ni construction tant qu’elle tient`,
+    baseDestroyed: (prestige: number): string => `Base mutante détruite ! +${prestige} Prestige, sa zone est libre`,
+    /** `gear` : l'arc forgé, avec sa majuscule. */
+    gearCrafted: (gear: string, level: number): string => `${gear} forgé : vous entamez les bases de niveau ${level}`,
     survivors: (count: number): string =>
       count > 1
         ? `${count} survivants arrivent à l’appel de l’antenne : ${count} porteurs de plus`

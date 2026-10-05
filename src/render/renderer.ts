@@ -7,8 +7,8 @@
  *
  * Deux conteneurs seulement :
  * - `world`, translaté par la caméra, où vit tout ce qui a des coordonnées
- *   monde : le sol baké, l'eau qui bouge par-dessus, le rayon de coupe d'une
- *   cabane, les ombres portées (et celles des particules, leurs flaques), le
+ *   monde : le sol baké, l'eau qui bouge par-dessus, les zones des bases
+ *   mutantes, le rayon de coupe d'une cabane, les ombres portées (et celles des particules, leurs flaques), le
  *   cadre de sélection au sol, puis le conteneur trié en profondeur (bâtiments, arbres, rochers, personnages), les particules, la
  *   nuit (une passe de teinte et ses lueurs) et le fantôme de construction ;
  * - `hud`, en pixels écran, où vivent la météo, les ondes du Signal et les repères de bord (le
@@ -28,6 +28,7 @@ import type { EntityId } from '../sim/types.ts';
 import { STEP_MS, type World } from '../sim/world.ts';
 import { Camera, ZOOM, stepZoom } from './camera.ts';
 import { ChunkLayer } from './chunkLayer.ts';
+import { EnemyBaseLayer } from './enemyBaseLayer.ts';
 import { EntityLayer } from './entityLayer.ts';
 import { GhostLayer } from './ghostLayer.ts';
 import { IndicatorLayer, indicatorSources, type ScreenRect } from './indicatorLayer.ts';
@@ -56,6 +57,7 @@ export class GameRenderer {
   private readonly shadows = new Container();
   private readonly entityLayer: EntityLayer;
   private readonly resourceLayer: ResourceLayer;
+  private readonly enemyBases: EnemyBaseLayer;
   private readonly ghostLayer: GhostLayer;
   private readonly workReach: WorkReachLayer;
   private readonly selection: SelectionLayer;
@@ -91,6 +93,7 @@ export class GameRenderer {
     this.signboards = new Signboards(app.renderer, library);
     this.entityLayer = new EntityLayer(world, library, this.tiles, this.shadows, this.signboards);
     this.resourceLayer = new ResourceLayer(world, library, this.tiles, this.entityLayer.container, this.shadows);
+    this.enemyBases = new EnemyBaseLayer(world, library, this.tiles, this.entityLayer.container, this.shadows);
     this.indicators = new IndicatorLayer(world, library);
     this.ghostLayer = new GhostLayer(world, library);
     this.workReach = new WorkReachLayer(world);
@@ -105,6 +108,7 @@ export class GameRenderer {
     this.worldContainer.addChild(
       this.chunkLayer.container,
       this.waterLayer.container,
+      this.enemyBases.zones,
       this.workReach.container,
       this.shadows,
       this.particles.ground,
@@ -299,6 +303,7 @@ export class GameRenderer {
 
     this.resourceLayer.update(this.camera, this.app.ticker.deltaMS, block?.reason === 'resource' ? block.tiles : []);
     this.entityLayer.update(alpha, this.app.ticker, this.camera.zoom);
+    this.enemyBases.update(this.app.ticker.deltaMS);
     this.particles.update(this.app.ticker.deltaMS);
     this.nightLayer.update(alpha);
     if (road) this.ghostLayer.updateRoad(road.tool, road.trail, this.app.ticker.deltaMS);
@@ -336,6 +341,7 @@ export class GameRenderer {
     this.resourceLayer.destroy();
     this.entityLayer.destroy();
     this.signboards.destroy();
+    this.enemyBases.destroy();
     this.ghostLayer.destroy();
     this.workReach.destroy();
     this.selection.destroy();

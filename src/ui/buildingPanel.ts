@@ -38,6 +38,13 @@
  * poste, plein s'il est occupé, vide sinon, marqué s'il est demandé mais
  * qu'aucun ouvrier libre ne vient le prendre.
  *
+ * La forge (`GEAR_WORKSHOP`) forge aussi l'arc d'Adam : l'arc suivant, son
+ * coût — ce qui manque en rouge — et « Forger l'arc » (`craftGear`).
+ *
+ * Une base mutante se tape aussi (`showBase`) : la même fenêtre, sans bouton,
+ * dit son niveau, sa zone, ses points de vie et l'équipement qu'il faut pour
+ * l'entamer. Elle se ferme quand la base tombe.
+ *
  * Sur un téléphone, elle doit laisser voir le jeu autour : ce qui se compte
  * se dit en puces « pictogramme + nombre » (habitants, nuits, rayon,
  * coffre…) plutôt qu'en phrases. Chaque puce porte son libellé
@@ -58,6 +65,8 @@
 
 import { BUILDINGS, REPAIR, buildingLevel, maxLevel, nextUpgrade, type BuildingId, type BuildingLevel } from '../data/buildings.ts';
 import { CLINIC } from '../data/clinic.ts';
+import { enemyBaseLevel } from '../data/enemyBases.ts';
+import { GEAR_WORKSHOP, gearOf } from '../data/gear.ts';
 import { NURSERY_CARE } from '../data/inhabitants.ts';
 import type { ItemId } from '../data/items.ts';
 import { RECIPES, type RecipeProto } from '../data/recipes.ts';
@@ -65,13 +74,14 @@ import { WEAPONS } from '../data/weapons.ts';
 import { BUILDERS, LOGISTICIANS, LUMBERJACKS } from '../data/workers.ts';
 import { floorCost } from '../sim/antenna.ts';
 import { forgeRecipe } from '../sim/consumers.ts';
+import { canDamage, isStanding } from '../sim/enemyBases.ts';
 import { canPause } from '../sim/staffing.ts';
 import type { SiteLine } from '../sim/siteLedger.ts';
-import type { Building, Entity, EntityId, Forge, Nursery } from '../sim/types.ts';
+import type { Building, EnemyBase, Entity, EntityId, Forge, Nursery } from '../sim/types.ts';
 import { TICKS_PER_SECOND, repairCost, siteMissing, type SiteCoverage, type World } from '../sim/world.ts';
 import type { UiIcon } from '../art/ui.ts';
 import { onLocale, t } from '../i18n/locale.ts';
-import { buildingIcon, buildingIconUrl, itemAmount, uiIcon } from './icons.ts';
+import { buildingIcon, buildingIconUrl, enemyBaseIconUrl, itemAmount, uiIcon } from './icons.ts';
 import { PanelTabs } from './panelTabs.ts';
 import { ResearchPanel } from './researchPanel.ts';
 import { TransferPanel } from './transferPanel.ts';
@@ -141,8 +151,16 @@ export class BuildingPanel {
   private lastStats: string | null = null;
   private lastItems = '';
   private lastUpgrade = '';
+  /** La forge d'équipement : l'arc suivant, son coût, « Forger l'arc ». */
+  private readonly gear: HTMLElement;
+  private readonly gearText: HTMLElement;
+  private readonly gearCost: HTMLElement;
+  private readonly gearButton: HTMLButtonElement;
+  private lastGear = '';
 
   private entityId: EntityId | null = null;
+  /** La base mutante affichée, si c'est elle qu'on a tapée. */
+  private baseId: number | null = null;
 
   private readonly world: World;
   private readonly onOpen: () => void;
@@ -320,6 +338,25 @@ export class BuildingPanel {
     upgradeActions.append(this.upgradeButton);
     this.upgrade.append(this.upgradeEffect, this.upgradeCost, upgradeActions);
 
+    this.gear = document.createElement('div');
+    this.gear.className = 'building-panel-upgrade';
+    this.gearText = document.createElement('p');
+    this.gearText.className = 'building-panel-upgrade-effect';
+    this.gearCost = document.createElement('div');
+    this.gearCost.className = 'building-panel-items';
+
+    const gearActions = document.createElement('div');
+
+    gearActions.className = 'building-panel-actions';
+    this.gearButton = document.createElement('button');
+    this.gearButton.type = 'button';
+    this.gearButton.dataset['tone'] = 'upgrade';
+    this.gearButton.addEventListener('click', () => {
+      if (this.entityId !== null) this.world.push({ type: 'craftGear', forge: this.entityId });
+    });
+    gearActions.append(this.gearButton);
+    this.gear.append(this.gearText, this.gearCost, gearActions);
+
     this.tabs = new PanelTabs<BuildingTab>(
       [
         { id: 'building', icon: buildingIcon('townHall', 24) },
@@ -338,6 +375,7 @@ export class BuildingPanel {
         this.crew,
         this.actions,
         this.upgrade,
+        this.gear,
         this.research.root,
       );
     this.tabs.page('inventory').append(this.exchange.root);
@@ -360,13 +398,14 @@ export class BuildingPanel {
       this.lastStats = null;
       this.lastItems = '';
       this.lastUpgrade = '';
+      this.lastGear = '';
       this.lastCrew = '';
       this.update();
     });
   }
 
   public get open(): boolean {
-    return this.entityId !== null;
+    return this.entityId !== null || this.baseId !== null;
   }
 
   /** Le bâtiment affiché, ou `null` si la fenêtre est fermée. */
@@ -380,29 +419,57 @@ export class BuildingPanel {
     if (!entity) return;
 
     this.entityId = id;
+    this.baseId = null;
+    this.reset();
+    this.refresh(entity);
+    this.onOpen();
+  }
+
+  /** La fenêtre d'une base mutante : son niveau, sa zone, sa vie, l'équipement qu'il faut. */
+  public showBase(id: number): void {
+    const base = this.world.enemyBase(id);
+
+    if (!base || !isStanding(base)) return;
+
+    this.entityId = null;
+    this.baseId = id;
+    this.reset();
+    this.refreshBase(base);
+    this.onOpen();
+  }
+
+  private reset(): void {
     this.root.hidden = false;
     this.lastText = '';
     this.lastStats = null;
     this.lastItems = '';
     this.lastUpgrade = '';
+    this.lastGear = '';
     this.lastCrew = '';
     this.cancelArmed = false;
     // Rouverte, elle revient sur « Bâtiment ».
     this.tabs.select('building');
     this.setDescription(false);
     this.hideTip();
-    this.refresh(entity);
-    this.onOpen();
   }
 
   public close(): void {
     this.entityId = null;
+    this.baseId = null;
     this.hideTip();
     this.root.hidden = true;
   }
 
   /** À chaque frame : le contenu suit l'état, la fenêtre se ferme si l'entité a disparu. */
   public update(): void {
+    if (this.baseId !== null) {
+      const base = this.world.enemyBase(this.baseId);
+
+      // Abattue : sa fenêtre n'a plus rien à dire.
+      if (!base || !isStanding(base)) this.close();
+      else this.refreshBase(base);
+      return;
+    }
     if (this.entityId === null) return;
 
     const entity = this.world.entities.get(this.entityId);
@@ -500,6 +567,7 @@ export class BuildingPanel {
       this.pauseButton.hidden = true;
       this.crew.hidden = true;
       this.upgrade.hidden = true;
+      this.gear.hidden = true;
       this.stock.hidden = true;
     } else {
       const level = buildingLevel(entity.proto, entity.level);
@@ -766,8 +834,50 @@ export class BuildingPanel {
         this.setItems([], 'none');
       }
       this.refreshUpgrade(entity, inReach);
+      this.refreshGear(entity, inReach);
     }
 
+    this.finish(stats, lines, ratio, barClass, meterValue, meterLabel);
+  }
+
+  /** La base mutante : la même fenêtre, sans bouton ni coffre. */
+  private refreshBase(base: EnemyBase): void {
+    const text = t().panel.enemyBase;
+    const level = enemyBaseLevel(base.level);
+    const gear = t().gear[base.level] ?? '';
+    const meterValue = `${base.hp}/${level.hp}`;
+
+    this.title.textContent = t().enemyBase.label;
+    this.description.textContent = t().enemyBase.description;
+
+    const thumb = enemyBaseIconUrl();
+
+    if (this.thumb.src !== thumb) this.thumb.src = thumb;
+    this.root.dataset['kind'] = 'enemyBase';
+    this.infoButton.hidden = false;
+    this.research.root.hidden = true;
+    for (const part of [this.crew, this.upgrade, this.gear, this.stock]) part.hidden = true;
+    this.exchange.show(null);
+    this.tabs.setAvailable('inventory', false);
+    for (const button of [this.pauseButton, this.repairButton, this.transferButton, this.cancelButton]) button.hidden = true;
+    delete this.items.dataset['layout'];
+    this.setItems([], 'none');
+
+    const stats: Stat[] = [
+      { icon: 'mutant', value: String(base.level), label: text.level(base.level) },
+      { icon: 'range', value: String(level.zoneRadius), label: text.zone(level.zoneRadius) },
+    ];
+    const lines = [
+      text.required(gear, base.level),
+      canDamage(base, this.world.player.gear) ? text.ready : text.weak,
+      text.prestige(level.prestige),
+    ];
+
+    this.finish(stats, lines, base.hp / level.hp, 'hp', meterValue, t().panel.hp(meterValue));
+  }
+
+  /** Puces, lignes, barre : la fin commune d'un bâtiment et d'une base. */
+  private finish(stats: readonly Stat[], lines: readonly string[], ratio: number, barClass: string, meterValue: string, meterLabel: string): void {
     this.setStats(stats);
 
     // Plus aucun bouton à montrer : la rangée disparaît.
@@ -934,6 +1044,54 @@ export class BuildingPanel {
       }),
     );
     this.upgradeButton.textContent = action;
+  }
+
+  /** L'arc suivant, sur la forge : son coût, ce qui manque, « Forger l'arc » ; ou le meilleur arc déjà en main. */
+  private refreshGear(entity: Building, inReach: boolean): void {
+    this.gear.hidden = entity.proto !== GEAR_WORKSHOP;
+    if (this.gear.hidden) return;
+
+    const level = this.world.player.gear;
+    const missing = this.world.gearMissing(entity);
+    const short = missing !== null && Object.keys(missing).length > 0;
+    const text = t().panel.gear;
+
+    this.gearButton.disabled = missing === null || !inReach || short;
+
+    const key = `${level}:${inReach}:${JSON.stringify(missing)}`;
+
+    if (key === this.lastGear) return;
+    this.lastGear = key;
+
+    const current = text.current(t().gear[level] ?? '', level);
+
+    if (missing === null) {
+      this.gearText.textContent = `${current} · ${text.best}`;
+      this.gearCost.replaceChildren();
+      this.gearCost.hidden = true;
+      this.gearButton.textContent = t().panel.maxLevel;
+      return;
+    }
+
+    this.gearText.textContent = `${current} · ${text.next(t().gear[level + 1] ?? '', level + 1)}${inReach ? '' : text.comeCloser}`;
+    this.gearCost.hidden = false;
+    this.gearCost.replaceChildren(
+      ...(Object.entries(gearOf(level + 1).cost) as [ItemId, number][]).map(([item, needed]) => {
+        const row = itemAmount(item, needed);
+        const lacking = missing[item] ?? 0;
+
+        if (lacking > 0) {
+          const note = document.createElement('span');
+
+          row.dataset['missing'] = 'true';
+          note.className = 'item-missing';
+          note.textContent = t().panel.upgrade.lacking(lacking);
+          row.append(note);
+        }
+        return row;
+      }),
+    );
+    this.gearButton.textContent = text.button;
   }
 
   /** Les lignes d'objets ne sont reconstruites que si leur clé change. */

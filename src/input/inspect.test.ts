@@ -98,7 +98,7 @@ describe('personAt', () => {
 });
 
 describe('tap dans le vide', () => {
-  const world = { eve: () => null, mobiles: new Map(), entities: new Map([[1, HALL]]) } as unknown as World;
+  const world = { eve: () => null, mobiles: new Map(), entities: new Map([[1, HALL]]), enemyBases: [] } as unknown as World;
 
   function inspector(open: boolean): { inspect: Inspect; taps: number[]; dismissed: () => number } {
     const taps: number[] = [];

@@ -229,6 +229,24 @@ export type Entity =
 
 export type Building = Exclude<Entity, Site>;
 
+/**
+ * Une base mutante (`data/enemyBases.ts`) : tirée de la seed autour de la
+ * mairie, elle tient une zone où l'on ne bâtit ni ne récolte. Elle n'est ni
+ * une entité ni un mobile : elle ne dort pas, ne bouge pas, et seul l'arc
+ * d'Adam la touche. Abattue, elle reste dans la liste à zéro point de vie —
+ * elle ne revient jamais.
+ */
+export interface EnemyBase {
+  id: number;
+  /** Tuile d'origine (coin haut-gauche de l'emprise, `ENEMY_BASE.width × height`). */
+  tx: number;
+  ty: number;
+  /** Son niveau : celui de son anneau, et celui de l'équipement qu'il faut pour l'entamer. */
+  level: number;
+  /** Points de vie restants ; 0 : détruite. */
+  hp: number;
+}
+
 export type Facing = 'down' | 'up' | 'left' | 'right';
 
 export interface Player {
@@ -250,6 +268,8 @@ export interface Player {
   target: MobileId | null;
   /** Points de vie : les crabes pincent, les loups mordent. À zéro, Adam se réveille à la mairie. */
   hp: number;
+  /** Niveau de son équipement (`data/gear.ts`) : 0, l'arc de fortune. Il dit quelles bases mutantes il entame. */
+  gear: number;
   /** Ticks depuis le dernier coup reçu : Adam ne récupère qu'au calme. */
   calmTicks: number;
   /** Son âge, en années : une de plus à chaque aube (`data/inhabitants.ts`). */
@@ -354,6 +374,8 @@ export interface Arrow extends Moving {
   /** Ticks de vol restants ; à zéro, la flèche se perd. */
   ttl: number;
   damage: number;
+  /** La base mutante visée : la flèche la frappe en traversant son emprise. Absent : elle ne vise que les ennemis. */
+  baseId?: number;
 }
 
 /**

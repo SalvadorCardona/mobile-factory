@@ -94,6 +94,12 @@ export type Command =
    */
   | { type: 'upgradeBuilding'; id: EntityId }
   /**
+   * Forge l'arc du niveau suivant (`data/gear.ts`) depuis la fenêtre de la
+   * forge (`GEAR_WORKSHOP`) : payé d'un coup, le sac d'abord, puis la ville
+   * si la forge est dans son rayon. Adam doit être à portée de la forge.
+   */
+  | { type: 'craftGear'; forge: EntityId }
+  /**
    * Répare un bâtiment abîmé au bois (`REPAIR`) : ce qu'il faut pour le
    * remettre à neuf, le sac d'abord, puis la ville dans son rayon. Le bouton
    * « Réparer » de sa fenêtre.
@@ -247,6 +253,17 @@ export type UpgradeRejection =
   /** Un étage d'antenne ne s'achète pas : il se livre, comme un chantier (`supplyBuilding`). */
   | 'delivered';
 
+/** Motif de refus d'un équipement à forger — remonté à l'UI par un événement. */
+export type GearRejection =
+  /** La forge n'existe plus, n'est qu'un chantier, ou ne forge pas d'équipement. */
+  | 'missing'
+  /** Adam est trop loin de la forge. */
+  | 'outOfReach'
+  /** Adam a déjà le meilleur arc. */
+  | 'maxLevel'
+  /** Ni le sac, ni la ville à portée n'ont tout le coût. */
+  | 'missingItems';
+
 /** Pourquoi une tuile d'un tracé de route n'a pas été pavée — remonté à l'UI par un événement. */
 export type RoadRejection =
   /** De l'eau : on ne pave pas un lac. */
@@ -255,6 +272,8 @@ export type RoadRejection =
   | 'occupied'
   /** Un arbre ou un rocher : il faut le récolter d'abord. */
   | 'resource'
+  /** Une base mutante tient la zone : on n'y pave pas tant qu'elle est debout. */
+  | 'enemyZone'
   /** Plus de pierre, ni dans le sac, ni en ville à portée. */
   | 'noStone';
 
@@ -279,6 +298,8 @@ export type PlacementRejection =
    * ou finir l'acte I (`unlockObjective`).
    */
   | 'locked'
+  /** Une base mutante tient la zone : on n'y bâtit pas tant qu'elle est debout. */
+  | 'enemyZone'
   /** Un seul par colonie, et il y en a déjà un — chantier compris. */
   | 'unique';
 

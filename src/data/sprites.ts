@@ -29,6 +29,7 @@ import { CRAB } from '../art/crab.ts';
 import { CRACK } from '../art/crack.ts';
 import { DECOR_ART } from '../art/decor.ts';
 import { DRILL } from '../art/drill.ts';
+import { ENEMY_BASE_SPRITE } from '../art/enemyBase.ts';
 import { EX_MUTANT_SPRITE } from '../art/exMutant.ts';
 import { EVE_SPRITE } from '../art/eve.ts';
 import { FARM } from '../art/farm.ts';
@@ -110,6 +111,8 @@ export const SPRITES = {
   puddle: PUDDLE,
   /** Le butin qu'ils lâchent : un morceau par objet. */
   loot: LOOT,
+  /** La base mutante, et la pancarte de son niveau (`sign1` à `sign3`). */
+  enemyBase: ENEMY_BASE_SPRITE,
 
   tree: TREE,
   treePine: TREE_PINE,

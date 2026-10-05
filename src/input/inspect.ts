@@ -21,6 +21,9 @@
  * pas son cadre, pour qu'un ouvrier devant une porte n'empêche pas d'ouvrir
  * le bâtiment.
  *
+ * Une base mutante aussi : un doigt sur son campement ouvre sa fenêtre
+ * d'info (`onBase`), comme un bâtiment.
+ *
  * Une fenêtre de bâtiment ouverte (`canDismiss`), un tap dans le vide la
  * ferme (`onDismiss`) — et son cadre de sélection avec elle. Fenêtre
  * fermée, le vide n'est pas revendiqué : il reste au joystick et au placement.
@@ -31,8 +34,10 @@
 
 import { TILE_SIZE } from '../core/grid.ts';
 import { BUILDINGS } from '../data/buildings.ts';
+import { ENEMY_BASE } from '../data/enemyBases.ts';
 import { SPRITES } from '../data/sprites.ts';
-import type { Entity, EntityId, Eve, Mobile, MobileId } from '../sim/types.ts';
+import { isStanding } from '../sim/enemyBases.ts';
+import type { EnemyBase, Entity, EntityId, Eve, Mobile, MobileId } from '../sim/types.ts';
 import type { World } from '../sim/world.ts';
 import { TAP_SLOP, type PointerConsumer, type PointerSample } from './pointer.ts';
 
@@ -45,8 +50,13 @@ const PERSON_TOP = 34;
 const KID_TOP = 24;
 const PERSON_BELOW = 4;
 
-/** Ce que le doigt vise : un bâtiment, Ève, un habitant, ou le vide (pour fermer la fenêtre ouverte). */
-type Target = { kind: 'building'; id: EntityId } | { kind: 'eve' } | { kind: 'person'; id: MobileId } | { kind: 'nothing' };
+/** Ce que le doigt vise : un bâtiment, une base mutante, Ève, un habitant, ou le vide (pour fermer la fenêtre ouverte). */
+type Target =
+  | { kind: 'building'; id: EntityId }
+  | { kind: 'enemyBase'; id: number }
+  | { kind: 'eve' }
+  | { kind: 'person'; id: MobileId }
+  | { kind: 'nothing' };
 
 export class Inspect implements PointerConsumer {
   private pointerId: number | null = null;
@@ -63,6 +73,7 @@ export class Inspect implements PointerConsumer {
   private readonly onPerson: (id: MobileId) => void;
   private readonly canDismiss: () => boolean;
   private readonly onDismiss: () => void;
+  private readonly onBase: (id: number) => void;
 
   public constructor(
     world: World,
@@ -73,6 +84,7 @@ export class Inspect implements PointerConsumer {
     onPerson: (id: MobileId) => void = () => {},
     canDismiss: () => boolean = () => false,
     onDismiss: () => void = () => {},
+    onBase: (id: number) => void = () => {},
   ) {
     this.world = world;
     this.screenToWorld = screenToWorld;
@@ -82,6 +94,7 @@ export class Inspect implements PointerConsumer {
     this.onPerson = onPerson;
     this.canDismiss = canDismiss;
     this.onDismiss = onDismiss;
+    this.onBase = onBase;
   }
 
   public onDown(sample: PointerSample): boolean {
@@ -123,6 +136,9 @@ export class Inspect implements PointerConsumer {
       case 'nothing':
         this.onDismiss();
         return;
+      case 'enemyBase':
+        this.onBase(target.id);
+        return;
       case 'building':
         // Le bâtiment doit encore exister au relâchement : un mutant a pu le raser entre-temps.
         if (this.world.entities.has(target.id)) this.onTap(target.id);
@@ -148,7 +164,11 @@ export class Inspect implements PointerConsumer {
 
     const building = buildingAt(this.world.entities.values(), position.x, position.y);
 
-    return building === undefined ? undefined : { kind: 'building', id: building };
+    if (building !== undefined) return { kind: 'building', id: building };
+
+    const base = enemyBaseAt(this.world.enemyBases, position.x, position.y);
+
+    return base === undefined ? undefined : { kind: 'enemyBase', id: base };
   }
 }
 
@@ -211,4 +231,19 @@ export function buildingAt(entities: Iterable<Entity>, x: number, y: number): En
     foundBottom = bottom;
   }
   return found;
+}
+
+/** La base mutante debout dessinée sous un point monde : son emprise et le campement qui la dépasse. */
+export function enemyBaseAt(bases: Iterable<EnemyBase>, x: number, y: number): number | undefined {
+  const art = SPRITES[ENEMY_BASE.sprite];
+
+  for (const base of bases) {
+    if (!isStanding(base)) continue;
+
+    const left = base.tx * TILE_SIZE;
+    const bottom = (base.ty + ENEMY_BASE.height) * TILE_SIZE;
+
+    if (x >= left && x < left + art.width && y >= bottom - art.height && y < bottom) return base.id;
+  }
+  return undefined;
 }

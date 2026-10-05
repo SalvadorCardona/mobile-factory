@@ -141,6 +141,23 @@ export const panel: Messages['panel'] = {
     lureTonight: 'Tonight, every wave is marching on it.',
   },
 
+  enemyBase: {
+    level: (level: number): string => `Level ${level}`,
+    zone: (tiles: number): string => `Held zone: no harvesting or building within ${tiles} tiles`,
+    required: (gear: string, level: number): string => `Required gear: ${gear} (level ${level})`,
+    weak: 'You need better gear: your arrows do nothing to it. Forge a better bow at the forge.',
+    ready: 'Your bow can damage it: get closer, it shoots on its own.',
+    prestige: (amount: number): string => `Destroyed, it gives ${amount} Prestige and frees its zone.`,
+  },
+
+  gear: {
+    current: (gear: string, level: number): string => `Your bow: ${gear} (level ${level})`,
+    next: (gear: string, level: number): string => `Forge: ${gear} — damages level ${level} bases`,
+    button: 'Forge the bow',
+    best: 'You have the best bow.',
+    comeCloser: ' — get closer.',
+  },
+
   clinic: {
     beds: (used: number, beds: number): string => `Beds taken: ${used}/${beds}`,
     full: 'Full: defeated mutants no longer drop stunned for it.',
@@ -206,12 +223,14 @@ export const panel: Messages['panel'] = {
     rock: { text: 'A rock is in the way', remedy: 'Adam can break it' },
     trees: { text: 'Trees in the way', remedy: 'Adam can chop them' },
     tree: { text: 'A tree is in the way', remedy: 'Adam can chop it' },
+    enemyZone: { text: 'A mutant base holds this zone', remedy: 'Take it down with a bow of its level' },
     extracts: (item: string): string => `Will extract: ${item}`,
     roads: {
       noStone: { text: 'Out of stone for the rest', remedy: 'Break some rocks, or draw within the town hall radius' },
       terrain: { text: 'Not on water', remedy: '' },
       occupied: { text: 'A building is on the path', remedy: '' },
       resource: { text: 'A tree or rock is in the way', remedy: 'Adam can harvest it' },
+      enemyZone: { text: 'A mutant base holds the zone', remedy: 'Take it down with a bow of its level' },
     },
   },
 };

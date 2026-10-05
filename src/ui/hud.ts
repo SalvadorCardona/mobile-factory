@@ -547,6 +547,19 @@ export class Hud {
       for (const [item, amount] of fromBag) this.float(item, -amount);
       if (entity) this.celebrate(entity, t().hud.float.upgraded(levelLabel(entity.proto, level)));
     });
+    world.events.on('enemyBaseResisted', ({ level }) =>
+      this.notify(t().hud.toast.betterGear(t().gear[Math.min(level, t().gear.length - 1)] ?? '', level), 'bad'),
+    );
+    world.events.on('enemyZoneEntered', ({ level }) => this.notify(t().hud.toast.enemyZone(level), 'info'));
+    // Le « +N Prestige » monte déjà de la base (`prestigeGained`) : il ne reste que le bandeau.
+    world.events.on('enemyBaseDestroyed', ({ prestige }) => this.notify(t().hud.toast.baseDestroyed(prestige), 'good'));
+    world.events.on('gearCrafted', ({ level, fromBag }) => {
+      for (const [item, amount] of fromBag) this.float(item, -amount);
+      this.notify(t().hud.toast.gearCrafted(t().gear[level] ?? '', level), 'good');
+    });
+    world.events.on('gearRejected', ({ reason }) => {
+      if (reason !== 'missing') this.notify(t().hud.gear[reason], 'bad');
+    });
     world.events.on('upgradeRejected', ({ reason }) => {
       if (reason === 'outOfReach') this.notify(t().hud.rejection.outOfReach, 'bad');
       if (reason === 'missingItems') this.notify(t().hud.toast.upgradeMissing, 'bad');
@@ -1090,7 +1103,7 @@ export class Hud {
   }
 
   /** « Mairie bâtie ! » qui monte du toit d'un bâtiment achevé et s'efface. */
-  private celebrate(entity: Entity, message: string): void {
+  private celebrate(entity: Pick<Entity, 'tx' | 'ty' | 'width' | 'height'>, message: string): void {
     const { x, y } = this.project((entity.tx + entity.width / 2) * TILE_SIZE, (entity.ty - 1) * TILE_SIZE);
     const floater = element('span', 'hud-built');
 

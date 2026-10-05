@@ -44,8 +44,15 @@ export function isTree(resources: ResourceIndex, tx: number, ty: number): boolea
   return resources.at(tx, ty)?.id === 'tree';
 }
 
-/** Les arbres encore debout dans le rayon, du plus proche du centre au plus loin. */
-export function treesInRange(camp: LumberCamp, resources: ResourceIndex): (TreeTile & { d2: number })[] {
+/**
+ * Les arbres encore debout dans le rayon, du plus proche du centre au plus loin.
+ * `allowed` : la tuile se récolte-t-elle ? Pas dans la zone d'une base mutante debout.
+ */
+export function treesInRange(
+  camp: LumberCamp,
+  resources: ResourceIndex,
+  allowed: (tx: number, ty: number) => boolean = () => true,
+): (TreeTile & { d2: number })[] {
   const { x, y } = centerOf(camp);
   const span = Math.ceil(LUMBERJACKS.radius);
   const cx = camp.tx + Math.floor(camp.width / 2);
@@ -54,7 +61,7 @@ export function treesInRange(camp: LumberCamp, resources: ResourceIndex): (TreeT
 
   for (let ty = cy - span - 1; ty <= cy + span; ty += 1) {
     for (let tx = cx - span - 1; tx <= cx + span; tx += 1) {
-      if (!inCutRange(camp, tx, ty) || !isTree(resources, tx, ty)) continue;
+      if (!inCutRange(camp, tx, ty) || !isTree(resources, tx, ty) || !allowed(tx, ty)) continue;
       trees.push({ tx, ty, d2: distanceSq(x, y, (tx + 0.5) * TILE_SIZE, (ty + 0.5) * TILE_SIZE) });
     }
   }
@@ -73,8 +80,9 @@ export function pickTree(
   resources: ResourceIndex,
   claimed: ReadonlySet<string>,
   clear: LineTest,
+  allowed: (tx: number, ty: number) => boolean = () => true,
 ): TreeTile | null {
-  for (const tree of treesInRange(camp, resources)) {
+  for (const tree of treesInRange(camp, resources, allowed)) {
     if (claimed.has(coordKey(tree.tx, tree.ty))) continue;
 
     const spot = chopSpot(tree);

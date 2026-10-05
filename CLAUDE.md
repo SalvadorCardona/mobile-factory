@@ -287,6 +287,22 @@ ruine rebâtie ne paie pas), chaque ennemi vaincu `KILL_PRESTIGE` ;
 événement `prestigeGained`, « +N Prestige » flottant, carte sous la ville
 au HUD. Rien ne le dépense encore.
 
+**Bases mutantes** (`src/data/enemyBases.ts`, `src/sim/enemyBases.ts`) —
+à la création de la partie, des anneaux de campements (`ENEMY_BASE_RINGS` :
+34, 54, 76 tuiles de la mairie, niveaux 1 à 3) se tirent de la seed, sans
+PRNG du monde, sur des emprises libres ; la clairière (22 tuiles au moins)
+reste à bâtir. Une base debout tient une zone (`zoneRadius`, disque fluo
+pâle au sol, `render/enemyBaseLayer.ts`) : ni chantier (refus
+`enemyZone`), ni route, ni récolte d'Adam ou des bûcherons
+(`World.enemyZoneAt`) ; les mutants des vagues passent. Son emprise arrête
+Adam ; son arc la vise quand aucun ennemi n'est à portée, mais ne l'entame
+qu'avec un **arc** de son niveau au moins (`player.gear`, `data/gear.ts`,
+forgé dans la fenêtre de la forge, commande `craftGear`) — sinon « Il vous
+faut un meilleur équipement ». Abattue, elle reste à zéro PV dans
+`World.enemyBases` (sauvegardé) : zone libre, `World.prestige` monte, butin
+au sol. Un tap ouvre sa fenêtre (`BuildingPanel.showBase`). Une sauvegarde
+d'avant les pose au chargement, sauf là où le bâti tient déjà la zone.
+
 **Faune** — en plus des mutants, des **crabes** vivent sur le sable et des
 **loups** au cœur des forêts (`WILDLIFE`, `src/data/enemies.ts` ;
 `src/sim/wildlife.ts`). Leurs tanières se tirent de la seed par chunk ; une

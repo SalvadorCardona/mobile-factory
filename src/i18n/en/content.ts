@@ -213,6 +213,11 @@ export const content: Content = {
     crab: 'Ruin crab',
     wolf: 'Indigo wolf',
   },
+  enemyBase: {
+    label: 'Mutant base',
+    description: 'A camp of ruins and glowing puddles. While it stands, nobody builds or harvests in its zone.',
+  },
+  gear: ['Makeshift bow', 'Iron-bound bow', 'Composite bow', 'Radioactive bow'],
   tools: {
     axe: 'Sharpened axe',
     pickaxe: 'Scrap pickaxe',
