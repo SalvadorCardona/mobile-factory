@@ -52,3 +52,20 @@ export const ROCK_OF_ORE: Partial<Record<ItemId, ResourceId>> = {
   coal: 'coalRock',
   stone: 'stoneRock',
 };
+
+/**
+ * Un arbre planté par le forestier : pousse, jeune arbre, puis arbre adulte
+ * — un `tree` comme un autre, qu'on coupe. Avant, il ne se coupe pas, ne se
+ * récolte pas et n'arrête personne. L'âge se compte en ticks depuis la
+ * plantation : du temps de jeu, qui ne passe pas en pause.
+ */
+export const SAPLING = {
+  /** Ticks de pousse avant de devenir un jeune arbre : une minute. */
+  youngTicks: 1200,
+  /** Ticks avant d'être un arbre adulte, à couper : trois minutes. */
+  adultTicks: 3600,
+  /** Ticks entre deux passages de croissance : la pousse n'a pas besoin de mieux. */
+  passTicks: 20,
+  /** Les essences d'un arbre planté : on ne plante pas d'arbre mort. */
+  sprites: ['tree', 'treePine'],
+} as const satisfies { sprites: readonly SpriteId[] } & Record<string, unknown>;

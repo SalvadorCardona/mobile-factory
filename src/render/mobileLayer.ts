@@ -41,7 +41,7 @@
  * tête tant que son job est ramassé. Un ex-mutant a son propre pantin, un
  * logisticien aussi : sa charge dépasse de la caisse qu'il a au dos. Un
  * bûcheron abat sa hache sur l'arbre qu'il coupe, et rapporte son bois sur
- * la tête.
+ * la tête ; un forestier enfonce sa bêche là où il plante.
  *
  * Un enfant sautille : il court à petits bonds et saute sur place. Un
  * ouvrier qui glande (`World.isIdle`) et s'arrête prend une pose tirée au
@@ -58,10 +58,10 @@ import { TILE_SIZE, floorDiv } from '../core/grid.ts';
 import { PALETTE, hex } from '../data/artDirection.ts';
 import { ENEMIES, LOOT_DROPS, WILDLIFE } from '../data/enemies.ts';
 import { SPRITES } from '../data/sprites.ts';
-import type { Lumberjack, Mobile, MobileId, Mutant, Pickup, Worker } from '../sim/types.ts';
+import type { Mobile, MobileId, Mutant, Pickup } from '../sim/types.ts';
 import { terrainAt } from '../sim/terrain.ts';
 import { isDeprived } from '../sim/needs.ts';
-import type { Inhabitant, World } from '../sim/world.ts';
+import type { Inhabitant, Laborer, World } from '../sim/world.ts';
 import { Puppet, type Lounge, type PuppetId } from './puppet.ts';
 import type { SpriteLibrary } from './spriteLibrary.ts';
 import type { TerrainTiles } from './terrainTiles.ts';
@@ -153,6 +153,8 @@ function puppetOf(
         : { id: 'worker', shadowWidth: 16, stride: 3 };
     case 'lumberjack':
       return { id: 'lumberjack', shadowWidth: 16, stride: 3 };
+    case 'forester':
+      return { id: 'forester', shadowWidth: 16, stride: 3 };
     case 'beast':
       return mobile.proto === 'crab'
         ? { id: WILDLIFE.crab.sprite, shadowWidth: 22, stride: 8, gait: 'scuttle' }
@@ -371,6 +373,18 @@ export class MobileLayer {
           break;
         }
 
+        case 'forester': {
+          const puppet = view.puppet!;
+
+          view.root.zIndex = y + 6;
+          view.root.visible = !mobile.inside;
+          this.ground(view, x, y);
+          this.loiter(view, mobile, deltaMs);
+          this.starve(view, mobile);
+          puppet.update(deltaMs, view.lounge ? 'down' : mobile.facing, mobile.state === 'plant' ? 'act' : mobile.moving ? 'walk' : 'idle');
+          break;
+        }
+
         case 'mutant':
         case 'beast':
         case 'kid':
@@ -445,7 +459,7 @@ export class MobileLayer {
    * adossé, il s'étire, il bâille. Dès qu'il marche — il flâne, ou un
    * travail l'appelle —, il se relève.
    */
-  private loiter(view: MobileView, mobile: Worker | Lumberjack, deltaMs: number): void {
+  private loiter(view: MobileView, mobile: Laborer, deltaMs: number): void {
     const puppet = view.puppet!;
 
     if (mobile.moving || !this.world.isIdle(mobile)) {
@@ -714,7 +728,7 @@ export class MobileLayer {
 
       let hungry: Sprite | null = null;
 
-      if (mobile.kind === 'kid' || mobile.kind === 'worker' || mobile.kind === 'lumberjack') {
+      if (mobile.kind === 'kid' || mobile.kind === 'worker' || mobile.kind === 'lumberjack' || mobile.kind === 'forester') {
         hungry = new Sprite(this.library.part('hungry', 'bubble'));
         hungry.anchor.set(SPRITES.hungry.anchorX, SPRITES.hungry.anchorY);
         hungry.visible = false;

@@ -154,6 +154,20 @@ export function hammer(x: number, y: number): string {
 }
 
 /**
+ * La bêche, tenue manche en main en (x, y) : le manche droit, la poignée en
+ * travers au-dessus de la main, le fer cyan plat en bas — c'est lui qui s'enfonce.
+ */
+export function spade(x: number, y: number): string {
+  return (
+    line(x, y - 9, x + 1.5, y + 4, orange.shade) +
+    pill(x - 2.5, y - 11, 6, 2.4, orange.base) +
+    rect(x - 1.5, y + 3, 6, 6.5, cyan.shade, 2) +
+    rect(x - 1.5, y + 3, 6, 5, cyan.base, 2) +
+    pill(x - 0.8, y + 3.6, 2.4, 1.3, cyan.light)
+  );
+}
+
+/**
  * La pioche, tenue manche en main en (x, y) : un fer cyan long et fin, en
  * travers du manche, à deux pointes — la hache, elle, n'a qu'un tranchant carré.
  */

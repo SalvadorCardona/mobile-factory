@@ -110,8 +110,20 @@ La **cabane de bûcheron** loge deux **bûcherons** (mobile `lumberjack`,
 mint au placement et à la sélection), réservé — jamais deux sur le même —,
 coupé une unité par coup comme par Adam, le bois rapporté au coffre de la
 cabane, que les porteurs vident (priorité d'une foreuse). Coffre plein, ils
-attendent devant la porte. Depuis sa fenêtre, un producteur (foreuse,
-ferme, forge, nurserie, cabane) se met **en pause** (`pauseBuilding` : il ne
+attendent devant la porte.
+La **maison du forestier** (`foresterHouse`, un ouvrier) loge un
+**forestier** (mobile `forester`, `FORESTERS` dans `src/data/workers.ts`,
+carré dans `src/sim/forester.ts`) : il plante un carré de `FORESTERS.plot`
+cases centré sur la maison (emprise et allée exclues), rang par rang, une
+pousse par case d'herbe nue — ni eau, ni bâti, ni route, ni filon
+(`World.forestPlot`). La pousse grandit au temps de jeu (`SAPLING`,
+`data/resources.ts` : pousse, jeune arbre, arbre) ; avant d'être adulte,
+elle n'est pas une ressource — ni coupée, ni récoltée, ni solide. Abattu,
+l'arbre libère sa case, que le forestier replante. Les arbres plantés
+(`ResourceIndex.planted` : tick de plantation, unités prises) sont
+sauvegardés sous `planted`. Carré mint au placement et à la sélection.
+Depuis sa fenêtre, un producteur (foreuse,
+ferme, forge, nurserie, cabane, maison du forestier) se met **en pause** (`pauseBuilding` : il ne
 produit ni ne consomme, ses ouvriers finissent leur geste, bulle ⏸ et sprite
 pâli sur la carte), et un bâtiment qui emploie règle ses ouvriers entre
 `minWorkers` et `workers` (`setWorkers`, sélecteur − / + ; zéro vaut pause) :

@@ -12,6 +12,10 @@
  * disparue) — par Adam ou par la hache d'un bûcheron —, et elle **tremble** : un minuteur de vue, la simulation n'en
  * sait rien. Un chunk sali par la simulation est reconstruit en entier.
  *
+ * Les arbres que plante le forestier y vivent aussi : pousse, puis jeune
+ * arbre (`sapling`), puis un arbre comme les autres — jamais un arbre mort.
+ * Un changement de stade salit le chunk, qui se reconstruit.
+ *
  * Pendant un placement, l'arbre ou le rocher qui empêche de poser
  * **clignote** : c'est lui qu'Adam doit aller heurter.
  *
@@ -24,8 +28,8 @@ import { Sprite } from 'pixi.js';
 import { CHUNK_TILES, TILE_SIZE, coordKey, floorDiv, type TileCoord } from '../core/grid.ts';
 import { hash3 } from '../core/rng.ts';
 import { LIGHT } from '../data/artDirection.ts';
-import { RESOURCES } from '../data/resources.ts';
-import { SPRITES } from '../data/sprites.ts';
+import { RESOURCES, SAPLING } from '../data/resources.ts';
+import { SPRITES, type SpriteId } from '../data/sprites.ts';
 import { terrainAt } from '../sim/terrain.ts';
 import type { World } from '../sim/world.ts';
 import type { Camera } from './camera.ts';
@@ -44,6 +48,8 @@ const BLINK_MIN_ALPHA = 0.35;
 /** Largeur de l'ombre portée d'un arbre et d'un rocher. */
 const TREE_SHADOW = 34;
 const ROCK_SHADOW = 28;
+/** Celle d'une pousse et d'un jeune arbre du forestier. */
+const SAPLING_SHADOW = { sprout: 12, young: 20 } as const;
 
 interface ResourceView {
   sprite: Sprite;
@@ -87,6 +93,8 @@ export class ResourceLayer {
     world.events.on('resourceHarvested', (event) => struck(event, event.item === 'wood'));
     // Un coup de hache de bûcheron fait trembler l'arbre comme un passage d'Adam.
     world.events.on('treeChopped', (event) => struck(event, true));
+    // Une pousse qu'on vient de mettre en terre frémit.
+    world.events.on('treePlanted', (event) => struck(event, true));
   }
 
   /** `blocking` : les tuiles dont la ressource gêne le fantôme, à faire clignoter. */
@@ -165,11 +173,11 @@ export class ResourceLayer {
   private create(tx: number, ty: number): ResourceView | null {
     const resource = this.world.resources.at(tx, ty);
 
-    if (!resource) return null;
+    if (!resource) return this.createSapling(tx, ty);
 
     const { seed } = this.world;
-    // L'essence d'un arbre est tirée par tuile : elle reste la même une fois entamé.
-    const sprites = RESOURCES[resource.id].sprites;
+    // L'essence d'un arbre est tirée par tuile : elle reste la même une fois entamé. Le forestier ne plante pas d'arbre mort.
+    const sprites: readonly SpriteId[] = this.world.resources.isPlanted(tx, ty) ? SAPLING.sprites : RESOURCES[resource.id].sprites;
     const id = sprites[hash3(seed ^ 0x510e527f, tx, ty) % sprites.length]!;
     const proto = SPRITES[id];
     const part = resource.stage === 'damaged' ? 'damaged' : 'full';
@@ -192,6 +200,34 @@ export class ResourceLayer {
     shadow.anchor.set(0.5);
     shadow.width = width;
     shadow.height = width * 0.32;
+    shadow.position.set(baseX + LIGHT.shadowOffset.x, baseY + LIGHT.shadowOffset.y - 2);
+
+    this.sorted.addChild(sprite);
+    this.shadows.addChild(shadow);
+    return { sprite, shadow, baseX, key };
+  }
+
+  /** La pousse ou le jeune arbre qu'un forestier a planté en (tx, ty), ou `null`. */
+  private createSapling(tx: number, ty: number): ResourceView | null {
+    const stage = this.world.resources.sapling(tx, ty);
+
+    if (!stage) return null;
+
+    const proto = SPRITES.sapling;
+    const key = `sapling.${stage}`;
+    const baseX = (tx + 0.5) * TILE_SIZE;
+    const baseY = (ty + 1) * TILE_SIZE - 3;
+    const sprite = new Sprite(this.library.texture(key));
+
+    sprite.anchor.set(proto.anchorX, proto.anchorY);
+    sprite.position.set(baseX, baseY);
+    sprite.zIndex = (ty + 1) * TILE_SIZE;
+
+    const shadow = new Sprite(this.tiles.shadow(terrainAt(this.world.seed, tx, ty)));
+
+    shadow.anchor.set(0.5);
+    shadow.width = SAPLING_SHADOW[stage];
+    shadow.height = SAPLING_SHADOW[stage] * 0.32;
     shadow.position.set(baseX + LIGHT.shadowOffset.x, baseY + LIGHT.shadowOffset.y - 2);
 
     this.sorted.addChild(sprite);

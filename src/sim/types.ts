@@ -8,7 +8,7 @@
  * Deux familles :
  * - les **entités** posées sur la grille — chantiers et bâtiments — qui
  *   dorment entre deux réveils du scheduler ;
- * - les **mobiles** — mutants, bêtes, flèches, enfants, Ève, ouvriers, bûcherons, butin, patients, caravane — qui bougent à chaque tick.
+ * - les **mobiles** — mutants, bêtes, flèches, enfants, Ève, ouvriers, bûcherons, forestiers, butin, patients, caravane — qui bougent à chaque tick.
  *   Ils sont peu nombreux, et c'est ce qui rend le tick par mobile acceptable.
  */
 
@@ -185,6 +185,15 @@ export interface LumberCamp extends Built {
 }
 
 /**
+ * La maison du forestier : elle loge son forestier, qui plante un carré de
+ * forêt autour d'elle (`sim/forester.ts`). Les arbres sont à la carte
+ * (`ResourceIndex`), pas à elle : elle n'a rien d'autre à retenir.
+ */
+export interface ForesterHouse extends Built {
+  kind: 'foresterHouse';
+}
+
+/**
  * Le poste de logistique : il loge ses logisticiens, qui vident les
  * producteurs de son rayon (`LOGISTICIANS.radius`) dans la mairie. Il n'a
  * rien à lui : la charge en route est dans le job de chaque logisticien.
@@ -225,6 +234,7 @@ export type Entity =
   | Clinic
   | Lab
   | LumberCamp
+  | ForesterHouse
   | Depot
   | Yard
   | Antenna;
@@ -560,6 +570,36 @@ export interface Lumberjack extends Moving, Wandering, Needful {
 }
 
 /**
+ * Ce que fait un forestier :
+ * - `idle` : rien — il flâne devant sa maison, ou y dort la nuit ;
+ * - `toPlot` : il marche vers la case qu'il va planter ;
+ * - `plant` : il y plante une pousse, `FORESTERS.plantTicks` durant.
+ */
+export type ForesterState = 'idle' | 'toPlot' | 'plant';
+
+/**
+ * Le forestier de la maison du forestier. Il plante les cases libres de son
+ * carré l'une après l'autre, dans l'ordre (`plotTiles`), sans repasser chez
+ * lui entre deux : rien à rapporter.
+ */
+export interface Forester extends Moving, Wandering, Needful {
+  kind: 'forester';
+  /** Son âge, en années : une de plus à chaque aube. */
+  age: number;
+  /** La maison qui le loge, et dont il plante le carré. */
+  homeId: EntityId;
+  /** Vrai s'il est chez lui : invisible, immobile. */
+  inside: boolean;
+  state: ForesterState;
+  /** La case visée, `null` hors d'une plantation. */
+  plot: { tx: number; ty: number } | null;
+  /** Ticks avant que la pousse soit en terre. */
+  plantTicks: number;
+  /** Ticks avant de chercher à nouveau une case libre. */
+  searchTicks: number;
+}
+
+/**
  * Un tas au sol : du butin lâché par un ennemi abattu, ou ce qu'Adam a jeté
  * de son sac. Il attend qu'Adam marche dessus.
  */
@@ -636,7 +676,7 @@ export interface Caravan extends Moving {
   met: boolean;
 }
 
-export type Mobile = Mutant | Beast | Arrow | Kid | Eve | Worker | Lumberjack | Pickup | Patient | Caravan;
+export type Mobile = Mutant | Beast | Arrow | Kid | Eve | Worker | Lumberjack | Forester | Pickup | Patient | Caravan;
 
 /**
  * Les compteurs de la partie, que les objectifs lisent. Ils ne font que

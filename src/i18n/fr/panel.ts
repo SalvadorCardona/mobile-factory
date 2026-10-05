@@ -140,6 +140,21 @@ export const panel = {
     working: 'Les haches résonnent.',
   },
 
+  foresterHouse: {
+    saplings: (count: number): string => `${count} pousse${s(count)} en train de grandir`,
+    trees: (count: number): string => `${count} arbre${s(count)} adulte${s(count)}, bon${s(count)} à couper`,
+    free: (count: number): string => `${count} case${s(count)} libre${s(count)} à planter`,
+    plot: (side: number): string => `Forêt : un carré de ${side} × ${side} cases autour de la maison.`,
+    paused: 'En pause : le forestier laisse sa bêche et flâne.',
+    noOne: 'À l’arrêt : pas de forestier — ajoutez un ouvrier. Rien ne se plante.',
+    toPlot: 'Le forestier va planter la case suivante.',
+    planting: 'Le forestier met une pousse en terre.',
+    asleep: 'Le forestier dort : il replantera demain.',
+    seeking: 'Le forestier cherche une case libre.',
+    full: 'Forêt complète : le forestier replantera ce que les bûcherons couperont.',
+    nowhere: 'Aucune case à planter ici : eau, roche, routes ou bâtiments.',
+  },
+
   depot: {
     radius: (tiles: number): string => `Rayon : les logisticiens vident les producteurs à ${tiles} cases`,
     none: 'Aucun producteur à portée : ils flânent.',

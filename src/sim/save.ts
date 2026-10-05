@@ -27,6 +27,7 @@ import { OBJECTIVES } from '../data/objectives.ts';
 import { JOB_PRIORITY, type JobPriority } from '../data/workers.ts';
 import { PERKS, type PerkId } from '../data/perks.ts';
 import { RESEARCH, type ResearchId } from '../data/research.ts';
+import type { PlantedTree } from './resources.ts';
 import type { SchedulerSnapshot } from './scheduler.ts';
 import { ADAM_SALT, adultAge } from './inhabitants.ts';
 import { freshNeeds, fullNeeds } from './needs.ts';
@@ -40,6 +41,7 @@ import type {
   EntityId,
   EveState,
   Facing,
+  ForesterState,
   Job,
   LumberjackState,
   Mobile,
@@ -133,6 +135,11 @@ export interface WorldState {
   player: SavedPlayer;
   /** Tuiles entamées : `"tx,ty"` → unités déjà prises. */
   resources: Record<string, number>;
+  /**
+   * Arbres plantés par les forestiers : `"tx,ty"` → tick de plantation, qui
+   * dit leur stade, et unités déjà coupées. Absent d'avant le forestier : aucun.
+   */
+  planted?: Record<string, PlantedTree>;
   /** Tuiles pavées : `"cx,cy"` → index des tuiles dans le chunk. */
   roads: Record<string, number[]>;
   entities: SavedEntity[];
@@ -336,6 +343,8 @@ const TRADE_KINDS: readonly TradeOffer['kind'][] = ['surplus', 'loot', 'rare'];
 
 const LUMBERJACK_STATES: readonly LumberjackState[] = ['idle', 'toTree', 'chop', 'toCamp', 'wait'];
 
+const FORESTER_STATES: readonly ForesterState[] = ['idle', 'toPlot', 'plant'];
+
 function parseState(raw: unknown): WorldState {
   const state = record(raw);
 
@@ -371,6 +380,8 @@ function parseState(raw: unknown): WorldState {
     ...(state['enemyBases'] !== undefined && { enemyBases: unique(array(state['enemyBases']).map(parseEnemyBase)) }),
     player: parsePlayer(state['player']),
     resources: parseResources(state['resources']),
+    // Absents d'une sauvegarde d'avant le forestier : rien n'était planté.
+    planted: parsePlanted(state['planted'] ?? {}),
     // Absentes d'une sauvegarde d'avant les routes : rien n'était pavé.
     roads: parseRoads(state['roads'] ?? {}),
     entities: unique(array(state['entities']).map(parseEntity)),
@@ -445,6 +456,21 @@ function parseResources(raw: unknown): Record<string, number> {
     taken[key] = int(amount);
   }
   return taken;
+}
+
+function parsePlanted(raw: unknown): Record<string, PlantedTree> {
+  const planted: Record<string, PlantedTree> = {};
+
+  for (const [key, value] of Object.entries(record(raw))) {
+    if (!/^-?\d+,-?\d+$/.test(key)) throw new SaveError(`tuile illisible : ${key}`);
+
+    const tree = record(value);
+    const taken = int(tree['taken']);
+
+    if (taken < 0) throw new SaveError(`arbre planté entamé en négatif : ${key}`);
+    planted[key] = { tick: int(tree['tick']), taken };
+  }
+  return planted;
 }
 
 function parseRoads(raw: unknown): Record<string, number[]> {
@@ -527,6 +553,7 @@ function parseEntity(raw: unknown): SavedEntity {
     case 'house':
     case 'clinic':
     case 'lumberCamp':
+    case 'foresterHouse':
     case 'depot':
     case 'yard':
     case 'antenna':
@@ -677,6 +704,25 @@ function parseMobile(raw: unknown): Mobile {
         tree: tree === null ? null : { tx: int(record(tree)['tx']), ty: int(record(tree)['ty']) },
         chopTicks: int(mobile['chopTicks']),
         load: int(mobile['load']),
+        searchTicks: int(mobile['searchTicks']),
+        ...wandering(mobile, base),
+      };
+    }
+    case 'forester': {
+      const state = mobile['state'];
+      const plot = mobile['plot'];
+
+      if (!FORESTER_STATES.includes(state as ForesterState)) throw new SaveError(`forestier inconnu : ${String(state)}`);
+      return {
+        ...base,
+        kind: 'forester',
+        age: age(mobile['age']),
+        ...needful(mobile),
+        homeId: int(mobile['homeId']),
+        inside: bool(mobile['inside']),
+        state: state as ForesterState,
+        plot: plot === null ? null : { tx: int(record(plot)['tx']), ty: int(record(plot)['ty']) },
+        plantTicks: int(mobile['plantTicks']),
         searchTicks: int(mobile['searchTicks']),
         ...wandering(mobile, base),
       };

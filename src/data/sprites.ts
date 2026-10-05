@@ -33,6 +33,8 @@ import { ENEMY_BASE_SPRITE } from '../art/enemyBase.ts';
 import { EX_MUTANT_SPRITE } from '../art/exMutant.ts';
 import { EVE_SPRITE } from '../art/eve.ts';
 import { FARM } from '../art/farm.ts';
+import { FORESTER } from '../art/forester.ts';
+import { FORESTER_HOUSE } from '../art/foresterHouse.ts';
 import { CHARCOAL_KILN } from '../art/charcoalKiln.ts';
 import { FORGE } from '../art/forge.ts';
 import { KID } from '../art/kid.ts';
@@ -52,6 +54,7 @@ import { QUARRY } from '../art/quarry.ts';
 import { QUEEN_SPRITE } from '../art/queen.ts';
 import { PUDDLE } from '../art/puddle.ts';
 import { ROCK_COAL, ROCK_IRON, ROCK_STONE } from '../art/rocks.ts';
+import { SAPLING_SPRITE } from '../art/sapling.ts';
 import { STORE_FULL } from '../art/storeFull.ts';
 import { TARGET } from '../art/target.ts';
 import { TOWN_HALL } from '../art/townHall.ts';
@@ -90,6 +93,8 @@ export const SPRITES = {
   worker: WORKER,
   /** Un bûcheron : chemise à carreaux, barbe, et sa hache, qui s'abat à chaque coup. */
   lumberjack: LUMBERJACK,
+  /** Un forestier : chapeau de paille, tablier menthe, et sa bêche, qui s'enfonce à chaque coup. */
+  forester: FORESTER,
   /** Un logisticien : caisse sur le dos, casquette cyan ; la charge dépasse de la caisse. */
   logistician: LOGISTICIAN,
   /** Un bâtisseur : casque jaune, ceinture à outils, et son marteau, qui s'abat à chaque coup. */
@@ -120,6 +125,8 @@ export const SPRITES = {
   tree: TREE,
   treePine: TREE_PINE,
   treeDead: TREE_DEAD,
+  /** Un arbre du forestier qui pousse : `sprout`, puis `young` ; adulte, il prend le sprite d'un arbre. */
+  sapling: SAPLING_SPRITE,
   rockIron: ROCK_IRON,
   rockCoal: ROCK_COAL,
   rockStone: ROCK_STONE,
@@ -136,6 +143,7 @@ export const SPRITES = {
   clinic: CLINIC_SPRITE,
   lab: LAB,
   lumberCamp: LUMBER_CAMP,
+  foresterHouse: FORESTER_HOUSE,
   quarry: QUARRY,
   logisticsPost: LOGISTICS_POST,
   constructionPost: CONSTRUCTION_POST,
@@ -164,7 +172,7 @@ export const SPRITE_IDS = Object.keys(SPRITES) as SpriteId[];
 /** Noms de morceaux valides pour un sprite donné. */
 export type PartOf<S extends SpriteId> = keyof (typeof SPRITES)[S]['parts'] & string;
 
-/** Les morceaux qu'un marcheur (Adam, Ève, mutant, enfant, ouvrier, logisticien, bâtisseur, bûcheron, patient, ex-mutant) doit fournir. */
+/** Les morceaux qu'un marcheur (Adam, Ève, mutant, enfant, ouvrier, logisticien, bâtisseur, bûcheron, forestier, patient, ex-mutant) doit fournir. */
 export const WALKER_PARTS = ['down', 'up', 'side', 'foot'] as const;
 
 /** Les morceaux qu'un bâtiment doit fournir. */

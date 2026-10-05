@@ -48,6 +48,14 @@ export const content: Content = {
       effect: '2 lumberjacks fell nearby trees on their own.',
       upgrades: [],
     },
+    foresterHouse: {
+      label: 'Forester’s house',
+      siteDescription: 'A wheelbarrow of young plants and a spade stuck in the earth: the house is waiting for its walls.',
+      description:
+        'A little house with a mossy roof, its seedling pots and its watering can. The forester who lives here plants a square of young trees all around, row by row, and replants every tile the lumberjacks have cut.',
+      effect: '1 forester plants and replants a forest around it.',
+      upgrades: [],
+    },
     quarry: {
       label: 'Quarry',
       sign: 'Quarry',
@@ -435,5 +443,6 @@ export const content: Content = {
   testScenarios: {
     base: 'Small base',
     lab: 'Lab',
+    forest: 'Forester',
   },
 };
