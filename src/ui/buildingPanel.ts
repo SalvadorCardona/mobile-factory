@@ -59,8 +59,14 @@
  * d'onglets. L'onglet choisi tient tant que la fenêtre reste ouverte ; elle
  * se rouvre toujours sur « Bâtiment ».
  *
+ * La même fenêtre s'ouvre au tap sur une créature — un habitant ou un
+ * ennemi (`showCreature`) : son portrait et son nom en tête, ses points de
+ * vie pour un ennemi, son âge en puce, puis ce que le jeu sait d'elle —
+ * métier ou espèce, ce qu'elle fait, où elle loge, ce qu'elle porte
+ * (`creatureView.ts`). Rien d'autre : ni coffre, ni bouton.
+ *
  * Elle **lit** le monde à chaque frame tant qu'elle est ouverte, et se ferme
- * seule si l'entité disparaît — rasée par un mutant, par exemple.
+ * seule si l'entité disparaît — rasée par un mutant, ennemi abattu.
  */
 
 import { BUILDINGS, REPAIR, buildingLevel, maxLevel, nextUpgrade, type BuildingId, type BuildingLevel } from '../data/buildings.ts';
@@ -77,11 +83,12 @@ import { forgeRecipe } from '../sim/consumers.ts';
 import { canDamage, isStanding } from '../sim/enemyBases.ts';
 import { canPause } from '../sim/staffing.ts';
 import type { SiteLine } from '../sim/siteLedger.ts';
-import type { Building, EnemyBase, Entity, EntityId, Forge, Nursery } from '../sim/types.ts';
+import type { Building, EnemyBase, Entity, EntityId, Forge, MobileId, Nursery } from '../sim/types.ts';
 import { TICKS_PER_SECOND, repairCost, siteMissing, type SiteCoverage, type World } from '../sim/world.ts';
 import type { UiIcon } from '../art/ui.ts';
 import { onLocale, t } from '../i18n/locale.ts';
-import { buildingIcon, buildingIconUrl, enemyBaseIconUrl, itemAmount, uiIcon } from './icons.ts';
+import { creatureView, isCreature, type CreatureView } from './creatureView.ts';
+import { buildingIcon, buildingIconUrl, creatureIconUrl, enemyBaseIconUrl, itemAmount, uiIcon } from './icons.ts';
 import { PanelTabs } from './panelTabs.ts';
 import { ResearchPanel } from './researchPanel.ts';
 import { TransferPanel } from './transferPanel.ts';
@@ -161,6 +168,8 @@ export class BuildingPanel {
   private entityId: EntityId | null = null;
   /** La base mutante affichée, si c'est elle qu'on a tapée. */
   private baseId: number | null = null;
+  /** La créature affichée à la place d'un bâtiment, ou `null`. */
+  private creatureId: MobileId | null = null;
 
   private readonly world: World;
   private readonly onOpen: () => void;
@@ -405,10 +414,15 @@ export class BuildingPanel {
   }
 
   public get open(): boolean {
-    return this.entityId !== null || this.baseId !== null;
+    return this.entityId !== null || this.baseId !== null || this.creatureId !== null;
   }
 
-  /** Le bâtiment affiché, ou `null` si la fenêtre est fermée. */
+  /** La créature affichée, ou `null`. */
+  public get shownCreature(): MobileId | null {
+    return this.creatureId;
+  }
+
+  /** Le bâtiment affiché, ou `null` si la fenêtre est fermée ou montre une créature. */
   public get shown(): EntityId | null {
     return this.entityId;
   }
@@ -420,7 +434,8 @@ export class BuildingPanel {
 
     this.entityId = id;
     this.baseId = null;
-    this.reset();
+    this.creatureId = null;
+    this.reveal();
     this.refresh(entity);
     this.onOpen();
   }
@@ -433,12 +448,28 @@ export class BuildingPanel {
 
     this.entityId = null;
     this.baseId = id;
-    this.reset();
+    this.creatureId = null;
+    this.reveal();
     this.refreshBase(base);
     this.onOpen();
   }
 
-  private reset(): void {
+  /** Une créature — habitant ou ennemi — dans la même fenêtre qu'un bâtiment. */
+  public showCreature(id: MobileId): void {
+    const mobile = this.world.mobiles.get(id);
+
+    if (!mobile || !isCreature(mobile)) return;
+
+    this.entityId = null;
+    this.baseId = null;
+    this.creatureId = id;
+    this.reveal();
+    this.refreshCreature(creatureView(this.world, mobile));
+    this.onOpen();
+  }
+
+  /** Ouvre la fenêtre, caches vidés, sans rien de l'occupant précédent. */
+  private reveal(): void {
     this.root.hidden = false;
     this.lastText = '';
     this.lastStats = null;
@@ -456,6 +487,7 @@ export class BuildingPanel {
   public close(): void {
     this.entityId = null;
     this.baseId = null;
+    this.creatureId = null;
     this.hideTip();
     this.root.hidden = true;
   }
@@ -468,6 +500,13 @@ export class BuildingPanel {
       // Abattue : sa fenêtre n'a plus rien à dire.
       if (!base || !isStanding(base)) this.close();
       else this.refreshBase(base);
+      return;
+    }
+    if (this.creatureId !== null) {
+      const mobile = this.world.mobiles.get(this.creatureId);
+
+      if (mobile && isCreature(mobile)) this.refreshCreature(creatureView(this.world, mobile));
+      else this.close();
       return;
     }
     if (this.entityId === null) return;
@@ -510,6 +549,7 @@ export class BuildingPanel {
     const lab = entity.kind === 'lab';
 
     this.root.dataset['kind'] = entity.kind;
+    this.meter.hidden = false;
     this.infoButton.hidden = lab;
     if (lab) this.setDescription(false);
     this.research.root.hidden = !lab;
@@ -854,6 +894,7 @@ export class BuildingPanel {
 
     if (this.thumb.src !== thumb) this.thumb.src = thumb;
     this.root.dataset['kind'] = 'enemyBase';
+    this.meter.hidden = false;
     this.infoButton.hidden = false;
     this.research.root.hidden = true;
     for (const part of [this.crew, this.upgrade, this.gear, this.stock]) part.hidden = true;
@@ -882,7 +923,50 @@ export class BuildingPanel {
 
     // Plus aucun bouton à montrer : la rangée disparaît.
     this.actions.hidden = [...this.actions.children].every((button) => (button as HTMLElement).hidden);
+    this.setBody(lines, ratio, barClass, meterValue, meterLabel);
+  }
 
+  /**
+   * Une créature : portrait et nom en tête, ses points de vie s'il en a, son
+   * âge en puce, ce qu'elle porte, puis ses lignes. Tout ce qui est d'un
+   * bâtiment — coffre, boutons, ouvriers, niveaux, recherche — se cache.
+   */
+  private refreshCreature(view: CreatureView): void {
+    const text = t().panel;
+
+    this.root.dataset['kind'] = 'creature';
+    this.title.textContent = view.name;
+
+    const thumb = creatureIconUrl(view.portrait);
+
+    if (this.thumb.src !== thumb) this.thumb.src = thumb;
+    this.infoButton.hidden = true;
+    this.setDescription(false);
+    this.research.root.hidden = true;
+    this.exchange.show(null);
+    this.tabs.setAvailable('inventory', false);
+    for (const part of [this.crew, this.upgrade, this.gear, this.stock]) part.hidden = true;
+    for (const button of this.actions.children) (button as HTMLElement).hidden = true;
+    this.actions.hidden = true;
+
+    this.setStats([{ icon: 'moon', value: String(view.age), label: text.creature.age(view.age) }]);
+    this.setItems([], 'creature');
+
+    const { hp } = view;
+
+    // Un habitant n'a pas de points de vie : pas de jauge.
+    this.meter.hidden = hp === null;
+    if (hp) {
+      const value = `${hp.value}/${hp.max}`;
+
+      this.setBody(view.lines, hp.value / hp.max, 'hp', value, text.hp(value));
+    } else {
+      this.setBody(view.lines, 0, 'hp', '', '');
+    }
+  }
+
+  /** Les lignes, puis la jauge : cœur (ou rien pour un chantier), barre, nombre. */
+  private setBody(lines: readonly string[], ratio: number, barClass: string, meterValue: string, meterLabel: string): void {
     const body = lines.filter(Boolean).join('\n');
     const width = `${Math.round(Math.max(0, Math.min(1, ratio)) * 100)}%`;
 

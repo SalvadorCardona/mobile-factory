@@ -337,6 +337,7 @@ describe('poste de logistique', () => {
       facing: 'down',
       moving: false,
       hp: ENEMIES.mutant.hp,
+      age: 30,
       attackCooldown: 0,
       emerge: 0,
     });

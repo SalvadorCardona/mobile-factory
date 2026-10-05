@@ -16,10 +16,13 @@
  *
  * Ève se tape aussi : un doigt sur elle la fait parler (`onTalk`). Elle
  * passe avant les bâtiments — elle se tient devant la mairie, dont le cadre
- * la recouvre. Un habitant — enfant, ouvrier, bûcheron — aussi : un doigt
- * sur lui montre son infobulle (`onPerson`) ; sa zone de tap est son corps,
- * pas son cadre, pour qu'un ouvrier devant une porte n'empêche pas d'ouvrir
- * le bâtiment.
+ * la recouvre. Une créature aussi — un habitant (enfant, ouvrier, bûcheron)
+ * ou un ennemi (mutant, bête) : un doigt sur elle ouvre la même fenêtre
+ * qu'un bâtiment (`onSelect`, une `Selection` de l'un ou de l'autre). La
+ * zone de tap d'un habitant est son corps, un peu élargi, pas son cadre,
+ * pour qu'un ouvrier devant une porte n'empêche pas d'ouvrir le bâtiment ;
+ * celle d'un ennemi, son cadre plus une marge : il bouge, le doigt suit
+ * mal. Un mutant encore dans sa flaque ne se tape pas : on ne le voit pas.
  *
  * Une base mutante aussi : un doigt sur son campement ouvre sa fenêtre
  * d'info (`onBase`), comme un bâtiment.
@@ -28,35 +31,35 @@
  * ferme (`onDismiss`) — et son cadre de sélection avec elle. Fenêtre
  * fermée, le vide n'est pas revendiqué : il reste au joystick et au placement.
  *
- * Aucune commande ici : ouvrir une fenêtre, faire parler Ève ou montrer qui
- * est un habitant ne modifie pas le monde.
+ * Aucune commande ici : ouvrir une fenêtre ou faire parler Ève ne modifie
+ * pas le monde.
  */
 
 import { TILE_SIZE } from '../core/grid.ts';
 import { BUILDINGS } from '../data/buildings.ts';
 import { ENEMY_BASE } from '../data/enemyBases.ts';
+import { ENEMIES, WILDLIFE } from '../data/enemies.ts';
 import { SPRITES } from '../data/sprites.ts';
 import { isStanding } from '../sim/enemyBases.ts';
 import type { EnemyBase, Entity, EntityId, Eve, Mobile, MobileId } from '../sim/types.ts';
 import type { World } from '../sim/world.ts';
+import type { Selection } from '../ui/creatureView.ts';
 import { TAP_SLOP, type PointerConsumer, type PointerSample } from './pointer.ts';
 
 /** Marge autour du cadre d'Ève, en pixels monde : elle est petite, le doigt est gros. */
 const EVE_TAP_MARGIN = 6;
 
 /** Le corps d'un habitant, autour de ses pieds, en pixels monde : demi-largeur, hauteur au-dessus, marge sous les pieds. */
-const PERSON_HALF_W = 9;
+const PERSON_HALF_W = 12;
 const PERSON_TOP = 34;
 const KID_TOP = 24;
 const PERSON_BELOW = 4;
 
-/** Ce que le doigt vise : un bâtiment, une base mutante, Ève, un habitant, ou le vide (pour fermer la fenêtre ouverte). */
-type Target =
-  | { kind: 'building'; id: EntityId }
-  | { kind: 'enemyBase'; id: number }
-  | { kind: 'eve' }
-  | { kind: 'person'; id: MobileId }
-  | { kind: 'nothing' };
+/** Marge autour du cadre d'un ennemi, en pixels monde : il bouge, le doigt arrive en retard. */
+const FOE_TAP_MARGIN = 6;
+
+/** Ce que le doigt vise : un bâtiment ou une créature, une base mutante, Ève, ou le vide (pour fermer la fenêtre ouverte). */
+type Target = Selection | { kind: 'enemyBase'; id: number } | { kind: 'eve' } | { kind: 'nothing' };
 
 export class Inspect implements PointerConsumer {
   private pointerId: number | null = null;
@@ -68,9 +71,8 @@ export class Inspect implements PointerConsumer {
   private readonly world: World;
   private readonly screenToWorld: (x: number, y: number) => { x: number; y: number };
   private readonly enabled: () => boolean;
-  private readonly onTap: (id: EntityId) => void;
+  private readonly onSelect: (selection: Selection) => void;
   private readonly onTalk: () => void;
-  private readonly onPerson: (id: MobileId) => void;
   private readonly canDismiss: () => boolean;
   private readonly onDismiss: () => void;
   private readonly onBase: (id: number) => void;
@@ -79,9 +81,8 @@ export class Inspect implements PointerConsumer {
     world: World,
     screenToWorld: (x: number, y: number) => { x: number; y: number },
     enabled: () => boolean,
-    onTap: (id: EntityId) => void,
+    onSelect: (selection: Selection) => void,
     onTalk: () => void = () => {},
-    onPerson: (id: MobileId) => void = () => {},
     canDismiss: () => boolean = () => false,
     onDismiss: () => void = () => {},
     onBase: (id: number) => void = () => {},
@@ -89,9 +90,8 @@ export class Inspect implements PointerConsumer {
     this.world = world;
     this.screenToWorld = screenToWorld;
     this.enabled = enabled;
-    this.onTap = onTap;
+    this.onSelect = onSelect;
     this.onTalk = onTalk;
-    this.onPerson = onPerson;
     this.canDismiss = canDismiss;
     this.onDismiss = onDismiss;
     this.onBase = onBase;
@@ -130,8 +130,9 @@ export class Inspect implements PointerConsumer {
       case 'eve':
         this.onTalk();
         return;
-      case 'person':
-        if (this.world.mobiles.has(target.id)) this.onPerson(target.id);
+      case 'creature':
+        // Un ennemi a pu tomber entre le doigt posé et le doigt levé.
+        if (this.world.mobiles.has(target.id)) this.onSelect(target);
         return;
       case 'nothing':
         this.onDismiss();
@@ -141,7 +142,7 @@ export class Inspect implements PointerConsumer {
         return;
       case 'building':
         // Le bâtiment doit encore exister au relâchement : un mutant a pu le raser entre-temps.
-        if (this.world.entities.has(target.id)) this.onTap(target.id);
+        if (this.world.entities.has(target.id)) this.onSelect(target);
     }
   }
 
@@ -158,9 +159,9 @@ export class Inspect implements PointerConsumer {
 
     if (eve && isOnEve(eve, position.x, position.y)) return { kind: 'eve' };
 
-    const person = personAt(this.world.mobiles.values(), position.x, position.y);
+    const creature = creatureAt(this.world.mobiles.values(), position.x, position.y);
 
-    if (person !== undefined) return { kind: 'person', id: person };
+    if (creature !== undefined) return { kind: 'creature', id: creature };
 
     const building = buildingAt(this.world.entities.values(), position.x, position.y);
 
@@ -182,26 +183,50 @@ export function isOnEve(eve: Eve, x: number, y: number): boolean {
 }
 
 /**
- * L'habitant dessiné sous un point monde — un enfant, un ouvrier ou un
- * bûcheron dehors —, le plus bas à l'écran s'ils se recouvrent.
+ * La créature dessinée sous un point monde — un enfant, un ouvrier ou un
+ * bûcheron dehors, un mutant sorti de sa flaque, une bête —, la plus basse
+ * à l'écran si elles se recouvrent, comme le tri en profondeur du rendu.
  */
-export function personAt(mobiles: Iterable<Mobile>, x: number, y: number): MobileId | undefined {
+export function creatureAt(mobiles: Iterable<Mobile>, x: number, y: number): MobileId | undefined {
   let found: MobileId | undefined;
   let foundY = -Infinity;
 
   for (const mobile of mobiles) {
-    if (mobile.kind !== 'kid' && mobile.kind !== 'worker' && mobile.kind !== 'lumberjack') continue;
-    if (mobile.kind !== 'kid' && mobile.inside) continue;
-
-    const top = mobile.kind === 'kid' ? KID_TOP : PERSON_TOP;
-
-    if (Math.abs(x - mobile.x) > PERSON_HALF_W || y < mobile.y - top || y > mobile.y + PERSON_BELOW) continue;
-    if (mobile.y <= foundY) continue;
+    if (!isUnder(mobile, x, y) || mobile.y <= foundY) continue;
 
     found = mobile.id;
     foundY = mobile.y;
   }
   return found;
+}
+
+/** Le point monde tombe-t-il sur cette créature : le corps d'un habitant, le cadre d'un ennemi ? */
+function isUnder(mobile: Mobile, x: number, y: number): boolean {
+  switch (mobile.kind) {
+    case 'kid':
+    case 'worker':
+    case 'lumberjack': {
+      if (mobile.kind !== 'kid' && mobile.inside) return false;
+
+      const top = mobile.kind === 'kid' ? KID_TOP : PERSON_TOP;
+
+      return Math.abs(x - mobile.x) <= PERSON_HALF_W && y >= mobile.y - top && y <= mobile.y + PERSON_BELOW;
+    }
+    case 'mutant':
+    case 'beast': {
+      if (mobile.kind === 'mutant' && mobile.emerge > 0) return false;
+
+      const proto = mobile.kind === 'mutant' ? ENEMIES[mobile.proto] : WILDLIFE[mobile.proto];
+      const scale = 'scale' in proto ? proto.scale : 1;
+      const { width, height, anchorX, anchorY } = SPRITES[proto.sprite];
+      const left = mobile.x - width * scale * anchorX - FOE_TAP_MARGIN;
+      const top = mobile.y - height * scale * anchorY - FOE_TAP_MARGIN;
+
+      return x >= left && x <= left + width * scale + FOE_TAP_MARGIN * 2 && y >= top && y <= top + height * scale + FOE_TAP_MARGIN * 2;
+    }
+    default:
+      return false;
+  }
 }
 
 /**

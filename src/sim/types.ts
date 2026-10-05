@@ -310,6 +310,8 @@ export interface Mutant extends Moving {
   kind: 'mutant';
   proto: EnemyId;
   hp: number;
+  /** En années : tiré à l'apparition (`foeAge`), un an de plus à chaque aube. */
+  age: number;
   /** Ticks avant le prochain coup sur le bâtiment heurté. */
   attackCooldown: number;
   /** Ticks restants à sortir de la flaque : immobile, et hors d'atteinte des arcs. */
@@ -350,6 +352,8 @@ export interface Beast extends Moving {
   kind: 'beast';
   proto: WildlifeId;
   hp: number;
+  /** En années, comme un mutant. */
+  age: number;
   /** La tanière d'où elle vient, et où elle rentre. */
   denId: number;
   homeX: number;

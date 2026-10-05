@@ -164,6 +164,29 @@ export const panel: Messages['panel'] = {
     open: 'A defeated mutant may drop stunned — touch it and it will follow you here.',
   },
 
+  creature: {
+    age: (years: number): string => `${years} year${s(years)} old — one more at every dawn`,
+    role: {
+      porter: 'Porter',
+      logistician: 'Logistician',
+      builder: 'Builder',
+      lumberjack: 'Lumberjack',
+      child: 'Child',
+      exMutant: 'Ex-mutant, porter',
+      survivor: 'Survivor, porter',
+    },
+    home: (building: string): string => `Lives at: ${building}`,
+    homeless: 'No home',
+    carrying: (load: string): string => `Carrying: ${load}`,
+    emerging: 'Crawling out of its puddle',
+    marchesOn: (building: string): string => `Marching on: ${building}`,
+    beast: {
+      roam: 'Roaming around its den',
+      chase: 'Charging Adam!',
+      return: 'Heading back to its den',
+    },
+  },
+
   crew: {
     less: 'One worker fewer',
     more: 'One worker more',

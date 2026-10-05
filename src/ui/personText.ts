@@ -20,7 +20,8 @@ export function needText(need: NeedId, state: NeedState): string {
   return t().hud.person.needs[need][state];
 }
 
-function occupationText(occupation: Occupation): string {
+/** Ce que fait un habitant, en minuscules : « au travail : Foreuse », « sans travail ». */
+export function occupationText(occupation: Occupation): string {
   const text = t().hud.person;
 
   switch (occupation.kind) {

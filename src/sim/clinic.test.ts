@@ -72,7 +72,7 @@ function weakMutant(world: World, dx: number): Mobile {
   const x = world.player.x + dx * TILE_SIZE;
   const y = world.player.y;
 
-  return { kind: 'mutant', id: 1, proto: 'mutant', x, y, prevX: x, prevY: y, facing: 'down', moving: false, hp: 1, attackCooldown: 0, emerge: 0 };
+  return { kind: 'mutant', id: 1, proto: 'mutant', x, y, prevX: x, prevY: y, facing: 'down', moving: false, hp: 1, age: 30, attackCooldown: 0, emerge: 0 };
 }
 
 function patient(x: number, y: number, clinicId: number, state: Patient['state'], ticks: number): Patient {

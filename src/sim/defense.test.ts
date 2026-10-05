@@ -339,6 +339,7 @@ function placeQueen(world: World, x: number, y: number, hp: number = ENEMIES.que
     facing: 'down',
     moving: false,
     hp,
+    age: 100,
     attackCooldown: 0,
     emerge: 0,
     queen: { phase: 1, layTicks: QUEEN.layTicks, prey: null },

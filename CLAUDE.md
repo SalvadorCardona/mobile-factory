@@ -149,7 +149,11 @@ Un ouvrier dehors sans tâche depuis `IDLE.graceTicks` est **inactif**
 (`World.isIdle`, compte non sauvegardé) : le rendu le fait glander (assis,
 adossé, s'étire, bâille avec bulle « zzz »), le HUD compte au travail /
 inactifs / enfants (`World.census`), et un tap sur les inactifs y jette un
-coup d'œil, puis le suivant ; un tap sur un habitant montre son infobulle.
+coup d'œil, puis le suivant. Un tap sur un habitant ou un ennemi ouvre la
+fenêtre d'un bâtiment (`showCreature`, contenu de `ui/creatureView.ts`) :
+portrait, nom, âge, métier ou espèce, ce qu'il fait, où il loge, ce qu'il
+porte, points de vie d'un ennemi. Un ennemi a un âge sauvegardé (bornes
+`age` de son proto, un an par aube) et un surnom haché (`foeName`, `FOE_NAMES`).
 
 **Faim** (`data/needs.ts`, `sim/needs.ts`) — ouvriers, bûcherons et
 enfants ont une jauge par besoin (`Needful.needs`, sauvegardée ; une

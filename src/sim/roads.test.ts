@@ -260,6 +260,7 @@ describe('routes pavées', () => {
         facing: 'down',
         moving: false,
         hp: 1000,
+        age: 30,
         attackCooldown: 0,
         emerge: 0,
       };

@@ -115,7 +115,7 @@ function openGround(world: World, fromX: number, fromY: number): { tx: number; t
 }
 
 function mutantAt(x: number, y: number): Mutant {
-  return { kind: 'mutant', id: 1, proto: 'mutant', x, y, prevX: x, prevY: y, facing: 'down', moving: false, hp: 3, attackCooldown: 0, emerge: 0 };
+  return { kind: 'mutant', id: 1, proto: 'mutant', x, y, prevX: x, prevY: y, facing: 'down', moving: false, hp: 3, age: 30, attackCooldown: 0, emerge: 0 };
 }
 
 describe('calendrier météo', () => {

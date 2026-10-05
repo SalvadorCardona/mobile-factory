@@ -33,6 +33,14 @@ export interface EnemyProto {
   loot: LootTable;
   /** Vrai s'il peut tomber assommé plutôt que s'évaporer, une clinique ayant une place (`data/clinic.ts`). */
   stunnable: boolean;
+  /** Son âge à l'apparition, en années, tiré entre ces bornes (`foeAge`) ; il prend un an à chaque aube. */
+  age: AgeRange;
+}
+
+/** Des bornes d'âge, en années, comprises. */
+export interface AgeRange {
+  min: number;
+  max: number;
 }
 
 export const ENEMIES = {
@@ -55,6 +63,7 @@ export const ENEMIES = {
       { item: 'mutantGoo', min: 1, max: 1, chance: 0.5 },
     ],
     stunnable: true,
+    age: { min: 18, max: 60 },
   },
   /**
    * Le « boss » des nuits spéciales : un mutant qui a trop poussé. Lent,
@@ -79,6 +88,7 @@ export const ENEMIES = {
       { item: 'mutantGoo', min: 1, max: 2, chance: 1 },
     ],
     stunnable: true,
+    age: { min: 25, max: 70 },
   },
   /**
    * La Reine des flaques : le rendez-vous des grosses nuits (`QUEEN`). Les
@@ -103,6 +113,7 @@ export const ENEMIES = {
       { item: 'ironPlate', min: 1, max: 3, chance: 1 },
     ],
     stunnable: false,
+    age: { min: 90, max: 140 },
   },
   /**
    * La larve que pond la Reine : un petit mutant rapide et fragile, qui
@@ -124,6 +135,7 @@ export const ENEMIES = {
       { item: 'mutantGoo', min: 1, max: 1, chance: 0.25 },
     ],
     stunnable: false,
+    age: { min: 0, max: 0 },
   },
 } as const satisfies Record<string, EnemyProto>;
 
@@ -381,6 +393,8 @@ export interface WildlifeProto {
   sprite: SpriteId;
   halfW: number;
   halfH: number;
+  /** Son âge à l'apparition, en années, comme un mutant. */
+  age: AgeRange;
 }
 
 export const WILDLIFE = {
@@ -409,6 +423,7 @@ export const WILDLIFE = {
     sprite: 'crab',
     halfW: 8,
     halfH: 5,
+    age: { min: 1, max: 6 },
   },
   /** Des meutes de deux ou trois, rapides et coriaces, au fond des bois. */
   wolf: {
@@ -436,12 +451,38 @@ export const WILDLIFE = {
     sprite: 'wolf',
     halfW: 9,
     halfH: 6,
+    age: { min: 1, max: 9 },
   },
 } as const satisfies Record<string, WildlifeProto>;
 
 export type WildlifeId = keyof typeof WILDLIFE;
 
 export const WILDLIFE_IDS = Object.keys(WILDLIFE) as WildlifeId[];
+
+/**
+ * Les surnoms des ennemis — mutants et bêtes —, tirés de la seed et de leur
+ * id (`foeName`) : jamais sauvegardés. Des onomatopées plutôt que des
+ * prénoms, pour qu'un mutant ne porte pas celui d'un habitant ; drôles plus
+ * qu'effrayants, comme eux.
+ */
+export const FOE_NAMES = [
+  'Gloups',
+  'Zorglu',
+  'Bloblo',
+  'Krakou',
+  'Slurp',
+  'Grumph',
+  'Bzou',
+  'Glurp',
+  'Splotch',
+  'Moumou',
+  'Pustulo',
+  'Gnafron',
+  'Ploc',
+  'Zigouz',
+  'Bouboule',
+  'Fluo',
+] as const;
 
 /**
  * Règles d'apparition de la faune, communes aux espèces.
