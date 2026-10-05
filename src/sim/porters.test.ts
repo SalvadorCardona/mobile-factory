@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_SIZE } from '../core/grid.ts';
 import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
+import { COLONY } from '../data/inhabitants.ts';
 import { unlockingResearch } from './research.ts';
 import { ENEMIES } from '../data/enemies.ts';
 import { ITEM_IDS, type ItemId } from '../data/items.ts';
@@ -426,13 +427,13 @@ describe('porteurs', () => {
     const world = colony({ hall: { wood: 40, stone: 40 }, houses: 2, sites: ['farm'] });
     const houses = BUILDINGS.builderHouse.workers * 2;
 
-    // Un chantier n'emploie personne.
+    // Un chantier n'emploie personne ; les maisons emploient huit des dix ouvriers de la colonie.
     expect(world.workforce()).toEqual({
-      total: houses,
+      total: COLONY.startingWorkers,
       byBuilding: [{ proto: 'builderHouse', count: houses }],
       porters: { busy: 0, idle: houses },
       assigned: houses,
-      free: 0,
+      free: COLONY.startingWorkers - houses,
       missing: 0,
     });
 
@@ -445,25 +446,26 @@ describe('porteurs', () => {
 
     run(world, 3000);
 
-    // La ferme finie embauche : le compte suit, et reste celui de la population.
+    // La ferme finie embauche les deux ouvriers libres : le total ne bouge pas, et reste celui de la population.
     const after = world.workforce();
 
-    expect(after.total).toBe(houses + BUILDINGS.farm.workers);
+    expect(after.total).toBe(COLONY.startingWorkers);
     expect(after.total).toBe(world.population().workers);
     expect(after.byBuilding).toEqual([
       { proto: 'builderHouse', count: houses },
-      { proto: 'farm', count: BUILDINGS.farm.workers },
+      { proto: 'farm', count: COLONY.startingWorkers - houses },
     ]);
+    expect(after).toMatchObject({ assigned: COLONY.startingWorkers, free: 0, missing: houses + BUILDINGS.farm.workers - COLONY.startingWorkers });
 
-    // Une maison tombée : ses ouvriers quittent la ville.
+    // Une maison tombée : ses porteurs quittent leur maison, la colonie les garde.
     const house = [...world.entities.values()].find((entity) => entity.kind === 'house')!;
 
     world.entities.delete(house.id);
-    expect(world.workforce().total).toBe(BUILDINGS.builderHouse.workers + BUILDINGS.farm.workers);
+    expect(world.workforce().total).toBe(COLONY.startingWorkers);
     expect(world.workforce().porters.busy + world.workforce().porters.idle).toBe(BUILDINGS.builderHouse.workers);
   });
 
-  it('une maison réglée à 2 ouvriers : deux porteurs travaillent, les autres flânent', () => {
+  it('une maison réglée à 2 ouvriers : deux porteurs travaillent, les autres rentrent, libres', () => {
     const world = colony({ hall: { wood: 40, stone: 40 }, houses: 1, sites: ['farm', 'nursery'] });
     const house = [...world.entities.values()].find((entity) => entity.kind === 'house')!;
     const busy = new Set<number>();
@@ -477,8 +479,11 @@ describe('porteurs', () => {
       .map((worker) => worker.id)
       .sort((a, b) => a - b);
 
-    expect([...busy].sort((a, b) => a - b)).toEqual(ids.slice(0, 2));
-    expect(world.workforce().free).toBe(BUILDINGS.builderHouse.workers - 2);
+    expect(ids).toHaveLength(2);
+    expect([...busy].sort((a, b) => a - b)).toEqual(ids);
+    expect(world.staffing(house)).toMatchObject({ wanted: 2, filled: 2 });
+    // La ferme, achevée entre-temps, emploie les siens ; le reste est libre.
+    expect(world.workforce()).toMatchObject({ assigned: 2 + BUILDINGS.farm.workers, free: COLONY.startingWorkers - 2 - BUILDINGS.farm.workers });
   });
 
   it('ne trace jamais une ligne droite à travers l’eau', () => {

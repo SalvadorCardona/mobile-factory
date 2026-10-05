@@ -71,6 +71,10 @@ export const panel: Messages['panel'] = {
     perBirth: (recipe: string): string => `Each birth eats ${recipe}.`,
     hungry: (why: string): string => `Waiting for a meal. ${why}`,
     next: (time: string): string => `Next child in ${time}`,
+    full: 'Full: the next child waits for an older one to go to work.',
+    nextAdult: (time: string): string => `Next worker in ${time}`,
+    noKids: 'No children here yet.',
+    kids: (count: number, capacity: number): string => `Children in the nursery: ${count} of ${capacity}`,
     born: (count: number): string => `Children born here: ${count}`,
   },
 

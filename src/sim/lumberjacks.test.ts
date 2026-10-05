@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_SIZE, coordKey } from '../core/grid.ts';
 import { BUILDINGS } from '../data/buildings.ts';
+import { COLONY } from '../data/inhabitants.ts';
 import { DAY_CYCLE } from '../data/dayNight.ts';
 import { ENEMIES } from '../data/enemies.ts';
 import { LUMBERJACKS, WANDER } from '../data/workers.ts';
@@ -186,12 +187,12 @@ function run(world: World, ticks: number, each?: () => void): void {
 }
 
 describe('bûcherons', () => {
-  it('la cabane loge ses bûcherons, comptés dans la population', () => {
+  it('la cabane loge ses bûcherons, pris parmi les ouvriers de la colonie', () => {
     const world = colony();
 
     expect(lumberjacks(world)).toHaveLength(BUILDINGS.lumberCamp.workers);
     expect(lumberjacks(world).every((lumberjack) => lumberjack.homeId === campOf(world).id)).toBe(true);
-    expect(world.population().workers).toBe(BUILDINGS.lumberCamp.workers);
+    expect(world.population().workers).toBe(COLONY.startingWorkers);
     expect(world.workforce().byBuilding).toEqual([{ proto: 'lumberCamp', count: BUILDINGS.lumberCamp.workers }]);
   });
 
@@ -314,10 +315,15 @@ describe('bûcherons', () => {
     const world = colony();
     const camp = campOf(world);
 
-    world.push({ type: 'setWorkers', id: camp.id, count: 1 });
-    run(world, 300);
-
     const [first, second] = lumberjacks(world).sort((a, b) => a.id - b.id);
+
+    world.push({ type: 'setWorkers', id: camp.id, count: 1 });
+    run(world, 600);
+
+    // Le second a rapporté son bois et il est rentré : un ouvrier libre de la colonie, plus logé à la cabane.
+    expect(lumberjacks(world).map((lumberjack) => lumberjack.id)).toEqual([first!.id]);
+    expect(world.mobiles.has(second!.id)).toBe(false);
+
     const out = new Set<number>();
 
     run(world, 2000, () => {
@@ -327,16 +333,18 @@ describe('bûcherons', () => {
     });
 
     expect(out).toEqual(new Set([first!.id]));
-    expect(second!.state).toBe('idle');
     expect(world.staffing(camp)).toMatchObject({ wanted: 1, filled: 1 });
-    expect(world.workforce()).toMatchObject({ total: 2, assigned: 1, free: 1 });
+    expect(world.workforce()).toMatchObject({ total: COLONY.startingWorkers, assigned: 1, free: COLONY.startingWorkers - 1 });
 
-    // Rendu à la cabane, il reprend la hache.
+    // Le poste rendu, un bûcheron revient à la cabane et reprend la hache.
     world.push({ type: 'setWorkers', id: camp.id, count: 2 });
     run(world, 1500, () => {
-      if (second!.state !== 'idle') out.add(second!.id);
+      for (const lumberjack of lumberjacks(world)) {
+        if (lumberjack.state !== 'idle') out.add(lumberjack.id);
+      }
     });
-    expect(out.has(second!.id)).toBe(true);
+    expect(lumberjacks(world)).toHaveLength(2);
+    expect(out.size).toBe(2);
   });
 
   it('les porteurs vident la cabane dans la mairie : tout le bois coupé arrive, rien de plus', () => {

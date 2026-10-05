@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { TILE_SIZE, tileToChunk, worldToTile } from '../core/grid.ts';
 import { BUILDINGS, type BuildingId, type BuildingProto } from '../data/buildings.ts';
 import { TOWN_PLENTY, type ItemId } from '../data/items.ts';
+import { COLONY } from '../data/inhabitants.ts';
 import { RECIPES } from '../data/recipes.ts';
 import { RESOURCES } from '../data/resources.ts';
 import type { PlacementRejection } from './commands.ts';
@@ -415,11 +416,12 @@ describe('World', () => {
     expect(restored.entities.get(restored.townHallId)?.kind).toBe('townHall');
   });
 
-  it('compte les ouvriers des bâtiments finis dans la population', () => {
+  it('part avec dix ouvriers ; construire un bâtiment n’en crée aucun, il les emploie', () => {
     const world = new World(7);
 
+    expect(world.population().workers).toBe(COLONY.startingWorkers);
     completeSite(world, world.townHallId);
-    expect(world.population().workers).toBe(0);
+    expect(world.population().workers).toBe(COLONY.startingWorkers);
 
     const spot = { tx: Math.floor(world.player.x / TILE_SIZE) + 2, ty: Math.floor(world.player.y / TILE_SIZE) + 2 };
 
@@ -432,9 +434,10 @@ describe('World', () => {
     const id = Math.max(...world.entities.keys());
 
     // Un chantier n'emploie personne.
-    expect(world.population().workers).toBe(0);
+    expect(world.workforce()).toMatchObject({ total: COLONY.startingWorkers, assigned: 0 });
     completeSite(world, id);
-    expect(world.population().workers).toBe(BUILDINGS.farm.workers);
+    expect(world.population().workers).toBe(COLONY.startingWorkers);
+    expect(world.workforce()).toMatchObject({ total: COLONY.startingWorkers, assigned: BUILDINGS.farm.workers });
   });
 
   it('achève la mairie quand Adam y a tout apporté', () => {

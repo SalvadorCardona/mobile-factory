@@ -4,6 +4,7 @@ import { BUILDINGS } from '../data/buildings.ts';
 import { DAWN_REWARD, DAY_CYCLE } from '../data/dayNight.ts';
 import { ENEMIES, LOOT_DROPS, NIGHT_PLAN, WAVES, isBossWave, waveSize, waveSpec } from '../data/enemies.ts';
 import type { ItemId } from '../data/items.ts';
+import { COLONY } from '../data/inhabitants.ts';
 import { RECIPES } from '../data/recipes.ts';
 import { WEAPONS } from '../data/weapons.ts';
 import { CYCLE_TICKS } from './dayNight.ts';
@@ -810,7 +811,7 @@ describe('nurserie', () => {
     expect(nursery.store.count('food')).toBe(BIRTH_FOOD * 2);
 
     expect(nursery.nextBirthTick - world.tickCount).toBeLessThanOrEqual(NURSERY_BIRTH_TICKS);
-    expect(world.population()).toEqual({ adults: 1, children: 0, workers: 0 });
+    expect(world.population()).toEqual({ adults: 1, children: 0, workers: COLONY.startingWorkers });
 
     while (world.tickCount < nursery.nextBirthTick - 1) world.tick();
     expect(born).toHaveLength(0);
@@ -819,7 +820,7 @@ describe('nurserie', () => {
     expect(born).toHaveLength(1);
     expect(nursery.born).toBe(1);
     expect(nursery.store.count('food')).toBe(BIRTH_FOOD);
-    expect(world.population()).toEqual({ adults: 1, children: 1, workers: 0 });
+    expect(world.population()).toEqual({ adults: 1, children: 1, workers: COLONY.startingWorkers });
     expect(nursery.nextBirthTick).toBe(birthTick + NURSERY_BIRTH_TICKS);
 
     const home = {

@@ -52,6 +52,7 @@
 
 import { BUILDINGS, REPAIR, buildingLevel, maxLevel, nextUpgrade, type BuildingId, type BuildingLevel } from '../data/buildings.ts';
 import { CLINIC } from '../data/clinic.ts';
+import { NURSERY_CARE } from '../data/inhabitants.ts';
 import type { ItemId } from '../data/items.ts';
 import { RECIPES, type RecipeProto } from '../data/recipes.ts';
 import { WEAPONS } from '../data/weapons.ts';
@@ -544,16 +545,28 @@ export class BuildingPanel {
 
         case 'nursery': {
           const remaining = Math.max(0, entity.nextBirthTick - this.world.tickCount);
+          const kids = this.world.nurseryKids(entity).length;
+          const adult = this.world.nextAdultTicks(entity);
 
           lines.push(text.nursery.perBirth(recipeLine(RECIPES.raiseChild.inputs)));
           lines.push(
             entity.paused
               ? paused
-              : entity.hungry
-                ? text.nursery.hungry(starvedLine(this.world, entity))
-                : text.nursery.next(clock(remaining)),
+              : kids >= NURSERY_CARE.capacity
+                ? text.nursery.full
+                : entity.hungry
+                  ? text.nursery.hungry(starvedLine(this.world, entity))
+                  : text.nursery.next(clock(remaining)),
           );
-          stats.push({ icon: 'child', value: String(entity.born), label: text.nursery.born(entity.born) });
+          lines.push(adult === null ? text.nursery.noKids : text.nursery.nextAdult(clock(adult)));
+          stats.push(
+            {
+              icon: 'child',
+              value: `${kids}/${NURSERY_CARE.capacity}`,
+              label: text.nursery.kids(kids, NURSERY_CARE.capacity),
+            },
+            { icon: 'worker', value: String(entity.born), label: text.nursery.born(entity.born) },
+          );
           break;
         }
 

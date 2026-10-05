@@ -89,6 +89,11 @@ export const panel = {
     /** `why` : d'où vient la famine (`starved`). */
     hungry: (why: string): string => `En attente d’un repas. ${why}`,
     next: (time: string): string => `Prochain enfant dans ${time}`,
+    full: 'Pleine : le prochain enfant attend qu’un grand parte travailler.',
+    /** `time` : jusqu'à l'aube où le plus âgé a l'âge de travailler. */
+    nextAdult: (time: string): string => `Prochain ouvrier dans ${time}`,
+    noKids: 'Aucun enfant ici pour l’instant.',
+    kids: (count: number, capacity: number): string => `Enfants à la nurserie : ${count} sur ${capacity}`,
     born: (count: number): string => `Enfants nés ici : ${count}`,
   },
 

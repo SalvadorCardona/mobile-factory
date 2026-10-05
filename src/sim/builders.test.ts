@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_SIZE } from '../core/grid.ts';
 import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
+import { COLONY } from '../data/inhabitants.ts';
 import { ENEMIES } from '../data/enemies.ts';
 import { ITEM_IDS, type ItemId } from '../data/items.ts';
 import { BUILDERS } from '../data/workers.ts';
@@ -203,14 +204,16 @@ function expectCoveredPromises(world: World): void {
 }
 
 describe('poste de construction', () => {
-  it('loge quatre bâtisseurs, comptés dans la population ; leur nombre se règle et le poste se met en pause', () => {
+  it('loge quatre bâtisseurs, pris parmi les ouvriers de la colonie ; leur nombre se règle et le poste se met en pause', () => {
     const world = colony({}, [YARD]);
     const yard = yardOf(world);
 
     expect(BUILDINGS.constructionPost.workers).toBe(4);
     expect(builders(world)).toHaveLength(4);
     expect(builders(world).every((worker) => worker.homeId === yard.id)).toBe(true);
-    expect(world.population().workers).toBe(4);
+    // Le poste n'en crée aucun : il en emploie quatre.
+    expect(world.population().workers).toBe(COLONY.startingWorkers);
+    expect(world.workforce()).toMatchObject({ total: COLONY.startingWorkers, assigned: 4 });
 
     world.push({ type: 'setWorkers', id: yard.id, count: 2 });
     world.push({ type: 'pauseBuilding', id: yard.id, paused: true });

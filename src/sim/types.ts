@@ -459,8 +459,9 @@ export interface Worker extends Moving, Wandering {
   /** Vrai pour un ex-mutant : plus fort, plus lent. */
   exMutant: boolean;
   /**
-   * Vrai pour un enfant de la colonie devenu ouvrier à 14 ans : un porteur
-   * logé à sa nurserie, qui ne prend le poste de personne — comme un ex-mutant.
+   * Vrai pour un enfant devenu ouvrier dans une sauvegarde d'avant `colonists` :
+   * un porteur logé à sa nurserie, qui ne prend le poste de personne — comme
+   * un ex-mutant. Aujourd'hui, l'enfant devenu grand rejoint `World.colonists`.
    */
   grown: boolean;
   /** Vrai pour un logisticien du poste de logistique. */

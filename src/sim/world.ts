@@ -68,7 +68,7 @@ import {
   type LootTable,
 } from '../data/enemies.ts';
 import { EVE } from '../data/eve.ts';
-import { AGES } from '../data/inhabitants.ts';
+import { AGES, COLONY, NURSERY_CARE } from '../data/inhabitants.ts';
 import { TOWN_PLENTY, type ItemId } from '../data/items.ts';
 import {
   PERKS,
@@ -92,7 +92,7 @@ import { ChunkIndex } from './chunk.ts';
 import { floorCost, floorMissing, floorNeeds, floorWants } from './antenna.ts';
 import { consumerRecipe, consumerRoom, consumerWants, forgeRecipe, isConsumer } from './consumers.ts';
 import { NO_WIND, nearestFoe, shoot, stepArrow, type Wind } from './combat.ts';
-import { clockAt, dayDial, nextWave, ticksToWave, waveAt, type DayClock, type DayDial } from './dayNight.ts';
+import { clockAt, CYCLE_TICKS, dayDial, nextWave, ticksToDawn, ticksToWave, waveAt, type DayClock, type DayDial } from './dayNight.ts';
 import type {
   Command,
   CommandLogEntry,
@@ -644,6 +644,13 @@ export class World {
    */
   public lureNight = 0;
 
+  /**
+   * Les ouvriers adultes de la colonie, que les bâtiments qui emploient se
+   * répartissent (`roster`) : `COLONY.startingWorkers` au départ, un de plus
+   * par enfant devenu grand. Construire n'en crée aucun.
+   */
+  public colonists: number = COLONY.startingWorkers;
+
   /** Les compteurs que les objectifs lisent. */
   public stats: WorldStats = emptyStats();
 
@@ -696,6 +703,9 @@ export class World {
    * ou quand un effectif, un bâtiment fini ou tombé la change. Jamais sauvegardée.
    */
   private duty: { tick: number; filled: Map<EntityId, number>; onDuty: Set<MobileId> } | null = null;
+
+  /** La répartition a changé : maisons, postes et cabanes logent leurs nouveaux ouvriers au prochain tick (`lodgeCrews`). */
+  private lodging = false;
 
   /** Depuis quel tick chaque ouvrier dehors est sans travail, cf. `isIdle()`. Jamais sauvegardé. */
   private readonly idleSince = new Map<MobileId, number>();
@@ -775,6 +785,7 @@ export class World {
       victoryTick: this.victoryTick,
       signalNights: this.signalNights,
       lureNight: this.lureNight,
+      colonists: this.colonists,
       stats: copyStats(this.stats),
       objectiveBase: copyStats(this.objectiveBase),
       player: { ...player, inventory: inventory.toJSON() },
@@ -868,6 +879,9 @@ export class World {
     this.restoreJobs();
     this.restoreLumberjacks();
 
+    // Une sauvegarde d'avant la colonie : ses ouvriers étaient ceux qu'emploient ses bâtiments finis — elle les garde.
+    this.colonists = state.colonists ?? this.employedByBuildings();
+
     // Un enfant d'une sauvegarde d'avant les âges a reçu un âge d'adulte : il est ouvrier.
     for (const mobile of [...this.mobiles.values()]) {
       if (mobile.kind === 'kid' && canWork(mobile.age)) this.growUp(mobile, false);
@@ -878,10 +892,18 @@ export class World {
     this.settleSites();
 
     // Une maison d'une sauvegarde d'avant les porteurs : ses ouvriers s'y installent.
+    this.duty = null;
+    this.lodgeCrews();
+  }
+
+  /** Les postes de tous les bâtiments finis : la colonie d'une sauvegarde d'avant `colonists`. */
+  private employedByBuildings(): number {
+    let count = 0;
+
     for (const entity of this.entities.values()) {
-      if (entity.kind === 'house' || entity.kind === 'depot' || entity.kind === 'yard') this.staff(entity);
-      if (entity.kind === 'lumberCamp') this.staffCamp(entity);
+      if (entity.kind !== 'site') count += BUILDINGS[entity.proto].workers;
     }
+    return count;
   }
 
   /* ------------------------------------------------------------------ tick */
@@ -2565,7 +2587,7 @@ export class World {
 
     this.entities.set(site.id, building);
     this.dirtyTile(site.tx, site.ty);
-    this.duty = null;
+    this.rosterChanged();
     this.events.emit('buildingCompleted', { id: site.id });
 
     // Le bâtiment est debout : ses bâtisseurs posent le marteau et repartent.
@@ -2818,12 +2840,15 @@ export class World {
    * Une naissance : si le coffre a de quoi nourrir l'enfant, il apparaît sur
    * la première tuile libre autour de la nurserie. Sinon, la nurserie a faim
    * et ne se replanifie pas : c'est la nourriture apportée qui la réveille.
+   * Pleine (`NURSERY_CARE.capacity`), elle attend sans manger : c'est l'enfant
+   * qui part travailler qui la réveille.
    */
   private runNursery(nursery: Nursery): void {
     const recipe: RecipeProto = RECIPES[NURSERY_RECIPE];
 
     // En pause : l'heure passe sans naissance ni repas, et rien n'est replanifié — « Reprendre » la relance.
     if (nursery.paused) return;
+    if (this.nurseryKids(nursery).length >= NURSERY_CARE.capacity) return;
 
     if (!hasInputs(nursery.store, recipe)) {
       if (!nursery.hungry) this.events.emit('nurseryHungry', { id: nursery.id });
@@ -2929,21 +2954,44 @@ export class World {
 
   /**
    * La population : Adam et Ève, les enfants nés aux nurseries, et les
-   * ouvriers qu'emploient les bâtiments finis — plus les ex-mutants sortis
-   * de la clinique et les enfants devenus ouvriers. Un chantier n'emploie personne.
+   * ouvriers de la colonie (`colonists`, enfants devenus grands compris) —
+   * plus les porteurs hors des postes : ex-mutants sortis de la clinique,
+   * survivants du Signal. Un bâtiment n'en ajoute aucun.
    */
   public population(): { adults: number; children: number; workers: number } {
     let children = 0;
-    let workers = 0;
+    let workers = this.colonists;
 
     for (const mobile of this.mobiles.values()) {
       if (mobile.kind === 'kid') children += 1;
       if (mobile.kind === 'worker' && (mobile.exMutant || mobile.grown || mobile.survivor)) workers += 1;
     }
-    for (const entity of this.entities.values()) {
-      if (entity.kind !== 'site') workers += BUILDINGS[entity.proto].workers;
-    }
     return { adults: this.eve() ? 2 : 1, children, workers };
+  }
+
+  /** Les enfants qu'élève la nurserie : ceux qui y sont nés et n'ont pas encore l'âge de travailler. */
+  public nurseryKids(nursery: Nursery): Kid[] {
+    const kids: Kid[] = [];
+
+    for (const mobile of this.mobiles.values()) {
+      if (mobile.kind === 'kid' && mobile.homeId === nursery.id) kids.push(mobile);
+    }
+    return kids;
+  }
+
+  /**
+   * Ticks avant que le plus âgé des enfants de la nurserie devienne ouvrier
+   * — à l'aube où il a l'âge —, ou `null` sans enfant ni horloge.
+   */
+  public nextAdultTicks(nursery: Nursery): number | null {
+    const clock = this.clock();
+    const kids = this.nurseryKids(nursery);
+
+    if (!clock || kids.length === 0) return null;
+
+    const years = Math.max(1, Math.min(...kids.map((kid) => yearsToWork(kid.age))));
+
+    return ticksToDawn(clock) + (years - 1) * CYCLE_TICKS;
   }
 
   /**
@@ -3008,14 +3056,13 @@ export class World {
   }
 
   /**
-   * Les ouvriers, comptés comme `population()` : ceux qu'emploient les
-   * bâtiments finis. Les porteurs dont la maison est tombée quittent la
-   * colonie : ils ne comptent plus. Ceux qu'on a retirés d'un poste
-   * (`setWorkers`) sont libres.
+   * Les ouvriers de la colonie (`colonists`) et leurs postes : ceux qu'occupent
+   * les bâtiments finis qui emploient, le reste est libre. Ceux qu'on a
+   * retirés d'un poste (`setWorkers`) sont libres.
    */
   public workforce(): Workforce {
     const counts = new Map<BuildingId, number>();
-    let total = 0;
+    const total = this.colonists;
     let busy = 0;
     let idle = 0;
     let assigned = 0;
@@ -3025,11 +3072,10 @@ export class World {
       const { workers } = BUILDINGS[entity.proto];
 
       if (entity.kind === 'site' || workers === 0) continue;
-      counts.set(entity.proto, (counts.get(entity.proto) ?? 0) + workers);
-      total += workers;
 
       const filled = this.roster().filled.get(entity.id) ?? 0;
 
+      if (filled > 0) counts.set(entity.proto, (counts.get(entity.proto) ?? 0) + filled);
       assigned += filled;
       missing += entity.staff - filled;
     }
@@ -3069,6 +3115,8 @@ export class World {
   }
 
   private stepMobiles(): void {
+    if (this.lodging) this.lodgeCrews();
+
     // Une fois par tick, pas une fois par ouvrier.
     const alarm = this.hasMutants();
     const bedtime = this.isBedtime();
@@ -4123,39 +4171,19 @@ export class World {
   }
 
   /**
-   * L'enfant devient ouvrier, sous le même id — il garde son prénom : un
-   * porteur logé à sa nurserie (à la mairie si elle est tombée), qui ne prend
-   * le poste de personne, comme un ex-mutant. Il entre dans le système
-   * d'affectation au tick suivant.
+   * L'enfant a l'âge : il part travailler. Il entre dans les ouvriers de la
+   * colonie (`colonists`), que les bâtiments se répartissent ; sa place à la
+   * nurserie se libère, et elle reprend ses naissances si elle était pleine.
    */
   private growUp(kid: Kid, announce: boolean): void {
-    const nursery = this.entities.get(kid.homeId);
-    const homeId = nursery && nursery.kind !== 'site' ? nursery.id : this.townHallId;
-    const worker: Worker = {
-      kind: 'worker',
-      id: kid.id,
-      age: kid.age,
-      x: kid.x,
-      y: kid.y,
-      prevX: kid.prevX,
-      prevY: kid.prevY,
-      facing: kid.facing,
-      moving: false,
-      homeId,
-      exMutant: false,
-      grown: true,
-      logistician: false,
-      builder: false,
-      survivor: false,
-      build: null,
-      inside: false,
-      job: null,
-      searchTicks: PORTERS.retryTicks,
-      ...wanderFrom(kid.x, kid.y),
-    };
+    this.mobiles.delete(kid.id);
+    this.colonists += 1;
+    this.rosterChanged();
+    this.restartFarms();
 
-    this.mobiles.set(worker.id, worker);
-    this.duty = null;
+    const nursery = this.entities.get(kid.homeId);
+
+    if (nursery?.kind === 'nursery') this.restart(nursery);
     if (announce) this.events.emit('kidGrewUp', { id: kid.id, name: nameOf(this.seed, kid.id), x: kid.x, y: kid.y });
   }
 
@@ -4230,9 +4258,25 @@ export class World {
 
   private readonly lineIsClear: LineTest = (x0, y0, x1, y1) => clearLine(this.seed, x0, y0, x1, y1);
 
+  /** Loge, dans chaque maison, poste et cabane, les ouvriers de la colonie qu'on vient d'y affecter. */
+  private lodgeCrews(): void {
+    this.lodging = false;
+    for (const entity of this.entities.values()) {
+      if (entity.kind === 'house' || entity.kind === 'depot' || entity.kind === 'yard') this.staff(entity);
+      if (entity.kind === 'lumberCamp') this.staffCamp(entity);
+    }
+  }
+
+  /** Effectifs, bâtiments ou colonie ont changé : la répartition est à refaire, les logés à revoir. */
+  private rosterChanged(): void {
+    this.duty = null;
+    this.lodging = true;
+  }
+
   /**
    * Loge les ouvriers de la maison — ou les logisticiens, ou les bâtisseurs
-   * du poste — qui n'y sont pas encore. Ils sortent un par un, dès qu'il y a à porter.
+   * du poste — qui n'y sont pas encore : autant que de postes pourvus, pris
+   * parmi les ouvriers de la colonie. Ils sortent un par un, dès qu'il y a à porter.
    */
   private staff(house: House | Depot | Yard): void {
     let lodged = 0;
@@ -4242,8 +4286,9 @@ export class World {
     }
 
     const door = doorOf(house);
+    const posts = this.roster().filled.get(house.id) ?? 0;
 
-    for (let i = lodged; i < BUILDINGS[house.proto].workers; i += 1) {
+    for (let i = lodged; i < posts; i += 1) {
       const id = this.nextMobileId++;
       const worker: Worker = {
         kind: 'worker',
@@ -4270,6 +4315,8 @@ export class World {
 
       this.mobiles.set(worker.id, worker);
     }
+    // Les nouveaux logés prennent leur poste : la répartition les compte au prochain coup d'œil.
+    if (posts > lodged) this.duty = null;
   }
 
   /**
@@ -4337,6 +4384,8 @@ export class World {
     if (!job) {
       // Sa maison est tombée et il n'a plus rien à porter : il quitte la colonie.
       if (!homeDoor) this.mobiles.delete(worker.id);
+      // Retiré de son poste, il rentre : il redevient un ouvrier libre de la colonie.
+      else if (!this.onDuty(worker)) this.dismiss(worker, homeDoor);
       else this.idle(worker, homeDoor, bedtime);
       return;
     }
@@ -4357,6 +4406,14 @@ export class World {
 
     if (job.carried) this.dropOff(worker, job);
     else this.pickUp(worker, job);
+  }
+
+  /** Un ouvrier sans poste rentre chez lui, puis n'y est plus logé : il rejoint les ouvriers libres. */
+  private dismiss(worker: Worker | Lumberjack, door: { x: number; y: number }): void {
+    this.goHome(worker, door);
+    if (!worker.inside) return;
+    this.mobiles.delete(worker.id);
+    this.idleSince.delete(worker.id);
   }
 
   private goHome(worker: Worker | Lumberjack, door: { x: number; y: number }): void {
@@ -4636,7 +4693,7 @@ export class World {
     }
   }
 
-  /** Loge les bûcherons de la cabane qui n'y sont pas encore. */
+  /** Loge les bûcherons de la cabane qui n'y sont pas encore, autant que de postes pourvus. */
   private staffCamp(camp: LumberCamp): void {
     let lodged = 0;
 
@@ -4645,8 +4702,9 @@ export class World {
     }
 
     const door = doorOf(camp);
+    const posts = this.roster().filled.get(camp.id) ?? 0;
 
-    for (let i = lodged; i < BUILDINGS[camp.proto].workers; i += 1) {
+    for (let i = lodged; i < posts; i += 1) {
       const id = this.nextMobileId++;
       const lumberjack: Lumberjack = {
         kind: 'lumberjack',
@@ -4671,6 +4729,7 @@ export class World {
 
       this.mobiles.set(lumberjack.id, lumberjack);
     }
+    if (posts > lodged) this.duty = null;
   }
 
   /**
@@ -4718,6 +4777,12 @@ export class World {
     if (!working) {
       if (lumberjack.state === 'toTree' || lumberjack.state === 'chop') this.endTrip(lumberjack, door);
       else if (lumberjack.state === 'wait' && lumberjack.load === 0) lumberjack.state = 'idle';
+    }
+
+    // Retiré de son poste, son bois rapporté : il rentre, et redevient un ouvrier libre.
+    if (!this.onDuty(lumberjack) && lumberjack.state === 'idle' && lumberjack.load === 0) {
+      this.dismiss(lumberjack, door);
+      return;
     }
 
     switch (lumberjack.state) {
@@ -5007,7 +5072,7 @@ export class World {
 
   private destroyBuilding(building: Building): void {
     this.entities.delete(building.id);
-    this.duty = null;
+    this.rosterChanged();
     this.restartFarms();
     this.chunks.release(building.id, building.tx, building.ty, building.width, building.height);
     this.dirtyTile(building.tx, building.ty);
@@ -5069,7 +5134,7 @@ export class World {
     if (staff === entity.staff) return;
 
     entity.staff = staff;
-    this.duty = null;
+    this.rosterChanged();
     this.events.emit('workersChanged', { id, staff });
     this.restartFarms();
     if (entity.kind === 'yard') this.settleSites();
@@ -5102,8 +5167,7 @@ export class World {
   }
 
   /**
-   * Qui travaille : la population de la ville — les ouvriers que logent les
-   * bâtiments finis — répartie entre les bâtiments qui emploient
+   * Qui travaille : les ouvriers de la colonie (`colonists`) répartis entre les bâtiments qui emploient
    * (`allocateStaff`, par id). Dans chaque bâtiment, ce sont ses premiers
    * logés, par id, qui prennent les postes ; les autres finissent leur geste
    * et sont libres. Un ex-mutant n'occupe pas de poste : il porte toujours.
@@ -5111,16 +5175,14 @@ export class World {
   private roster(): { filled: Map<EntityId, number>; onDuty: Set<MobileId> } {
     if (this.duty?.tick === this.tickCount) return this.duty;
 
-    let pool = 0;
     const demands: { id: EntityId; wanted: number }[] = [];
 
     for (const entity of this.entities.values()) {
       if (entity.kind === 'site' || !employs(entity.proto)) continue;
-      pool += BUILDINGS[entity.proto].workers;
       demands.push({ id: entity.id, wanted: entity.staff });
     }
 
-    const filled = allocateStaff(demands, pool);
+    const filled = allocateStaff(demands, this.colonists);
     const crews = new Map<EntityId, MobileId[]>();
 
     for (const mobile of this.mobiles.values()) {

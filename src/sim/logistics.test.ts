@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_SIZE } from '../core/grid.ts';
 import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
+import { COLONY } from '../data/inhabitants.ts';
 import { ENEMIES } from '../data/enemies.ts';
 import { ITEM_IDS, type ItemId } from '../data/items.ts';
 import { LOGISTICIANS, PORTERS } from '../data/workers.ts';
@@ -173,13 +174,14 @@ function run(world: World, ticks: number, each?: () => void): void {
 }
 
 describe('poste de logistique', () => {
-  it('loge quatre logisticiens, comptés dans la population', () => {
+  it('loge quatre logisticiens, pris parmi les ouvriers de la colonie', () => {
     const world = colony({}, [DEPOT]);
 
     expect(logisticians(world)).toHaveLength(BUILDINGS.logisticsPost.workers);
     expect(BUILDINGS.logisticsPost.workers).toBe(4);
     expect(logisticians(world).every((worker) => worker.homeId === depotOf(world).id)).toBe(true);
-    expect(world.population().workers).toBe(4);
+    expect(world.population().workers).toBe(COLONY.startingWorkers);
+    expect(world.workforce()).toMatchObject({ total: COLONY.startingWorkers, assigned: 4 });
   });
 
   it('portent un peu plus qu’un porteur', () => {

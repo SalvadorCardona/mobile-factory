@@ -1690,11 +1690,11 @@ function crewDetail({ byBuilding, porters, assigned, free, missing }: Workforce)
 
   const label = t().hud.quest;
 
-  if (byBuilding.length === 0) detail.append(text('hud-quest-crew-label', label.noCrew, 'div'));
+  if (byBuilding.length === 0 && free === 0) detail.append(text('hud-quest-crew-label', label.noCrew, 'div'));
   for (const { proto, count } of byBuilding) detail.append(row(buildingIcon(proto, 22), t().buildings[proto].label, count));
-  if (byBuilding.length > 0) {
-    detail.append(row(uiIcon('worker', 22), label.assigned, assigned), row(uiIcon('worker', 22), label.free, free));
-  }
+  if (byBuilding.length > 0) detail.append(row(uiIcon('worker', 22), label.assigned, assigned));
+  // Les ouvriers de la colonie qu'aucun bâtiment n'emploie : dès le départ, les dix.
+  if (byBuilding.length > 0 || free > 0) detail.append(row(uiIcon('worker', 22), label.free, free));
   if (missing > 0) detail.append(row(uiIcon('worker', 22), label.emptyPosts, missing));
   if (porters.busy + porters.idle > 0) {
     detail.append(
