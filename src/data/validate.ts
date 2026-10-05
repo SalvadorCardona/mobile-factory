@@ -21,6 +21,7 @@ import { ENEMIES, LOOT_DROPS, NIGHT_PLAN, WAVES, WILDLIFE, WILDLIFE_SPAWN, type 
 import { EVE } from './eve.ts';
 import { ICON_SIZE, ITEM_ICONS, PRESTIGE_ICON } from './icons.ts';
 import { ITEMS } from './items.ts';
+import { NEEDS, type NeedProto } from './needs.ts';
 import { OBJECTIVES, type ObjectiveProto } from './objectives.ts';
 import { PERKS, type PerkProto } from './perks.ts';
 import { QUESTS, QUEST_IDS, TOOLS, type QuestProto } from './quests.ts';
@@ -203,7 +204,7 @@ export function validatePrototypes(): string[] {
     }
   }
 
-  // Un débouché par objet : un coût de bâtiment ou d'amélioration, une entrée de recette ou un coût de recherche.
+  // Un débouché par objet : un coût de bâtiment ou d'amélioration, une entrée de recette, un coût de recherche — ou un besoin des habitants (l'eau se boit).
   const consumed = new Set<string>();
 
   for (const building of Object.values(BUILDINGS) as BuildingProto[]) {
@@ -216,9 +217,10 @@ export function validatePrototypes(): string[] {
   for (const research of Object.values(RESEARCH) as ResearchProto[]) {
     for (const itemId of Object.keys(research.cost)) consumed.add(itemId);
   }
+  for (const need of Object.values(NEEDS) as NeedProto[]) consumed.add(need.item);
   for (const id of Object.keys(ITEMS)) {
     if (!consumed.has(id)) {
-      errors.push(`ITEMS.${id} : aucun débouché — ni coût de bâtiment ou d'amélioration, ni entrée de recette, ni coût de recherche`);
+      errors.push(`ITEMS.${id} : aucun débouché — ni coût de bâtiment ou d'amélioration, ni entrée de recette, ni coût de recherche, ni besoin`);
     }
   }
 

@@ -90,6 +90,7 @@ import type { UiIcon } from '../art/ui.ts';
 import { onLocale, t } from '../i18n/locale.ts';
 import { creatureView, isCreature, type CreatureView } from './creatureView.ts';
 import { buildingIcon, buildingIconUrl, creatureIconUrl, enemyBaseIconUrl, itemAmount, uiIcon } from './icons.ts';
+import { needMeter } from './needMeter.ts';
 import { PanelTabs } from './panelTabs.ts';
 import { ResearchPanel } from './researchPanel.ts';
 import { TransferPanel } from './transferPanel.ts';
@@ -117,6 +118,9 @@ export class BuildingPanel {
   private readonly infoButton: HTMLButtonElement;
   private readonly description: HTMLElement;
   private readonly lines: HTMLElement;
+  /** Les jauges d'un habitant : la faim, la soif. */
+  private readonly needs: HTMLElement;
+  private lastNeeds = '';
   /** Cœur (ou rien pour un chantier), barre, nombre : une seule ligne. */
   private readonly meter: HTMLElement;
   private readonly meterIcon: HTMLElement;
@@ -247,6 +251,10 @@ export class BuildingPanel {
 
     this.lines = document.createElement('pre');
     this.lines.className = 'building-panel-lines';
+
+    this.needs = document.createElement('div');
+    this.needs.className = 'building-panel-needs';
+    this.needs.hidden = true;
 
     this.items = document.createElement('div');
     this.items.className = 'building-panel-items';
@@ -382,6 +390,7 @@ export class BuildingPanel {
         this.stock,
         this.items,
         this.lines,
+        this.needs,
         this.crew,
         this.actions,
         this.upgrade,
@@ -410,6 +419,7 @@ export class BuildingPanel {
       this.lastUpgrade = '';
       this.lastGear = '';
       this.lastCrew = '';
+      this.lastNeeds = '';
       this.update();
     });
   }
@@ -478,6 +488,9 @@ export class BuildingPanel {
     this.lastUpgrade = '';
     this.lastGear = '';
     this.lastCrew = '';
+    this.lastNeeds = '';
+    // Les jauges de faim et de soif ne sont qu'à un habitant : `refreshCreature` les montre.
+    this.needs.hidden = true;
     this.cancelArmed = false;
     // Rouverte, elle revient sur « Bâtiment ».
     this.tabs.select('building');
@@ -750,17 +763,13 @@ export class BuildingPanel {
           );
           break;
 
-        case 'quarry':
-          lines.push(
-            entity.paused
-              ? paused
-              : stopped
-                ? text.quarry.noOne
-                : entity.blocked
-                  ? blocked
-                  : text.quarry.working,
-          );
+        case 'quarry': {
+          // Le puits est une carrière sur sa propre recette : ses mots à lui.
+          const words = entity.proto === 'well' ? text.well : text.quarry;
+
+          lines.push(entity.paused ? paused : stopped ? words.noOne : entity.blocked ? blocked : words.working);
           break;
+        }
 
         case 'house':
           lines.push(text.house.sleeping);
@@ -966,6 +975,7 @@ export class BuildingPanel {
 
     this.setStats([{ icon: 'moon', value: String(view.age), label: text.creature.age(view.age) }]);
     this.setItems([], 'creature');
+    this.setNeeds(view.needs);
 
     const { hp } = view;
 
@@ -978,6 +988,16 @@ export class BuildingPanel {
     } else {
       this.setBody(view.lines, 0, 'hp', '', '');
     }
+  }
+
+  /** Les jauges d'un habitant, une par besoin ; reconstruites quand l'une bouge d'un centième. */
+  private setNeeds(needs: CreatureView['needs']): void {
+    const key = needs.map(({ need, value }) => `${need}:${Math.round(value * 100)}`).join('|');
+
+    this.needs.hidden = needs.length === 0;
+    if (key === this.lastNeeds) return;
+    this.lastNeeds = key;
+    this.needs.replaceChildren(...needs.map(({ need, value }) => needMeter(need, value)));
   }
 
   /** Les lignes, puis la jauge : cœur (ou rien pour un chantier), barre, nombre. */

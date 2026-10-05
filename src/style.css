@@ -2491,6 +2491,7 @@ button.hud-stock:active {
 .building-panel-info[hidden],
 .building-panel-description[hidden],
 .building-panel-lines[hidden],
+.building-panel-needs[hidden],
 .building-panel-stats[hidden],
 .building-panel-stock[hidden],
 .building-panel-meter[hidden],
@@ -2994,6 +2995,18 @@ button.hud-stock:active {
   font-size: 17px;
   font-variant-numeric: tabular-nums;
   white-space: pre-wrap;
+}
+
+/* Les jauges d'un habitant, sous ses lignes : la faim, la soif — icône, barre, état. */
+.building-panel-needs {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.building-panel-needs .hud-person-need {
+  margin-top: 0;
+  font-size: 15px;
 }
 
 /* ------------------------------------------------------- panneau Recherche */

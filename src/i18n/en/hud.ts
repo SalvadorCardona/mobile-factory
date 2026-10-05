@@ -79,7 +79,10 @@ export const hud: Messages['hud'] = {
     patientAdmitted: 'Admitted to the clinic: one night of care',
     mutantHealed: 'An ex-mutant leaves the clinic: one more porter!',
     kidGrewUp: (name: string): string => `${name} is 14, one more worker`,
-    growthStunted: (name: string): string => `${name} is hungry: no birthday this dawn`,
+    growthStunted: {
+      hunger: (name: string): string => `${name} is hungry: no birthday this dawn`,
+      thirst: (name: string): string => `${name} is thirsty: no birthday this dawn`,
+    },
     weatherSoon: (weather: string, seconds: number, advice: string): string => `${weather} in ${seconds} s — ${advice}`,
     weatherEnded: (weather: string): string => `Over: ${lower(weather)}`,
     knockedOut: 'Adam passed out — he wakes up at the town hall',
@@ -172,9 +175,12 @@ export const hud: Messages['hud'] = {
   needAlert: {
     soonShort: (minutes: number): string => `${minutes} min`,
     outShort: 'out',
-    soon: (item: string, minutes: number, wanting: number): string =>
-      `${item}: only ${minutes} min left in town${wanting > 0 ? ` — ${wanting} hungry, tap to see` : ''}`,
-    out: (item: string, wanting: number): string => `${item}: the town has none left${wanting > 0 ? ` — ${wanting} hungry, tap to see` : ''}`,
+    soon: (item: string, minutes: number, who: string): string => `${item}: only ${minutes} min left in town${who ? ` — ${who}, tap to see` : ''}`,
+    out: (item: string, who: string): string => `${item}: the town has none left${who ? ` — ${who}, tap to see` : ''}`,
+    wanting: {
+      hunger: (count: number): string => `${count} hungry`,
+      thirst: (count: number): string => `${count} thirsty`,
+    },
   },
   people: {
     working: (n: number): string => `${n} worker${n === 1 ? '' : 's'} working`,
@@ -237,6 +243,7 @@ export const hud: Messages['hud'] = {
     home: 'at home',
     needs: {
       hunger: { sated: 'well fed', wanting: 'hungry', deprived: 'starving' },
+      thirst: { sated: 'not thirsty', wanting: 'thirsty', deprived: 'parched' },
     },
   },
 };

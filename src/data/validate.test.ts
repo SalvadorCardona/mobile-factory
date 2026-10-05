@@ -40,7 +40,7 @@ describe('prototypes', () => {
     floor.cost = { ironPlate: 40, radCore: 1 };
     try {
       expect(validatePrototypes()).toContain(
-        "ITEMS.coal : aucun débouché — ni coût de bâtiment ou d'amélioration, ni entrée de recette, ni coût de recherche",
+        "ITEMS.coal : aucun débouché — ni coût de bâtiment ou d'amélioration, ni entrée de recette, ni coût de recherche, ni besoin",
       );
     } finally {
       forge.inputs = inputs;

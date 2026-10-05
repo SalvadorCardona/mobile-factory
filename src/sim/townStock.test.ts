@@ -3,7 +3,7 @@ import { TILE_SIZE } from '../core/grid.ts';
 import { BUILDINGS } from '../data/buildings.ts';
 import { LOOT_DROPS } from '../data/enemies.ts';
 import type { ItemId } from '../data/items.ts';
-import { START_FOOD } from '../data/needs.ts';
+import { COLONY } from '../data/inhabitants.ts';
 import type { DepositRejection } from './commands.ts';
 import { INVENTORY_CAPACITY } from './player.ts';
 import { SAVE_VERSION, decodeSave, encodeSave } from './save.ts';
@@ -95,7 +95,7 @@ describe('ville et sac', () => {
 
     expect(refused).toEqual(['empty', 'outOfReach']);
     expect(world.player.inventory.count('stone')).toBe(4);
-    expect(world.townStock()!.total()).toBe(START_FOOD);
+    expect(world.townStock()!.total()).toBe(COLONY.startingStock.food + COLONY.startingStock.water);
   });
 
   it('« Jeter » pose un tas à ses pieds, qu’Adam ne reprend qu’après s’en être éloigné', () => {
@@ -226,7 +226,7 @@ describe('ville et sac', () => {
 
     expect(restored.player.inventory.toJSON()).toEqual({ coal: 2 });
     expect(restored.player.inventory.capacity).toBe(INVENTORY_CAPACITY);
-    expect(restored.townStock()!.toJSON()).toEqual({ food: START_FOOD, stone: 7 });
+    expect(restored.townStock()!.toJSON()).toEqual({ ...COLONY.startingStock, stone: 7 });
     expect(pickups(restored)).toEqual([expect.objectContaining({ item: 'wood', amount: 12, waitForLeave: true })]);
   });
 

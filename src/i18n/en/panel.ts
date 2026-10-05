@@ -106,6 +106,11 @@ export const panel: Messages['panel'] = {
     working: 'Pickaxes chipping away at the ruin.',
   },
 
+  well: {
+    noOne: 'Stopped: nobody at the winch. Add a worker.',
+    working: 'The bucket comes up full.',
+  },
+
   house: {
     sleeping: 'The workers sleep here between shifts.',
   },

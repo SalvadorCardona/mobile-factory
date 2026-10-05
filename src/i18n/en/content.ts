@@ -23,6 +23,7 @@ export const content: Content = {
     coal: 'Coal',
     ironOre: 'Iron ore',
     food: 'Food',
+    water: 'Water',
     ironPlate: 'Iron plate',
     mutantGoo: 'Mutant goo',
     wolfFang: 'Wolf fang',
@@ -64,6 +65,15 @@ export const content: Content = {
       description:
         'A collapsed car park, a jury-rigged crane and piles of pink rubble. Three workers cut stone from the ruins of the old world and store it in its chest, which porters empty into the town hall. No rock needed: there’s no shortage of ruins.',
       effect: '3 workers cut stone, no rock needed.',
+      upgrades: [],
+    },
+    well: {
+      label: 'Well',
+      sign: 'Well',
+      siteDescription: 'A half-built curb and two posts with no roof: one worker will draw water here.',
+      description:
+        'A stone curb, a winch and its bucket under a little roof. The water table runs under the whole town: one worker draws the water the colony drinks and stores it in its chest, which porters empty into the town hall.',
+      effect: '1 worker draws 12 water a minute, anywhere.',
       upgrades: [],
     },
     logisticsPost: {
@@ -203,6 +213,7 @@ export const content: Content = {
     mineOre: 'Mining',
     growFood: 'Farming',
     cutStone: 'Stonecutting',
+    drawWater: 'Drawing water',
     raiseChild: 'Birth',
     smeltPlate: 'Smelting',
     burnCharcoal: 'Charring',
@@ -303,6 +314,7 @@ export const content: Content = {
       bow: 'Stay close to them: your bow shoots by itself.',
       repair: 'The town hall is damaged! Charge into it with wood, or tap it then "Repair".',
       repairFetch: 'The town hall is damaged! Bring back wood and charge into it: that fixes it.',
+      well: 'Our workers are getting thirsty, Adam! Place a well: a single worker draws water, anywhere.',
       quarry: 'Out of stone in town? Place a quarry: its workers cut it from the ruins.',
       coming: 'Hang in there: {n} more night{s} and I’m coming with my machine!',
       labForge: 'To reinforce our towers, we’ll need iron plates. Build a lab: that’s where we’ll learn to forge.',

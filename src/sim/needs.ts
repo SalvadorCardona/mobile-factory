@@ -15,8 +15,8 @@ export type Needs = Record<NeedId, number>;
 /**
  * Où en est un besoin :
  * - `sated` : comblé ;
- * - `wanting` : sous `seekBelow` — il a faim, il va manger s'il y a de quoi ;
- * - `deprived` : sous `weakBelow` — il est affamé, il ralentit, puis s'arrête.
+ * - `wanting` : sous `seekBelow` — il a faim (ou soif), il va manger (ou boire) s'il y a de quoi ;
+ * - `deprived` : sous `weakBelow` — il est affamé (ou assoiffé), il ralentit, puis s'arrête.
  */
 export type NeedState = 'sated' | 'wanting' | 'deprived';
 
@@ -44,7 +44,18 @@ export function needState(id: NeedId, value: number): NeedState {
 
 /** Affamé d'au moins un besoin : la bulle au-dessus de sa tête. */
 export function isDeprived(needs: Needs): boolean {
-  return NEED_IDS.some((id) => needState(id, needs[id]) === 'deprived');
+  return deprivedNeed(needs) !== null;
+}
+
+/** Le besoin dont il est à bout — le plus bas s'il en a deux —, celui que dit sa bulle ; `null` sinon. */
+export function deprivedNeed(needs: Needs): NeedId | null {
+  let deprived: NeedId | null = null;
+
+  for (const id of NEED_IDS) {
+    if (needState(id, needs[id]) !== 'deprived') continue;
+    if (deprived === null || needs[id] < needs[deprived]) deprived = id;
+  }
+  return deprived;
 }
 
 /** Le besoin le plus bas sous son seuil, celui qu'il va combler d'abord ; `null` s'il ne manque de rien. */
@@ -76,7 +87,12 @@ export function needsPace(needs: Needs): number {
 
 /** Un enfant grandit-il cette aube ? Pas s'il manque d'un besoin qui bloque la croissance. */
 export function canGrow(needs: Needs): boolean {
-  return NEED_IDS.every((id) => !NEEDS[id].blocksGrowth || needState(id, needs[id]) === 'sated');
+  return stuntingNeed(needs) === null;
+}
+
+/** Le besoin qui empêche un enfant de grandir cette aube — la faim, la soif —, `null` s'il ne manque de rien. */
+export function stuntingNeed(needs: Needs): NeedId | null {
+  return NEED_IDS.find((id) => NEEDS[id].blocksGrowth && needState(id, needs[id]) !== 'sated') ?? null;
 }
 
 /**

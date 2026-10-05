@@ -72,7 +72,7 @@ import { EVE } from '../data/eve.ts';
 import { GEAR_WORKSHOP, MAX_GEAR, gearOf } from '../data/gear.ts';
 import { AGES, COLONY, NURSERY_CARE } from '../data/inhabitants.ts';
 import { TOWN_PLENTY, type ItemId } from '../data/items.ts';
-import { NEED_ALERT, NEED_IDS, NEEDS, START_FOOD, type NeedId } from '../data/needs.ts';
+import { NEED_ALERT, NEED_IDS, NEEDS, type NeedId } from '../data/needs.ts';
 import { BUILD_PRESTIGE, KILL_PRESTIGE } from '../data/prestige.ts';
 import {
   PERKS,
@@ -85,7 +85,7 @@ import {
 } from '../data/perks.ts';
 import { OBJECTIVES, objectiveBagBonus, type Reward } from '../data/objectives.ts';
 import type { QuestId } from '../data/quests.ts';
-import { RECIPES, type RecipeId, type RecipeProto } from '../data/recipes.ts';
+import { RECIPES, recipeOf, type RecipeId, type RecipeProto } from '../data/recipes.ts';
 import { RESEARCH, type ResearchId, type ResearchStat } from '../data/research.ts';
 import { RESOURCES, SAPLING, type ResourceId } from '../data/resources.ts';
 import { ROADS } from '../data/roads.ts';
@@ -120,7 +120,7 @@ import { compassOf, spawnPoint, stepMutant, stepQueen, surfacePoint, type Compas
 import { createEve, currentQuest, harvestYieldWithTools, isUnlocked, mostDamaged, questProgress, rideHome, walkTo } from './eve.ts';
 import { ADAM_SALT, adultAge, canWork, foeAge, nameOf, yearsToWork } from './inhabitants.ts';
 import { KID_SPRINT, stepKid } from './kids.ts';
-import { canGrow, drainNeeds, freshNeeds, needState, needsPace, pacedTick, urgentNeed } from './needs.ts';
+import { drainNeeds, stuntingNeed, freshNeeds, needState, needsPace, pacedTick, urgentNeed } from './needs.ts';
 import { rollLoot, stepPickup } from './loot.ts';
 import { copyStats, emptyStats, objectiveDone } from './objectives.ts';
 import { denSize, densOfChunk, stepBeast, type Den } from './wildlife.ts';
@@ -230,9 +230,6 @@ const DRILL_RECIPE: RecipeId = 'mineOre';
 
 /** Recette d'une ferme. */
 const FARM_RECIPE: RecipeId = 'growFood';
-
-/** Recette d'une carrière. */
-const QUARRY_RECIPE: RecipeId = 'cutStone';
 
 /** Ce que coûte une naissance à la nurserie, et tous les combien. */
 const NURSERY_RECIPE: RecipeId = 'raiseChild';
@@ -536,8 +533,8 @@ export type WorldEvents = {
   kidGrewUp: { id: MobileId; name: string; x: number; y: number };
   /** L'habitant `id` a comblé un besoin à la mairie : sa jauge est pleine. */
   needMet: { id: MobileId; need: NeedId; x: number; y: number };
-  /** Un enfant affamé n'a pas pris d'année à l'aube. */
-  growthStunted: { id: MobileId; name: string };
+  /** Un enfant affamé (ou assoiffé : `need`) n'a pas pris d'année à l'aube. */
+  growthStunted: { id: MobileId; name: string; need: NeedId };
   /** Le labo `id` a choisi une recherche : il attend son coût. */
   researchChosen: { id: EntityId; research: ResearchId };
   /** La recherche choisie est abandonnée ; ce qui était déposé reste au coffre. */
@@ -2768,8 +2765,8 @@ export class World {
       case 'townHall':
         // Le toit est posé : le premier jour se lève, les mutants sauront où aller la nuit venue.
         if (building.id === this.townHallId) {
-          // De quoi nourrir les premiers ouvriers le temps de lancer une ferme.
-          building.store.add('food', START_FOOD);
+          // De quoi nourrir et abreuver les premiers ouvriers le temps de lancer un puits et une ferme.
+          for (const [item, amount] of amountsOf(COLONY.startingStock)) building.store.add(item, amount);
           this.cycleStartTick = this.tickCount;
           this.nextWaveHeading = this.rng() * Math.PI * 2;
           // Le menu s'ouvre : ce qu'il propose d'emblée est le départ, pas une découverte — ni badge ni annonce.
@@ -2886,8 +2883,8 @@ export class World {
   }
 
   /**
-   * Un cycle de ferme — ou de carrière, qui tourne pareil sur sa propre
-   * recette : même logique que la foreuse — coffre plein, elle s'endort et
+   * Un cycle de ferme — ou de carrière, ou de puits, qui tourne pareil sur
+   * sa propre recette : même logique que la foreuse — coffre plein, elle s'endort et
    * ne coûte plus rien jusqu'à ce qu'on vienne la vider.
    */
   private runFarm(farm: Farm | Quarry): void {
@@ -2897,7 +2894,7 @@ export class World {
       return;
     }
 
-    const recipe = RECIPES[farm.kind === 'farm' ? FARM_RECIPE : QUARRY_RECIPE];
+    const recipe = quarryRecipe(farm);
     const [item, base] = (Object.entries(recipe.outputs) as [ItemId, number][])[0] ?? ['food', 1];
     // Fermes fertiles (labo) : la même récolte, plus généreuse.
     const amount = farm.kind === 'farm' ? base + this.bonus('farmYield') : base;
@@ -2917,7 +2914,7 @@ export class World {
   /** La cadence de la recette est celle de la ferme au complet : à moitié d'ouvriers, deux fois plus lente. */
   private scheduleFarm(farm: Farm | Quarry): void {
     const { filled, max } = this.staffing(farm) ?? { filled: 1, max: 1 };
-    const recipe = RECIPES[farm.kind === 'farm' ? FARM_RECIPE : QUARRY_RECIPE];
+    const recipe = quarryRecipe(farm);
     const duration = Math.ceil((recipe.duration * max) / Math.max(1, filled));
 
     this.scheduler.schedule(farm.id, this.tickCount + duration, this.tickCount);
@@ -4488,9 +4485,11 @@ export class World {
     this.player.age += AGES.yearsPerCycle;
     for (const mobile of [...this.mobiles.values()]) {
       if (mobile.kind === 'arrow' || mobile.kind === 'pickup' || mobile.kind === 'patient' || mobile.kind === 'caravan') continue;
-      // Un enfant qui a faim ne grandit pas : il attend sa prochaine aube le ventre plein.
-      if (mobile.kind === 'kid' && !canGrow(mobile.needs)) {
-        this.events.emit('growthStunted', { id: mobile.id, name: nameOf(this.seed, mobile.id) });
+      // Un enfant qui a faim ou soif ne grandit pas : il attend sa prochaine aube le ventre plein.
+      const stunted = mobile.kind === 'kid' ? stuntingNeed(mobile.needs) : null;
+
+      if (stunted !== null) {
+        this.events.emit('growthStunted', { id: mobile.id, name: nameOf(this.seed, mobile.id), need: stunted });
         continue;
       }
       mobile.age += AGES.yearsPerCycle;
@@ -4677,37 +4676,46 @@ export class World {
 
     if (!town) return null;
 
+    if (this.inhabitants().next().done) return null;
+
+    // La faim et la soif peuvent sonner ensemble : la capsule dit la plus pressante, le stock à sec d'abord.
+    let worst: NeedAlert | null = null;
+
     for (const need of NEED_IDS) {
       const { item, meal } = NEEDS[need];
-      let people = 0;
       let wanting = 0;
 
       for (const mobile of this.inhabitants()) {
-        people += 1;
         if (mobile.meal === null && needState(need, mobile.needs[need]) !== 'sated') wanting += 1;
       }
-      if (people === 0) return null;
 
       const stock = town.available(item);
       const rate = this.flows.netRate(item);
+      let alert: NeedAlert | null = null;
 
-      if (stock < meal && (wanting > 0 || rate < 0)) return { need, item, wanting, minutes: 0 };
+      if (stock < meal && (wanting > 0 || rate < 0)) {
+        alert = { need, item, wanting, minutes: 0 };
+      } else {
+        const minutes = rate < 0 ? stock / -rate : Infinity;
 
-      const minutes = rate < 0 ? stock / -rate : Infinity;
-
-      if (minutes * 20 * 60 < NEED_ALERT.runwayTicks) return { need, item, wanting, minutes: Math.max(1, Math.ceil(minutes)) };
+        if (minutes * 20 * 60 < NEED_ALERT.runwayTicks) alert = { need, item, wanting, minutes: Math.max(1, Math.ceil(minutes)) };
+      }
+      if (alert && (worst === null || alert.minutes < worst.minutes)) worst = alert;
     }
-    return null;
+    return worst;
   }
 
-  /** Les habitants qui ont faim, du plus affamé au moins : le HUD centre la caméra sur l'un, puis le suivant. */
-  public wantingInhabitants(): Inhabitant[] {
+  /**
+   * Les habitants qui ont faim — ou soif, ou ce que dit `need` —, du plus
+   * affamé au moins : le HUD centre la caméra sur l'un, puis le suivant.
+   */
+  public wantingInhabitants(need?: NeedId): Inhabitant[] {
     const wanting: { mobile: Inhabitant; level: number }[] = [];
 
     for (const mobile of this.inhabitants()) {
-      const need = urgentNeed(mobile.needs);
+      const urgent = need === undefined ? urgentNeed(mobile.needs) : needState(need, mobile.needs[need]) === 'sated' ? null : need;
 
-      if (need !== null) wanting.push({ mobile, level: mobile.needs[need] });
+      if (urgent !== null) wanting.push({ mobile, level: mobile.needs[urgent] });
     }
     return wanting.sort((a, b) => a.level - b.level || a.mobile.id - b.mobile.id).map(({ mobile }) => mobile);
   }
@@ -6209,6 +6217,12 @@ export function siteMissing(site: Site): number {
     missing += Math.max(0, needed - (site.delivered[item] ?? 0));
   }
   return missing;
+}
+
+/** La recette d'une ferme, ou celle d'une carrière ou d'un puits, trouvée par son id : la taille, le puisage. */
+function quarryRecipe(producer: Farm | Quarry): RecipeProto {
+  if (producer.kind === 'farm') return RECIPES[FARM_RECIPE];
+  return recipeOf(producer.proto) ?? RECIPES.cutStone;
 }
 
 function amountsOf(amounts: RecipeProto['inputs']): [ItemId, number][] {

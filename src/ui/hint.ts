@@ -15,6 +15,7 @@
 
 import { BUILDINGS, REPAIR, buildingLevel } from '../data/buildings.ts';
 import { EVE } from '../data/eve.ts';
+import { COLONY } from '../data/inhabitants.ts';
 import { TOWN_PLENTY, type ItemId } from '../data/items.ts';
 import type { Goal } from '../data/objectives.ts';
 import { RESEARCH_IDS } from '../data/research.ts';
@@ -105,6 +106,12 @@ export function tutorialAdvice(world: World, progress: HintProgress, towers: boo
     return null;
   }
 
+  // L'eau de départ fond et rien n'en tire : sans puits, les ouvriers s'arrêteront, tour ou pas.
+  const welled = [...world.entities.values()].some((entity) => entity.proto === 'well');
+  const water = world.townStock()?.available('water') ?? 0;
+
+  if (mutants === 0 && !welled && (water < COLONY.startingStock.water / 2 || world.needAlert()?.need === 'thirst')) return say(lines.well);
+
   if (world.night === 0 && !towers) return say(lines.tower);
   if (mutants > 0 && world.night <= 2) return say(lines.bow);
 
@@ -114,7 +121,7 @@ export function tutorialAdvice(world: World, progress: HintProgress, towers: boo
   }
 
   // La pierre manque en ville, et rien n'en produit : la carrière, avant que les rochers ne soient vidés.
-  const quarried = [...world.entities.values()].some((entity) => BUILDINGS[entity.proto].kind === 'quarry');
+  const quarried = [...world.entities.values()].some((entity) => entity.proto === 'quarry');
 
   if (mutants === 0 && !quarried && (world.townStock()?.available('stone') ?? 0) === 0) return say(lines.quarry);
 

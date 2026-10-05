@@ -1,5 +1,5 @@
 /**
- * Les besoins des habitants — contenu pur : la faim, et demain la soif.
+ * Les besoins des habitants — contenu pur : la faim et la soif.
  *
  * Chaque ouvrier, bûcheron et enfant porte une jauge par besoin, de 1
  * (comblé) à 0 (à bout). Elle baisse avec le temps de jeu, plus vite au
@@ -11,8 +11,9 @@
  * de plus — on la rend mortelle en ajoutant ici un délai, pas en touchant aux
  * humains.
  *
- * Un besoin de plus (la soif, l'eau du puits) est une entrée de plus dans
- * `NEEDS` : la jauge, le trajet, l'allure et l'infobulle suivent.
+ * La soif est la faim en plus pressé : l'eau du puits, une jauge qui baisse
+ * deux fois plus vite. Un besoin de plus est une entrée de plus dans
+ * `NEEDS` : la jauge, le trajet, l'allure, la bulle et l'infobulle suivent.
  */
 
 import type { ItemId } from './items.ts';
@@ -51,6 +52,18 @@ export const NEEDS = {
     stopsWork: true,
     blocksGrowth: true,
   },
+  thirst: {
+    item: 'water',
+    meal: 1,
+    // Cinq minutes au repos, deux et demie au travail : un porteur boit toutes les minutes et demie.
+    restTicks: 20 * 60 * 5,
+    workTicks: 20 * 60 * 2.5,
+    seekBelow: 0.4,
+    weakBelow: 0.15,
+    weakPace: 0.5,
+    stopsWork: true,
+    blocksGrowth: true,
+  },
 } as const satisfies Record<string, NeedProto>;
 
 export type NeedId = keyof typeof NEEDS;
@@ -58,15 +71,9 @@ export type NeedId = keyof typeof NEEDS;
 export const NEED_IDS = Object.keys(NEEDS) as NeedId[];
 
 /**
- * La nourriture qui tombe en ville quand la mairie est bâtie : deux repas
- * pour dix travailleurs, le temps de lancer une ferme.
- */
-export const START_FOOD = 20;
-
-/**
  * L'alerte du HUD : la ville « va manquer » d'un objet qu'un besoin
  * consomme quand, au rythme des habitants, son stock ne tient pas
- * `runwayTicks` — ou dès que quelqu'un a faim sans rien à manger.
+ * `runwayTicks` — ou dès que quelqu'un a faim (ou soif) sans rien en ville.
  */
 export const NEED_ALERT = {
   runwayTicks: 20 * 60 * 2,

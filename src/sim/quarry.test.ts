@@ -48,7 +48,8 @@ function colony(): { world: World; hx: number; hy: number } {
   };
 
   state.entities = [
-    { kind: 'townHall', id: world.townHallId, proto: 'townHall', tx: hx, ty: hy, width: 3, height: 3, store: {}, hp: BUILDINGS.townHall.hp, level: 1, paused: false, staff: 0 },
+    // De l'eau pour vingt minutes : ce n'est pas la soif qu'on mesure ici.
+    { kind: 'townHall', id: world.townHallId, proto: 'townHall', tx: hx, ty: hy, width: 3, height: 3, store: { water: 400 }, hp: BUILDINGS.townHall.hp, level: 1, paused: false, staff: 0 },
     built('watchtower', -3, 0),
     built('watchtower', 4, 0),
     built('logisticsPost', 0, 6),

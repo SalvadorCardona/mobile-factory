@@ -21,6 +21,7 @@ import { RARE_OFFERS, type RareOfferId } from '../data/caravan.ts';
 import { ENEMY_BASE_LEVELS } from '../data/enemyBases.ts';
 import { ENEMIES, WILDLIFE, type EnemyId, type WildlifeId } from '../data/enemies.ts';
 import { MAX_GEAR } from '../data/gear.ts';
+import { COLONY } from '../data/inhabitants.ts';
 import { ITEMS, type ItemId } from '../data/items.ts';
 import { NEED_IDS, NEEDS, type NeedId } from '../data/needs.ts';
 import { OBJECTIVES } from '../data/objectives.ts';
@@ -61,7 +62,7 @@ import { World } from './world.ts';
  * `WorldState` ; une migration de l'ancienne version se branche alors dans
  * `decodeSave`, sinon l'ancienne sauvegarde est ignorée.
  */
-export const SAVE_VERSION = 8;
+export const SAVE_VERSION = 9;
 
 /** Une entité telle qu'elle est rangée : son coffre devient un simple stock. */
 export type SavedEntity = Stored<Entity>;
@@ -190,13 +191,14 @@ export function decodeSave(text: string): DecodedSave {
   if (!isRecord(file) || typeof file['version'] !== 'number') return { ok: false, reason: 'corrupt' };
   const version = file['version'];
 
-  if (version !== SAVE_VERSION && version !== 7 && version !== 6 && version !== 5 && version !== 4) return { ok: false, reason: 'version' };
+  if (version !== SAVE_VERSION && version !== 8 && version !== 7 && version !== 6 && version !== 5 && version !== 4) return { ok: false, reason: 'version' };
 
   try {
     const v5 = version === 4 ? migrateV4(file['state']) : file['state'];
     const v6 = version === 4 || version === 5 ? migrateV5(v5) : v5;
     const v7 = version <= 6 ? migrateV6(v6) : v6;
-    const state = version === SAVE_VERSION ? v7 : migrateV7(v7);
+    const v8 = version <= 7 ? migrateV7(v7) : v7;
+    const state = version === SAVE_VERSION ? v8 : migrateV8(v8);
 
     return { ok: true, world: deserialize(state), savedAt: finite(file['savedAt']) };
   } catch {
@@ -308,6 +310,28 @@ function migrateV7(raw: unknown): unknown {
   const granted = typeof raw['night'] === 'number' && raw['night'] >= 1 ? NIGHT_ONE_RESEARCH.filter((id) => !done.includes(id)) : [];
 
   return { ...raw, researchDone: [...done, ...granted], seenBuildings: [...MENU_BUILDING_IDS] };
+}
+
+/**
+ * Version 8 : personne n'avait soif, et l'eau n'existait pas. La mairie
+ * debout reçoit l'eau d'une nouvelle partie (`COLONY.startingStock`), le
+ * temps de poser un puits ; les jauges de soif partent pleines (`needful`).
+ * Une mairie encore en chantier la recevra à son achèvement.
+ */
+function migrateV8(raw: unknown): unknown {
+  if (!isRecord(raw) || !Array.isArray(raw['entities'])) return raw;
+
+  const water = COLONY.startingStock.water;
+  const entities = raw['entities'].map((entity: unknown) => {
+    if (!isRecord(entity) || entity['kind'] !== 'townHall' || !isRecord(entity['store'])) return entity;
+
+    const store = entity['store'];
+    const held = typeof store['water'] === 'number' ? store['water'] : 0;
+
+    return { ...entity, store: { ...store, water: held + water } };
+  });
+
+  return { ...raw, entities };
 }
 
 /** Les recherches qui débloquent ce que la première nuit débloquait en version 7. */

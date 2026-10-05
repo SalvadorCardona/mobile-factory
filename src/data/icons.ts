@@ -65,6 +65,20 @@ export const ITEM_ICONS: Record<ItemId, string> = {
     cushion(16.5, 17, 8, 6),
     line(12.5, 21, 12.5, 23, mint.shade),
   ),
+  /**
+   * Une goutte d'eau cyan, pointe en haut — la teinte de l'eau, mais pas la
+   * forme du minerai de fer, un bloc trapu clouté : on ne les confond pas.
+   */
+  water: svg(
+    S,
+    S,
+    polygon([12, 1.5, 18.6, 13, 5.4, 13], cyan.shade),
+    circle(12, 15, 7.5, cyan.shade),
+    polygon([11.4, 2.8, 17, 12.6, 5.8, 12.6], cyan.base),
+    circle(11.4, 14.4, 6.6, cyan.base),
+    pill(7.6, 11.5, 2.4, 6, cyan.light),
+    circle(14.8, 18.2, 1.3, cyan.light),
+  ),
   /** Une plaque de fer cyan, forgée, rivetée d'indigo aux quatre coins. */
   ironPlate: svg(
     S,
