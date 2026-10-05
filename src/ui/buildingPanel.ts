@@ -46,6 +46,12 @@
  * cœur, barre, nombre. Le coffre — le stock de la ville pour la mairie —
  * coiffe ses objets d'un pictogramme de coffre.
  *
+ * Sous le titre, deux onglets (`panelTabs.ts`) : « Bâtiment » — vie, ce
+ * qu'il fait, ouvriers, boutons — et « Inventaire », la zone d'échange. Un
+ * bâtiment sans coffre où échanger n'a que le premier, et pas de rangée
+ * d'onglets. L'onglet choisi tient tant que la fenêtre reste ouverte ; elle
+ * se rouvre toujours sur « Bâtiment ».
+ *
  * Elle **lit** le monde à chaque frame tant qu'elle est ouverte, et se ferme
  * seule si l'entité disparaît — rasée par un mutant, par exemple.
  */
@@ -66,11 +72,15 @@ import { TICKS_PER_SECOND, repairCost, siteMissing, type SiteCoverage, type Worl
 import type { UiIcon } from '../art/ui.ts';
 import { onLocale, t } from '../i18n/locale.ts';
 import { buildingIcon, buildingIconUrl, itemAmount, uiIcon } from './icons.ts';
+import { PanelTabs } from './panelTabs.ts';
 import { ResearchPanel } from './researchPanel.ts';
 import { TransferPanel } from './transferPanel.ts';
 
 /** Combien de temps la bulle d'une puce reste affichée. */
 const TIP_MS = 2200;
+
+/** Les onglets de la fenêtre d'un bâtiment. */
+type BuildingTab = 'building' | 'inventory';
 
 /** Une puce : un pictogramme, un nombre, et ce qu'il compte. */
 interface Stat {
@@ -83,6 +93,8 @@ export class BuildingPanel {
   public readonly root: HTMLElement;
 
   private readonly title: HTMLElement;
+  /** « Bâtiment » et « Inventaire », sous le titre. */
+  private readonly tabs: PanelTabs<BuildingTab>;
   private readonly thumb: HTMLImageElement;
   private readonly infoButton: HTMLButtonElement;
   private readonly description: HTMLElement;
@@ -308,21 +320,29 @@ export class BuildingPanel {
     upgradeActions.append(this.upgradeButton);
     this.upgrade.append(this.upgradeEffect, this.upgradeCost, upgradeActions);
 
-    this.root.append(
-      header,
-      this.description,
-      this.meter,
-      this.stats,
-      this.stock,
-      this.items,
-      this.lines,
-      this.crew,
-      this.exchange.root,
-      this.actions,
-      this.upgrade,
-      this.research.root,
-      this.tip,
+    this.tabs = new PanelTabs<BuildingTab>(
+      [
+        { id: 'building', icon: buildingIcon('townHall', 24) },
+        { id: 'inventory', icon: uiIcon('chest', 24) },
+      ],
+      () => this.hideTip(),
     );
+    this.tabs
+      .page('building')
+      .append(
+        this.meter,
+        this.stats,
+        this.stock,
+        this.items,
+        this.lines,
+        this.crew,
+        this.actions,
+        this.upgrade,
+        this.research.root,
+      );
+    this.tabs.page('inventory').append(this.exchange.root);
+
+    this.root.append(header, this.description, this.tabs.bar, this.tabs.pages, this.tip);
 
     // Les libellés fixes suivent la langue ; les caches tombent, la fenêtre ouverte se réécrit.
     onLocale(() => {
@@ -332,6 +352,9 @@ export class BuildingPanel {
       close.setAttribute('aria-label', t().common.close);
       this.crewLess.setAttribute('aria-label', text.crew.less);
       this.crewMore.setAttribute('aria-label', text.crew.more);
+      this.tabs.bar.setAttribute('aria-label', text.tabs.label);
+      this.tabs.setLabel('building', text.tabs.building);
+      this.tabs.setLabel('inventory', text.tabs.inventory);
       this.transferButton.textContent = text.transferBag;
       this.lastText = '';
       this.lastStats = null;
@@ -364,6 +387,8 @@ export class BuildingPanel {
     this.lastUpgrade = '';
     this.lastCrew = '';
     this.cancelArmed = false;
+    // Rouverte, elle revient sur « Bâtiment ».
+    this.tabs.select('building');
     this.setDescription(false);
     this.hideTip();
     this.refresh(entity);
@@ -409,7 +434,10 @@ export class BuildingPanel {
 
     const thumb = buildingIconUrl(entity.proto);
 
-    if (this.thumb.src !== thumb) this.thumb.src = thumb;
+    if (this.thumb.src !== thumb) {
+      this.thumb.src = thumb;
+      this.tabs.setIcon('building', buildingIcon(entity.proto, 24));
+    }
 
     // Le labo fini : sa fenêtre devient le panneau Recherche, qui a besoin de toute la place.
     const lab = entity.kind === 'lab';
@@ -467,6 +495,7 @@ export class BuildingPanel {
       this.cancelButton.hidden = entity.id === this.world.townHallId;
       this.cancelButton.textContent = this.cancelArmed ? text.cancelConfirm : text.cancelSite;
       this.exchange.show(null);
+      this.tabs.setAvailable('inventory', false);
       this.repairButton.hidden = true;
       this.pauseButton.hidden = true;
       this.crew.hidden = true;
@@ -513,6 +542,7 @@ export class BuildingPanel {
       // Un coffre où échanger : la mairie, un producteur, une forge, une nurserie.
       const rules = this.world.transferRules(entity);
 
+      this.tabs.setAvailable('inventory', rules !== null);
       this.exchange.show(
         rules && {
           id: entity.id,

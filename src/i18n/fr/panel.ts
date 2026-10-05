@@ -28,6 +28,13 @@ export const panel = {
   maxLevel: 'Niveau max',
   hp: (value: string): string => `Points de vie : ${value}`,
 
+  /** Les onglets de la fenêtre, sous le titre. */
+  tabs: {
+    label: 'Onglets de la fenêtre',
+    building: 'Bâtiment',
+    inventory: 'Inventaire',
+  },
+
   site: {
     allDelivered: 'Tout est livré : les bâtisseurs arrivent pour le bâtir.',
     building: (builders: number, percent: number): string => `${builders} bâtisseur${s(builders)} au marteau — ${percent} %`,

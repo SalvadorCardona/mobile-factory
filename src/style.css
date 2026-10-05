@@ -2429,6 +2429,93 @@ button.hud-stock:active {
   min-height: 46px;
 }
 
+/*
+ * Les onglets, sous le titre : des capsules sur une face lavande, la choisie
+ * pleine, comme le sélecteur 1 / 10 / Tout — en plus grand, pour le doigt.
+ */
+.panel-tabs {
+  display: flex;
+  gap: 4px;
+  margin-top: 10px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--paper-shade);
+}
+
+.panel-tabs[hidden],
+.panel-tabs button[hidden],
+.panel-tab-page[hidden] {
+  display: none;
+}
+
+.panel-tabs button {
+  display: inline-flex;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--violet-shade);
+  font-size: 17px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.panel-tabs button .icon {
+  flex: none;
+}
+
+.panel-tabs button[aria-selected='true'] {
+  background: var(--violet);
+  color: var(--paper);
+  box-shadow: 0 3px 0 var(--violet-shade);
+}
+
+/*
+ * Les pages dans la même case : la fenêtre a la hauteur de la plus haute, elle
+ * ne saute pas. Le glissé horizontal est à elles (changer d'onglet), le
+ * vertical fait défiler la fenêtre.
+ */
+.panel-tab-pages {
+  display: grid;
+  touch-action: pan-y;
+}
+
+.panel-tab-page {
+  grid-area: 1 / 1;
+  min-width: 0;
+}
+
+.panel-tab-page[data-active='false'] {
+  visibility: hidden;
+}
+
+.panel-tab-page[data-active='true'] {
+  animation: tab-in 160ms ease-out both;
+}
+
+@keyframes tab-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Sous les onglets, les boutons du bâtiment tombent en bas, comme « Tout prendre » / « Tout déposer ». */
+.building-window .panel-tab-page {
+  display: flex;
+  flex-direction: column;
+}
+
+.building-window .panel-tab-page > .building-panel-actions {
+  margin-top: auto;
+  padding-top: 12px;
+}
+
 /* Points de vie sur une ligne : cœur, barre, nombre. */
 .building-panel-meter {
   display: flex;
