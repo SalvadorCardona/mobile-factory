@@ -18,7 +18,9 @@
 import { CHUNK_TILES } from '../core/grid.ts';
 import { BUILDINGS, MENU_BUILDING_IDS, maxLevel, type BuildingId } from '../data/buildings.ts';
 import { RARE_OFFERS, type RareOfferId } from '../data/caravan.ts';
+import { ENEMY_BASE_LEVELS } from '../data/enemyBases.ts';
 import { ENEMIES, WILDLIFE, type EnemyId, type WildlifeId } from '../data/enemies.ts';
+import { MAX_GEAR } from '../data/gear.ts';
 import { ITEMS, type ItemId } from '../data/items.ts';
 import { NEED_IDS, NEEDS, type NeedId } from '../data/needs.ts';
 import { OBJECTIVES } from '../data/objectives.ts';
@@ -32,6 +34,7 @@ import { canPause, clampStaff } from './staffing.ts';
 import type { Store, StoreSnapshot } from './store.ts';
 import type {
   BeastState,
+  EnemyBase,
   CaravanState,
   Entity,
   EntityId,
@@ -122,6 +125,8 @@ export interface WorldState {
   lureNight?: number;
   /** Les ouvriers adultes de la colonie. Absent d'avant eux : ceux qu'employaient les bâtiments finis. */
   colonists?: number;
+  /** Les bases mutantes et leurs points de vie. Absent d'avant elles : elles se posent au chargement, hors du bâti. */
+  enemyBases?: EnemyBase[];
   stats: WorldStats;
   /** Les compteurs au début de l'objectif en cours. */
   objectiveBase: WorldStats;
@@ -363,6 +368,7 @@ function parseState(raw: unknown): WorldState {
     rareTrades: parseRareTrades(state['rareTrades'] ?? {}),
     ...(state['colonists'] !== undefined && { colonists: int(state['colonists']) }),
     ...parseObjectives(state),
+    ...(state['enemyBases'] !== undefined && { enemyBases: unique(array(state['enemyBases']).map(parseEnemyBase)) }),
     player: parsePlayer(state['player']),
     resources: parseResources(state['resources']),
     // Absentes d'une sauvegarde d'avant les routes : rien n'était pavé.
@@ -425,6 +431,8 @@ function parsePlayer(raw: unknown): SavedPlayer {
     target: player['target'] === null ? null : int(player['target']),
     hp: finite(player['hp']),
     calmTicks: int(player['calmTicks']),
+    // Absent d'avant l'équipement : l'arc de fortune.
+    gear: player['gear'] === undefined ? 0 : Math.min(MAX_GEAR, Math.max(0, int(player['gear']))),
     inventory: stock(player['inventory']),
   };
 }
@@ -589,6 +597,7 @@ function parseMobile(raw: unknown): Mobile {
         vy: finite(mobile['vy']),
         ttl: int(mobile['ttl']),
         damage: finite(mobile['damage']),
+        ...(mobile['baseId'] !== undefined && { baseId: int(mobile['baseId']) }),
       };
     case 'kid':
       return {
@@ -757,6 +766,16 @@ function parseRareTrades(raw: unknown): Partial<Record<RareOfferId, number>> {
     result[oneOf(id, RARE_OFFERS) as RareOfferId] = taken;
   }
   return result;
+}
+
+function parseEnemyBase(raw: unknown): EnemyBase {
+  const base = record(raw);
+  const level = int(base['level']);
+  const hp = int(base['hp']);
+
+  if (level < 1 || level > ENEMY_BASE_LEVELS.length) throw new SaveError(`niveau de base mutante inconnu : ${level}`);
+  if (hp < 0) throw new SaveError('base mutante aux points de vie négatifs');
+  return { id: int(base['id']), tx: int(base['tx']), ty: int(base['ty']), level, hp };
 }
 
 function parseDen(raw: unknown): SavedDen {

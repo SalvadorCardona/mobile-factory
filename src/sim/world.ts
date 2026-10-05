@@ -67,7 +67,9 @@ import {
   type EnemyId,
   type LootTable,
 } from '../data/enemies.ts';
+import { ENEMY_BASE, enemyBaseLevel } from '../data/enemyBases.ts';
 import { EVE } from '../data/eve.ts';
+import { GEAR_WORKSHOP, MAX_GEAR, gearOf } from '../data/gear.ts';
 import { AGES, COLONY, NURSERY_CARE } from '../data/inhabitants.ts';
 import { TOWN_PLENTY, type ItemId } from '../data/items.ts';
 import { NEED_ALERT, NEED_IDS, NEEDS, START_FOOD, type NeedId } from '../data/needs.ts';
@@ -99,6 +101,7 @@ import type {
   Command,
   CommandLogEntry,
   DepositRejection,
+  GearRejection,
   PlacementRejection,
   RepairRejection,
   ResearchRejection,
@@ -112,6 +115,7 @@ import type {
 } from './commands.ts';
 import { caravanBagBonus, caravanRoute, createCaravan, drawOffers, isCaravanDay, rideTo, tradeCost } from './caravan.ts';
 import type { WildlifeId } from '../data/enemies.ts';
+import { baseCenter, canDamage, hitsBase, inBaseZone, isStanding, onBase, placeEnemyBases } from './enemyBases.ts';
 import { compassOf, spawnPoint, stepMutant, stepQueen, surfacePoint, type Compass, type MutantStep } from './enemies.ts';
 import { createEve, currentQuest, harvestYieldWithTools, isUnlocked, mostDamaged, questProgress, rideHome, walkTo } from './eve.ts';
 import { ADAM_SALT, adultAge, canWork, nameOf, yearsToWork } from './inhabitants.ts';
@@ -181,6 +185,7 @@ import type {
   Depot,
   Drill,
   Entity,
+  EnemyBase,
   Eve,
   EntityId,
   Farm,
@@ -563,6 +568,17 @@ export type WorldEvents = {
   signalSent: { id: EntityId; x: number; y: number };
   /** L'aube après le Signal : `count` survivants arrivent à la mairie, en (x, y). */
   survivorsArrived: { count: number; x: number; y: number };
+  /** Une flèche a entamé une base mutante. */
+  enemyBaseHit: { id: number; hp: number; x: number; y: number };
+  /** Une base mutante est tombée : sa zone est libre, le Prestige gagné, son butin au sol. */
+  enemyBaseDestroyed: { id: number; level: number; prestige: number; x: number; y: number };
+  /** L'arc d'Adam n'entame pas cette base : il lui faut un équipement de son niveau. */
+  enemyBaseResisted: { id: number; level: number; gear: number };
+  /** Adam entre dans la zone d'une base debout : on n'y bâtit ni n'y récolte. */
+  enemyZoneEntered: { id: number; level: number };
+  /** Un arc forgé : `level` est le nouveau niveau d'équipement. */
+  gearCrafted: { level: number; fromBag: [ItemId, number][] };
+  gearRejected: { reason: GearRejection };
 };
 
 export class World {
@@ -681,6 +697,12 @@ export class World {
    */
   public colonists: number = COLONY.startingWorkers;
 
+  /**
+   * Les bases mutantes, debout ou abattues (`data/enemyBases.ts`) : tirées de
+   * la seed à la création de la partie, puis de l'état — leurs points de vie.
+   */
+  public enemyBases: EnemyBase[] = [];
+
   /** Les compteurs que les objectifs lisent. */
   public stats: WorldStats = emptyStats();
 
@@ -737,6 +759,12 @@ export class World {
   /** La répartition a changé : maisons, postes et cabanes logent leurs nouveaux ouvriers au prochain tick (`lodgeCrews`). */
   private lodging = false;
 
+  /** Dernier « Il vous faut un meilleur équipement », pour ne pas le répéter à chaque tick. Jamais sauvegardé. */
+  private resistTick = -Infinity;
+
+  /** La base dont Adam est dans la zone, pour ne l'annoncer qu'en y entrant. Jamais sauvegardé. */
+  private zoneBase: number | null = null;
+
   /** Depuis quel tick chaque ouvrier dehors est sans travail, cf. `isIdle()`. Jamais sauvegardé. */
   private readonly idleSince = new Map<MobileId, number>();
 
@@ -760,6 +788,13 @@ export class World {
     this.player = createPlayer(this.spawnX, this.spawnY, adultAge(this.seed, ADAM_SALT));
     this.townHallId = this.openSite(STARTING_BUILDING, sx - 1, sy - proto.height);
     this.target = { x: (sx + 0.5) * TILE_SIZE, y: (sy - proto.height / 2) * TILE_SIZE };
+
+    // Les anneaux de bases mutantes, autour de la mairie, sur des emprises libres.
+    this.enemyBases = placeEnemyBases(
+      this.seed,
+      { x: this.target.x / TILE_SIZE, y: this.target.y / TILE_SIZE },
+      (tx, ty) => isBuildable(terrainAt(this.seed, tx, ty)) && !this.resources.at(tx, ty) && this.chunks.isFree(tx, ty, 1, 1),
+    );
   }
 
   /* ---------------------------------------------------------------- entrée */
@@ -818,6 +853,7 @@ export class World {
       signalNights: this.signalNights,
       lureNight: this.lureNight,
       colonists: this.colonists,
+      enemyBases: this.enemyBases.map((base) => ({ ...base })),
       stats: copyStats(this.stats),
       objectiveBase: copyStats(this.objectiveBase),
       player: { ...player, inventory: inventory.toJSON() },
@@ -914,6 +950,13 @@ export class World {
     this.dens.clear();
     for (const { id, members, readyTick } of state.dens) this.dens.set(id, { members, readyTick });
 
+    // Une sauvegarde d'avant les bases mutantes les découvre autour de la mairie — sauf celles dont la
+    // zone tient déjà du bâti, ou dont l'emprise tomberait sur Adam.
+    this.enemyBases =
+      state.enemyBases === undefined
+        ? this.enemyBases.filter((base) => !this.zoneBuilt(base) && !this.playerOnBase(base))
+        : state.enemyBases.map((base) => ({ ...base }));
+
     this.scheduler.restore(state.scheduler);
     this.restoreJobs();
     this.restoreLumberjacks();
@@ -966,6 +1009,7 @@ export class World {
     );
 
     this.handleContact(contact);
+    this.watchZone();
     this.harvestNearby();
     this.stepClock();
     this.corrode();
@@ -1043,6 +1087,10 @@ export class World {
 
       case 'upgradeBuilding':
         this.upgrade(command.id);
+        break;
+
+      case 'craftGear':
+        this.craftGear(command.forge);
         break;
 
       case 'repairBuilding':
@@ -1589,6 +1637,7 @@ export class World {
    */
   private readonly playerObstacleAt = (tx: number, ty: number): TileBox | null => {
     if (!isWalkable(terrainAt(this.seed, tx, ty)) || this.chunks.occupantAt(tx, ty) !== undefined) return FULL_TILE;
+    if (this.enemyBaseAt(tx, ty)) return FULL_TILE;
 
     const resource = this.resources.at(tx, ty);
 
@@ -1628,6 +1677,10 @@ export class World {
 
     const occupant = this.chunks.occupantAt(contact.tx, contact.ty);
     const entity = occupant === undefined ? undefined : this.entities.get(occupant);
+    const base = this.enemyBaseAt(contact.tx, contact.ty);
+
+    // Une base mutante heurtée avec un arc trop faible : le joueur sait pourquoi rien ne bouge.
+    if (base && !canDamage(base, this.player.gear)) this.resist(base);
 
     // Un bâtiment abîmé heurté avec du bois dans le sac se répare — avant que la mairie n'avale le sac.
     if (entity && entity.kind !== 'site' && this.contactTicks % DELIVER_TICKS === 0) this.repair(entity, null);
@@ -1672,7 +1725,8 @@ export class World {
       for (let tx = px - span; tx <= px + span; tx += 1) {
         const resource = this.resources.at(tx, ty);
 
-        if (!resource) continue;
+        // Dans la zone d'une base mutante debout, rien ne se récolte.
+        if (!resource || this.enemyZoneAt(tx, ty)) continue;
 
         const d2 = distanceSq(player.x, player.y, (tx + 0.5) * TILE_SIZE, (ty + 0.5) * TILE_SIZE);
 
@@ -2282,6 +2336,8 @@ export class World {
       ['resource', (x, y) => this.resources.isSolid(x, y)],
       // Un bâtiment est solide : le poser sur Adam l'emmurerait.
       ['onPlayer', (x, y) => playerOverlaps(this.player, x, y, 1, 1)],
+      // Une base mutante debout tient sa zone.
+      ['enemyZone', (x, y) => this.enemyZoneAt(x, y) !== null],
     ];
 
     for (const [reason, blocks] of checks) {
@@ -2327,6 +2383,7 @@ export class World {
     if (!isWalkable(terrainAt(this.seed, tx, ty))) return 'terrain';
     if (this.chunks.occupantAt(tx, ty) !== undefined) return 'occupied';
     if (this.resources.isSolid(tx, ty)) return 'resource';
+    if (this.enemyZoneAt(tx, ty)) return 'enemyZone';
     return null;
   }
 
@@ -3189,11 +3246,15 @@ export class World {
 
         case 'arrow': {
           const hit = stepArrow(mobile, this.foes(), this.wind());
+          const base = hit || mobile.baseId === undefined ? undefined : this.enemyBase(mobile.baseId);
 
           if (hit) {
             this.mobiles.delete(mobile.id);
             if (hit.kind === 'mutant') this.hurtMutant(hit, mobile.damage, mobile.vx, mobile.vy);
             else this.hurtBeast(hit, mobile.damage);
+          } else if (base && isStanding(base) && hitsBase(base, mobile.x, mobile.y)) {
+            this.mobiles.delete(mobile.id);
+            this.hurtBase(base, mobile.damage);
           } else if (mobile.ttl <= 0) {
             this.mobiles.delete(mobile.id);
           }
@@ -3350,7 +3411,12 @@ export class World {
 
     player.target = target?.id ?? null;
 
-    if (!target || player.bowCooldown > 0) return;
+    // Aucun ennemi à portée : l'arc se tourne vers la base mutante la plus proche.
+    if (!target) {
+      this.shootBase();
+      return;
+    }
+    if (player.bowCooldown > 0) return;
 
     // Le corps est au-dessus des pieds : la flèche part de la poitrine.
     this.fire('bow', player.x, player.y - 8, target, this.bonus('bowDamage'));
@@ -3361,6 +3427,177 @@ export class World {
     if (this.moveX === 0 && this.moveY === 0) {
       player.facing = facingOf(target.x - player.x, target.y - player.y);
     }
+  }
+
+  /* ---------------------------------------------------------- bases mutantes */
+
+  /** La base mutante, debout ou abattue, sous cet id. */
+  public enemyBase(id: number): EnemyBase | undefined {
+    return this.enemyBases.find((base) => base.id === id);
+  }
+
+  /** La base debout dont la zone couvre la tuile, ou `null` : on n'y bâtit ni n'y récolte. */
+  public enemyZoneAt(tx: number, ty: number): EnemyBase | null {
+    for (const base of this.enemyBases) {
+      if (isStanding(base) && inBaseZone(base, tx, ty)) return base;
+    }
+    return null;
+  }
+
+  /** La base debout dont l'emprise couvre la tuile, ou `null` : elle arrête Adam. */
+  public enemyBaseAt(tx: number, ty: number): EnemyBase | null {
+    for (const base of this.enemyBases) {
+      if (isStanding(base) && onBase(base, tx, ty)) return base;
+    }
+    return null;
+  }
+
+  /** La tuile se récolte-t-elle ? Pas dans la zone d'une base debout. Ce que lisent les bûcherons. */
+  private readonly harvestable = (tx: number, ty: number): boolean => this.enemyZoneAt(tx, ty) === null;
+
+  /** La zone de la base tient-elle déjà un bâtiment ou un chantier ? Une ancienne sauvegarde n'y pose pas de base. */
+  private zoneBuilt(base: EnemyBase): boolean {
+    for (const entity of this.entities.values()) {
+      for (let ty = entity.ty; ty < entity.ty + entity.height; ty += 1) {
+        for (let tx = entity.tx; tx < entity.tx + entity.width; tx += 1) {
+          if (inBaseZone(base, tx, ty)) return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /** L'emprise de la base tomberait-elle sur Adam ? */
+  private playerOnBase(base: EnemyBase): boolean {
+    return playerOverlaps(this.player, base.tx, base.ty, ENEMY_BASE.width, ENEMY_BASE.height);
+  }
+
+  /** « Il vous faut un meilleur équipement » — au plus une fois toutes les `ENEMY_BASE.resistTicks`. */
+  private resist(base: EnemyBase): void {
+    if (this.tickCount - this.resistTick < ENEMY_BASE.resistTicks) return;
+    this.resistTick = this.tickCount;
+    this.events.emit('enemyBaseResisted', { id: base.id, level: base.level, gear: this.player.gear });
+  }
+
+  /** Adam entre dans la zone d'une base debout : le HUD le dit, une fois par entrée. */
+  private watchZone(): void {
+    const base = this.enemyZoneAt(floorDiv(this.player.x, TILE_SIZE), floorDiv(this.player.y, TILE_SIZE));
+    const id = base?.id ?? null;
+
+    if (id === this.zoneBase) return;
+    this.zoneBase = id;
+    if (base) this.events.emit('enemyZoneEntered', { id: base.id, level: base.level });
+  }
+
+  /**
+   * Sans ennemi à portée, l'arc d'Adam vise la base debout la plus proche,
+   * en son centre. Trop faible pour elle, il ne tire pas : le HUD dit
+   * pourquoi.
+   */
+  private shootBase(): void {
+    const { player } = this;
+    const range = (WEAPONS.bow.range * this.rangeFactor() + ENEMY_BASE.reach) * TILE_SIZE;
+    let best: EnemyBase | null = null;
+    let bestSq = range * range;
+
+    for (const base of this.enemyBases) {
+      if (!isStanding(base)) continue;
+
+      const { x, y } = baseCenter(base);
+      const sq = distanceSq(player.x, player.y, x, y);
+
+      if (sq <= bestSq) {
+        best = base;
+        bestSq = sq;
+      }
+    }
+    if (!best) return;
+    if (!canDamage(best, player.gear)) {
+      this.resist(best);
+      return;
+    }
+    if (player.bowCooldown > 0) return;
+
+    const center = baseCenter(best);
+    const arrow = shoot(this.nextMobileId++, 'bow', player.x, player.y - 8, center, this.wind());
+
+    arrow.damage += this.bonus('bowDamage');
+    arrow.baseId = best.id;
+    this.mobiles.set(arrow.id, arrow);
+    this.events.emit('arrowShot', { x: player.x, y: player.y - 8 });
+    player.bowCooldown = Math.max(1, WEAPONS.bow.cooldown + this.bonus('bowCooldown'));
+    if (this.moveX === 0 && this.moveY === 0) player.facing = facingOf(center.x - player.x, center.y - player.y);
+  }
+
+  /**
+   * Une flèche frappe une base. À zéro, elle tombe pour de bon : sa zone est
+   * libre, le Prestige gagné, et son butin tombe au sol.
+   */
+  private hurtBase(base: EnemyBase, damage: number): void {
+    const { x, y } = baseCenter(base);
+
+    base.hp = Math.max(0, base.hp - damage);
+    if (base.hp > 0) {
+      this.events.emit('enemyBaseHit', { id: base.id, hp: base.hp, x, y });
+      return;
+    }
+
+    const level = enemyBaseLevel(base.level);
+
+    this.gainPrestige(level.prestige, x, y);
+    if (this.zoneBase === base.id) this.zoneBase = null;
+    this.events.emit('enemyBaseDestroyed', { id: base.id, level: base.level, prestige: level.prestige, x, y });
+    this.dropLoot(level.loot, x, y + TILE_SIZE);
+  }
+
+  /* -------------------------------------------------------------- équipement */
+
+  /**
+   * Ce qui manque pour forger l'arc suivant, d'ici — objet par objet, le sac
+   * puis la ville si la forge est dans son rayon —, ou `null` s'il n'y a plus
+   * d'arc à forger.
+   */
+  public gearMissing(forge: Building): Partial<Record<ItemId, number>> | null {
+    if (this.player.gear >= MAX_GEAR) return null;
+
+    const town = this.townStockFor(forge);
+    const missing: Partial<Record<ItemId, number>> = {};
+
+    for (const [item, needed] of Object.entries(gearOf(this.player.gear + 1).cost) as [ItemId, number][]) {
+      const short = needed - this.player.inventory.available(item) - (town?.available(item) ?? 0);
+
+      if (short > 0) missing[item] = short;
+    }
+    return missing;
+  }
+
+  /** « Forger » : l'arc suivant, payé d'un coup, le sac d'abord, puis la ville. */
+  private craftGear(id: EntityId): void {
+    const forge = this.entities.get(id);
+    const reject = (reason: GearRejection): void => this.events.emit('gearRejected', { reason });
+
+    if (!forge || forge.kind === 'site' || forge.proto !== GEAR_WORKSHOP) return reject('missing');
+    if (!this.inReach(forge)) return reject('outOfReach');
+
+    const missing = this.gearMissing(forge);
+
+    if (!missing) return reject('maxLevel');
+    if (Object.keys(missing).length > 0) return reject('missingItems');
+
+    const town = this.townStockFor(forge);
+    const fromBag: [ItemId, number][] = [];
+
+    for (const [item, needed] of Object.entries(gearOf(this.player.gear + 1).cost) as [ItemId, number][]) {
+      const bag = Math.min(needed, this.player.inventory.available(item));
+
+      if (bag > 0) {
+        this.player.inventory.remove(item, bag);
+        fromBag.push([item, bag]);
+      }
+      if (needed > bag) town?.remove(item, needed - bag);
+    }
+    this.player.gear += 1;
+    this.events.emit('gearCrafted', { level: this.player.gear, fromBag });
   }
 
   /** `extraDamage` : ce que la recherche ajoute aux dégâts de l'arme. */
@@ -4958,7 +5195,7 @@ export class World {
    */
   public treesLeft(camp: LumberCamp): number {
     if (this.treeCount?.id !== camp.id || this.treeCount.tick !== this.tickCount) {
-      this.treeCount = { id: camp.id, tick: this.tickCount, count: treesInRange(camp, this.resources).length };
+      this.treeCount = { id: camp.id, tick: this.tickCount, count: treesInRange(camp, this.resources, this.harvestable).length };
     }
     return this.treeCount.count;
   }
@@ -5059,7 +5296,7 @@ export class World {
       return;
     }
 
-    const tree = pickTree(camp, door, this.resources, this.claimedTrees, this.lineIsClear);
+    const tree = pickTree(camp, door, this.resources, this.claimedTrees, this.lineIsClear, this.harvestable);
 
     if (!tree) {
       camp.store.releaseIn('wood', LUMBERJACKS.carry);

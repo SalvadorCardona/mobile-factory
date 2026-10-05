@@ -58,7 +58,7 @@ describe('sprites', () => {
 
   it('réserve le vert fluo aux mutants', () => {
     // Seuls ont le droit de le porter : le mutant, la Reine des flaques, le patient (un mutant assommé), la flaque
-    // d'où il sort, son pictogramme, la bannière, où il en passe un, la gelée et le cœur de la Reine qu'ils lâchent en
+    // d'où il sort, leurs bases, son pictogramme, la bannière, où il en passe un, la gelée et le cœur de la Reine qu'ils lâchent en
     // butin (des bouts d'eux : leur icône, le tas au sol, la charge d'un porteur) — et l'ex-mutant, pour un seul
     // détail (test suivant).
     const mutants = (name: string): boolean =>
@@ -67,6 +67,7 @@ describe('sprites', () => {
       name.startsWith('patient.') ||
       name.startsWith('exMutant.') ||
       name.startsWith('puddle.') ||
+      name.startsWith('enemyBase.') ||
       name === 'ui.mutant' ||
       name.endsWith('.mutantGoo') ||
       name.endsWith('.radCore') ||

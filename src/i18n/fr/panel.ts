@@ -162,6 +162,27 @@ export const panel = {
     lureTonight: 'Cette nuit, toutes les vagues marchent sur elle.',
   },
 
+  /** La fenêtre d'une base mutante. */
+  enemyBase: {
+    level: (level: number): string => `Niveau ${level}`,
+    zone: (tiles: number): string => `Zone tenue : ni récolte ni construction à ${tiles} cases`,
+    /** `gear` : l'arc qu'il faut, avec sa majuscule. */
+    required: (gear: string, level: number): string => `Équipement requis : ${gear} (niveau ${level})`,
+    weak: 'Il vous faut un meilleur équipement : vos flèches n’y font rien. Forgez un meilleur arc à la forge.',
+    ready: 'Votre arc l’entame : approchez-vous, il tire seul.',
+    prestige: (amount: number): string => `Abattue, elle rapporte ${amount} Prestige et libère sa zone.`,
+  },
+
+  /** La forge d'équipement, dans la fenêtre de la forge. */
+  gear: {
+    /** `gear` : l'arc d'Adam, avec sa majuscule. */
+    current: (gear: string, level: number): string => `Votre arc : ${gear} (niveau ${level})`,
+    next: (gear: string, level: number): string => `Forger : ${gear} — entame les bases de niveau ${level}`,
+    button: 'Forger l’arc',
+    best: 'Vous avez le meilleur arc.',
+    comeCloser: ' — rapprochez-vous.',
+  },
+
   clinic: {
     beds: (used: number, beds: number): string => `Places occupées : ${used}/${beds}`,
     full: 'Complète : les mutants vaincus ne tombent plus assommés pour elle.',
@@ -240,6 +261,7 @@ export const panel = {
     rock: { text: 'Un rocher gêne', remedy: 'Adam peut le casser' },
     trees: { text: 'Des arbres gênent', remedy: 'Adam peut les couper' },
     tree: { text: 'Un arbre gêne', remedy: 'Adam peut le couper' },
+    enemyZone: { text: 'Une base mutante tient cette zone', remedy: 'Abattez-la avec un arc de son niveau' },
     /** Ce qu'une foreuse posée là extraira. */
     extracts: (item: string): string => `Extraira : ${item}`,
     /** Pourquoi une partie d'un tracé de route ne sera pas pavée. */
@@ -248,6 +270,7 @@ export const panel = {
       terrain: { text: 'Pas sur l’eau', remedy: '' },
       occupied: { text: 'Un bâtiment est sur le tracé', remedy: '' },
       resource: { text: 'Un arbre ou un rocher gêne', remedy: 'Adam peut le récolter' },
+      enemyZone: { text: 'Une base mutante tient la zone', remedy: 'Abattez-la avec un arc de son niveau' },
     },
   },
 };

@@ -24,6 +24,7 @@ export const hud: Messages['hud'] = {
     locked: 'Not unlocked yet — you need its blueprint, or one more night',
     unique: 'Only one per colony — you already have one',
     nearHall: `Too close to the town hall — the antenna stands at least ${BUILDINGS.antenna.hallDistance} tiles away`,
+    enemyZone: 'A mutant base holds this zone — take it down first',
   },
   road: {
     noStone: (paved: number): string => `Out of stone: road stopped after ${paved} tile${s(paved)}`,
@@ -31,6 +32,12 @@ export const hud: Messages['hud'] = {
     terrain: 'No roads on water',
     occupied: 'A road can’t run under a building',
     resource: 'Skipped trees and rocks: clear them to pave',
+    enemyZone: 'No roads inside a mutant base’s zone',
+  },
+  gear: {
+    outOfReach: 'Too far from the forge — get closer',
+    maxLevel: 'You already have the best bow',
+    missingItems: 'Not enough to forge this bow — not in the bag, not in town',
   },
   repair: {
     outOfReach: 'Too far — get closer',
@@ -97,6 +104,10 @@ export const hud: Messages['hud'] = {
     antennaRaised: (floor: number, night: number): string =>
       `Floor ${floor} is up! On night ${night}, every wave will march on the antenna.`,
     antennaFell: (floor: number): string => `The antenna lost a floor — back down to floor ${floor}`,
+    betterGear: (gear: string, level: number): string => `You need better gear: ${gear} (level ${level}) — forge it at the forge`,
+    enemyZone: (level: number): string => `Mutant base zone (level ${level}): no harvesting or building while it stands`,
+    baseDestroyed: (prestige: number): string => `Mutant base destroyed! +${prestige} Prestige, its zone is free`,
+    gearCrafted: (gear: string, level: number): string => `${gear} forged: you can now damage level ${level} bases`,
     survivors: (count: number): string =>
       count > 1
         ? `${count} survivors answer the antenna’s call: ${count} more porters`

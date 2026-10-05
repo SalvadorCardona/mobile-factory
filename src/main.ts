@@ -233,6 +233,7 @@ async function main(): Promise<void> {
     (id) => hud.showPerson(id),
     () => panel.open,
     () => panel.close(),
+    (id) => panel.showBase(id),
   );
 
   // Le zoom de la carte : un niveau choisi par le joueur, mémorisé sur l'appareil.
@@ -618,6 +619,13 @@ function wireAudio(world: World, audio: AudioEngine, settings: SettingsPanel): v
   });
   world.events.on('playerRepaired', () => audio.play('repair'));
   world.events.on('buildingDestroyed', () => audio.play('collapse'));
+  world.events.on('enemyBaseHit', () => audio.play('thud'));
+  world.events.on('enemyBaseDestroyed', () => {
+    audio.play('collapse');
+    audio.play('objective');
+  });
+  world.events.on('enemyBaseResisted', () => audio.play('deny'));
+  world.events.on('gearCrafted', () => audio.play('upgrade'));
   world.events.on('siteCancelled', () => audio.play('deliver'));
   world.events.on('roadPaved', () => audio.play('deliver'));
   world.events.on('roadRemoved', () => audio.play('pickup'));
@@ -853,6 +861,17 @@ function wireParticles(world: World, renderer: GameRenderer): void {
   world.events.on('buildingDestroyed', ({ tx, ty }) =>
     particles.burst((tx + 1) * TILE_SIZE, (ty + 1) * TILE_SIZE, PARTICLES.rubble, 16, 0.14),
   );
+  // Une base mutante frappée crache sa gelée ; abattue, elle s'effondre dans un anneau de poussière.
+  world.events.on('enemyBaseHit', ({ x, y }) => {
+    particles.ring(x, y);
+    particles.burst(x, y, PARTICLES.mutant, 4);
+  });
+  world.events.on('enemyBaseDestroyed', ({ x, y }) => {
+    particles.dustRing(x, y + TILE_SIZE * 1.5, TILE_SIZE * 3);
+    particles.burst(x, y, PARTICLES.rubble, 18, 0.14);
+    particles.burst(x, y, PARTICLES.mutant, 14, 0.14);
+    particles.burst(x, y, PARTICLES.confetti, 12, 0.16);
+  });
   world.events.on('siteCancelled', ({ tx, ty }) => particles.burst((tx + 1) * TILE_SIZE, (ty + 1) * TILE_SIZE, PARTICLES.rubble, 8, 0.08));
   // Une poussière de pierre sur chaque dalle posée ou retirée.
   const roadDust = ({ tiles }: { tiles: readonly { tx: number; ty: number }[] }): void => {
@@ -936,6 +955,7 @@ function wireShake(world: World, renderer: GameRenderer, busy: () => boolean): v
   });
   world.events.on('buildingDamaged', ({ id }) => renderer.shake(id === world.townHallId ? 0.28 : 0.14));
   world.events.on('buildingDestroyed', () => renderer.shake(0.6));
+  world.events.on('enemyBaseDestroyed', () => renderer.shake(0.5));
   world.events.on('waveStarted', () => renderer.shake(0.3));
   world.events.on('buildingCompleted', () => renderer.shake(0.18));
   world.events.on('buildingUpgraded', () => renderer.shake(0.12));

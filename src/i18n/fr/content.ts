@@ -7,8 +7,10 @@
 
 import { BUILDINGS, type BuildingId, type BuildingProto } from '../../data/buildings.ts';
 import { RARE_OFFERS } from '../../data/caravan.ts';
+import { ENEMY_BASE } from '../../data/enemyBases.ts';
 import { ENEMIES, WILDLIFE } from '../../data/enemies.ts';
 import { EVE_LINES } from '../../data/eve.ts';
+import { GEAR } from '../../data/gear.ts';
 import { ITEMS } from '../../data/items.ts';
 import { LORE } from '../../data/lore.ts';
 import { OBJECTIVES, type ObjectiveProto } from '../../data/objectives.ts';
@@ -76,6 +78,9 @@ export const content = {
   weapons: mapTable(WEAPONS, (weapon): string => weapon.label),
   enemies: mapTable(ENEMIES, (enemy): string => enemy.label),
   wildlife: mapTable(WILDLIFE, (beast): string => beast.label),
+  enemyBase: { label: ENEMY_BASE.label, description: ENEMY_BASE.description },
+  /** Les arcs d'Adam, du niveau 0 au dernier. */
+  gear: GEAR.map(({ label }): string => label),
   tools: mapTable(TOOLS, (tool): string => tool.label),
   quests: mapTable(QUESTS, ({ label, give, done }): { label: string; give: string; done: string } => ({ label, give, done })),
   objectives: (OBJECTIVES as readonly ObjectiveProto[]).map(
