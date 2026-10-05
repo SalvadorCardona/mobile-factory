@@ -36,6 +36,7 @@ import { ParticleLayer } from './particles.ts';
 import { ResourceLayer } from './resourceLayer.ts';
 import { SelectionLayer } from './selectionLayer.ts';
 import { SignalLayer } from './signalLayer.ts';
+import { Signboards } from './signboard.ts';
 import { SpriteLibrary, type AtlasStats } from './spriteLibrary.ts';
 import { TerrainTiles, terrainSources } from './terrainTiles.ts';
 import { WaterLayer, type WaterStats } from './waterLayer.ts';
@@ -63,6 +64,7 @@ export class GameRenderer {
   private readonly nightLayer: NightLayer;
   public readonly particles: ParticleLayer;
   private readonly library: SpriteLibrary;
+  private readonly signboards: Signboards;
   private readonly tiles: TerrainTiles;
   private readonly indicators: IndicatorLayer;
   private readonly weather: WeatherLayer;
@@ -86,7 +88,8 @@ export class GameRenderer {
     world.events.on('roadPaved', repave);
     world.events.on('roadRemoved', repave);
     this.waterLayer = new WaterLayer(this.tiles, world.seed);
-    this.entityLayer = new EntityLayer(world, library, this.tiles, this.shadows);
+    this.signboards = new Signboards(app.renderer, library);
+    this.entityLayer = new EntityLayer(world, library, this.tiles, this.shadows, this.signboards);
     this.resourceLayer = new ResourceLayer(world, library, this.tiles, this.entityLayer.container, this.shadows);
     this.indicators = new IndicatorLayer(world, library);
     this.ghostLayer = new GhostLayer(world, library);
@@ -176,6 +179,11 @@ export class GameRenderer {
   /** Le bâtiment sélectionné — sa fenêtre est ouverte —, ou `null`. */
   public setSelected(id: EntityId | null): void {
     this.selected = id;
+  }
+
+  /** Le réglage « Pancartes » : montre ou masque celles de tous les bâtiments. */
+  public setSigns(on: boolean): void {
+    this.entityLayer.signsOn = on;
   }
 
   /** Le repère de la mairie est-il sous ce point écran ? */
@@ -327,6 +335,7 @@ export class GameRenderer {
     this.waterLayer.destroy();
     this.resourceLayer.destroy();
     this.entityLayer.destroy();
+    this.signboards.destroy();
     this.ghostLayer.destroy();
     this.workReach.destroy();
     this.selection.destroy();

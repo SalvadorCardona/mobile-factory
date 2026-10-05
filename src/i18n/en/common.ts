@@ -17,6 +17,7 @@ export const settings: Messages['settings'] = {
   language: 'Language',
   sound: 'Sounds',
   music: 'Music',
+  signs: 'Building signs',
   toggle: (name, on) => `${name}: ${on ? 'on' : 'off'}`,
   languageName: 'English',
 };

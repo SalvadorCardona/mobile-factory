@@ -40,6 +40,7 @@ import { LocalGarden } from './storage/localGarden.ts';
 import { LocalRecord } from './storage/localRecord.ts';
 import { LocalSave, type LoadResult } from './storage/localSave.ts';
 import { LocalLocale } from './storage/localLocale.ts';
+import { LocalSigns } from './storage/localSigns.ts';
 import { LocalZoom } from './storage/localZoom.ts';
 import { TILE_SIZE } from './core/grid.ts';
 import { detectLocale, onLocale, setLocale, t } from './i18n/locale.ts';
@@ -263,6 +264,16 @@ async function main(): Promise<void> {
   // L'écran de victoire arrête l'horloge jusqu'à « Continuer sans fin ».
   let celebrating = false;
 
+  // Les pancartes des bâtiments : une préférence de l'appareil — la partie de test ne touche à aucun stockage.
+  const signPrefs = scenario ? new LocalSigns(null) : LocalSigns.browser();
+  let signsOn = signPrefs.load();
+  const showSigns = (on: boolean): void => {
+    signsOn = on;
+    signPrefs.save(on);
+    renderer.setSigns(on);
+    settings.setSigns(on);
+  };
+
   // Les réglages ouverts arrêtent l'horloge, comme la pause, sans en montrer l'écran.
   const settings = new SettingsPanel({
     setLocale: (locale) => {
@@ -271,11 +282,15 @@ async function main(): Promise<void> {
     },
     toggleSound: () => settings.setSound(!audio.toggleMuted()),
     toggleMusic: () => settings.setMusic(audio.toggleMusic()),
+    toggleSigns: () => showSigns(!signsOn),
     onToggle: (open) => {
       accumulator = 0;
       if (open) audio.play('open');
     },
   });
+
+  renderer.setSigns(signsOn);
+  settings.setSigns(signsOn);
 
   const autosave = wireSave(world, saves, () => started);
   const garden = wireGarden(world, scenario ? new LocalGarden(null) : LocalGarden.browser());

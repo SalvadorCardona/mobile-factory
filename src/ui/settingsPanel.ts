@@ -1,13 +1,13 @@
 /**
  * Le menu des réglages, derrière le bouton engrenage du HUD : la langue, les
- * sons, la musique. Rien qui touche à la partie — ce sont des préférences de
+ * sons, la musique, les pancartes des bâtiments. Rien qui touche à la partie — ce sont des préférences de
  * l'appareil, gardées hors de la sauvegarde.
  *
  * Ouvert, il arrête l'horloge (`main.ts` lit `open`) ; il se ferme par sa
  * croix, par un tap sur le voile autour, ou par Échap (`escape.ts`).
  *
  * Il ne décide de rien : il dit à `main.ts` la langue choisie, ou qu'il faut
- * basculer le son ou la musique, et `main.ts` lui renvoie l'état réel.
+ * basculer le son, la musique ou les pancartes, et `main.ts` lui renvoie l'état réel.
  */
 
 import { LOCALES, messagesOf, onLocale, t, type Locale } from '../i18n/locale.ts';
@@ -17,6 +17,7 @@ export interface SettingsActions {
   setLocale(locale: Locale): void;
   toggleSound(): void;
   toggleMusic(): void;
+  toggleSigns(): void;
   /** Ouvert ou fermé : l'horloge s'arrête, le son de fenêtre joue. */
   onToggle(open: boolean): void;
 }
@@ -29,9 +30,11 @@ export class SettingsPanel {
   private readonly languages = new Map<Locale, HTMLButtonElement>();
   private readonly soundButton: HTMLButtonElement;
   private readonly musicButton: HTMLButtonElement;
+  private readonly signsButton: HTMLButtonElement;
   private readonly actions: SettingsActions;
   private sound = true;
   private music = true;
+  private signs = true;
 
   public constructor(actions: SettingsActions) {
     this.actions = actions;
@@ -93,7 +96,12 @@ export class SettingsPanel {
     this.musicButton.className = 'button-secondary settings-toggle';
     this.musicButton.addEventListener('click', () => actions.toggleMusic());
 
-    this.panel.append(head, languageLabel, languages, this.soundButton, this.musicButton);
+    this.signsButton = document.createElement('button');
+    this.signsButton.type = 'button';
+    this.signsButton.className = 'button-secondary settings-toggle';
+    this.signsButton.addEventListener('click', () => actions.toggleSigns());
+
+    this.panel.append(head, languageLabel, languages, this.soundButton, this.musicButton, this.signsButton);
     this.root.append(this.panel);
 
     onLocale((current) => {
@@ -105,6 +113,7 @@ export class SettingsPanel {
       for (const [locale, button] of this.languages) button.setAttribute('aria-checked', String(locale === current));
       this.setSound(this.sound);
       this.setMusic(this.music);
+      this.setSigns(this.signs);
     });
   }
 
@@ -139,6 +148,11 @@ export class SettingsPanel {
   public setMusic(on: boolean): void {
     this.music = on;
     toggleLabel(this.musicButton, on, uiIcon(on ? 'musicOn' : 'musicOff', 22), t().settings.music);
+  }
+
+  public setSigns(on: boolean): void {
+    this.signs = on;
+    toggleLabel(this.signsButton, on, uiIcon(on ? 'signOn' : 'signOff', 22), t().settings.signs);
   }
 }
 

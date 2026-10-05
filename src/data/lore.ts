@@ -93,10 +93,13 @@ export const LORE = {
    * pour le bâtiment fini, `effect` pour sa carte du menu de construction —
    * une ligne, ce qu'il fait vraiment aujourd'hui. Un bâtiment debout ne
    * parle jamais de son chantier ; un bâtiment qui ne fait encore rien le dit.
+   * `sign` est son nom court, peint sur sa pancarte : un mot ou deux, qui
+   * disent à quoi il sert.
    */
   buildings: {
     townHall: {
       name: 'Mairie',
+      sign: 'Mairie',
       site:
         'Le premier bâtiment de la colonie. Le jeu commence sur son chantier : ' +
         'il faut y apporter du bois et de la pierre pour l’achever.',
@@ -105,6 +108,7 @@ export const LORE = {
     },
     lumberCamp: {
       name: 'Cabane de bûcheron',
+      sign: 'Bûcherons',
       site: 'Quelques rondins empilés, une hache plantée dans la souche : la cabane attend ses murs.',
       description:
         'Une cabane de rondins, sa pile de bûches et sa hache plantée dans la souche. ' +
@@ -114,6 +118,7 @@ export const LORE = {
     },
     logisticsPost: {
       name: 'Poste de logistique',
+      sign: 'Logistique',
       site: 'Des caisses empilées et un panneau fléché planté de travers : le poste attend son auvent.',
       description:
         'Un quai sous un auvent rayé, des caisses empilées, une charrette et un panneau fléché. ' +
@@ -123,6 +128,7 @@ export const LORE = {
     },
     constructionPost: {
       name: 'Poste de construction',
+      sign: 'Bâtisseurs',
       site: 'Un établi à moitié monté et un tas de planches : le poste attend son échafaudage.',
       description:
         'Un atelier sous un échafaudage, un établi, un tas de planches et des barrières rayées. ' +
@@ -132,12 +138,14 @@ export const LORE = {
     },
     drill: {
       name: 'Foreuse',
+      sign: 'Foreuse',
       site: 'Un bâti de pierre qui attend son fer. Posée sur un filon, elle l’extraira seule.',
       description: 'Machine de récupération qui extrait le filon sous elle.',
       effect: 'Extrait seule le minerai du filon sous elle.',
     },
     nursery: {
       name: 'Nurserie',
+      sign: 'Nurserie',
       site: 'Des murs à monter avant d’y installer le berceau. Il lui faut du bois et de la pierre.',
       description:
         'Un abri chauffé, des couvertures, un berceau. Toutes les trois minutes, ' +
@@ -147,6 +155,7 @@ export const LORE = {
     },
     builderHouse: {
       name: 'Maison des constructeurs',
+      sign: 'Porteurs',
       site: 'Le dortoir de quatre ouvriers, encore à l’état de planches et de tôle empilées.',
       description:
         'Un dortoir de planches et de tôle pour quatre ouvriers. Ce sont eux ' +
@@ -155,6 +164,7 @@ export const LORE = {
     },
     quarry: {
       name: 'Carrière',
+      sign: 'Carrière',
       site: 'Une grue de fortune au-dessus d’un vieux parking effondré : trois ouvriers y casseront le béton.',
       description:
         'Un parking effondré, une grue bricolée et des tas de moellons roses. Trois ouvriers ' +
@@ -164,6 +174,7 @@ export const LORE = {
     },
     farm: {
       name: 'Ferme',
+      sign: 'Ferme',
       site: 'Une cabane à outils à monter avant de retourner la terre. Quatre ouvriers y travailleront.',
       description:
         'Quelques sillons dans la terre irradiée et une cabane à outils. Quatre ' +
@@ -172,6 +183,7 @@ export const LORE = {
     },
     watchtower: {
       name: 'Tour de guet',
+      sign: 'Tour de guet',
       site: 'Quatre poteaux plantés, une plateforme à clouer dessus. L’arc viendra ensuite.',
       description:
         'Une plateforme de planches sur quatre poteaux, avec un arc et un carquois. ' +
@@ -188,6 +200,7 @@ export const LORE = {
     },
     forge: {
       name: 'Forge',
+      sign: 'Forge',
       site: 'Un four de pierre et sa cheminée, encore sans feu. Il lui faut du minerai de fer pour l’armer.',
       description:
         'Un four de pierre, une cheminée qui fume et une enclume. Deux minerais de fer ' +
@@ -196,6 +209,7 @@ export const LORE = {
     },
     charcoalKiln: {
       name: 'Four à charbon',
+      sign: 'Charbonnière',
       site: 'Un dôme de briques à monter autour d’une porte ronde. Il lui faudra un chauffeur.',
       description:
         'Un dôme de briques roses où le bois couve à l’étouffée. Son chauffeur y ' +
@@ -205,6 +219,7 @@ export const LORE = {
     },
     clinic: {
       name: 'Clinique',
+      sign: 'Clinique',
       site: 'Des murs à monter, un lit de camp qui attend déjà. Il faudra aussi de quoi nourrir les convalescents.',
       description:
         'Trois lits de camp, des bandages et une croix menthe sur la porte. Un mutant ' +
@@ -214,6 +229,7 @@ export const LORE = {
     },
     lab: {
       name: 'Labo de recherche',
+      sign: 'Labo',
       site: 'Une cabane de planches, des fioles qui attendent sur une caisse, une antenne à dresser.',
       description:
         'Des fioles qui glougloutent, une antenne bricolée et une cheminée qui fume ' +
@@ -227,6 +243,7 @@ export const LORE = {
      */
     antenna: {
       name: 'Antenne',
+      sign: 'Antenne',
       site: 'Un socle de pierre à couler, des poutres à dresser : le premier étage du Signal.',
       description:
         'Un pylône de poutres sur un socle de pierre. Chaque étage monté attire les mutants : ' +

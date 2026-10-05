@@ -366,6 +366,12 @@ Les règles, en résumé :
   au-dessus de ses objets. Sur la carte, un cadre jaune en contour seul
   entoure au sol l'emprise du bâtiment ouvert (`render/selectionLayer.ts`,
   rebond puis respiration) ; un tap dans le vide ferme la fenêtre.
+- Chaque bâtiment fini porte au pied de sa façade une **pancarte** : son nom
+  court (`sign` de `data/buildings.ts`, `t().buildings[id].sign`) et l'icône
+  de ce qu'il produit ou consomme (`render/signs.ts` décide, `signboard.ts`
+  dessine une texture partagée par type). Icône seule en reculant, rien sous
+  `SIGN_ZOOM.icon` ; un enfant du sprite du bâtiment, dans son emprise (le tap
+  l'ouvre). Réglage « Pancartes » (`mobile-factory:signs`, `storage/localSigns.ts`).
 
 ## Système de sprites
 
