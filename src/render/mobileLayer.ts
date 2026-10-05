@@ -60,7 +60,8 @@ import { ENEMIES, LOOT_DROPS, WILDLIFE } from '../data/enemies.ts';
 import { SPRITES } from '../data/sprites.ts';
 import type { Lumberjack, Mobile, MobileId, Mutant, Pickup, Worker } from '../sim/types.ts';
 import { terrainAt } from '../sim/terrain.ts';
-import type { World } from '../sim/world.ts';
+import { isDeprived } from '../sim/needs.ts';
+import type { Inhabitant, World } from '../sim/world.ts';
 import { Puppet, type Lounge, type PuppetId } from './puppet.ts';
 import type { SpriteLibrary } from './spriteLibrary.ts';
 import type { TerrainTiles } from './terrainTiles.ts';
@@ -184,6 +185,8 @@ interface MobileView {
   /** La glande en cours d'un ouvrier inactif, et ses ms restantes avant d'en changer. */
   lounge: Lounge | null;
   loungeLeft: number;
+  /** La bulle « affamé » d'un habitant à court de nourriture. */
+  hungry: Sprite | null;
 }
 
 /** Le vélo-cargo — une ombre, le cadre avec Ève en selle, deux roues qui tournent — ou la charrette du marchand. */
@@ -363,6 +366,7 @@ export class MobileLayer {
           this.ground(view, x, y);
           puppet.carry(mobile.load > 0 ? 'wood' : null);
           this.loiter(view, mobile, deltaMs);
+          this.starve(view, mobile);
           puppet.update(deltaMs, view.lounge ? 'down' : mobile.facing, mobile.state === 'chop' ? 'act' : mobile.moving ? 'walk' : 'idle');
           break;
         }
@@ -381,6 +385,7 @@ export class MobileLayer {
             puppet.carry(mobile.job?.carried ? mobile.job.item : null);
             this.loiter(view, mobile, deltaMs);
           }
+          if (mobile.kind === 'kid' || mobile.kind === 'worker') this.starve(view, mobile);
 
           if ((mobile.kind === 'mutant' || mobile.kind === 'beast') && view.hp) {
             const max = mobile.kind === 'mutant' ? ENEMIES[mobile.proto].hp : WILDLIFE[mobile.proto].hp;
@@ -424,6 +429,14 @@ export class MobileLayer {
     this.bury(deltaMs);
     this.bubble(deltaMs);
     this.mark(alpha, deltaMs);
+  }
+
+  /** La bulle « affamé » flotte au-dessus de la tête d'un habitant à court de nourriture. */
+  private starve(view: MobileView, mobile: Inhabitant): void {
+    const bubble = view.hungry!;
+
+    bubble.visible = isDeprived(mobile.needs);
+    if (bubble.visible) bubble.y = (mobile.kind === 'kid' ? -30 : -40) + Math.sin(this.clock * 0.004 + mobile.id) * 2;
   }
 
   /**
@@ -644,7 +657,7 @@ export class MobileLayer {
       }
       sprite.anchor.set(SPRITES.arrow.anchorX, SPRITES.arrow.anchorY);
       root.addChild(sprite);
-      view = { root, puppet: null, hp: null, lastHp: 0, age: SPAWN_MS, tile: '', bike: null, stars: null, size: 1, puddle: 1, recoil: null, kind: mobile.kind, lounge: null, loungeLeft: 0 };
+      view = { root, puppet: null, hp: null, lastHp: 0, age: SPAWN_MS, tile: '', bike: null, stars: null, size: 1, puddle: 1, recoil: null, kind: mobile.kind, lounge: null, loungeLeft: 0, hungry: null };
     } else if (mobile.kind === 'pickup') {
       const tx = floorDiv(mobile.x, TILE_SIZE);
       const ty = floorDiv(mobile.y, TILE_SIZE);
@@ -663,14 +676,14 @@ export class MobileLayer {
       // Butin rechargé d'une sauvegarde : déjà posé, pas de saut.
       const fresh = LOOT_DROPS.lifetimeTicks - mobile.ttl < 20;
 
-      view = { root, puppet: null, hp: null, lastHp: 0, age: fresh ? 0 : LOOT_DROP_MS, tile: '', bike: null, stars: null, size: 1, puddle: 1, recoil: null, kind: mobile.kind, lounge: null, loungeLeft: 0 };
+      view = { root, puppet: null, hp: null, lastHp: 0, age: fresh ? 0 : LOOT_DROP_MS, tile: '', bike: null, stars: null, size: 1, puddle: 1, recoil: null, kind: mobile.kind, lounge: null, loungeLeft: 0, hungry: null };
     } else if (mobile.kind === 'caravan') {
       const cart = this.cart(this.tiles.shadow('grass'));
 
       // Rechargée garée, elle garde le sens où elle roulait.
       cart.figure.scale.x = mobile.facing === 'left' ? -1 : 1;
       root.addChild(cart.root);
-      view = { root, puppet: null, hp: null, lastHp: 0, age: SPAWN_MS, tile: '', bike: cart, stars: null, size: 1, puddle: 1, recoil: null, kind: mobile.kind, lounge: null, loungeLeft: 0 };
+      view = { root, puppet: null, hp: null, lastHp: 0, age: SPAWN_MS, tile: '', bike: cart, stars: null, size: 1, puddle: 1, recoil: null, kind: mobile.kind, lounge: null, loungeLeft: 0, hungry: null };
     } else {
       const foe = mobile.kind === 'mutant' || mobile.kind === 'beast';
       const { id, ...options } = puppetOf(mobile);
@@ -698,9 +711,18 @@ export class MobileLayer {
       const stars = mobile.kind === 'patient' ? this.stars() : null;
 
       if (stars) root.addChild(stars.orbit);
+
+      let hungry: Sprite | null = null;
+
+      if (mobile.kind === 'kid' || mobile.kind === 'worker' || mobile.kind === 'lumberjack') {
+        hungry = new Sprite(this.library.part('hungry', 'bubble'));
+        hungry.anchor.set(SPRITES.hungry.anchorX, SPRITES.hungry.anchorY);
+        hungry.visible = false;
+        root.addChild(hungry);
+      }
       const puddle = mobile.kind === 'mutant' ? puddleSize(mobile) : 1;
 
-      view = { root, puppet, hp, lastHp: foe ? mobile.hp : 0, age: foe ? 0 : SPAWN_MS, tile: '', bike, stars, size: scale, puddle, recoil: null, kind: mobile.kind, lounge: null, loungeLeft: 0 };
+      view = { root, puppet, hp, lastHp: foe ? mobile.hp : 0, age: foe ? 0 : SPAWN_MS, tile: '', bike, stars, size: scale, puddle, recoil: null, kind: mobile.kind, lounge: null, loungeLeft: 0, hungry };
       if (mobile.kind === 'mutant' && mobile.emerge > 0) this.spill(mobile, puddle);
     }
 

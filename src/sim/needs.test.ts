@@ -1,0 +1,336 @@
+import { describe, expect, it } from 'vitest';
+import { TILE_SIZE } from '../core/grid.ts';
+import { BUILDINGS } from '../data/buildings.ts';
+import { DAY_CYCLE } from '../data/dayNight.ts';
+import { AGES } from '../data/inhabitants.ts';
+import type { ItemId } from '../data/items.ts';
+import { NEEDS, START_FOOD } from '../data/needs.ts';
+import { doorOf } from './jobs.ts';
+import { canGrow, drainNeeds, fullNeeds, needState, needsPace, pacedTick, urgentNeed } from './needs.ts';
+import { freshNeeds } from './needs.ts';
+import { decodeSave, encodeSave, type SavedEntity } from './save.ts';
+import { isWalkable, terrainAt } from './terrain.ts';
+import type { Kid, Mobile, Worker } from './types.ts';
+import { World } from './world.ts';
+
+type Stock = Partial<Record<ItemId, number>>;
+
+const HUNGER = NEEDS.hunger;
+
+/** Une seed dont la mairie a une plaine sans eau au sud. */
+function landSeed(): { world: World; hx: number; hy: number } {
+  for (let seed = 1; seed < 400; seed += 1) {
+    const world = new World(seed);
+    const hall = world.entities.get(world.townHallId)!;
+    let dry = true;
+
+    for (let ty = hall.ty - 1; ty < hall.ty + 16 && dry; ty += 1) {
+      for (let tx = hall.tx - 10; tx < hall.tx + 10 && dry; tx += 1) {
+        if (!isWalkable(terrainAt(world.seed, tx, ty))) dry = false;
+      }
+    }
+    if (dry) return { world, hx: hall.tx, hy: hall.ty };
+  }
+  throw new Error('aucune seed testable — la génération de terrain a changé');
+}
+
+/** Une colonie posée d'un coup : mairie (et son stock), nurserie, maison des constructeurs, un enfant de 12 ans. */
+function colony(town: Stock): World {
+  const { world, hx, hy } = landSeed();
+  const state = world.snapshot();
+  let nextId = state.nextId;
+  const at = (proto: 'nursery' | 'builderHouse', dx: number, dy: number) => ({
+    id: nextId++,
+    proto,
+    tx: hx + dx,
+    ty: hy + dy,
+    width: BUILDINGS[proto].width,
+    height: BUILDINGS[proto].height,
+  });
+  const built = { hp: 100, level: 1, paused: false };
+  const nursery = at('nursery', -5, 5);
+  const entities: SavedEntity[] = [
+    { kind: 'townHall', id: world.townHallId, proto: 'townHall', tx: hx, ty: hy, width: 3, height: 3, store: town, ...built, hp: BUILDINGS.townHall.hp, staff: 0 },
+    // En pause : elle n'appelle pas la nourriture de la ville pour ses naissances.
+    { ...nursery, kind: 'nursery', store: {}, ...built, paused: true, staff: BUILDINGS.nursery.workers, nextBirthTick: state.tick + 1_000_000, born: 1, hungry: false },
+    { ...at('builderHouse', 2, 6), kind: 'house', store: {}, ...built, staff: BUILDINGS.builderHouse.workers },
+  ];
+  const x = (nursery.tx + 1) * TILE_SIZE;
+  const y = (nursery.ty + nursery.height + 1) * TILE_SIZE;
+  const mobiles: Mobile[] = [
+    { kind: 'kid', id: state.nextMobileId, age: 12, x, y, prevX: x, prevY: y, facing: 'down', moving: false, homeId: nursery.id, homeX: x, homeY: y, dirX: 0, dirY: 0, wanderTicks: 0, ...freshNeeds() },
+  ];
+
+  // Adam à l'écart, immobile.
+  state.player = { ...state.player, x: (hx - 20) * TILE_SIZE, y: (hy - 20) * TILE_SIZE };
+  state.entities = entities;
+  state.nextId = nextId;
+  state.mobiles = mobiles;
+  state.nextMobileId += mobiles.length;
+  state.tick = Math.max(state.tick, 1);
+  state.cycleStartTick = state.tick;
+  return World.restore(state);
+}
+
+function kid(world: World): Kid {
+  return [...world.mobiles.values()].find((mobile): mobile is Kid => mobile.kind === 'kid')!;
+}
+
+function workers(world: World): Worker[] {
+  return [...world.mobiles.values()].filter((mobile): mobile is Worker => mobile.kind === 'worker');
+}
+
+/** Pose un chantier : Adam s'en approche le temps de la pose, puis retourne à l'écart. */
+function place(world: World, tx: number, ty: number): void {
+  const { x, y } = world.player;
+
+  world.player.x = world.player.prevX = tx * TILE_SIZE;
+  world.player.y = world.player.prevY = (ty + 3) * TILE_SIZE;
+  world.push({ type: 'placeBuilding', building: 'watchtower', tx, ty });
+  world.tick();
+  world.player.x = world.player.prevX = x;
+  world.player.y = world.player.prevY = y;
+  expect([...world.entities.values()].some((entity) => entity.kind === 'site' && entity.proto === 'watchtower')).toBe(true);
+}
+
+function run(world: World, ticks: number): void {
+  for (let i = 0; i < ticks; i += 1) world.tick();
+}
+
+/** Avance l'horloge jusqu'au tick qui précède l'aube, sans traverser la nuit et ses vagues. */
+function toDawn(world: World): void {
+  const clock = world.clock()!;
+
+  world.cycleStartTick -= DAY_CYCLE.day + DAY_CYCLE.dusk + DAY_CYCLE.night - clock.offset - 1;
+  world.tick();
+  expect(world.clock()?.phase).toBe('dawn');
+}
+
+describe('jauges', () => {
+  it('baissent avec le temps, plus vite au travail qu’au repos', () => {
+    const resting = fullNeeds();
+    const working = fullNeeds();
+
+    for (let i = 0; i < 600; i += 1) {
+      drainNeeds(resting, false);
+      drainNeeds(working, true);
+    }
+    expect(resting.hunger).toBeCloseTo(1 - 600 / HUNGER.restTicks);
+    expect(working.hunger).toBeCloseTo(1 - 600 / HUNGER.workTicks);
+    expect(working.hunger).toBeLessThan(resting.hunger);
+  });
+
+  it('disent rassasié, a faim, affamé — et l’allure qui va avec', () => {
+    expect(needState('hunger', 1)).toBe('sated');
+    expect(needState('hunger', HUNGER.seekBelow - 0.01)).toBe('wanting');
+    expect(needState('hunger', HUNGER.weakBelow - 0.01)).toBe('deprived');
+    expect(urgentNeed({ hunger: 1 })).toBeNull();
+    expect(urgentNeed({ hunger: 0.2 })).toBe('hunger');
+    expect(needsPace({ hunger: 0.2 })).toBe(1);
+    expect(needsPace({ hunger: HUNGER.weakBelow / 2 })).toBe(HUNGER.weakPace);
+    expect(needsPace({ hunger: 0 })).toBe(0);
+    expect(canGrow({ hunger: 1 })).toBe(true);
+    expect(canGrow({ hunger: 0.2 })).toBe(false);
+  });
+
+  it('un affamé à mi-allure ne compte qu’un tick sur deux', () => {
+    const counted = Array.from({ length: 100 }, (_, tick) => pacedTick(tick, 0.5)).filter(Boolean).length;
+
+    expect(counted).toBe(50);
+    expect(pacedTick(7, 1)).toBe(true);
+  });
+});
+
+describe('faim', () => {
+  it('baisse avec le temps de jeu pour chaque ouvrier et chaque enfant', () => {
+    const world = colony({ food: 10 });
+
+    run(world, 200);
+    for (const mobile of [kid(world), ...workers(world)]) {
+      expect(mobile.needs.hunger).toBeLessThan(1);
+      expect(mobile.needs.hunger).toBeGreaterThan(0.9);
+    }
+  });
+
+  it('un ouvrier qui a faim va manger à la mairie, remonte sa jauge, et la ville compte un repas de moins', () => {
+    const world = colony({ food: 10 });
+    const worker = workers(world)[0]!;
+    let met = 0;
+
+    world.events.on('needMet', ({ id }) => {
+      if (id === worker.id) met += 1;
+    });
+    worker.needs.hunger = HUNGER.seekBelow - 0.05;
+
+    for (let i = 0; i < 20 * 30 && met === 0; i += 1) {
+      world.tick();
+      if (worker.meal) expect(world.townStock()!.available('food')).toBe(10 - HUNGER.meal);
+    }
+
+    const door = doorOf(world.warehouse()!);
+
+    expect(met).toBe(1);
+    expect(worker.needs.hunger).toBe(1);
+    expect(worker.meal).toBeNull();
+    expect(Math.hypot(worker.x - door.x, worker.y - door.y)).toBeLessThan(1);
+    expect(world.townStock()!.count('food')).toBe(10 - HUNGER.meal);
+  });
+
+  it('interrompt son transport pour manger, puis le reprend : rien de perdu', () => {
+    const world = colony({ food: 10, stone: 0 });
+    const worker = workers(world)[0]!;
+
+    // Un chantier proche à livrer en pierre, de la pierre en ville : les porteurs partent.
+    world.townStock()!.add('stone', 30);
+    const hall = world.warehouse()!;
+
+    place(world, hall.tx + 6, hall.ty - 4);
+    for (let i = 0; i < 20 * 20 && !worker.job; i += 1) world.tick();
+    expect(worker.job).not.toBeNull();
+
+    const job = { ...worker.job! };
+
+    worker.needs.hunger = HUNGER.seekBelow - 0.05;
+    for (let i = 0; i < 20 * 30 && worker.needs.hunger < 1; i += 1) world.tick();
+
+    expect(worker.needs.hunger).toBe(1);
+    // Il a gardé son job — ses réservations avec — et repart le finir.
+    expect(worker.job).toMatchObject({ from: job.from, to: job.to, item: job.item, amount: job.amount });
+  });
+
+  it('sans nourriture, il ralentit sous le seuil, puis s’arrête à bout', () => {
+    const world = colony({});
+    const hall = world.warehouse()!;
+
+    // Rien à manger en ville : on donne aux porteurs une destination lointaine pour les voir marcher.
+    place(world, hall.tx + 12, hall.ty + 8);
+    world.townStock()!.add('stone', 30);
+    for (let i = 0; i < 20 * 20 && !workers(world).some((mobile) => mobile.job); i += 1) world.tick();
+
+    const worker = workers(world).find((mobile) => mobile.job)!;
+
+    expect(worker).toBeDefined();
+
+    const stride = (): number => {
+      const { x, y } = worker;
+
+      world.tick();
+      return Math.hypot(worker.x - x, worker.y - y);
+    };
+
+    const fed = stride();
+
+    worker.needs.hunger = HUNGER.weakBelow / 2;
+    const weak = stride();
+
+    expect(fed).toBeGreaterThan(0);
+    expect(weak).toBeCloseTo(fed * HUNGER.weakPace, 5);
+    expect(worker.meal).toBeNull();
+
+    worker.needs.hunger = 0;
+    const { x, y } = worker;
+
+    run(world, 100);
+    expect([worker.x, worker.y]).toEqual([x, y]);
+    expect(worker.moving).toBe(false);
+    // Le job attend : il le reprendra rassasié.
+    expect(worker.job).not.toBeNull();
+
+    // De quoi manger arrive en ville : il se traîne jusqu'à la mairie, et repart.
+    world.townStock()!.add('food', 5);
+    for (let i = 0; i < 20 * 60 && worker.needs.hunger < 1; i += 1) world.tick();
+    expect(worker.needs.hunger).toBe(1);
+  });
+
+  it('un enfant affamé ne grandit pas à l’aube ; rassasié, il prend son année', () => {
+    const hungry = colony({});
+
+    kid(hungry).needs.hunger = HUNGER.seekBelow - 0.1;
+    toDawn(hungry);
+    expect(kid(hungry).age).toBe(12);
+
+    const fed = colony({});
+
+    toDawn(fed);
+    expect(kid(fed).age).toBe(12 + AGES.yearsPerCycle);
+  });
+
+  it('un enfant qui a faim va manger à la mairie lui aussi', () => {
+    const world = colony({ food: 3 });
+    const child = kid(world);
+
+    child.needs.hunger = HUNGER.seekBelow - 0.05;
+    for (let i = 0; i < 20 * 60 && child.needs.hunger < 1; i += 1) world.tick();
+
+    expect(child.needs.hunger).toBe(1);
+    expect(world.townStock()!.count('food')).toBe(3 - HUNGER.meal);
+  });
+
+  it('la mairie bâtie, la ville a de quoi nourrir ses premiers ouvriers', () => {
+    const world = new World(7);
+    const hall = world.entities.get(world.townHallId)!;
+
+    if (hall.kind !== 'site') throw new Error('la mairie n’est pas en chantier');
+    // Tout livré sauf une pierre : Adam l'apporte, le chantier s'achève.
+    hall.delivered = { ...BUILDINGS.townHall.cost, stone: BUILDINGS.townHall.cost.stone - 1 };
+    world.player.inventory.add('stone', 1);
+    world.push({ type: 'transferToSite', id: world.townHallId });
+    world.tick();
+
+    expect(world.townStock()?.count('food')).toBe(START_FOOD);
+  });
+});
+
+describe('alerte de la ville', () => {
+  it('se lève quand quelqu’un a faim et qu’il n’y a plus rien à manger', () => {
+    const world = colony({});
+
+    expect(world.needAlert()).toBeNull();
+    workers(world)[0]!.needs.hunger = HUNGER.seekBelow - 0.05;
+    expect(world.needAlert()).toMatchObject({ need: 'hunger', item: 'food', wanting: 1, minutes: 0 });
+    expect(world.wantingInhabitants().map((mobile) => mobile.id)).toEqual([workers(world)[0]!.id]);
+
+    world.townStock()!.add('food', 50);
+    expect(world.needAlert()).toBeNull();
+  });
+});
+
+describe('faim — sauvegarde', () => {
+  it('les jauges et le repas en route se sauvegardent ; la part réservée se rejoue', () => {
+    const world = colony({ food: 10 });
+    const worker = workers(world)[0]!;
+
+    worker.needs.hunger = HUNGER.seekBelow - 0.05;
+    for (let i = 0; i < 40 && !worker.meal; i += 1) world.tick();
+    expect(worker.meal).toBe('hunger');
+
+    const decoded = decodeSave(encodeSave(world, 0));
+
+    if (!decoded.ok) throw new Error(decoded.reason);
+
+    const loaded = decoded.world.mobiles.get(worker.id) as Worker;
+
+    expect(loaded.needs.hunger).toBeCloseTo(worker.needs.hunger);
+    expect(loaded.meal).toBe('hunger');
+    expect(decoded.world.townStock()!.available('food')).toBe(10 - HUNGER.meal);
+  });
+
+  it('une ancienne sauvegarde, sans jauges, démarre avec des habitants rassasiés', () => {
+    const world = colony({ food: 10 });
+    const file = JSON.parse(encodeSave(world, 0)) as { state: { mobiles: Record<string, unknown>[] } };
+
+    for (const mobile of file.state.mobiles) {
+      delete mobile['needs'];
+      delete mobile['meal'];
+    }
+
+    const decoded = decodeSave(JSON.stringify(file));
+
+    if (!decoded.ok) throw new Error(decoded.reason);
+
+    const people = [...decoded.world.mobiles.values()].filter((mobile) => mobile.kind === 'kid' || mobile.kind === 'worker');
+
+    expect(people.length).toBeGreaterThan(1);
+    for (const mobile of people) expect(mobile).toMatchObject({ needs: { hunger: 1 }, meal: null });
+  });
+});

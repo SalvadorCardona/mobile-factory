@@ -70,6 +70,7 @@ import {
 import { EVE } from '../data/eve.ts';
 import { AGES, COLONY, NURSERY_CARE } from '../data/inhabitants.ts';
 import { TOWN_PLENTY, type ItemId } from '../data/items.ts';
+import { NEED_ALERT, NEED_IDS, NEEDS, START_FOOD, type NeedId } from '../data/needs.ts';
 import { BUILD_PRESTIGE, KILL_PRESTIGE } from '../data/prestige.ts';
 import {
   PERKS,
@@ -115,6 +116,7 @@ import { compassOf, spawnPoint, stepMutant, stepQueen, surfacePoint, type Compas
 import { createEve, currentQuest, harvestYieldWithTools, isUnlocked, mostDamaged, questProgress, rideHome, walkTo } from './eve.ts';
 import { ADAM_SALT, adultAge, canWork, nameOf, yearsToWork } from './inhabitants.ts';
 import { KID_SPRINT, stepKid } from './kids.ts';
+import { canGrow, drainNeeds, freshNeeds, needState, needsPace, pacedTick, urgentNeed } from './needs.ts';
 import { rollLoot, stepPickup } from './loot.ts';
 import { copyStats, emptyStats, objectiveDone } from './objectives.ts';
 import { denSize, densOfChunk, stepBeast, type Den } from './wildlife.ts';
@@ -308,6 +310,18 @@ export type Occupation =
 
 /** Un habitant qu'on peut taper : un enfant, un ouvrier, un bûcheron. */
 export type Inhabitant = Kid | Worker | Lumberjack;
+
+/**
+ * L'alerte du HUD quand la ville va manquer de ce qu'un besoin consomme :
+ * `wanting` habitants ont faim sans rien à manger, ou `minutes` — le stock
+ * au rythme où il fond — sont comptées. `minutes` vaut 0 quand il n'y a plus rien.
+ */
+export interface NeedAlert {
+  need: NeedId;
+  item: ItemId;
+  wanting: number;
+  minutes: number;
+}
 
 /** La population détaillée du HUD Ville : au travail, inactifs, enfants. */
 export interface Census {
@@ -507,6 +521,10 @@ export type WorldEvents = {
   mutantHealed: { id: MobileId; clinicId: EntityId; x: number; y: number };
   /** Un enfant a eu 14 ans : il devient ouvrier, sous le même id. */
   kidGrewUp: { id: MobileId; name: string; x: number; y: number };
+  /** L'habitant `id` a comblé un besoin à la mairie : sa jauge est pleine. */
+  needMet: { id: MobileId; need: NeedId; x: number; y: number };
+  /** Un enfant affamé n'a pas pris d'année à l'aube. */
+  growthStunted: { id: MobileId; name: string };
   /** Le labo `id` a choisi une recherche : il attend son coût. */
   researchChosen: { id: EntityId; research: ResearchId };
   /** La recherche choisie est abandonnée ; ce qui était déposé reste au coffre. */
@@ -899,6 +917,7 @@ export class World {
     this.scheduler.restore(state.scheduler);
     this.restoreJobs();
     this.restoreLumberjacks();
+    this.restoreMeals();
 
     // Une sauvegarde d'avant la colonie : ses ouvriers étaient ceux qu'emploient ses bâtiments finis — elle les garde.
     this.colonists = state.colonists ?? this.employedByBuildings();
@@ -2673,6 +2692,8 @@ export class World {
       case 'townHall':
         // Le toit est posé : le premier jour se lève, les mutants sauront où aller la nuit venue.
         if (building.id === this.townHallId) {
+          // De quoi nourrir les premiers ouvriers le temps de lancer une ferme.
+          building.store.add('food', START_FOOD);
           this.cycleStartTick = this.tickCount;
           this.nextWaveHeading = this.rng() * Math.PI * 2;
           // Le menu s'ouvre : ce qu'il propose d'emblée est le départ, pas une découverte — ni badge ni annonce.
@@ -2890,6 +2911,7 @@ export class World {
     const kid: Kid = {
       kind: 'kid',
       id: this.nextMobileId++,
+      ...freshNeeds(),
       age: AGES.nursery,
       x,
       y,
@@ -3068,7 +3090,7 @@ export class World {
 
   /** Tient le compte de qui glande depuis quand : rien de tout ça n'est sauvegardé. */
   private noteIdle(mobile: Worker | Lumberjack): void {
-    const busy = mobile.kind === 'worker' ? mobile.job !== null || mobile.build !== null : mobile.state !== 'idle';
+    const busy = mobile.meal !== null || (mobile.kind === 'worker' ? mobile.job !== null || mobile.build !== null : mobile.state !== 'idle');
 
     if (busy || mobile.inside || !this.mobiles.has(mobile.id) || !this.entities.has(mobile.homeId)) {
       this.idleSince.delete(mobile.id);
@@ -3179,7 +3201,17 @@ export class World {
         }
 
         case 'kid':
-          stepKid(mobile, { x: mobile.homeX, y: mobile.homeY }, this.isSolid, this.rng, STEP_SECONDS, undefined, undefined, KID_SPRINT);
+          if (this.stepNeeds(mobile, alarm)) break;
+          stepKid(
+            mobile,
+            { x: mobile.homeX, y: mobile.homeY },
+            this.isSolid,
+            this.rng,
+            STEP_SECONDS * needsPace(mobile.needs),
+            undefined,
+            undefined,
+            KID_SPRINT,
+          );
           break;
 
         case 'eve':
@@ -3187,12 +3219,12 @@ export class World {
           break;
 
         case 'worker':
-          this.stepWorker(mobile, alarm, bedtime);
+          if (!this.stepNeeds(mobile, alarm)) this.stepWorker(mobile, alarm, bedtime);
           this.noteIdle(mobile);
           break;
 
         case 'lumberjack':
-          this.stepLumberjack(mobile, alarm, bedtime);
+          if (!this.stepNeeds(mobile, alarm)) this.stepLumberjack(mobile, alarm, bedtime);
           this.noteIdle(mobile);
           break;
 
@@ -3502,6 +3534,7 @@ export class World {
     const worker: Worker = {
       kind: 'worker',
       id,
+      ...freshNeeds(),
       age: adultAge(this.seed, id),
       x: door.x,
       y: door.y,
@@ -4156,6 +4189,7 @@ export class World {
       const worker: Worker = {
         kind: 'worker',
         id,
+        ...freshNeeds(),
         age: adultAge(this.seed, id),
         x,
         y: door.y,
@@ -4189,6 +4223,11 @@ export class World {
     this.player.age += AGES.yearsPerCycle;
     for (const mobile of [...this.mobiles.values()]) {
       if (mobile.kind !== 'kid' && mobile.kind !== 'eve' && mobile.kind !== 'worker' && mobile.kind !== 'lumberjack') continue;
+      // Un enfant qui a faim ne grandit pas : il attend sa prochaine aube le ventre plein.
+      if (mobile.kind === 'kid' && !canGrow(mobile.needs)) {
+        this.events.emit('growthStunted', { id: mobile.id, name: nameOf(this.seed, mobile.id) });
+        continue;
+      }
       mobile.age += AGES.yearsPerCycle;
       if (mobile.kind === 'kid' && canWork(mobile.age)) this.growUp(mobile, true);
     }
@@ -4200,6 +4239,8 @@ export class World {
    * nurserie se libère, et elle reprend ses naissances si elle était pleine.
    */
   private growUp(kid: Kid, announce: boolean): void {
+    // Sa part réservée pour un repas en route retourne au stock de la ville.
+    this.cancelMeal(kid);
     this.mobiles.delete(kid.id);
     this.colonists += 1;
     this.rosterChanged();
@@ -4250,6 +4291,156 @@ export class World {
 
     if (proto === 'queen') mutant.queen = { phase: 1, layTicks: QUEEN.layTicks, prey: null };
     this.mobiles.set(mutant.id, mutant);
+  }
+
+  /* ---------------------------------------------------------------- besoins */
+
+  /**
+   * Le tick d'un habitant côté besoins, avant sa tâche : ses jauges baissent
+   * — plus vite au travail —, et sous le seuil d'un besoin il part le combler
+   * à la mairie, s'il y a de quoi. Sa tâche attend : un job garde ses
+   * réservations, un chantier ou un arbre l'attend, et il les reprend en
+   * revenant. Pendant une vague, il rentre s'abriter d'abord. Vrai s'il ne
+   * fait rien d'autre ce tick : il est en route pour manger, ou à bout.
+   */
+  private stepNeeds(mobile: Inhabitant, alarm: boolean): boolean {
+    drainNeeds(mobile.needs, this.isToiling(mobile));
+
+    if (alarm) {
+      if (mobile.meal !== null) this.cancelMeal(mobile);
+    } else {
+      // Une fois par seconde, pas à chaque tick : la ligne droite jusqu'à la mairie a un coût.
+      if (mobile.meal === null && (this.tickCount + mobile.id) % PORTERS.retryTicks === 0) this.seekMeal(mobile);
+      if (mobile.meal !== null) {
+        this.walkToMeal(mobile, mobile.meal);
+        return true;
+      }
+    }
+
+    if (needsPace(mobile.needs) > 0) return false;
+
+    // À bout : il s'arrête là où il est, sa tâche en suspens, jusqu'à ce que la ville ait de quoi.
+    mobile.prevX = mobile.x;
+    mobile.prevY = mobile.y;
+    mobile.moving = false;
+    return true;
+  }
+
+  /** Travaille-t-il ? Dehors, à une tâche. Un enfant ne travaille jamais, un dormeur non plus. */
+  private isToiling(mobile: Inhabitant): boolean {
+    if (mobile.kind === 'kid' || mobile.inside) return false;
+    if (mobile.kind === 'worker') return mobile.job !== null || mobile.build !== null;
+    return mobile.state !== 'idle';
+  }
+
+  /** Sous un seuil : sa part du stock de la ville réservée, il part pour la mairie. */
+  private seekMeal(mobile: Inhabitant): void {
+    const need = urgentNeed(mobile.needs);
+    const hall = this.warehouse();
+
+    if (need === null || !hall) return;
+
+    const { item, meal } = NEEDS[need];
+    const door = doorOf(hall);
+
+    if (hall.store.available(item) < meal || !clearLine(this.seed, mobile.x, mobile.y, door.x, door.y)) return;
+
+    hall.store.reserveOut(item, meal);
+    mobile.meal = need;
+    if (mobile.kind !== 'kid') mobile.inside = false;
+    // Il lâche sa hache : il lui faudra retourner à l'arbre.
+    if (mobile.kind === 'lumberjack' && mobile.state === 'chop') mobile.state = 'toTree';
+  }
+
+  /** En route pour la mairie ; à la porte, il consomme sa part et sa jauge remonte. */
+  private walkToMeal(mobile: Inhabitant, need: NeedId): void {
+    const hall = this.warehouse();
+
+    if (!hall) {
+      mobile.meal = null;
+      return;
+    }
+
+    const door = doorOf(hall);
+
+    if (!walkToward(mobile, door.x, door.y, STEP_SECONDS, this.onRoad)) return;
+
+    const { item, meal } = NEEDS[need];
+
+    mobile.meal = null;
+    if (hall.store.commitOut(item, meal) < meal) return;
+    mobile.needs[need] = 1;
+    this.events.emit('needMet', { id: mobile.id, need, x: mobile.x, y: mobile.y });
+  }
+
+  /** Une vague : il rentre s'abriter, sa part rendue au stock de la ville. */
+  private cancelMeal(mobile: Inhabitant): void {
+    const need = mobile.meal;
+
+    mobile.meal = null;
+    if (need !== null) this.warehouse()?.store.releaseOut(NEEDS[need].item, NEEDS[need].meal);
+  }
+
+  /** Après un chargement : la part de chaque habitant en route pour manger se réserve de nouveau. */
+  private restoreMeals(): void {
+    const town = this.townStock();
+
+    for (const mobile of this.inhabitants()) {
+      if (mobile.meal === null) continue;
+      if (!town?.reserveOut(NEEDS[mobile.meal].item, NEEDS[mobile.meal].meal)) mobile.meal = null;
+    }
+  }
+
+  private *inhabitants(): IterableIterator<Inhabitant> {
+    for (const mobile of this.mobiles.values()) {
+      if (mobile.kind === 'kid' || mobile.kind === 'worker' || mobile.kind === 'lumberjack') yield mobile;
+    }
+  }
+
+  /**
+   * La ville va-t-elle manquer de ce qu'un besoin consomme ? Oui si un
+   * habitant a faim sans rien à manger en ville, ou si le stock, au rythme
+   * où il fond sur les deux dernières minutes, ne tient pas
+   * `NEED_ALERT.runwayTicks`. `null` sans mairie ni habitant.
+   */
+  public needAlert(): NeedAlert | null {
+    const town = this.townStock();
+
+    if (!town) return null;
+
+    for (const need of NEED_IDS) {
+      const { item, meal } = NEEDS[need];
+      let people = 0;
+      let wanting = 0;
+
+      for (const mobile of this.inhabitants()) {
+        people += 1;
+        if (mobile.meal === null && needState(need, mobile.needs[need]) !== 'sated') wanting += 1;
+      }
+      if (people === 0) return null;
+
+      const stock = town.available(item);
+      const rate = this.flows.netRate(item);
+
+      if (stock < meal && (wanting > 0 || rate < 0)) return { need, item, wanting, minutes: 0 };
+
+      const minutes = rate < 0 ? stock / -rate : Infinity;
+
+      if (minutes * 20 * 60 < NEED_ALERT.runwayTicks) return { need, item, wanting, minutes: Math.max(1, Math.ceil(minutes)) };
+    }
+    return null;
+  }
+
+  /** Les habitants qui ont faim, du plus affamé au moins : le HUD centre la caméra sur l'un, puis le suivant. */
+  public wantingInhabitants(): Inhabitant[] {
+    const wanting: { mobile: Inhabitant; level: number }[] = [];
+
+    for (const mobile of this.inhabitants()) {
+      const need = urgentNeed(mobile.needs);
+
+      if (need !== null) wanting.push({ mobile, level: mobile.needs[need] });
+    }
+    return wanting.sort((a, b) => a.level - b.level || a.mobile.id - b.mobile.id).map(({ mobile }) => mobile);
   }
 
   /* ---------------------------------------------------------------- porteurs */
@@ -4317,6 +4508,7 @@ export class World {
       const worker: Worker = {
         kind: 'worker',
         id,
+        ...freshNeeds(),
         age: adultAge(this.seed, id),
         x: door.x,
         y: door.y,
@@ -4676,6 +4868,8 @@ export class World {
     if (!walkToward(worker, spot.x, spot.y, STEP_SECONDS, this.onRoad)) return;
 
     worker.facing = 'up';
+    // Affamé, il ne frappe plus qu'un tick sur deux.
+    if (!pacedTick(this.tickCount, needsPace(worker.needs))) return;
     site.work += 1;
     if (site.work >= siteWork(site)) this.complete(site);
   }
@@ -4733,6 +4927,7 @@ export class World {
       const lumberjack: Lumberjack = {
         kind: 'lumberjack',
         id,
+        ...freshNeeds(),
         age: adultAge(this.seed, id),
         x: door.x,
         y: door.y,
@@ -4845,7 +5040,8 @@ export class World {
       case 'chop':
         standStill(lumberjack);
         lumberjack.inside = false;
-        lumberjack.chopTicks -= 1;
+        // Affamé, il ne frappe plus qu'un tick sur deux.
+        if (pacedTick(this.tickCount, needsPace(lumberjack.needs))) lumberjack.chopTicks -= 1;
         if (lumberjack.chopTicks <= 0) this.chop(lumberjack, door);
         break;
 
@@ -5505,8 +5701,9 @@ function saveEntity(entity: Entity): SavedEntity {
 
 /** Un mobile copié : un ouvrier emporte son job, qui ne doit pas être partagé entre deux mondes. */
 function copyMobile(mobile: Mobile): Mobile {
-  if (mobile.kind === 'worker') return { ...mobile, job: mobile.job && { ...mobile.job } };
-  if (mobile.kind === 'lumberjack') return { ...mobile, tree: mobile.tree && { ...mobile.tree } };
+  if (mobile.kind === 'worker') return { ...mobile, needs: { ...mobile.needs }, job: mobile.job && { ...mobile.job } };
+  if (mobile.kind === 'lumberjack') return { ...mobile, needs: { ...mobile.needs }, tree: mobile.tree && { ...mobile.tree } };
+  if (mobile.kind === 'kid') return { ...mobile, needs: { ...mobile.needs } };
   if (mobile.kind === 'caravan') {
     return { ...mobile, offers: mobile.offers.map((trade) => ({ ...trade, cost: { ...trade.cost }, items: { ...trade.items } })) };
   }

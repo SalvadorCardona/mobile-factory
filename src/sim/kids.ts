@@ -17,7 +17,7 @@ import type { Kid } from './types.ts';
 export type Wanderer = Pick<Kid, 'x' | 'y' | 'prevX' | 'prevY' | 'facing' | 'moving' | 'dirX' | 'dirY' | 'wanderTicks'>;
 
 /** Vitesse d'un enfant, en tuiles par seconde. */
-const KID_SPEED_TILES = 1.6;
+export const KID_SPEED_TILES = 1.6;
 
 /** Rayon de flânerie autour de la nurserie, en tuiles. */
 const KID_RANGE_TILES = 4;

@@ -56,6 +56,7 @@
 import { TILE_SIZE } from '../core/grid.ts';
 import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
+import { NEED_IDS, NEEDS, type NeedId } from '../data/needs.ts';
 import { SIGNAL_WAVES } from '../data/artDirection.ts';
 import { OBJECTIVES, type Goal } from '../data/objectives.ts';
 import { seedsFor } from '../data/perks.ts';
@@ -68,6 +69,7 @@ import type { WaterStats } from '../render/waterLayer.ts';
 import type { RoadRejection } from '../sim/commands.ts';
 import type { Compass } from '../sim/enemies.ts';
 import { nameOf } from '../sim/inhabitants.ts';
+import { needState } from '../sim/needs.ts';
 import type { Entity, Mobile, MobileId } from '../sim/types.ts';
 import { DIAL_ARCS } from '../sim/dayNight.ts';
 import { currentQuest, questProgress } from '../sim/eve.ts';
@@ -77,7 +79,7 @@ import { locale, onLocale, t } from '../i18n/locale.ts';
 import { carriesWanted, harvestRefusedText, tutorialAdvice, type Advice } from './hint.ts';
 import { buildingIcon, dayDialUrl, itemAmount, itemIcon, prestigeIcon, uiIcon } from './icons.ts';
 import { effectLine } from './researchText.ts';
-import { personText } from './personText.ts';
+import { needText, personText } from './personText.ts';
 import { mapUrl, seedLine } from './seed.ts';
 
 /** Durée de l'alarme après le dernier coup reçu par la mairie hors de l'écran, en ms. */
@@ -191,11 +193,16 @@ export class Hud {
   private lastPeople = '';
   /** Rang, dans `World.idleWorkers()`, du prochain inactif que montre un tap sur leur compteur. */
   private idleCursor = 0;
+  /** L'alerte de nourriture : la ville va en manquer. Un tap montre qui a faim, puis le suivant. */
+  private readonly hunger: HTMLButtonElement;
+  private lastHunger = '';
+  private hungryCursor = 0;
   /** L'infobulle d'un habitant : son id, et l'heure (`performance.now()`) où elle s'efface. */
   private readonly person: HTMLElement;
   private personId: MobileId | null = null;
   private personUntil = 0;
   private personHeight = 0;
+  private personKey = '';
   private onFocus: (x: number, y: number) => void = () => {};
   private readonly buttons: HTMLElement;
   private readonly floats: HTMLElement;
@@ -349,6 +356,10 @@ export class Hud {
     this.people.hidden = true;
     this.person = element('div', 'hud-speech hud-person');
     this.person.hidden = true;
+    this.hunger = element('button', 'panel hud-hunger');
+    this.hunger.type = 'button';
+    this.hunger.hidden = true;
+    this.hunger.addEventListener('click', () => this.focusHungry());
     this.floats = element('div', 'hud-floats');
     this.stats = element('div', 'panel hud-stats');
     this.stats.hidden = !debug;
@@ -438,7 +449,7 @@ export class Hud {
     const side = element('div', 'hud-side');
 
     this.quest.append(fold);
-    side.append(buttons, this.town, this.prestige, this.people, this.bag);
+    side.append(buttons, this.town, this.prestige, this.people, this.hunger, this.bag);
     this.top.append(this.quest, side, this.weather);
 
     this.root.append(
@@ -605,6 +616,7 @@ export class Hud {
     world.events.on('patientAdmitted', () => this.notify(t().hud.toast.patientAdmitted, 'good'));
     world.events.on('mutantHealed', () => this.notify(t().hud.toast.mutantHealed, 'good'));
     world.events.on('kidGrewUp', ({ name }) => this.notify(t().hud.toast.kidGrewUp(name), 'good'));
+    world.events.on('growthStunted', ({ name }) => this.notify(t().hud.toast.growthStunted(name), 'bad'));
     world.events.on('townHallDestroyed', () => this.showDefeat());
     world.events.on('weatherAnnounced', ({ id, seconds }) => {
       const { label, advice } = t().weather[id];
@@ -783,7 +795,8 @@ export class Hud {
     this.personId = id;
     this.personUntil = performance.now() + PERSON_MS;
     this.person.style.animation = 'none';
-    this.person.textContent = '';
+    this.person.replaceChildren();
+    this.personKey = '';
     this.person.hidden = false;
     void this.person.offsetWidth;
     this.person.style.animation = '';
@@ -799,9 +812,13 @@ export class Hud {
     }
 
     const line = personText(nameOf(this.world.seed, mobile.id), mobile.age, this.world.occupation(mobile));
+    // La jauge avance par centièmes : l'infobulle ne se refait pas à chaque tick.
+    const gauges = NEED_IDS.map((need) => Math.round(mobile.needs[need] * 100));
+    const key = `${line}|${gauges.join(':')}`;
 
-    if (line !== this.person.textContent) {
-      this.person.textContent = line;
+    if (key !== this.personKey) {
+      this.personKey = key;
+      this.person.replaceChildren(text('hud-person-line', line), ...NEED_IDS.map((need) => needMeter(need, mobile.needs[need])));
       this.personHeight = this.person.offsetHeight;
     }
 
@@ -849,6 +866,42 @@ export class Hud {
       lazy,
       count('child', children, label.children(children)),
     );
+  }
+
+  /**
+   * L'alerte de nourriture, sous la population : la ville va en manquer —
+   * « 3 min » de stock au rythme où il fond, ou plus rien —, en corail. Elle
+   * disparaît quand le stock tient.
+   */
+  private updateHunger(): void {
+    const alert = this.world.needAlert();
+    const key = alert ? `${alert.item}:${alert.minutes}:${alert.wanting}:${locale()}` : '';
+
+    if (key === this.lastHunger) return;
+    this.lastHunger = key;
+    this.hunger.hidden = alert === null;
+    if (!alert) return;
+
+    const words = t().hud.needAlert;
+    const item = t().items[alert.item];
+    const label = alert.minutes === 0 ? words.out(item, alert.wanting) : words.soon(item, alert.minutes, alert.wanting);
+
+    this.hunger.title = label;
+    this.hunger.setAttribute('aria-label', label);
+    this.hunger.replaceChildren(itemIcon(alert.item, 18), text('hud-hunger-text', alert.minutes === 0 ? words.outShort : words.soonShort(alert.minutes)));
+  }
+
+  /** Centre la caméra sur un habitant qui a faim — au tap suivant, sur le suivant — et dit qui il est. */
+  private focusHungry(): void {
+    const hungry = this.world.wantingInhabitants();
+
+    if (hungry.length === 0) return;
+
+    const mobile = hungry[this.hungryCursor % hungry.length]!;
+
+    this.hungryCursor = (this.hungryCursor + 1) % hungry.length;
+    this.onFocus(mobile.x, mobile.y);
+    this.showPerson(mobile.id);
   }
 
   /** Centre la caméra sur un ouvrier qui glande — au tap suivant, sur le suivant — et dit qui il est. */
@@ -1111,6 +1164,7 @@ export class Hud {
     this.updateTown();
     this.updatePrestige();
     this.updatePeople();
+    this.updateHunger();
     this.updateSpeech();
     this.updatePerson();
     this.updateWeather();
@@ -1818,6 +1872,20 @@ function goalIcon(goal: Goal): HTMLElement {
     : goal.type === 'produce'
       ? itemIcon(goal.item, 18)
       : uiIcon(goal.type === 'nights' ? 'mutant' : goal.type === 'quests' ? 'eve' : 'people', 18);
+}
+
+/**
+ * Un besoin dans l'infobulle d'un habitant : l'icône de ce qui le comble, sa
+ * jauge, son état — en menthe rassasié, en corail affamé.
+ */
+function needMeter(need: NeedId, value: number): HTMLElement {
+  const row = element('div', 'hud-meter hud-person-need');
+  const state = needState(need, value);
+
+  row.dataset['done'] = String(state === 'sated');
+  row.dataset['blocked'] = String(state === 'deprived');
+  row.append(itemIcon(NEEDS[need].item, 18), bar(value), text('hud-meter-value', needText(need, state)));
+  return row;
 }
 
 /** Une ligne de quête : icône, barre, « 7/20 ». */

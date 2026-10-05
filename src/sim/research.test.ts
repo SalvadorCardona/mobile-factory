@@ -3,6 +3,7 @@ import { TILE_SIZE } from '../core/grid.ts';
 import { BUILDINGS, MENU_BUILDING_IDS, type BuildingId } from '../data/buildings.ts';
 import { ENEMIES, WILDLIFE } from '../data/enemies.ts';
 import type { ItemId } from '../data/items.ts';
+import { START_FOOD } from '../data/needs.ts';
 import { RESEARCH, RESEARCH_IDS, type ResearchId } from '../data/research.ts';
 import { validatePrototypes } from '../data/validate.ts';
 import { WEAPONS } from '../data/weapons.ts';
@@ -363,7 +364,8 @@ describe('labo de recherche', () => {
 
     expect(lab.endTick).toBeGreaterThan(0);
     expect(world.townStock()!.count('stone')).toBe(14);
-    expect(world.townStock()!.count('food')).toBe(14);
+    // Les 6 de la recherche, pris aux 20 posés et aux nourritures de départ de la mairie.
+    expect(world.townStock()!.count('food')).toBe(20 + START_FOOD - 6);
   });
 });
 
