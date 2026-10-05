@@ -1118,6 +1118,47 @@ button.hud-stock:active {
   }
 }
 
+/*
+ * Le libellé d'une icône du HUD (`ui/tooltip.ts`) : au survol, au focus, à
+ * l'appui long. Une icône qui en a un prend le pointeur, même posée sur une
+ * carte qui le laisse passer ; ni loupe ni menu à l'appui long.
+ */
+.hud [data-tip] {
+  pointer-events: auto;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+
+.hud-tip {
+  position: fixed;
+  z-index: 40;
+  width: max-content;
+  max-width: min(240px, calc(100vw - 16px));
+  padding: 5px 12px;
+  border-radius: 14px;
+  background: var(--ink);
+  box-shadow: 0 3px 0 var(--ink-shade);
+  color: var(--paper);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
+  letter-spacing: normal;
+  text-transform: none;
+  pointer-events: none;
+  animation: tip-in 140ms ease-out both;
+}
+
+.hud-tip[hidden] {
+  display: none;
+}
+
+@keyframes tip-in {
+  from {
+    opacity: 0;
+  }
+}
+
 /* Le résumé de la pastille (ville, objet réclamé) ne sert que sur un téléphone. */
 .hud-bag-town,
 .hud-bag-wanted {
