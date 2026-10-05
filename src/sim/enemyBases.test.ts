@@ -172,6 +172,8 @@ describe('bases mutantes', () => {
   it('ne bouge pas sous un arc trop faible, et le dit', () => {
     const world = withTownHall();
     const base = firstRingBase(world);
+    // La mairie bâtie en a déjà rapporté : on compte ce qui vient en plus.
+    const prestige = world.prestige;
     let resisted = 0;
 
     world.events.on('enemyBaseResisted', () => (resisted += 1));
@@ -181,7 +183,7 @@ describe('bases mutantes', () => {
 
     expect(base.hp).toBe(enemyBaseLevel(base.level).hp);
     expect(resisted).toBeGreaterThan(0);
-    expect(world.prestige).toBe(0);
+    expect(world.prestige).toBe(prestige);
   });
 
   it('tombe sous un arc de son niveau : sa zone se libère, le Prestige monte, son butin tombe, et elle ne revient pas', () => {
@@ -190,6 +192,7 @@ describe('bases mutantes', () => {
     const spot = spotInZone(world, base);
     const { building, tx, ty } = spot;
     const destroyed: number[] = [];
+    const prestige = world.prestige;
     let loot = 0;
 
     world.events.on('enemyBaseDestroyed', ({ id }) => destroyed.push(id));
@@ -199,7 +202,7 @@ describe('bases mutantes', () => {
     for (let i = 0; i < 4000 && isStanding(base); i += 1) world.tick();
 
     expect(destroyed).toEqual([base.id]);
-    expect(world.prestige).toBe(enemyBaseLevel(base.level).prestige);
+    expect(world.prestige - prestige).toBe(enemyBaseLevel(base.level).prestige);
     expect(loot).toBeGreaterThan(0);
     expect(world.enemyZoneAt(tx, ty)).toBeNull();
     standNear(world, spot);
