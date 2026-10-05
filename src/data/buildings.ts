@@ -36,6 +36,8 @@ export type BuildingKind =
 
 export interface BuildingProto {
   label: string;
+  /** Nom court, écrit sur la pancarte du bâtiment sur la carte : « Bûcherons », « Labo ». */
+  sign: string;
   /** Texte de la fenêtre d'inspection du chantier. */
   siteDescription: string;
   /** Texte de la fenêtre d'inspection du bâtiment fini. */
@@ -124,6 +126,7 @@ export type BuildingLevel = Pick<BuildingUpgrade, 'label' | 'description' | 'hp'
 export const BUILDINGS = {
   townHall: {
     label: LORE.buildings.townHall.name,
+    sign: LORE.buildings.townHall.sign,
     siteDescription: LORE.buildings.townHall.site,
     description: LORE.buildings.townHall.description,
     effect: LORE.buildings.townHall.effect,
@@ -145,6 +148,7 @@ export const BUILDINGS = {
   },
   lumberCamp: {
     label: LORE.buildings.lumberCamp.name,
+    sign: LORE.buildings.lumberCamp.sign,
     siteDescription: LORE.buildings.lumberCamp.site,
     description: LORE.buildings.lumberCamp.description,
     effect: LORE.buildings.lumberCamp.effect,
@@ -166,6 +170,7 @@ export const BUILDINGS = {
   },
   quarry: {
     label: LORE.buildings.quarry.name,
+    sign: LORE.buildings.quarry.sign,
     siteDescription: LORE.buildings.quarry.site,
     description: LORE.buildings.quarry.description,
     effect: LORE.buildings.quarry.effect,
@@ -188,6 +193,7 @@ export const BUILDINGS = {
   },
   logisticsPost: {
     label: LORE.buildings.logisticsPost.name,
+    sign: LORE.buildings.logisticsPost.sign,
     siteDescription: LORE.buildings.logisticsPost.site,
     description: LORE.buildings.logisticsPost.description,
     effect: LORE.buildings.logisticsPost.effect,
@@ -209,6 +215,7 @@ export const BUILDINGS = {
   },
   constructionPost: {
     label: LORE.buildings.constructionPost.name,
+    sign: LORE.buildings.constructionPost.sign,
     siteDescription: LORE.buildings.constructionPost.site,
     description: LORE.buildings.constructionPost.description,
     effect: LORE.buildings.constructionPost.effect,
@@ -230,6 +237,7 @@ export const BUILDINGS = {
   },
   drill: {
     label: LORE.buildings.drill.name,
+    sign: LORE.buildings.drill.sign,
     siteDescription: LORE.buildings.drill.site,
     description: LORE.buildings.drill.description,
     effect: LORE.buildings.drill.effect,
@@ -251,6 +259,7 @@ export const BUILDINGS = {
   },
   nursery: {
     label: LORE.buildings.nursery.name,
+    sign: LORE.buildings.nursery.sign,
     siteDescription: LORE.buildings.nursery.site,
     description: LORE.buildings.nursery.description,
     effect: LORE.buildings.nursery.effect,
@@ -273,6 +282,7 @@ export const BUILDINGS = {
   },
   builderHouse: {
     label: LORE.buildings.builderHouse.name,
+    sign: LORE.buildings.builderHouse.sign,
     siteDescription: LORE.buildings.builderHouse.site,
     description: LORE.buildings.builderHouse.description,
     effect: LORE.buildings.builderHouse.effect,
@@ -294,6 +304,7 @@ export const BUILDINGS = {
   },
   farm: {
     label: LORE.buildings.farm.name,
+    sign: LORE.buildings.farm.sign,
     siteDescription: LORE.buildings.farm.site,
     description: LORE.buildings.farm.description,
     effect: LORE.buildings.farm.effect,
@@ -315,6 +326,7 @@ export const BUILDINGS = {
   },
   watchtower: {
     label: LORE.buildings.watchtower.name,
+    sign: LORE.buildings.watchtower.sign,
     siteDescription: LORE.buildings.watchtower.site,
     description: LORE.buildings.watchtower.description,
     effect: LORE.buildings.watchtower.effect,
@@ -347,6 +359,7 @@ export const BUILDINGS = {
   },
   forge: {
     label: LORE.buildings.forge.name,
+    sign: LORE.buildings.forge.sign,
     siteDescription: LORE.buildings.forge.site,
     description: LORE.buildings.forge.description,
     effect: LORE.buildings.forge.effect,
@@ -368,6 +381,7 @@ export const BUILDINGS = {
   },
   charcoalKiln: {
     label: LORE.buildings.charcoalKiln.name,
+    sign: LORE.buildings.charcoalKiln.sign,
     siteDescription: LORE.buildings.charcoalKiln.site,
     description: LORE.buildings.charcoalKiln.description,
     effect: LORE.buildings.charcoalKiln.effect,
@@ -390,6 +404,7 @@ export const BUILDINGS = {
   },
   clinic: {
     label: LORE.buildings.clinic.name,
+    sign: LORE.buildings.clinic.sign,
     siteDescription: LORE.buildings.clinic.site,
     description: LORE.buildings.clinic.description,
     effect: LORE.buildings.clinic.effect,
@@ -411,6 +426,7 @@ export const BUILDINGS = {
   },
   lab: {
     label: LORE.buildings.lab.name,
+    sign: LORE.buildings.lab.sign,
     siteDescription: LORE.buildings.lab.site,
     description: LORE.buildings.lab.description,
     effect: LORE.buildings.lab.effect,
@@ -433,6 +449,7 @@ export const BUILDINGS = {
   },
   antenna: {
     label: LORE.buildings.antenna.name,
+    sign: LORE.buildings.antenna.sign,
     siteDescription: LORE.buildings.antenna.site,
     description: LORE.buildings.antenna.description,
     effect: LORE.buildings.antenna.effect,

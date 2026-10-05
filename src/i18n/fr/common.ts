@@ -22,6 +22,8 @@ export const settings = {
   language: 'Langue',
   sound: 'Sons',
   music: 'Musique',
+  /** Les pancartes des bâtiments, sur la carte. */
+  signs: 'Pancartes',
   /** Un interrupteur : « Musique : oui ». */
   toggle: (name: string, on: boolean): string => `${name} : ${on ? 'oui' : 'non'}`,
   /** Le nom de chaque langue, écrit dans la langue elle-même : c'est ainsi qu'on la reconnaît. */

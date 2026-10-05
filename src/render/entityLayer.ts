@@ -28,6 +28,10 @@
  * ville n'a plus en corail. Elle s'efface au marteau des bâtisseurs, et au
  * dézoom, où elle deviendrait illisible.
  *
+ * Au pied de chaque bâtiment fini, sa pancarte (`signboard.ts`) : son nom
+ * court et l'icône de ce qu'il produit. En reculant, elle ne garde que
+ * l'icône, puis s'efface ; le réglage « Pancartes » la masque partout.
+ *
  * Un bâtiment amélioré (`buildingUpgraded`) change de sprite sur place : celui
  * de son niveau (`BUILDINGS[proto].upgrades`), et il rebondit comme à l'achèvement.
  *
@@ -43,6 +47,7 @@ import { TILE_SIZE, floorDiv } from '../core/grid.ts';
 import { LIGHT, PALETTE, hex } from '../data/artDirection.ts';
 import { BUILDINGS, buildingLevel } from '../data/buildings.ts';
 import { SPRITES, type SpriteId, type SpriteProto } from '../data/sprites.ts';
+import { locale, t } from '../i18n/locale.ts';
 import { LUMBERJACKS } from '../data/workers.ts';
 import type { Entity, EntityId } from '../sim/types.ts';
 import { terrainAt } from '../sim/terrain.ts';
@@ -53,6 +58,8 @@ import { PLAYER_MAX_HP } from '../sim/player.ts';
 import { MobileLayer, drawHp } from './mobileLayer.ts';
 import { type HeldTool, Puppet } from './puppet.ts';
 import { NEEDS_MIN_ZOOM, SiteNeeds } from './siteNeeds.ts';
+import type { Signboards } from './signboard.ts';
+import { signItem, signMode } from './signs.ts';
 import type { SpriteLibrary } from './spriteLibrary.ts';
 import type { TerrainTiles } from './terrainTiles.ts';
 
@@ -100,6 +107,10 @@ const PAUSED_TINT = hex(PALETTE.paper.shade);
 const FULL_DIP = 6;
 const FULL_ABOVE_BAR = 16;
 
+/** Le pied des piquets de la pancarte, autant de px au-dessus du pied de l'emprise ; et sa marge de chaque côté. */
+const SIGN_RISE = 1;
+const SIGN_MARGIN = 2;
+
 /** Sous cette part de ses points de vie, un bâtiment montre ses blessures. */
 const DAMAGED_RATIO = 0.5;
 
@@ -140,6 +151,9 @@ interface EntityView {
   barKey: string;
   /** Sous la barre d'un chantier, ce qu'il attend encore ; `null` pour un bâtiment fini. */
   needs: SiteNeeds | null;
+  /** La pancarte d'un bâtiment fini, `null` pour un chantier ; et la clé de sa texture. */
+  sign: Sprite | null;
+  signKey: string;
 }
 
 export class EntityLayer {
@@ -157,11 +171,15 @@ export class EntityLayer {
   private readonly world: World;
   private readonly library: SpriteLibrary;
   private readonly tiles: TerrainTiles;
+  private readonly signboards: Signboards;
+  /** Le réglage « Pancartes » : faux, aucune ne s'affiche. */
+  public signsOn = true;
 
-  public constructor(world: World, library: SpriteLibrary, tiles: TerrainTiles, shadows: Container) {
+  public constructor(world: World, library: SpriteLibrary, tiles: TerrainTiles, shadows: Container, signboards: Signboards) {
     this.world = world;
     this.library = library;
     this.tiles = tiles;
+    this.signboards = signboards;
     this.shadows = shadows;
     this.container.sortableChildren = true;
     this.mobiles = new MobileLayer(world, library, tiles, this.container);
@@ -329,6 +347,17 @@ export class EntityLayer {
       root.addChildAt(crack, root.getChildIndex(main) + 1);
     }
 
+    let sign: Sprite | null = null;
+
+    if (entity.kind !== 'site') {
+      // Plantée au pied de la façade, au milieu : devant le bâtiment, sous sa barre et ses bulles.
+      sign = new Sprite();
+      sign.anchor.set(0.5, 1);
+      sign.position.set((entity.width * TILE_SIZE) / 2, entity.height * TILE_SIZE - SIGN_RISE);
+      sign.visible = false;
+      root.addChildAt(sign, root.getChildIndex(bar));
+    }
+
     return {
       root,
       main,
@@ -346,6 +375,8 @@ export class EntityLayer {
       shown,
       barKey: '',
       needs,
+      sign,
+      signKey: '',
     };
   }
 
@@ -416,6 +447,25 @@ export class EntityLayer {
     view.needs.update(this.world.siteLedger(entity), (entity.width * TILE_SIZE) / 2, barTop(entity) + BAR_HEIGHT + NEEDS_DIP, deltaMs);
   }
 
+  /** La pancarte : nom et icône, l'icône seule en reculant, rien plus loin ou si le réglage la masque. */
+  private showSign(view: EntityView, entity: Entity, zoom: number): void {
+    if (!view.sign || entity.kind === 'site') return;
+
+    const item = signItem(entity.proto, entity.kind, entity.kind === 'drill' ? entity.output : null);
+    const mode = this.signsOn ? signMode(zoom, item) : 'none';
+
+    view.sign.visible = mode !== 'none';
+    if (mode === 'none') return;
+
+    const key = `${this.signboards.generation}:${locale()}:${mode}:${entity.proto}:${item ?? ''}`;
+
+    if (key === view.signKey) return;
+    view.signKey = key;
+    view.sign.texture = this.signboards.texture(t().buildings[entity.proto].sign, item, mode);
+    // Jamais plus large que l'emprise : un tap sur la pancarte est un tap sur le bâtiment.
+    view.sign.scale.set(Math.min(1, (entity.width * TILE_SIZE - SIGN_MARGIN * 2) / view.sign.texture.width));
+  }
+
   /** Un outil d'Adam, le temps d'un geste — sauf s'il vise : l'arc passe avant, sans clignoter. */
   private wieldTool(tool: Exclude<HeldTool, 'bow'>, swing = false): void {
     if (this.world.player.target === null) this.adam.wield(tool, swing);
@@ -463,6 +513,7 @@ export class EntityLayer {
 
       this.drawBar(view, entity);
       this.showNeeds(view, entity, zoom, ticker.deltaMS);
+      this.showSign(view, entity, zoom);
       this.showFull(view, entity, ticker.lastTime);
       this.showPause(view, entity, ticker.lastTime);
       this.feel(view, ticker.deltaMS);

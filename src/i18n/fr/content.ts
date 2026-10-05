@@ -30,6 +30,8 @@ interface LevelText {
 
 interface BuildingText {
   label: string;
+  /** Le nom court de la pancarte, sur la carte. */
+  sign: string;
   siteDescription: string;
   description: string;
   effect: string;
@@ -45,6 +47,7 @@ function mapTable<K extends string, V, R>(table: Record<K, V>, pick: (value: V) 
 function buildingText(proto: BuildingProto): BuildingText {
   return {
     label: proto.label,
+    sign: proto.sign,
     siteDescription: proto.siteDescription,
     description: proto.description,
     effect: proto.effect,

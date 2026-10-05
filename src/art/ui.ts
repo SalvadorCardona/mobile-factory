@@ -226,6 +226,25 @@ export const UI_ICONS = {
     circle(15.5, 15, 3.2, ink.base),
     line(3.5, 3.5, 20.5, 20.5, coral.shade),
   ),
+  /** Une pancarte : un panneau jaune de la colonie sur son piquet indigo, deux mots au trait. */
+  signOn: svg(
+    S,
+    S,
+    rect(11, 12, 2.5, 9, ink.base, 1.25),
+    shadedPill(2.5, 4, 19, 10, 2.5, 'yellow'),
+    line(7, 8.5, 11, 8.5, ink.base),
+    line(13.5, 8.5, 17, 8.5, ink.base),
+  ),
+  /** Les pancartes masquées : la même, barrée de corail. */
+  signOff: svg(
+    S,
+    S,
+    rect(11, 12, 2.5, 9, ink.base, 1.25),
+    shadedPill(2.5, 4, 19, 10, 2.5, 'yellow'),
+    line(7, 8.5, 11, 8.5, ink.base),
+    line(13.5, 8.5, 17, 8.5, ink.base),
+    line(3.5, 3.5, 20.5, 20.5, coral.shade),
+  ),
   /** Le marteau blanc du bouton de construction, comme sur la maquette. */
   hammer: svg(
     S,

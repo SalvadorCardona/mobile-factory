@@ -32,6 +32,7 @@ export const content: Content = {
   buildings: {
     townHall: {
       label: 'Town hall',
+      sign: 'Town hall',
       siteDescription:
         'The colony’s first building. The game starts on its construction site: bring it wood and stone to finish it.',
       description: 'The heart of the colony: if it falls, all is lost.',
@@ -40,6 +41,7 @@ export const content: Content = {
     },
     lumberCamp: {
       label: 'Lumber camp',
+      sign: 'Lumberjacks',
       siteDescription: 'A few stacked logs, an axe stuck in the stump: the camp is waiting for its walls.',
       description:
         'A log cabin, its woodpile and its axe stuck in the stump. Two lumberjacks live here: they fell the nearby trees on their own and stack the wood in its chest, which porters empty into the town hall.',
@@ -48,6 +50,7 @@ export const content: Content = {
     },
     quarry: {
       label: 'Quarry',
+      sign: 'Quarry',
       siteDescription: 'A makeshift crane over an old collapsed car park: three workers will break the concrete here.',
       description:
         'A collapsed car park, a jury-rigged crane and piles of pink rubble. Three workers cut stone from the ruins of the old world and store it in its chest, which porters empty into the town hall. No rock needed: there’s no shortage of ruins.',
@@ -56,6 +59,7 @@ export const content: Content = {
     },
     logisticsPost: {
       label: 'Logistics post',
+      sign: 'Logistics',
       siteDescription: 'Stacked crates and a crooked arrow sign: the post is waiting for its awning.',
       description:
         'A loading dock under a striped awning, stacked crates, a cart and an arrow sign. Four haulers, crates on their backs, empty the chests of nearby producers and bring everything back to the town hall.',
@@ -64,6 +68,7 @@ export const content: Content = {
     },
     constructionPost: {
       label: 'Construction post',
+      sign: 'Builders',
       siteDescription: 'A half-built workbench and a pile of planks: the post is waiting for its scaffolding.',
       description:
         'A workshop under scaffolding, a workbench, a pile of planks and striped barriers. Four builders, yellow hard hats and hammers on their belts, fetch from the town hall what nearby sites are missing, deliver it, then build them.',
@@ -72,6 +77,7 @@ export const content: Content = {
     },
     drill: {
       label: 'Drill',
+      sign: 'Drill',
       siteDescription: 'A stone frame waiting for its iron. Set on an ore vein, it will mine it on its own.',
       description: 'A salvaged machine that mines the vein beneath it.',
       effect: 'Mines the ore of the vein beneath it on its own.',
@@ -79,6 +85,7 @@ export const content: Content = {
     },
     nursery: {
       label: 'Nursery',
+      sign: 'Nursery',
       siteDescription: 'Walls to raise before the cradle goes in. It needs wood and stone.',
       description:
         'A heated shelter, blankets, a cradle. Every three minutes a child is born here and the colony grows by one survivor — if there’s enough to feed them: each birth eats six food from the farm.',
@@ -87,6 +94,7 @@ export const content: Content = {
     },
     builderHouse: {
       label: 'Builders’ house',
+      sign: 'Porters',
       siteDescription: 'A bunkhouse for four workers, still just a pile of planks and sheet metal.',
       description:
         'A bunkhouse of planks and sheet metal for four workers. Soon they’ll be the ones hauling resources instead of Adam.',
@@ -95,6 +103,7 @@ export const content: Content = {
     },
     farm: {
       label: 'Farm',
+      sign: 'Farm',
       siteDescription: 'A tool shed to put up before turning the soil. Four workers will work here.',
       description: 'A few furrows in the irradiated soil and a tool shed. Four workers grow enough here to feed the colony.',
       effect: 'Grows food for the nursery.',
@@ -102,6 +111,7 @@ export const content: Content = {
     },
     watchtower: {
       label: 'Watchtower',
+      sign: 'Watchtower',
       siteDescription: 'Four posts in the ground, a platform to nail on top. The bow comes later.',
       description:
         'A plank platform on four posts, with a bow and a quiver. It shoots on its own at any mutant that wanders into range.',
@@ -117,6 +127,7 @@ export const content: Content = {
     },
     forge: {
       label: 'Forge',
+      sign: 'Forge',
       siteDescription: 'A stone furnace and its chimney, still cold. It needs iron ore to fire it up.',
       description:
         'A stone furnace, a smoking chimney and an anvil. Two iron ore and one coal become an iron plate here.',
@@ -125,6 +136,7 @@ export const content: Content = {
     },
     charcoalKiln: {
       label: 'Charcoal kiln',
+      sign: 'Kiln',
       siteDescription: 'A brick dome to raise around a round door. It will need a stoker.',
       description:
         'A dome of pink bricks where wood smolders slowly. Its stoker bakes three wood into one coal, which porters carry to the town hall: the forge never runs dry, and spare wood finally has a use.',
@@ -133,6 +145,7 @@ export const content: Content = {
     },
     clinic: {
       label: 'Clinic',
+      sign: 'Clinic',
       siteDescription: 'Walls to raise, a camp bed already waiting. It will also need food for the patients.',
       description:
         'Three camp beds, bandages and a mint cross on the door. A knocked-out mutant that Adam brings here walks out cured after a night of care — a villager, a little green around the edges, who carries more than the others.',
@@ -141,6 +154,7 @@ export const content: Content = {
     },
     lab: {
       label: 'Research lab',
+      sign: 'Lab',
       siteDescription: 'A plank shack, vials waiting on a crate, an antenna to put up.',
       description:
         'Gurgling vials, a jury-rigged antenna and a chimney that smokes when it’s thinking. Drop off wood, stone and enemy trophies; out come upgrades for the whole game.',
@@ -149,6 +163,7 @@ export const content: Content = {
     },
     antenna: {
       label: 'Antenna',
+      sign: 'Antenna',
       siteDescription: 'A stone base to pour, beams to raise: the first floor of the Signal.',
       description:
         'A pylon of beams on a stone base. Each floor built draws the mutants: the next night, every wave marches on it.',
