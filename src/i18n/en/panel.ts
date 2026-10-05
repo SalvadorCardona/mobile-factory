@@ -18,6 +18,12 @@ export const panel: Messages['panel'] = {
   maxLevel: 'Max level',
   hp: (value: string): string => `Health: ${value}`,
 
+  tabs: {
+    label: 'Window tabs',
+    building: 'Building',
+    inventory: 'Inventory',
+  },
+
   site: {
     allDelivered: 'All delivered: the builders are on their way to build it.',
     building: (builders: number, percent: number): string => `${builders} builder${s(builders)} hammering away — ${percent}%`,
