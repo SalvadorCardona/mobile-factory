@@ -380,6 +380,17 @@ export const UI_ICONS = {
     circle(15.5, 13.5, 1.6, paper.base),
     line(9, 17.5, 15, 17.5, ink.base),
   ),
+  /** Le bouclier d'une base que tient son chef : un écu blanc cerclé de violet, le cône corail du chef dessus. */
+  shield: svg(
+    S,
+    S,
+    shape('M4 5Q4 3 6 3H18Q20 3 20 5V11Q20 17 12 21.5Q4 17 4 11Z', violet.shade),
+    shape('M5.6 5.6Q5.6 4.4 7 4.4H17Q18.4 4.4 18.4 5.6V11Q18.4 15.8 12 19.6Q5.6 15.8 5.6 11Z', paper.base),
+    rect(8, 14, 8, 2.4, coral.shade, 1),
+    rect(9.2, 9.6, 5.6, 5, coral.base, 1),
+    pill(9.2, 11.2, 5.6, 1.6, paper.base),
+    pill(10.8, 6.4, 2.4, 4, coral.base),
+  ),
   /**
    * La flèche de l'annonce d'une vague, pointée vers la droite : le HUD la
    * tourne vers le point d'où surgissent les mutants. Blanche sur le corail

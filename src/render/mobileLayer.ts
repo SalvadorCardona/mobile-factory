@@ -12,7 +12,12 @@
  * quand il est en dessous — comme Adam.
  *
  * Une flèche traîne derrière elle trois segments blancs de plus en plus
- * effacés : on voit qui tire sur qui.
+ * effacés : on voit qui tire sur qui. Le crachat d'un cracheur traîne deux
+ * gouttes de gelée, et laisse une petite mare là où il s'écrase.
+ *
+ * Le cracheur gonfle son jabot avant de cracher ; le chef d'une base lève
+ * sa massue, et un cercle corail se remplit au sol là où elle va tomber :
+ * c'est ce qui laisse au joueur le temps d'esquiver.
  *
  * Un mutant touché blanchit un éclair, recule dans l'axe du tir en
  * s'écrasant, fait la grimace (yeux en croix) et gicle ; un mutant de
@@ -57,10 +62,11 @@
 import { Container, Graphics, Sprite, type Texture, type Ticker } from 'pixi.js';
 import { TILE_SIZE, floorDiv } from '../core/grid.ts';
 import { PALETTE, hex } from '../data/artDirection.ts';
-import { ENEMIES, LOOT_DROPS, WILDLIFE } from '../data/enemies.ts';
+import { CHIEF, ENEMIES, LOOT_DROPS, SPITTER } from '../data/enemies.ts';
+import { SLAM_MARK_RADIUS } from '../art/spitter.ts';
 import type { NeedId } from '../data/needs.ts';
 import { SPRITES } from '../data/sprites.ts';
-import type { Mobile, MobileId, Mutant, Pickup } from '../sim/types.ts';
+import type { Beast, Mobile, MobileId, Mutant, Pickup } from '../sim/types.ts';
 import { terrainAt } from '../sim/terrain.ts';
 import { moodOf } from '../sim/housing.ts';
 import { deprivedNeed } from '../sim/needs.ts';
@@ -72,9 +78,21 @@ import type { TerrainTiles } from './terrainTiles.ts';
 
 const HP_TRACK = hex(PALETTE.paper.base);
 const HP_FG = hex(PALETTE.coral.base);
-/** Largeur d'une barre de vie, en pixels monde ; celle de la Reine se lit de loin. */
+/** Largeur d'une barre de vie, en pixels monde ; celle de la Reine se lit de loin, celle d'un chef de base aussi. */
 const HP_WIDTH = 18;
 const QUEEN_HP_WIDTH = 52;
+const CHIEF_HP_WIDTH = 36;
+
+/** La traînée d'un crachat : deux gouttes derrière lui, à tant de ticks de vol, de plus en plus petites. */
+const SPIT_TRAIL = [
+  { ticks: 0.9, scale: 0.9 },
+  { ticks: 1.8, scale: 0.6 },
+] as const;
+/** La mare d'un crachat écrasé, en taille de flaque de mutant. */
+const SPIT_SPLASH = 0.3;
+/** Le cercle du coup de zone : son anneau, et le disque qui s'y remplit, posés en transparence. */
+const SLAM_RING_ALPHA = 0.85;
+const SLAM_FILL_ALPHA = 0.55;
 /** La flaque de la Reine, agrandie d'autant : elle en sort tout entière. */
 const QUEEN_PUDDLE = 2.6;
 
@@ -170,6 +188,8 @@ interface MobileView {
   need: Bubble;
   /** L'ouvrier couché dehors, faute de lit : montré à la place du pantin. */
   sleeper: Sprite | null;
+  /** Le cercle du coup de zone d'un chef de base, créé à son premier coup. */
+  mark?: Container;
 }
 
 /** Le vélo-cargo — une ombre, le cadre avec Ève en selle, deux roues qui tournent — ou la charrette du marchand. */
@@ -240,6 +260,7 @@ export class MobileLayer {
       if (view?.puppet) {
         // La vue quitte la synchronisation : elle devient un corps qui s'efface.
         this.views.delete(id);
+        view.mark?.destroy({ children: true });
         view.hp?.destroy();
         view.root.destroy();
         // Un corps ne s'anime plus : son flash s'éteint ici, pas au prochain cadre.
@@ -275,6 +296,11 @@ export class MobileLayer {
     });
     world.events.on('beastDied', fall);
     world.events.on('playerHurt', ({ by }) => this.views.get(by)?.puppet?.strike());
+    // Le cracheur crache : il se détend d'un coup vers Adam.
+    world.events.on('spitShot', ({ id }) => this.views.get(id)?.puppet?.strike());
+    // Le crachat s'écrase : une petite mare fluo qui se résorbe.
+    world.events.on('spitSplashed', ({ x, y }) => this.spill({ id: -1, x, y: y + 6 }, SPIT_SPLASH, true));
+    world.events.on('chiefSlammed', ({ id }) => this.views.get(id)?.puppet?.strike());
   }
 
   public update(alpha: number, ticker: Ticker): void {
@@ -297,6 +323,15 @@ export class MobileLayer {
           view.root.rotation = Math.atan2(mobile.vy, mobile.vx);
           // Une flèche vole au-dessus de tout ce qui marche.
           view.root.zIndex = y + 64;
+          break;
+
+        case 'spit':
+          // Le crachat vole au-dessus de tout, ses gouttes derrière lui, et tourne un peu sur lui-même.
+          view.root.zIndex = y + 64;
+          for (const [k, { ticks }] of SPIT_TRAIL.entries()) {
+            view.root.getChildAt(k).position.set(-mobile.vx * ticks, -mobile.vy * ticks);
+          }
+          view.root.getChildAt(SPIT_TRAIL.length).rotation += deltaMs * 0.01;
           break;
 
         case 'eve': {
@@ -402,12 +437,13 @@ export class MobileLayer {
           if (mobile.kind === 'worker') this.bedDown(view, mobile);
 
           if ((mobile.kind === 'mutant' || mobile.kind === 'beast') && view.hp) {
-            const max = mobile.kind === 'mutant' ? ENEMIES[mobile.proto].hp : WILDLIFE[mobile.proto].hp;
+            const max = mobile.kind === 'mutant' ? ENEMIES[mobile.proto].hp : this.world.beastMaxHp(mobile);
             const queen = mobile.kind === 'mutant' && mobile.proto === 'queen';
+            const chief = mobile.kind === 'beast' && mobile.proto === 'chief';
 
-            // La Reine porte sa barre dès qu'elle sort : on voit d'emblée ce qu'il faut user.
-            view.hp.visible = queen || mobile.hp < max;
-            if (view.hp.visible) drawHp(view.hp, mobile.hp / max, queen ? QUEEN_HP_WIDTH : HP_WIDTH);
+            // La Reine et un chef de base portent leur barre dès qu'ils sortent : on voit d'emblée ce qu'il faut user.
+            view.hp.visible = queen || chief || mobile.hp < max;
+            if (view.hp.visible) drawHp(view.hp, mobile.hp / max, queen ? QUEEN_HP_WIDTH : chief ? CHIEF_HP_WIDTH : HP_WIDTH);
             if (mobile.hp < view.lastHp) puppet.hit();
             view.lastHp = mobile.hp;
 
@@ -424,6 +460,7 @@ export class MobileLayer {
           }
 
           if (mobile.kind === 'mutant') this.recoil(view, deltaMs);
+          if (mobile.kind === 'beast') this.windUp(view, mobile, alpha);
 
           // Un bâtisseur arrivé au chantier tape du marteau.
           const hammering = mobile.kind === 'worker' && mobile.build !== null && !mobile.moving;
@@ -502,6 +539,7 @@ export class MobileLayer {
 
   /** Détruit la vue d'un mobile parti — ou qui a changé de nature. */
   private drop(id: MobileId, view: MobileView): void {
+    view.mark?.destroy({ children: true });
     view.puppet?.destroy();
     view.root.destroy({ children: true });
     this.views.delete(id);
@@ -519,6 +557,59 @@ export class MobileLayer {
     view.age = SPAWN_MS;
     view.root.alpha = t;
     view.root.scale.set(0.7 + t * 0.3, 0.25 + t * 0.75);
+  }
+
+  /**
+   * Ce qu'annoncent les gardiens avant de frapper de loin : le chef lève sa
+   * massue au-dessus de la tête, et son cercle se remplit au sol là où elle
+   * tombera ; le cracheur gonfle son jabot avant chaque crachat
+   * (`SPITTER.tellTicks`).
+   */
+  private windUp(view: MobileView, beast: Beast, alpha: number): void {
+    const puppet = view.puppet!;
+
+    if (beast.proto === 'spitter') {
+      const tell = beast.state === 'chase' && beast.attackCooldown > 0 && beast.attackCooldown <= SPITTER.tellTicks;
+
+      puppet.pose(tell ? (beast.facing === 'left' || beast.facing === 'right' ? 'spitSide' : 'spit') : null);
+      return;
+    }
+    if (beast.proto !== 'chief') return;
+
+    puppet.pose(beast.slam ? 'slam' : null);
+
+    if (!beast.slam) {
+      if (view.mark) view.mark.visible = false;
+      return;
+    }
+
+    const mark = view.mark ?? this.slamMark();
+    const fill = mark.getChildAt(0);
+    const ring = mark.getChildAt(1);
+    const t = 1 - Math.max(0, beast.slam.ticks - alpha) / CHIEF.slam.windupTicks;
+
+    view.mark = mark;
+    mark.visible = true;
+    mark.position.set(beast.slam.x, beast.slam.y);
+    // Au sol, sous tout ce qui marche : on voit Adam en sortir.
+    mark.zIndex = beast.slam.y - 24;
+    mark.scale.set((CHIEF.slam.radius * TILE_SIZE) / SLAM_MARK_RADIUS);
+    fill.scale.set(Math.max(0.05, t));
+    ring.alpha = SLAM_RING_ALPHA * (0.75 + 0.25 * Math.sin(this.clock * 0.03 + t * 12));
+  }
+
+  /** Le cercle d'un coup de zone : le disque qui se remplit, puis l'anneau par-dessus. */
+  private slamMark(): Container {
+    const mark = new Container();
+    const fill = new Sprite(this.library.part('slamMark', 'fill'));
+    const ring = new Sprite(this.library.part('slamMark', 'ring'));
+
+    fill.anchor.set(0.5);
+    fill.alpha = SLAM_FILL_ALPHA;
+    ring.anchor.set(0.5);
+    mark.addChild(fill, ring);
+    this.container.addChild(mark);
+    return mark;
   }
 
   /** Un mutant touché : repoussé dans l'axe du tir et écrasé, puis il revient. */
@@ -693,6 +784,20 @@ export class MobileLayer {
       sprite.anchor.set(SPRITES.arrow.anchorX, SPRITES.arrow.anchorY);
       root.addChild(sprite);
       view = { root, puppet: null, hp: null, lastHp: 0, age: SPAWN_MS, tile: '', bike: null, stars: null, size: 1, puddle: 1, recoil: null, kind: mobile.kind, lounge: null, loungeLeft: 0, hungry: null, need: 'hungry', sleeper: null };
+    } else if (mobile.kind === 'spit') {
+      for (const { scale } of SPIT_TRAIL) {
+        const drop = new Sprite(this.library.part('spit', 'drop'));
+
+        drop.anchor.set(SPRITES.spit.anchorX, SPRITES.spit.anchorY);
+        drop.scale.set(scale);
+        root.addChild(drop);
+      }
+
+      const glob = new Sprite(this.library.part('spit', 'fly'));
+
+      glob.anchor.set(SPRITES.spit.anchorX, SPRITES.spit.anchorY);
+      root.addChild(glob);
+      view = { root, puppet: null, hp: null, lastHp: 0, age: SPAWN_MS, tile: '', bike: null, stars: null, size: 1, puddle: 1, recoil: null, kind: mobile.kind, lounge: null, loungeLeft: 0, hungry: null, need: 'hungry', sleeper: null };
     } else if (mobile.kind === 'pickup') {
       const tx = floorDiv(mobile.x, TILE_SIZE);
       const ty = floorDiv(mobile.y, TILE_SIZE);
@@ -738,7 +843,7 @@ export class MobileLayer {
         const proto = SPRITES[id];
 
         hp = new Graphics();
-        hp.position.set(-(id === 'queen' ? QUEEN_HP_WIDTH : HP_WIDTH) / 2, -proto.height * proto.anchorY * scale - 2);
+        hp.position.set(-(id === 'queen' ? QUEEN_HP_WIDTH : id === 'chief' ? CHIEF_HP_WIDTH : HP_WIDTH) / 2, -proto.height * proto.anchorY * scale - 2);
         hp.visible = false;
         root.addChild(hp);
         root.alpha = 0;
@@ -872,6 +977,7 @@ export class MobileLayer {
 
   public destroy(): void {
     for (const view of this.views.values()) {
+      view.mark?.destroy({ children: true });
       view.puppet?.destroy();
       view.root.destroy({ children: true });
     }

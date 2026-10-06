@@ -46,6 +46,13 @@ export interface TestScenarioProto {
   adam: { dx: number; dy: number };
   /** Vrai : la partie s'ouvre au crépuscule du premier jour, plutôt qu'au matin — le moment où l'on va dormir. */
   dusk?: boolean;
+  /** Le niveau de l'arc d'Adam (`data/gear.ts`) ; absent : l'arc de fortune. */
+  gear?: number;
+  /**
+   * Adam se tient à tant de tuiles du centre de la base mutante la plus
+   * proche de la mairie, du côté de la mairie, plutôt qu'à `adam`.
+   */
+  nearBase?: number;
 }
 
 export const TEST_SCENARIOS = {
@@ -141,6 +148,22 @@ export const TEST_SCENARIOS = {
     town: { wood: 40, stone: 30, food: 30, water: 20 },
     bag: {},
     adam: { dx: 2, dy: 5 },
+  },
+  /**
+   * Adam à l'orée de la base mutante la plus proche, l'arc cerclé de fer au
+   * poing : son chef, ses gardiens et son cracheur l'attendent. On esquive
+   * le cercle de la massue et les crachats, on abat le chef, le bouclier
+   * tombe, puis la base.
+   */
+  raid: {
+    label: 'Base mutante',
+    seed: 100,
+    buildings: [],
+    town: { wood: 40, stone: 30, food: 12, water: 12 },
+    bag: {},
+    adam: { dx: 1, dy: 4 },
+    gear: 1,
+    nearBase: 10,
   },
 } as const satisfies Record<string, TestScenarioProto>;
 

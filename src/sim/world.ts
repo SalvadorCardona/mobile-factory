@@ -52,6 +52,7 @@ import { CARAVAN, RARE_OFFERS, type RareOfferId } from '../data/caravan.ts';
 import { CLINIC } from '../data/clinic.ts';
 import { DAWN_REWARD, SURVIVORS } from '../data/dayNight.ts';
 import {
+  CHIEF,
   ENEMIES,
   ENEMY_IDS,
   LOOT_DROPS,
@@ -96,7 +97,7 @@ import { WEATHER, WEATHER_CALENDAR, type WeatherId } from '../data/weather.ts';
 import { ChunkIndex } from './chunk.ts';
 import { floorCost, floorMissing, floorNeeds, floorWants } from './antenna.ts';
 import { consumerRecipe, consumerRoom, consumerWants, forgeRecipe, isConsumer, isStarving } from './consumers.ts';
-import { NO_WIND, nearestFoe, shoot, stepArrow, type Wind } from './combat.ts';
+import { NO_WIND, nearestFoe, shoot, spit, stepArrow, stepSpit, type Wind } from './combat.ts';
 import { clockAt, CYCLE_TICKS, dayDial, nextWave, ticksToDawn, ticksToWave, waveAt, type DayClock, type DayDial } from './dayNight.ts';
 import type {
   Command,
@@ -116,7 +117,7 @@ import type {
 } from './commands.ts';
 import { caravanBagBonus, caravanRoute, createCaravan, drawOffers, isCaravanDay, rideTo, tradeCost } from './caravan.ts';
 import type { WildlifeId } from '../data/enemies.ts';
-import { baseCenter, baseDoor, breed, canDamage, hitsBase, inBaseZone, isStanding, onBase, placeEnemyBases } from './enemyBases.ts';
+import { baseCenter, baseDoor, breed, canDamage, hitsBase, inBaseZone, isShielded, isStanding, onBase, placeEnemyBases } from './enemyBases.ts';
 import { compassOf, stepMutant, stepQueen, surfacePoint, type Compass, type MutantStep } from './enemies.ts';
 import { createEve, currentQuest, harvestYieldWithTools, isUnlocked, mostDamaged, questProgress, rideHome, walkTo } from './eve.ts';
 import { ADAM_SALT, adultAge, canWork, foeAge, nameOf, yearsToWork } from './inhabitants.ts';
@@ -268,6 +269,17 @@ const DROP_AHEAD = 12;
 const DROP_SPACING = 14;
 /** Distance, en tuiles, du centre d'une base mutante au poste de ses gardiens : devant la palissade. */
 const GUARD_POST = 2.6;
+/** Celle de ses cracheurs : plus loin, ils tiennent les abords. */
+const SPITTER_POST = 4;
+/** Hauteur de la bouche d'un cracheur, et du corps d'Adam qu'il vise, en pixels au-dessus des pieds. */
+const SPIT_MOUTH = 14;
+
+/** Les espèces que loge une base mutante. */
+type GuardKind = 'guardian' | 'spitter' | 'chief';
+
+function guardKind(proto: WildlifeId): GuardKind {
+  return proto === 'spitter' || proto === 'chief' ? proto : 'guardian';
+}
 
 /** Le bâtiment que la partie ouvre en chantier au démarrage. */
 export const STARTING_BUILDING: BuildingId = 'townHall';
@@ -507,8 +519,16 @@ export type WorldEvents = {
   beastDied: { id: MobileId; proto: WildlifeId; x: number; y: number };
   /** Du Prestige gagné (`data/prestige.ts`) : `x`, `y`, en pixels monde, d'où il monte ; `total` est le nouveau compte. */
   prestigeGained: { amount: number; total: number; x: number; y: number };
-  /** Une bête a frappé Adam ; `hp` est ce qui lui reste. */
+  /** Une bête — ou le crachat d'un cracheur — a frappé Adam ; `hp` est ce qui lui reste. */
   playerHurt: { by: MobileId; hp: number };
+  /** Un cracheur a craché (`spit` est le crachat) : il se gonfle et recule d'un coup. */
+  spitShot: { id: MobileId; spit: MobileId; x: number; y: number };
+  /** Un crachat s'est écrasé — sur Adam, un mur, ou au sol au bout de sa course. */
+  spitSplashed: { x: number; y: number };
+  /** Le chef d'une base lève sa massue : un cercle de `radius` tuiles en (x, y), qui tombe dans `ticks`. */
+  chiefSlamWarned: { id: MobileId; x: number; y: number; radius: number; ticks: number };
+  /** La massue du chef est tombée en (x, y) ; `hit` : Adam était encore dans le cercle. */
+  chiefSlammed: { id: MobileId; x: number; y: number; hit: boolean };
   /** Adam est tombé : il se réveille à la mairie, remis sur pied. */
   playerKnockedOut: { x: number; y: number };
   /** La nurserie a produit un enfant. */
@@ -621,6 +641,10 @@ export type WorldEvents = {
   enemyBaseDestroyed: { id: number; level: number; prestige: number; x: number; y: number };
   /** L'arc d'Adam n'entame pas cette base : il lui faut un équipement de son niveau. */
   enemyBaseResisted: { id: number; level: number; gear: number };
+  /** La base est sous le bouclier de son chef : il faut l'abattre d'abord. */
+  enemyBaseShielded: { id: number };
+  /** Le chef d'une base est tombé : le bouclier est levé, le Prestige gagné, son butin au sol. */
+  enemyChiefDefeated: { baseId: number; level: number; prestige: number; x: number; y: number };
   /** Adam entre dans la zone d'une base debout : on n'y bâtit ni n'y récolte. */
   enemyZoneEntered: { id: number; level: number };
   /** Un arc forgé : `level` est le nouveau niveau d'équipement. */
@@ -1764,8 +1788,9 @@ export class World {
     const entity = occupant === undefined ? undefined : this.entities.get(occupant);
     const base = this.enemyBaseAt(contact.tx, contact.ty);
 
-    // Une base mutante heurtée avec un arc trop faible : le joueur sait pourquoi rien ne bouge.
-    if (base && !canDamage(base, this.player.gear)) this.resist(base);
+    // Une base mutante heurtée avec un arc trop faible, ou sous le bouclier de son chef : le joueur sait pourquoi rien ne bouge.
+    if (base && isShielded(base)) this.shielded(base);
+    else if (base && !canDamage(base, this.player.gear)) this.resist(base);
 
     // Un bâtiment abîmé heurté avec du bois dans le sac se répare — avant que la mairie n'avale le sac.
     if (entity && entity.kind !== 'site' && this.contactTicks % DELIVER_TICKS === 0) this.repair(entity, null);
@@ -3368,7 +3393,25 @@ export class World {
           const solid = WILDLIFE[mobile.proto].throughTrees ? this.isOpenGroundSolid : this.isSolid;
           const step = stepBeast(mobile, this.player, solid, this.seed, this.rng, STEP_SECONDS);
 
-          if (step.strikes) this.hurtPlayer(mobile, WILDLIFE[mobile.proto].damage);
+          if (step.strikes) this.hurtPlayer(mobile.id, this.beastDamage(mobile));
+          if (step.shoots) this.spitAt(mobile);
+          if (step.warns && mobile.slam) {
+            const { x, y, ticks } = mobile.slam;
+
+            this.events.emit('chiefSlamWarned', { id: mobile.id, x, y, radius: CHIEF.slam.radius, ticks });
+          }
+          if (step.slam) this.slamDown(mobile, step.slam);
+          break;
+        }
+
+        case 'spit': {
+          const hit = stepSpit(mobile, this.player, this.spitWall);
+
+          if (hit === 'player') this.hurtPlayer(mobile.from, mobile.damage);
+          if (hit !== null || mobile.ttl <= 0) {
+            this.mobiles.delete(mobile.id);
+            this.events.emit('spitSplashed', { x: mobile.x, y: mobile.y });
+          }
           break;
         }
 
@@ -3625,6 +3668,13 @@ export class World {
     this.events.emit('enemyBaseResisted', { id: base.id, level: base.level, gear: this.player.gear });
   }
 
+  /** « Abattez d'abord son chef » — au même rythme que `resist`, avec qui il partage son minuteur. */
+  private shielded(base: EnemyBase): void {
+    if (this.tickCount - this.resistTick < ENEMY_BASE.resistTicks) return;
+    this.resistTick = this.tickCount;
+    this.events.emit('enemyBaseShielded', { id: base.id });
+  }
+
   /** Adam entre dans la zone d'une base debout : le HUD le dit, une fois par entrée. */
   private watchZone(): void {
     const base = this.enemyZoneAt(floorDiv(this.player.x, TILE_SIZE), floorDiv(this.player.y, TILE_SIZE));
@@ -3658,6 +3708,10 @@ export class World {
       }
     }
     if (!best) return;
+    if (isShielded(best)) {
+      this.shielded(best);
+      return;
+    }
     if (!canDamage(best, player.gear)) {
       this.resist(best);
       return;
@@ -3681,6 +3735,9 @@ export class World {
    */
   private hurtBase(base: EnemyBase, damage: number): void {
     const { x, y } = baseCenter(base);
+
+    // Le bouclier de son chef : la flèche s'y brise.
+    if (isShielded(base)) return;
 
     base.hp = Math.max(0, base.hp - damage);
     if (base.hp > 0) {
@@ -4194,6 +4251,11 @@ export class World {
   private hurtBeast(beast: Beast, damage: number): void {
     beast.hp -= damage;
 
+    const home = beast.proto === 'chief' && beast.guardOf !== undefined ? this.enemyBase(beast.guardOf) : undefined;
+
+    // Les points de vie d'un chef sont ceux de sa base : rentré, il les garde.
+    if (home) home.chief = Math.max(0, beast.hp);
+
     if (beast.hp > 0) {
       if (beast.state === 'roam') beast.state = 'chase';
       this.events.emit('beastHit', { id: beast.id, proto: beast.proto, hp: beast.hp, x: beast.x, y: beast.y });
@@ -4206,8 +4268,13 @@ export class World {
 
     this.mobiles.delete(beast.id);
 
-    // Un gardien de moins : sa base le refera, le jour.
-    if (base) base.guards = Math.max(0, base.guards - 1);
+    // Un gardien ou un cracheur de moins : sa base le refera, le jour. Son chef, jamais : le bouclier tombe avec lui.
+    if (base && beast.proto === 'chief') {
+      this.defeatChief(base, beast);
+    } else if (base) {
+      if (beast.proto === 'spitter') base.spitters = Math.max(0, base.spitters - 1);
+      else base.guards = Math.max(0, base.guards - 1);
+    }
 
     // Tanière vidée par l'arc : elle attend avant de se repeupler.
     if (den) {
@@ -4220,13 +4287,75 @@ export class World {
     this.dropLoot(proto.loot, beast.x, beast.y);
   }
 
-  /** Un coup de pince ou de croc. À zéro, Adam tombe et se réveille à la mairie. */
-  private hurtPlayer(by: Beast, damage: number): void {
+  /**
+   * Le chef d'une base tombe : le bouclier est levé pour de bon, le Prestige
+   * de sa base s'ajoute au sien, et le butin rare de sa base tombe avec le
+   * sien.
+   */
+  private defeatChief(base: EnemyBase, chief: Beast): void {
+    const level = enemyBaseLevel(base.level);
+
+    base.chief = 0;
+    this.events.emit('enemyChiefDefeated', {
+      baseId: base.id,
+      level: base.level,
+      prestige: level.chief.prestige + KILL_PRESTIGE.chief,
+      x: chief.x,
+      y: chief.y,
+    });
+    this.gainPrestige(level.chief.prestige, chief.x, chief.y);
+    this.dropLoot(level.chief.loot, chief.x, chief.y);
+  }
+
+  /** Les points de vie d'une bête au plus : ceux de son espèce, ou, pour un chef, ceux de sa base. */
+  public beastMaxHp(beast: Beast): number {
+    const base = beast.proto === 'chief' && beast.guardOf !== undefined ? this.enemyBase(beast.guardOf) : undefined;
+
+    return base ? enemyBaseLevel(base.level).chief.hp : WILDLIFE[beast.proto].hp;
+  }
+
+  /** Ce qu'une bête retire à Adam par coup : son espèce, ou, pour un chef, sa base. */
+  private beastDamage(beast: Beast): number {
+    const base = beast.proto === 'chief' && beast.guardOf !== undefined ? this.enemyBase(beast.guardOf) : undefined;
+
+    return base ? enemyBaseLevel(base.level).chief.damage : WILDLIFE[beast.proto].damage;
+  }
+
+  /** Un cracheur crache sur Adam : de sa bouche, vers le corps d'Adam là où il est. */
+  private spitAt(spitter: Beast): void {
+    const x = spitter.x;
+    const y = spitter.y - SPIT_MOUTH;
+    const glob = spit(this.nextMobileId++, spitter.id, x, y, { x: this.player.x, y: this.player.y - SPIT_MOUTH }, WILDLIFE[spitter.proto].damage);
+
+    this.mobiles.set(glob.id, glob);
+    this.events.emit('spitShot', { id: spitter.id, spit: glob.id, x, y });
+  }
+
+  /** Où un crachat s'écrase : un bâtiment, une base debout. Arbres, rochers et eau, il passe par-dessus. */
+  private readonly spitWall = (x: number, y: number): boolean => {
+    const tx = floorDiv(x, TILE_SIZE);
+    const ty = floorDiv(y, TILE_SIZE);
+
+    return this.chunks.occupantAt(tx, ty) !== undefined || this.enemyBaseAt(tx, ty) !== null;
+  };
+
+  /** La massue du chef tombe : Adam encore dans le cercle prend le coup. */
+  private slamDown(chief: Beast, at: { x: number; y: number }): void {
+    const reach = CHIEF.slam.radius * TILE_SIZE;
+    const hit = distanceSq(this.player.x, this.player.y, at.x, at.y) <= reach * reach;
+    const base = chief.guardOf === undefined ? undefined : this.enemyBase(chief.guardOf);
+
+    this.events.emit('chiefSlammed', { id: chief.id, x: at.x, y: at.y, hit });
+    if (hit) this.hurtPlayer(chief.id, base ? enemyBaseLevel(base.level).chief.slamDamage : WILDLIFE.chief.damage);
+  }
+
+  /** Un coup de pince, de croc, de massue ou de crachat. À zéro, Adam tombe et se réveille à la mairie. */
+  private hurtPlayer(by: MobileId, damage: number): void {
     const { player } = this;
 
     player.hp = Math.max(0, player.hp - damage);
     player.calmTicks = 0;
-    this.events.emit('playerHurt', { by: by.id, hp: player.hp });
+    this.events.emit('playerHurt', { by, hp: player.hp });
 
     if (player.hp > 0) return;
 
@@ -4318,7 +4447,9 @@ export class World {
     const { player } = this;
     const show = GUARD_RANGE.showTiles * TILE_SIZE;
     const hide = GUARD_RANGE.hideTiles * TILE_SIZE;
-    const out = new Map<number, number>();
+    const out = new Map<number, Record<GuardKind, number>>();
+    const fighting = new Set<number>();
+    const regen = this.tickCount % CHIEF.regenTicks === 0;
 
     for (const beast of [...this.beasts()]) {
       if (beast.guardOf === undefined) continue;
@@ -4331,29 +4462,57 @@ export class World {
         this.mobiles.delete(beast.id);
         continue;
       }
-      out.set(beast.guardOf, (out.get(beast.guardOf) ?? 0) + 1);
+
+      const count = out.get(beast.guardOf) ?? { guardian: 0, spitter: 0, chief: 0 };
+
+      count[guardKind(beast.proto)] += 1;
+      out.set(beast.guardOf, count);
+      if (beast.proto === 'chief' && beast.state === 'chase') fighting.add(beast.guardOf);
     }
 
     for (const base of this.enemyBases) {
       if (!isStanding(base)) continue;
 
-      const missing = base.guards - (out.get(base.id) ?? 0);
+      // Hors combat, le chef se refait, sorti ou rentré : un point toutes les `CHIEF.regenTicks`.
+      const max = enemyBaseLevel(base.level).chief.hp;
+
+      if (regen && base.chief > 0 && base.chief < max && !fighting.has(base.id)) {
+        base.chief = Math.min(max, Math.floor(base.chief) + 1);
+        for (const beast of this.beasts()) {
+          if (beast.guardOf === base.id && beast.proto === 'chief') beast.hp = base.chief;
+        }
+      }
+
       const { x, y } = baseCenter(base);
 
-      if (missing > 0 && distanceSq(player.x, player.y, x, y) <= show * show) this.postGuards(base, missing);
+      if (distanceSq(player.x, player.y, x, y) > show * show) continue;
+
+      const count = out.get(base.id) ?? { guardian: 0, spitter: 0, chief: 0 };
+
+      this.postGuards(base, 'guardian', base.guards - count.guardian);
+      this.postGuards(base, 'spitter', base.spitters - count.spitter);
+      if (base.chief > 0) this.postGuards(base, 'chief', 1 - count.chief);
     }
   }
 
-  /** `count` gardiens sortent de la base et se postent en rond autour d'elle, sur une tuile libre. */
-  private postGuards(base: EnemyBase, count: number): void {
-    const proto = WILDLIFE.guardian;
+  /**
+   * `count` gardiens de l'espèce sortent de la base et se postent en rond
+   * autour d'elle, sur une tuile libre ; les cracheurs derrière la ronde, le
+   * chef devant sa porte.
+   */
+  private postGuards(base: EnemyBase, kind: GuardKind, count: number): void {
+    const proto = WILDLIFE[kind];
     const home = baseCenter(base);
+    const post = kind === 'chief' ? 0 : kind === 'spitter' ? SPITTER_POST : GUARD_POST;
 
     for (let i = 0; i < count; i += 1) {
-      // Chacun à son poste, tiré de son rang : la ronde ne dépend pas du PRNG.
-      const angle = ((base.id * 7 + i) / Math.max(3, base.guards)) * Math.PI * 2;
-      let x = home.x + Math.cos(angle) * GUARD_POST * TILE_SIZE;
-      let y = home.y + Math.sin(angle) * GUARD_POST * TILE_SIZE;
+      // Chacun à son poste, tiré de son rang : la ronde ne dépend pas du PRNG. Les cracheurs, en quinconce.
+      const rank = kind === 'spitter' ? i + 0.5 : i;
+      const angle = ((base.id * 7 + rank) / Math.max(3, kind === 'spitter' ? base.spitters : base.guards)) * Math.PI * 2;
+      let x = home.x + Math.cos(angle) * post * TILE_SIZE;
+      let y = home.y + Math.sin(angle) * post * TILE_SIZE;
+
+      if (kind === 'chief') ({ x, y } = baseDoor(base));
 
       if (this.isOpenGroundSolid(floorDiv(x, TILE_SIZE), floorDiv(y, TILE_SIZE))) ({ x, y } = baseDoor(base, i));
 
@@ -4361,14 +4520,15 @@ export class World {
       const guard: Beast = {
         kind: 'beast',
         id,
-        proto: 'guardian',
+        proto: kind,
         x,
         y,
         prevX: x,
         prevY: y,
         facing: 'down',
         moving: false,
-        hp: proto.hp,
+        // Le chef ressort avec ce qu'il lui reste : il ne guérit qu'au calme.
+        hp: kind === 'chief' ? base.chief : proto.hp,
         age: foeAge(this.seed, id, proto.age),
         denId: 0,
         guardOf: base.id,
@@ -4379,6 +4539,7 @@ export class World {
         dirY: 0,
         wanderTicks: 0,
         attackCooldown: 0,
+        ...(kind === 'chief' && { slamCooldown: 0 }),
       };
 
       this.mobiles.set(guard.id, guard);
@@ -4902,7 +5063,7 @@ export class World {
   private ageInhabitants(): void {
     this.player.age += AGES.yearsPerCycle;
     for (const mobile of [...this.mobiles.values()]) {
-      if (mobile.kind === 'arrow' || mobile.kind === 'pickup' || mobile.kind === 'patient' || mobile.kind === 'caravan') continue;
+      if (mobile.kind === 'arrow' || mobile.kind === 'spit' || mobile.kind === 'pickup' || mobile.kind === 'patient' || mobile.kind === 'caravan') continue;
       // Un enfant qui a faim ou soif ne grandit pas : il attend sa prochaine aube le ventre plein.
       const stunted = mobile.kind === 'kid' ? stuntingNeed(mobile.needs) : null;
 
@@ -7223,6 +7384,7 @@ function copyMobile(mobile: Mobile): Mobile {
     return { ...mobile, offers: mobile.offers.map((trade) => ({ ...trade, cost: { ...trade.cost }, items: { ...trade.items } })) };
   }
   if (mobile.kind === 'mutant' && mobile.queen) return { ...mobile, queen: { ...mobile.queen } };
+  if (mobile.kind === 'beast' && mobile.slam) return { ...mobile, slam: { ...mobile.slam } };
   return { ...mobile };
 }
 

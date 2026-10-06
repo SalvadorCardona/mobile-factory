@@ -72,6 +72,8 @@ import { REINFORCED_TOWER, WATCHTOWER } from '../art/watchtower.ts';
 import { RAINBOW, WEATHER_FX } from '../art/weather.ts';
 import { WOLF } from '../art/wolf.ts';
 import { GUARDIAN } from '../art/guardian.ts';
+import { CHIEF_SPRITE } from '../art/chief.ts';
+import { SLAM_MARK, SPIT_SPRITE, SPITTER_SPRITE } from '../art/spitter.ts';
 import { WORKER } from '../art/worker.ts';
 
 export interface SpriteProto {
@@ -119,6 +121,14 @@ export const SPRITES = {
   wolf: WOLF,
   /** Le gardien d'une base mutante : seau de ruine sur la tête, couvercle pour bouclier. */
   guardian: GUARDIAN,
+  /** Le cracheur d'une base : jabot de gelée, lunettes de piscine violettes. */
+  spitter: SPITTER_SPRITE,
+  /** Le chef d'une base : cône de chantier en couronne, épaulière de bidon, massue de béton. */
+  chief: CHIEF_SPRITE,
+  /** Le crachat du cracheur, en vol, et une goutte de sa traînée. */
+  spit: SPIT_SPRITE,
+  /** Le cercle corail du coup de zone du chef, et le disque qui s'y remplit. */
+  slamMark: SLAM_MARK,
   arrow: ARROW,
   target: TARGET,
   /** Bulles d'alerte au-dessus d'un producteur arrêté par un problème : coffre plein, ouvrier manquant. */

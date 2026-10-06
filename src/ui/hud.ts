@@ -589,6 +589,8 @@ export class Hud {
     world.events.on('enemyBaseResisted', ({ level }) =>
       this.notify(t().hud.toast.betterGear(t().gear[Math.min(level, t().gear.length - 1)] ?? '', level), 'bad'),
     );
+    world.events.on('enemyBaseShielded', () => this.notify(t().hud.toast.baseShielded, 'bad'));
+    world.events.on('enemyChiefDefeated', ({ prestige }) => this.notify(t().hud.toast.chiefDefeated(prestige), 'good'));
     world.events.on('enemyZoneEntered', ({ level }) => this.notify(t().hud.toast.enemyZone(level), 'info'));
     // Le « +N Prestige » monte déjà de la base (`prestigeGained`) : il ne reste que le bandeau.
     world.events.on('enemyBaseDestroyed', ({ prestige }) => this.notify(t().hud.toast.baseDestroyed(prestige), 'good'));

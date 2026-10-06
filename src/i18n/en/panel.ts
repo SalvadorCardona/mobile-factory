@@ -184,6 +184,10 @@ export const panel: Messages['panel'] = {
     prestige: (amount: number): string => `Destroyed, it gives ${amount} Prestige and frees its zone.`,
     raiders: (count: number, capacity: number): string => `Raiders in reserve: ${count} of ${capacity}`,
     guards: (count: number, max: number): string => `Guards: ${count} of ${max}`,
+    spitters: (count: number, max: number): string => `Spitters: ${count} of ${max}`,
+    chief: (hp: number, max: number): string => `Chief: ${hp} of ${max} hit points`,
+    shielded: 'Shielded by its chief: no arrow harms it while he lives. Bring him down first — he never comes back.',
+    chiefReward: (prestige: number): string => `Its chief, defeated, gives ${prestige} Prestige and rare loot.`,
     raid: 'By day it breeds raiders; at nightfall they all march on the town.',
     asleep: (night: number): string => `It sends its first raiders only on night ${night}.`,
   },
@@ -228,6 +232,9 @@ export const panel: Messages['panel'] = {
       chase: 'Charging Adam!',
       return: 'Heading back to its den',
     },
+    spitter: 'Spits from afar, and backs off if you come close',
+    chief: 'Chief of its base: while he lives, the base is shielded',
+    slamming: 'Raising his club — get out of the circle!',
   },
 
   crew: {

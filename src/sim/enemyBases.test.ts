@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { TILE_SIZE } from '../core/grid.ts';
 import { BUILDINGS, type BuildingId, type BuildingProto } from '../data/buildings.ts';
 import { DAY_CYCLE } from '../data/dayNight.ts';
-import { WILDLIFE } from '../data/enemies.ts';
+import { WILDLIFE, type WildlifeId } from '../data/enemies.ts';
 import { ENEMY_BASE, ENEMY_BASE_LEVELS, ENEMY_BASE_RINGS, GUARD_RANGE, RAIDS, enemyBaseLevel } from '../data/enemyBases.ts';
 import { MAX_GEAR, gearOf } from '../data/gear.ts';
 import type { ItemId } from '../data/items.ts';
@@ -79,15 +79,21 @@ function standBelow(world: World, base: EnemyBase): void {
   world.player.y = (base.ty + ENEMY_BASE.height + 1.5) * TILE_SIZE;
 }
 
-/** Les bases sans gardiens : ni l'arc ni le Prestige ne s'y mêlent. */
+/** Les bases sans gardiens, sans cracheurs et sans chefs — donc sans bouclier : ni l'arc ni le Prestige ne s'y mêlent. */
 function unguarded(world: World): void {
-  for (const base of world.enemyBases) base.guards = 0;
+  for (const base of world.enemyBases) {
+    base.guards = 0;
+    base.spitters = 0;
+    base.chief = 0;
+  }
   for (const beast of guardians(world)) world.mobiles.delete(beast.id);
 }
 
-function guardians(world: World, base?: EnemyBase): Beast[] {
+/** Ce que loge une base sur la carte — d'une seule espèce si `proto` est donné. */
+function guardians(world: World, base?: EnemyBase, proto?: WildlifeId): Beast[] {
   return [...world.mobiles.values()].filter(
-    (mobile): mobile is Beast => mobile.kind === 'beast' && mobile.guardOf !== undefined && (!base || mobile.guardOf === base.id),
+    (mobile): mobile is Beast =>
+      mobile.kind === 'beast' && mobile.guardOf !== undefined && (!base || mobile.guardOf === base.id) && (!proto || mobile.proto === proto),
   );
 }
 
@@ -292,7 +298,7 @@ describe('bases mutantes', () => {
 
 describe('bases mutantes — production et sorties', () => {
   it('produit des assaillants le jour, jusqu’à sa capacité, puis attend la nuit', () => {
-    const base: EnemyBase = { id: 1, tx: 0, ty: 0, level: 1, hp: ENEMY_BASE_LEVELS[0].hp, raiders: 0, brood: 0, guards: 2, mend: 0 };
+    const base: EnemyBase = { id: 1, tx: 0, ty: 0, level: 1, hp: ENEMY_BASE_LEVELS[0].hp, raiders: 0, brood: 0, guards: 2, spitters: 1, mend: 0, chief: 24 };
     const capacity = raidCapacity(1, 1);
     const ticks = raidTicks(1, 1);
     const counts: number[] = [];
@@ -385,7 +391,9 @@ describe('bases mutantes — production et sorties', () => {
     world.player.x = center.x;
     world.player.y = center.y + (GUARD_RANGE.showTiles - 1) * TILE_SIZE;
     for (let i = 0; i < 21; i += 1) world.tick();
-    expect(guardians(world, base)).toHaveLength(enemyBaseLevel(base.level).guards.count);
+    expect(guardians(world, base, 'guardian')).toHaveLength(enemyBaseLevel(base.level).guards.count);
+    expect(guardians(world, base, 'spitter')).toHaveLength(enemyBaseLevel(base.level).guards.spitters);
+    expect(guardians(world, base, 'chief')).toHaveLength(1);
 
     for (let i = 0; i < 20 * 20; i += 1) {
       // Adam dans la zone, l'arc au repos, et il reste debout : on regarde les gardiens.
@@ -400,9 +408,9 @@ describe('bases mutantes — production et sorties', () => {
     }
     expect(guardians(world, base).some((guard) => hits.has(guard.id))).toBe(true);
 
-    // Adam file hors de la zone, loin : ils le lâchent sans sortir, puis rentrent.
+    // Adam file hors de la zone, hors de portée d'arc du chef : ils le lâchent sans sortir, puis rentrent.
     for (let i = 0; i < 20 * 10; i += 1) {
-      world.player.x = center.x + 12 * TILE_SIZE;
+      world.player.x = center.x + (WILDLIFE.chief.giveUpRadius + 1) * TILE_SIZE;
       world.player.y = center.y;
       world.tick();
       for (const guard of guardians(world, base)) {
@@ -419,7 +427,7 @@ describe('bases mutantes — production et sorties', () => {
   });
 
   it('refait le jour, lentement, un gardien tombé', () => {
-    const base: EnemyBase = { id: 1, tx: 0, ty: 0, level: 1, hp: ENEMY_BASE_LEVELS[0].hp, raiders: 0, brood: 0, guards: 1, mend: 0 };
+    const base: EnemyBase = { id: 1, tx: 0, ty: 0, level: 1, hp: ENEMY_BASE_LEVELS[0].hp, raiders: 0, brood: 0, guards: 1, spitters: 1, mend: 0, chief: 24 };
     const { guards } = ENEMY_BASE_LEVELS[0];
 
     for (let i = 0; i < guards.respawnTicks - 1; i += 1) expect(breed(base, 1).guard).toBe(false);
@@ -462,7 +470,7 @@ describe('bases mutantes — production et sorties', () => {
     world.player.x = center.x;
     world.player.y = center.y + 20 * TILE_SIZE;
     for (let i = 0; i < 21; i += 1) world.tick();
-    expect(guardians(world, base)).toHaveLength(1);
+    expect(guardians(world, base, 'guardian')).toHaveLength(1);
 
     const copy = deserialize(JSON.parse(JSON.stringify(serialize(world))));
 

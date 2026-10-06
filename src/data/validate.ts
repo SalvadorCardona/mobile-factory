@@ -18,7 +18,7 @@ import { auditSvg } from './artDirection.ts';
 import { BUILDINGS, RUIN, type BuildingProto } from './buildings.ts';
 import { DAWN_REWARD, DAY_CYCLE } from './dayNight.ts';
 import { ENEMY_BASE_LEVELS, GUARD_RANGE, RAIDS, type EnemyBaseLevel } from './enemyBases.ts';
-import { ENEMIES, LOOT_DROPS, NIGHT_BOSSES, WAVES, WILDLIFE, WILDLIFE_SPAWN, type LootTable, type WaveSpec, type WildlifeProto } from './enemies.ts';
+import { CHIEF, ENEMIES, LOOT_DROPS, SPITTER, NIGHT_BOSSES, WAVES, WILDLIFE, WILDLIFE_SPAWN, type LootTable, type WaveSpec, type WildlifeProto } from './enemies.ts';
 import { EVE } from './eve.ts';
 import { ICON_SIZE, ITEM_ICONS, PRESTIGE_ICON } from './icons.ts';
 import { CATEGORY_ICONS } from './categoryIcons.ts';
@@ -364,6 +364,15 @@ export function validatePrototypes(): string[] {
     }
   }
 
+  // Un cracheur qui tirerait plus loin que l'arc d'Adam ne se laisserait jamais approcher.
+  if (SPITTER.range <= SPITTER.fleeRadius || SPITTER.range >= WEAPONS.bow.range || SPITTER.speed <= 0 || SPITTER.tellTicks >= WILDLIFE.spitter.attackTicks) {
+    errors.push('SPITTER : portée, recul ou vitesse incohérents');
+  }
+  // Un coup de zone sans préavis, ou dont on ne sort pas au pas d'Adam, ne s'esquive pas.
+  if (CHIEF.slam.windupTicks <= 0 || CHIEF.slam.radius <= 0 || CHIEF.slam.cooldownTicks <= CHIEF.slam.windupTicks || CHIEF.regenTicks % WILDLIFE_SPAWN.checkTicks !== 0) {
+    errors.push('CHIEF : coup de zone ou regain incohérents');
+  }
+
   if (WILDLIFE_SPAWN.minPlayerDistance >= WILDLIFE_SPAWN.despawnDistance || WILDLIFE_SPAWN.cap <= 0) {
     errors.push('WILDLIFE_SPAWN : distances ou plafond incohérents');
   }
@@ -397,14 +406,27 @@ export function validatePrototypes(): string[] {
   });
 
   for (const [index, level] of ENEMY_BASE_LEVELS.entries()) {
-    const { raid, guards }: EnemyBaseLevel = level;
+    const { raid, guards, chief }: EnemyBaseLevel = level;
 
     if (raid.from < 1 || raid.ticksPerRaider <= 0 || raid.capacity < 1 || raid.capacity > RAIDS.capacityMax) {
       errors.push(`ENEMY_BASE_LEVELS[${index}].raid : nuit, cadence ou capacité incohérentes`);
     }
-    if (guards.count < 0 || guards.respawnTicks <= 0) errors.push(`ENEMY_BASE_LEVELS[${index}].guards : effectif ou cadence incohérents`);
+    if (guards.count < 0 || guards.spitters < 0 || guards.respawnTicks <= 0) {
+      errors.push(`ENEMY_BASE_LEVELS[${index}].guards : effectif ou cadence incohérents`);
+    }
     // Un gardien sortirait de la zone qu'il tient.
-    if (WILDLIFE.guardian.leashRadius > level.zoneRadius) errors.push(`ENEMY_BASE_LEVELS[${index}] : zone plus petite que la laisse des gardiens`);
+    for (const [id, beast] of Object.entries(WILDLIFE)) {
+      if (beast.habitat === 'base' && beast.leashRadius > level.zoneRadius) {
+        errors.push(`ENEMY_BASE_LEVELS[${index}] : zone plus petite que la laisse de WILDLIFE.${id}`);
+      }
+    }
+    if (chief.hp <= 0 || chief.damage <= 0 || chief.slamDamage <= 0 || chief.prestige < 0) {
+      errors.push(`ENEMY_BASE_LEVELS[${index}].chief : points de vie, coups ou Prestige incohérents`);
+    }
+    if (index > 0 && chief.hp <= ENEMY_BASE_LEVELS[index - 1]!.chief.hp) {
+      errors.push(`ENEMY_BASE_LEVELS[${index}].chief : un anneau plus lointain doit avoir un chef plus coriace`);
+    }
+    errors.push(...lootErrors(`ENEMY_BASE_LEVELS[${index}].chief`, chief.loot));
   }
   if (RAIDS.paceGrowth < 0 || RAIDS.capacityEvery <= 0 || RAIDS.capacityMax > 9 || RAIDS.exitStagger <= 0) {
     errors.push('RAIDS : croissance, capacité (un chiffre au badge) ou sortie incohérentes');

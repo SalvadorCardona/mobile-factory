@@ -109,6 +109,8 @@ export const hud: Messages['hud'] = {
     betterGear: (gear: string, level: number): string => `You need better gear: ${gear} (level ${level}) — forge it at the forge`,
     enemyZone: (level: number): string => `Mutant base zone (level ${level}): no harvesting or building while it stands`,
     baseDestroyed: (prestige: number): string => `Mutant base destroyed! +${prestige} Prestige, its zone is free`,
+    baseShielded: 'Its chief shields it: bring him down first, the shield falls with him',
+    chiefDefeated: (prestige: number): string => `Base chief defeated! +${prestige} Prestige — the base has lost its shield`,
     gearCrafted: (gear: string, level: number): string => `${gear} forged: you can now damage level ${level} bases`,
     survivors: (count: number): string =>
       count > 1

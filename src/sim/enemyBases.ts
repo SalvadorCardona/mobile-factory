@@ -14,7 +14,10 @@
  *
  * Le jour, une base debout produit (`breed`) : ses assaillants, à la cadence
  * de son niveau et de la nuit qui vient, jusqu'à sa capacité ; ses gardiens
- * tombés, plus lentement. Son compte de départ est tiré de la seed, pour que
+ * et ses cracheurs tombés, plus lentement. Son chef ne revient pas : c'est
+ * lui qui tient le bouclier (`isShielded`), et l'abattre doit ouvrir la base
+ * pour de bon — un chef qui renaîtrait referait le bouclier d'une base
+ * qu'Adam est en train d'user. Son compte de départ est tiré de la seed, pour que
  * les bases d'un anneau ne remplissent pas leur badge au même instant.
  */
 
@@ -55,7 +58,9 @@ export function placeEnemyBases(seed: number, hall: { x: number; y: number }, fr
         raiders: 0,
         brood: firstBrood(seed, id, ring.level),
         guards: level.guards.count,
+        spitters: level.guards.spitters,
         mend: 0,
+        chief: level.chief.hp,
       });
     }
   });
@@ -131,6 +136,11 @@ export function canDamage(base: EnemyBase, gear: number): boolean {
   return gear >= base.level;
 }
 
+/** La base est-elle sous le bouclier de son chef ? Tant qu'il vit, aucune flèche ne l'entame. */
+export function isShielded(base: EnemyBase): boolean {
+  return base.chief > 0;
+}
+
 /**
  * Le compte de départ d'une base, tiré de la seed et de son id : déjà
  * entamé, pour que les bases d'un anneau ne produisent pas toutes au même
@@ -159,6 +169,7 @@ export function raidCapacity(level: number, night: number): number {
 /** Ce qu'une base a produit ce tick. */
 export interface Brood {
   raider: boolean;
+  /** Un gardien ou un cracheur refait. */
   guard: boolean;
 }
 
@@ -186,11 +197,13 @@ export function breed(base: EnemyBase, night: number): Brood {
 
   const { guards } = enemyBaseLevel(base.level);
 
-  if (base.guards < guards.count) {
+  // Les gardiens d'abord, puis les cracheurs ; le chef, jamais.
+  if (base.guards < guards.count || base.spitters < guards.spitters) {
     base.mend += 1;
     if (base.mend >= guards.respawnTicks) {
       base.mend = 0;
-      base.guards += 1;
+      if (base.guards < guards.count) base.guards += 1;
+      else base.spitters += 1;
       brood.guard = true;
     }
   }

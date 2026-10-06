@@ -61,4 +61,7 @@ export const KILL_PRESTIGE = {
   crab: 1,
   wolf: 2,
   guardian: 2,
+  spitter: 2,
+  /** Plus le Prestige de sa base (`ENEMY_BASE_LEVELS[].chief.prestige`). */
+  chief: 5,
 } as const satisfies Record<EnemyId | WildlifeId, number>;

@@ -333,7 +333,8 @@ export function queenWave(night: number): number | null {
  * - `shore` : le sable, le long de l'eau. Un crabe ne le quitte jamais.
  * - `forest` : le cœur des massifs d'arbres. Un loup en sort pour charger,
  *   jamais bien loin.
- * - `base` : la zone d'une base mutante. Ses gardiens n'ont pas de tanière
+ * - `base` : la zone d'une base mutante. Ses gardiens (le gardien, le
+ *   cracheur et le chef) n'ont pas de tanière
  *   tirée de la seed (`densPerChunk` nul) : c'est la base qui les loge et les
  *   refait (`data/enemyBases.ts`). Ils chargent Adam dès qu'il entre dans
  *   leur laisse, et n'en sortent jamais, même en chargeant.
@@ -469,9 +470,114 @@ export const WILDLIFE = {
     halfH: 6,
     age: { min: 20, max: 60 },
   },
+  /**
+   * Le cracheur : un gardien maigre au jabot gonflé de gelée, qui tient
+   * Adam à distance. Il crache des boules de bave (`SPITTER`) qui volent
+   * lentement — on les voit venir, on s'écarte — et recule dès qu'on
+   * l'approche : fragile, deux flèches suffisent. Ses dégâts et sa cadence
+   * sont ceux d'un crachat (`damage`, `attackTicks`) : il ne frappe pas au
+   * contact.
+   */
+  spitter: {
+    label: 'Cracheur de base',
+    hp: 2,
+    speed: 0.8,
+    // En reculant : un peu moins vite qu'Adam, qui le rattrape s'il le veut.
+    chargeSpeed: 1.8,
+    damage: 1,
+    attackTicks: 50,
+    // Comme le gardien, compté depuis le centre de sa base ; il ouvre le feu dès qu'Adam entre dans la zone.
+    aggroRadius: 7,
+    giveUpRadius: 11,
+    leashRadius: 7.5,
+    habitat: 'base',
+    throughTrees: true,
+    densPerChunk: 0,
+    groupMin: 1,
+    groupMax: 1,
+    respawnTicks: 0,
+    // Son jabot de gelée, et parfois un bout de tuyau qui lui servait de sarbacane.
+    loot: [
+      { item: 'mutantGoo', min: 1, max: 1, chance: 1 },
+      { item: 'ironOre', min: 1, max: 1, chance: 0.5 },
+    ],
+    sprite: 'spitter',
+    halfW: 7,
+    halfH: 5,
+    age: { min: 15, max: 45 },
+  },
+  /**
+   * Le chef d'une base : un gros mutant couronné d'un cône de chantier,
+   * épaulière de bidon et massue de béton. Ses points de vie, ses coups et
+   * son butin sont ceux de sa base (`ENEMY_BASE_LEVELS[].chief`) ; ceux-ci
+   * sont ceux du premier anneau. Lent — Adam le distance toujours —, il
+   * frappe fort et rarement au contact, et lève sa massue pour un coup de
+   * zone annoncé (`CHIEF`). Il défend la zone de plus loin que ses gardiens
+   * et la poursuit jusqu'à sa laisse ; Adam parti, il rentre et se refait.
+   */
+  chief: {
+    label: 'Chef de base',
+    hp: 24,
+    speed: 0.6,
+    chargeSpeed: 1.4,
+    damage: 3,
+    attackTicks: 40,
+    aggroRadius: 7,
+    // Touché de loin, il charge quand même : il ne lâche qu'un Adam hors de portée d'arc.
+    giveUpRadius: 12,
+    leashRadius: 7.5,
+    habitat: 'base',
+    throughTrees: true,
+    densPerChunk: 0,
+    groupMin: 1,
+    groupMax: 1,
+    respawnTicks: 0,
+    // Sa gelée, toujours ; sa base y ajoute ce qu'elle a de rare (`chief.loot`).
+    loot: [{ item: 'mutantGoo', min: 1, max: 2, chance: 1 }],
+    sprite: 'chief',
+    // Ses pieds : une tuile de large au plus, comme tout ennemi.
+    halfW: 13,
+    halfH: 8,
+    age: { min: 40, max: 90 },
+  },
 } as const satisfies Record<string, WildlifeProto>;
 
 export type WildlifeId = keyof typeof WILDLIFE;
+
+/**
+ * Le crachat du cracheur : une boule de bave fluo qui vole droit vers où
+ * était Adam au moment du tir, sans anticipation — qui bouge l'esquive.
+ * Elle s'écrase sur le premier bâtiment ou la première base qu'elle
+ * rencontre ; arbres et rochers, elle passe par-dessus, comme une flèche.
+ */
+export const SPITTER = {
+  /** Portée, en tuiles : il tire d'aussi loin, et s'approche s'il est plus loin. Moins que l'arc d'Adam (6). */
+  range: 5,
+  /** Plus près, en tuiles, il recule au lieu de tirer. */
+  fleeRadius: 2.5,
+  /** Vitesse du crachat, en tuiles par seconde : moins de deux fois le pas d'Adam, il se voit venir. */
+  speed: 6,
+  /**
+   * Ticks pendant lesquels il gonfle son jabot avant chaque crachat — le
+   * premier compris : on le voit se préparer, on a le temps de bouger.
+   */
+  tellTicks: 10,
+} as const;
+
+/**
+ * Le chef d'une base, ce que ne dit pas `WILDLIFE.chief`.
+ *
+ * Son coup de zone : Adam à moins de `range` tuiles, le chef s'arrête, lève
+ * sa massue, et un cercle corail de `radius` tuiles se dessine au sol là où
+ * était Adam ; il se remplit pendant `windupTicks`, puis la massue tombe.
+ * Qui est encore dans le cercle prend `slamDamage` (`ENEMY_BASE_LEVELS`).
+ * Une seconde suffit à en sortir au pas d'Adam — s'il bouge.
+ */
+export const CHIEF = {
+  slam: { range: 3, radius: 1.6, windupTicks: 20, cooldownTicks: 20 * 4 },
+  /** Hors combat, il regagne un point de vie toutes les `regenTicks` (multiple de `WILDLIFE_SPAWN.checkTicks`). */
+  regenTicks: 40,
+} as const;
 
 export const WILDLIFE_IDS = Object.keys(WILDLIFE) as WildlifeId[];
 

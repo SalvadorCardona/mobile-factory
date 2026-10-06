@@ -17,9 +17,15 @@
  * celui de son anneau.
  *
  * Une base abrite deux sortes de mutants :
- * - ses **gardiens** (`WILDLIFE.guardian`) ne la quittent jamais : ils
- *   flânent dans sa zone et chargent Adam dès qu'il y entre. Morts, la base
- *   les refait le jour, lentement (`guards`) ;
+ * - ses **gardiens** ne la quittent jamais : ils flânent dans sa zone et
+ *   chargent Adam dès qu'il y entre. Morts, la base les refait le jour,
+ *   lentement (`guards`). Les uns cognent (`WILDLIFE.guardian`), les autres
+ *   crachent de loin (`WILDLIFE.spitter`) et reculent quand on les approche ;
+ * - son **chef** (`WILDLIFE.chief`, `chief`) : un gros gardien à massue,
+ *   annoncé par sa barre de vie. Tant qu'il vit, la base est sous bouclier —
+ *   aucune flèche ne l'entame, quel que soit l'arc. Il ne revient jamais :
+ *   l'abattre est l'étape qui ouvre la base, et il paie en Prestige et en
+ *   butin rare. Si Adam fuit, il rentre et regagne lentement sa vie ;
  * - ses **assaillants** (`RAIDS.proto`) sont produits le jour, à la cadence
  *   de son niveau (`raid`), jusqu'à sa capacité : ils attendent dans la
  *   base — le badge en dit le nombre — et sortent tous à la tombée de la
@@ -44,6 +50,24 @@ export interface EnemyBaseLevel {
   raid: RaidSpec;
   /** Ses gardiens : combien, et le temps de jour qu'il lui faut pour en refaire un. */
   guards: GuardSpec;
+  /** Son chef (`WILDLIFE.chief`) : tant qu'il vit, la base ne se laisse pas entamer. */
+  chief: ChiefSpec;
+}
+
+/**
+ * Le chef d'une base, à son niveau : plus la base est loin, plus il est
+ * coriace. Il ne revient pas : abattu, la base perd son bouclier pour de bon.
+ */
+export interface ChiefSpec {
+  hp: number;
+  /** Points de vie retirés à Adam par coup de massue, au contact. */
+  damage: number;
+  /** Points de vie retirés à Adam s'il reste dans le cercle du coup de zone (`CHIEF`). */
+  slamDamage: number;
+  /** Prestige gagné en l'abattant, en plus de `KILL_PRESTIGE.chief`. */
+  prestige: number;
+  /** Ce qu'il lâche au sol, en plus de la table de son espèce (`WILDLIFE.chief.loot`). */
+  loot: LootTable;
 }
 
 /**
@@ -66,7 +90,10 @@ export interface RaidSpec {
 
 /** Les gardiens d'une base. */
 export interface GuardSpec {
+  /** Gardiens au corps à corps (`WILDLIFE.guardian`). */
   count: number;
+  /** Cracheurs, qui tirent de loin (`WILDLIFE.spitter`). */
+  spitters: number;
   /** Ticks de jour pour refaire un gardien tombé. */
   respawnTicks: number;
 }
@@ -110,7 +137,18 @@ export const ENEMY_BASE_LEVELS = [
     ],
     // Onze bases au premier anneau, un assaillant tous les deux jours et demi chacune : quatre la première nuit.
     raid: { from: 1, ticksPerRaider: 20 * 450, capacity: 2 },
-    guards: { count: 2, respawnTicks: 20 * 120 },
+    guards: { count: 2, spitters: 1, respawnTicks: 20 * 120 },
+    // Vingt-quatre flèches de l'arc de départ : une demi-minute de combat en esquivant.
+    chief: {
+      hp: 24,
+      damage: 3,
+      slamDamage: 4,
+      prestige: 5,
+      loot: [
+        { item: 'ironPlate', min: 1, max: 2, chance: 1 },
+        { item: 'mutantGoo', min: 2, max: 3, chance: 1 },
+      ],
+    },
   },
   {
     hp: 120,
@@ -123,7 +161,18 @@ export const ENEMY_BASE_LEVELS = [
     ],
     // Le deuxième anneau se réveille à la nuit 8, plus lent : il épaule le premier.
     raid: { from: 8, ticksPerRaider: 20 * 1200, capacity: 2 },
-    guards: { count: 3, respawnTicks: 20 * 150 },
+    guards: { count: 3, spitters: 1, respawnTicks: 20 * 150 },
+    chief: {
+      hp: 40,
+      damage: 4,
+      slamDamage: 5,
+      prestige: 12,
+      loot: [
+        { item: 'ironPlate', min: 2, max: 3, chance: 1 },
+        { item: 'mutantGoo', min: 3, max: 4, chance: 1 },
+        { item: 'wolfFang', min: 1, max: 2, chance: 0.6 },
+      ],
+    },
   },
   {
     hp: 200,
@@ -135,7 +184,18 @@ export const ENEMY_BASE_LEVELS = [
       { item: 'radCore', min: 1, max: 1, chance: 0.5 },
     ],
     raid: { from: 12, ticksPerRaider: 20 * 1800, capacity: 2 },
-    guards: { count: 4, respawnTicks: 20 * 180 },
+    guards: { count: 4, spitters: 2, respawnTicks: 20 * 180 },
+    chief: {
+      hp: 60,
+      damage: 5,
+      slamDamage: 6,
+      prestige: 25,
+      loot: [
+        { item: 'ironPlate', min: 3, max: 5, chance: 1 },
+        { item: 'mutantGoo', min: 4, max: 6, chance: 1 },
+        { item: 'radCore', min: 1, max: 1, chance: 0.35 },
+      ],
+    },
   },
 ] as const satisfies readonly EnemyBaseLevel[];
 

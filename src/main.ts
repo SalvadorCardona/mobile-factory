@@ -19,7 +19,7 @@ import { prefetchMusic } from './audio/music.ts';
 import { assertPrototypes } from './data/validate.ts';
 import { GROUND, PARTICLES, type ParticleStyle } from './data/artDirection.ts';
 import { MENU_BUILDING_IDS } from './data/buildings.ts';
-import type { WildlifeId } from './data/enemies.ts';
+import { CHIEF, type WildlifeId } from './data/enemies.ts';
 import type { ItemId } from './data/items.ts';
 import { OBJECTIVES, type ObjectiveProto } from './data/objectives.ts';
 import { TEST_SCENARIOS } from './data/testScenario.ts';
@@ -140,8 +140,10 @@ declare global {
 const BEAST_PARTICLES: Record<WildlifeId, ParticleStyle> = {
   crab: PARTICLES.claw,
   wolf: PARTICLES.fur,
-  // Un gardien est un mutant : il gicle fluo.
+  // Les gardiens d'une base sont des mutants : ils giclent fluo.
   guardian: PARTICLES.mutant,
+  spitter: PARTICLES.mutant,
+  chief: PARTICLES.mutant,
 };
 /** Les éclats d'un mur frappé : ceux de la pierre, dans l'ombre de la roche. */
 const CHIP_PARTICLES: ParticleStyle = { ...PARTICLES.stone, colors: [GROUND.rock.shade] };
@@ -696,6 +698,11 @@ function wireAudio(world: World, audio: AudioEngine, settings: SettingsPanel): v
     audio.play('objective');
   });
   world.events.on('enemyBaseResisted', () => audio.play('deny'));
+  world.events.on('enemyBaseShielded', () => audio.play('deny'));
+  world.events.on('spitShot', () => audio.play('gloop'));
+  world.events.on('chiefSlamWarned', () => audio.play('brute'));
+  world.events.on('chiefSlammed', () => audio.play('thud'));
+  world.events.on('enemyChiefDefeated', () => audio.play('objective'));
   world.events.on('gearCrafted', () => audio.play('upgrade'));
   world.events.on('siteCancelled', () => audio.play('deliver'));
   world.events.on('roadPaved', () => audio.play('deliver'));
@@ -943,6 +950,16 @@ function wireParticles(world: World, renderer: GameRenderer): void {
     particles.burst(x, y, PARTICLES.mutant, 14, 0.14);
     particles.burst(x, y, PARTICLES.confetti, 12, 0.16);
   });
+  // La massue du chef tombe : un anneau de poussière à la taille de son cercle. Le crachat s'écrase en gouttes.
+  world.events.on('chiefSlammed', ({ x, y }) => {
+    particles.dustRing(x, y, CHIEF.slam.radius * 2 * TILE_SIZE);
+    particles.burst(x, y, PARTICLES.rubble, 8, 0.1);
+  });
+  world.events.on('spitSplashed', ({ x, y }) => particles.burst(x, y, PARTICLES.mutant, 5, 0.08));
+  world.events.on('enemyChiefDefeated', ({ x, y }) => {
+    particles.burst(x, y - 16, PARTICLES.mutant, 14, 0.14);
+    particles.burst(x, y - 16, PARTICLES.confetti, 12, 0.16);
+  });
   world.events.on('siteCancelled', ({ tx, ty }) => particles.burst((tx + 1) * TILE_SIZE, (ty + 1) * TILE_SIZE, PARTICLES.rubble, 8, 0.08));
   // Une poussière de pierre sur chaque dalle posée ou retirée.
   const roadDust = ({ tiles }: { tiles: readonly { tx: number; ty: number }[] }): void => {
@@ -1027,6 +1044,8 @@ function wireShake(world: World, renderer: GameRenderer, busy: () => boolean): v
   world.events.on('buildingDamaged', ({ id }) => renderer.shake(id === world.townHallId ? 0.28 : 0.14));
   world.events.on('buildingDestroyed', () => renderer.shake(0.6));
   world.events.on('enemyBaseDestroyed', () => renderer.shake(0.5));
+  world.events.on('chiefSlammed', ({ hit }) => renderer.shake(hit ? 0.3 : 0.15));
+  world.events.on('enemyChiefDefeated', () => renderer.shake(0.35));
   world.events.on('waveStarted', () => renderer.shake(0.3));
   world.events.on('buildingCompleted', () => renderer.shake(0.18));
   world.events.on('buildingUpgraded', () => renderer.shake(0.12));

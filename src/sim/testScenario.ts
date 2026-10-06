@@ -20,6 +20,7 @@ import { BUILDINGS } from '../data/buildings.ts';
 import { DAY_CYCLE } from '../data/dayNight.ts';
 import type { ItemId } from '../data/items.ts';
 import type { TestScenarioProto } from '../data/testScenario.ts';
+import { baseCenter } from './enemyBases.ts';
 import type { Store } from './store.ts';
 import type { EntityId } from './types.ts';
 import { World, siteMissing } from './world.ts';
@@ -63,6 +64,8 @@ export function stageScenario(scenario: TestScenarioProto): World {
   fill(town, scenario.town);
   fill(world.player.inventory, scenario.bag);
   teleport(world, (hx + scenario.adam.dx + 0.5) * TILE_SIZE, (hy + scenario.adam.dy + 0.5) * TILE_SIZE);
+  if (scenario.gear !== undefined) world.player.gear = scenario.gear;
+  if (scenario.nearBase !== undefined) besideBase(world, scenario.nearBase);
 
   // Le soir tombe : l'horloge avance jusqu'au crépuscule, sans rien sauter d'autre — ni nuit, ni aube.
   if (scenario.dusk) {
@@ -113,6 +116,21 @@ function entityAt(world: World, tx: number, ty: number): EntityId | null {
 /** Adam se tient juste sous l'emprise, à mi-largeur : à portée, et pas dessus. */
 function standBeside(world: World, tx: number, ty: number, width: number, height: number): void {
   teleport(world, (tx + width / 2) * TILE_SIZE, (ty + height + 0.5) * TILE_SIZE);
+}
+
+/** Adam à `tiles` tuiles du centre de la base debout la plus proche de la mairie, du côté de la mairie. */
+function besideBase(world: World, tiles: number): void {
+  const base = world.leadBase();
+  const hall = world.entities.get(world.townHallId);
+
+  if (!base || !hall) throw new Error('scénario de test : pas de base mutante près de la mairie');
+
+  const { x, y } = baseCenter(base);
+  const hx = (hall.tx + hall.width / 2) * TILE_SIZE;
+  const hy = (hall.ty + hall.height / 2) * TILE_SIZE;
+  const length = Math.hypot(hx - x, hy - y) || 1;
+
+  teleport(world, x + ((hx - x) / length) * tiles * TILE_SIZE, y + ((hy - y) / length) * tiles * TILE_SIZE);
 }
 
 function teleport(world: World, x: number, y: number): void {
