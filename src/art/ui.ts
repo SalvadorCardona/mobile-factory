@@ -425,6 +425,20 @@ export const UI_ICONS = {
     line(7, 11.5, 17, 11.5, orange.shade),
     line(14.5, 6, 17.5, 2.5, ink.base),
   ),
+  /**
+   * Une case d'herbe, en 3/4 : une motte menthe, trois brins et une fleur —
+   * la moitié d'assise d'une foreuse, à côté de l'icône du filon.
+   */
+  grass: svg(
+    S,
+    S,
+    shadedBlock(3.5, 11, 17, 9, 3, 'mint', 4),
+    line(8, 13, 7, 7.5, mint.shade),
+    line(12, 13, 12, 5.5, mint.shade),
+    line(16, 13, 17, 8, mint.shade),
+    circle(17, 7, 2, yellow.base),
+    circle(17, 7, 0.9, orange.base),
+  ),
   /** Le sac à dos violet d'Adam, pour le bonus « Grand sac ». */
   bag: svg(
     S,

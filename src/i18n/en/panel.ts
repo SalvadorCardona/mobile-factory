@@ -269,7 +269,14 @@ export const panel: Messages['panel'] = {
     onPlayer: 'You are standing on the spot',
     outOfReach: 'Too far — come closer',
     unique: 'Only one per colony',
-    noOre: { text: 'No ore vein here', remedy: 'Break a rock, then place the drill where it stood' },
+    footing: {
+      text: (vein: string | null, ore: number, grass: number): string =>
+        vein === null
+          ? `A drill sits on ${ore} tiles of an ore vein and ${grass} grass tiles.`
+          : `${/^[aeiou]/.test(vein) ? 'An' : 'A'} ${vein} drill sits on ${ore} ${vein} tiles and ${grass} grass tiles.`,
+      remedy: 'Straddle the edge of the vein: break its rocks, keep the grass',
+    },
+    veins: { ironOre: 'iron', coal: 'coal', stone: 'stone' },
     road: { text: 'A road runs here', remedy: 'Remove it first: Build › Road › Remove' },
     nearHall: { text: 'Too close to the town hall', remedy: 'Move away, outside the circle around it' },
     treesAndRocks: { text: 'Trees and rocks in the way', remedy: 'Adam can harvest them' },

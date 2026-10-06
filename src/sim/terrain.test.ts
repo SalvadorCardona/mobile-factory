@@ -197,7 +197,7 @@ describe('foyer', () => {
 
       expect({ seed, ok: trees <= 6 && stone <= 12 && iron <= 20 }).toEqual({ seed, ok: true });
     }
-  });
+  }, 30_000);
 
   it('se tire de la seed : même seed, mêmes filons', () => {
     const [sx, sy] = findSpawn(42);

@@ -171,6 +171,7 @@ import { Scheduler } from './scheduler.ts';
 import { Store } from './store.ts';
 import { ProblemWatch, type ProblemFacts } from './problems.ts';
 import { transferAllPlan, transferAmount, type TransferDirection, type TransferQuantity, type TransferRules } from './transfer.ts';
+import { footingAt, type Footing } from './footing.ts';
 import { findSpawn, habitatAt, isBuildable, isWalkable, oreAt, terrainAt } from './terrain.ts';
 import { inLogisticRange, pointInLogisticRange } from './warehouse.ts';
 import { chopSpot, isTree, pickTree, treesInRange } from './lumberjacks.ts';
@@ -283,6 +284,8 @@ export interface RoadStep extends TileCoord {
 export interface PlacementBlock {
   reason: PlacementRejection;
   tiles: TileCoord[];
+  /** Refus `footing` : le filon que la foreuse couvre le plus, `null` sans filon. */
+  ore?: ItemId | null;
 }
 
 /** D'où « Transférer » tirerait de quoi achever un chantier, lu par sa fenêtre. */
@@ -350,7 +353,8 @@ export type WorldEvents = {
   buildingPlaced: { id: EntityId; tx: number; ty: number };
   /** Le chantier a reçu son dernier objet : l'entité est devenue le bâtiment, sous le même id, sans autre action du joueur. */
   buildingCompleted: { id: EntityId };
-  placementRejected: { reason: PlacementRejection };
+  /** `ore` : pour un refus `footing`, le filon couvert (`PlacementBlock.ore`) ; `null` sinon. */
+  placementRejected: { reason: PlacementRejection; ore: ItemId | null };
   /** Ces tuiles viennent d'être pavées ; `fromBag` pierres sont sorties du sac, le reste de la ville. */
   roadPaved: { tiles: TileCoord[]; fromBag: number };
   /** Ces dalles viennent d'être retirées ; `toBag` pierres sont revenues au sac. */
@@ -979,6 +983,15 @@ export class World {
       this.entities.set(entity.id, entity);
       this.chunks.occupy(entity.id, entity.tx, entity.ty, entity.width, entity.height);
     }
+    // Les filons ont pris un bord droit (la règle des foreuses) : un rocher né sur une case déjà bâtie ou
+    // pavée d'une ancienne sauvegarde n'y pousse pas — la case reste comme le joueur l'a laissée.
+    for (const entity of this.entities.values()) {
+      for (let ty = entity.ty; ty < entity.ty + entity.height; ty += 1) {
+        for (let tx = entity.tx; tx < entity.tx + entity.width; tx += 1) this.clearUnder(tx, ty);
+      }
+    }
+    for (const { tx, ty } of this.roads.tiles()) this.clearUnder(tx, ty);
+
     // Une sauvegarde d'avant le Prestige : ses bâtiments debout ne rapporteront plus rien, même rebâtis.
     for (const entity of this.entities.values()) {
       if (entity.kind !== 'site') this.prestigeSites.add(prestigeKey(entity));
@@ -1091,10 +1104,10 @@ export class World {
         break;
 
       case 'placeBuilding': {
-        const rejection = this.canPlace(command.building, command.tx, command.ty);
+        const block = this.placementBlock(command.building, command.tx, command.ty);
 
-        if (rejection) {
-          this.events.emit('placementRejected', { reason: rejection });
+        if (block) {
+          this.events.emit('placementRejected', { reason: block.reason, ore: block.ore ?? null });
           break;
         }
         this.openSite(command.building, command.tx, command.ty);
@@ -2374,6 +2387,16 @@ export class World {
     // Pas de plan ou pas encore la vague, pas de chantier : le tick refuse comme le menu.
     if (!this.isUnlocked(building)) return { reason: 'locked', tiles: tiles(() => true) };
 
+    // Une foreuse au bord d'un filon : moitié gisement, moitié herbe. L'eau et le sable y sont des cases
+    // fautives comme les autres ; le rocher du filon se casse ensuite (« resource »).
+    const footing = this.footing(building, tx, ty);
+
+    if (footing && !footing.valid) {
+      const wrong = footing.tiles.filter((tile) => tile.state === 'wrong').map(({ tx: x, ty: y }) => ({ tx: x, ty: y }));
+
+      return { reason: 'footing', tiles: wrong, ore: footing.ore };
+    }
+
     const checks: [PlacementRejection, (x: number, y: number) => boolean][] = [
       ['terrain', (x, y) => !isBuildable(terrainAt(this.seed, x, y))],
       ['occupied', (x, y) => !this.chunks.isFree(x, y, 1, 1)],
@@ -2395,12 +2418,6 @@ export class World {
     // L'antenne se dresse loin de la mairie : il faudra la défendre.
     if (proto.hallDistance !== undefined && this.nearHall(proto.hallDistance, tx, ty, proto.width, proto.height)) {
       return { reason: 'nearHall', tiles: tiles(() => true) };
-    }
-
-    // Une foreuse posée à sec ne produirait jamais rien : le rocher d'un filon
-    // se casse d'abord (« resource »), la foreuse se pose ensuite à sa place.
-    if (proto.kind === 'drill' && this.oreUnder(building, tx, ty) === null) {
-      return { reason: 'noOre', tiles: tiles(() => true) };
     }
 
     // Portée mesurée depuis le centre de l'emprise, en distances au carré.
@@ -2814,6 +2831,17 @@ export class World {
   }
 
   /**
+   * L'assise d'un bâtiment à gisements (`deposits` : la foreuse) posé en
+   * (tx, ty) : case par case, filon, herbe ou faute (`sim/footing.ts`).
+   * `null` pour un bâtiment qui se pose n'importe où.
+   */
+  public footing(building: BuildingId, tx: number, ty: number): Footing | null {
+    const { deposits, width, height }: BuildingProto = BUILDINGS[building];
+
+    return deposits ? footingAt(this.seed, deposits, tx, ty, width, height) : null;
+  }
+
+  /**
    * Le premier objet extractible sous l'emprise de ce bâtiment posé en
    * (tx, ty), ou `null` si aucun gisement. L'aperçu d'une foreuse le montre
    * (« Extraira : … »), `placementBlock()` refuse sans.
@@ -2829,6 +2857,11 @@ export class World {
       }
     }
     return null;
+  }
+
+  /** Vide la tuile d'un rocher ou d'un arbre de la carte qui n'a rien à y faire (`load`). */
+  private clearUnder(tx: number, ty: number): void {
+    if (this.resources.at(tx, ty) !== null && !this.resources.isPlanted(tx, ty)) this.resources.clear(tx, ty);
   }
 
   private dirtyTile(tx: number, ty: number): void {

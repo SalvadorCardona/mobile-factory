@@ -11,7 +11,6 @@ import { BUILD_REACH_TILES, INVENTORY_CAPACITY } from './player.ts';
 import { SAVE_VERSION, decodeSave, encodeSave, serialize } from './save.ts';
 import { currentObjective, goalProgress, goalWait, objectiveWait } from './objectives.ts';
 import { CYCLE_TICKS } from './dayNight.ts';
-import { oreAt } from './terrain.ts';
 import type { Entity, EntityId } from './types.ts';
 import { World } from './world.ts';
 
@@ -84,7 +83,11 @@ function overlaps(tx: number, ty: number, reserved: Reserved): boolean {
   return reserved !== null && Math.abs(tx - reserved.tx) < 2 && Math.abs(ty - reserved.ty) < 2;
 }
 
-/** La première case posable autour d'Adam, éventuellement sur un filon de fer. */
+/**
+ * La première case posable autour d'Adam, éventuellement une foreuse au bord
+ * d'un filon de fer : deux cases de fer, deux d'herbe — Adam y a cassé les
+ * rochers du filon.
+ */
 function spot(world: World, building: BuildingId, iron = false, reserved: Reserved = null): { tx: number; ty: number } | null {
   const origin = worldToTile(world.player.x, world.player.y);
 
@@ -93,8 +96,13 @@ function spot(world: World, building: BuildingId, iron = false, reserved: Reserv
       const tx = origin.tx + dx;
       const ty = origin.ty + dy;
 
-      if (iron && oreAt(world.seed, tx, ty)?.item !== 'ironOre') continue;
       if (overlaps(tx, ty, reserved)) continue;
+      if (iron) {
+        const footing = world.footing(building, tx, ty);
+
+        if (!footing?.valid || footing.ore !== 'ironOre') continue;
+        for (const tile of footing.tiles) if (tile.state === 'ore') world.resources.clear(tile.tx, tile.ty);
+      }
       if (world.canPlace(building, tx, ty) === null) return { tx, ty };
     }
   }

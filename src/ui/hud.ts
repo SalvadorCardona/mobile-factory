@@ -82,6 +82,7 @@ import { effectLine } from './researchText.ts';
 import { moodMeter } from './moodMeter.ts';
 import { needMeter } from './needMeter.ts';
 import { personText } from './personText.ts';
+import { footingText } from './placementReason.ts';
 import { mapUrl, seedLine } from './seed.ts';
 import { setTip, Tooltips } from './tooltip.ts';
 
@@ -512,7 +513,9 @@ export class Hud {
 
     document.addEventListener('pointerdown', this.foldCrewOnTouch, { capture: true });
 
-    world.events.on('placementRejected', ({ reason }) => this.notify(t().hud.rejection[reason], 'bad'));
+    world.events.on('placementRejected', ({ reason, ore }) =>
+      this.notify(reason === 'footing' ? footingText(ore) : t().hud.rejection[reason], 'bad'),
+    );
     world.events.on('roadPaved', ({ fromBag }) => {
       if (fromBag > 0) this.float('stone', -fromBag);
     });

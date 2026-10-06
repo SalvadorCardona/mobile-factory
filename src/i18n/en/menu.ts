@@ -5,6 +5,10 @@ import type { Messages } from '../messages.ts';
 /** "1 stone", "3 stones". */
 const count = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`;
 
+/** "iron, coal or stone". */
+const or = (words: readonly string[]): string =>
+  words.length > 1 ? `${words.slice(0, -1).join(', ')} or ${words[words.length - 1]}` : (words[0] ?? '');
+
 export const menu: Messages['menu'] = {
   build: 'Build',
   keys: {
@@ -18,6 +22,7 @@ export const menu: Messages['menu'] = {
   cardEffect: (name, effect) => `${name}: ${effect}`,
   free: 'free',
   employs: (n) => `Employs ${n} worker${n === 1 ? '' : 's'}`,
+  footing: (ore, veins, grass) => `Sits on ${ore} tiles of an ore vein (${or(veins)}) and ${grass} grass tiles`,
   road: 'Road',
   roadEffect: (speed) => `Adam and the workers go ${speed}x faster on it. Swipe from tile to tile`,
   roadMeta: 'per tile · no site',

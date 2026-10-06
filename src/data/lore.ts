@@ -149,7 +149,7 @@ export const LORE = {
     drill: {
       name: 'Foreuse',
       sign: 'Foreuse',
-      site: 'Un bâti de pierre qui attend son fer. Posée sur un filon, elle l’extraira seule.',
+      site: 'Un bâti de pierre qui attend son fer. Posée au bord d’un filon, elle l’extraira seule.',
       description: 'Machine de récupération qui extrait le filon sous elle.',
       effect: 'Extrait seule le minerai du filon sous elle.',
     },

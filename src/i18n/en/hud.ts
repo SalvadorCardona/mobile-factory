@@ -20,7 +20,6 @@ export const hud: Messages['hud'] = {
     outOfReach: 'Too far — get closer',
     resource: 'Clear the trees and rocks first',
     onPlayer: 'You’re standing on the spot',
-    noOre: 'No ore here — a drill goes on an ore vein',
     locked: 'Not unlocked yet — you need its blueprint, or one more night',
     unique: 'Only one per colony — you already have one',
     nearHall: `Too close to the town hall — the antenna stands at least ${BUILDINGS.antenna.hallDistance} tiles away`,

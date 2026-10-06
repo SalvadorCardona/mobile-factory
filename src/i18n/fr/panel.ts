@@ -7,6 +7,8 @@
  * (« Bois ») : c'est la phrase qui choisit sa casse et son article.
  */
 
+import type { DrillDeposit } from '../../data/buildings.ts';
+
 /** Le pluriel français : 0 et 1 au singulier. */
 const s = (count: number): string => (count > 1 ? 's' : '');
 
@@ -313,7 +315,20 @@ export const panel = {
     onPlayer: 'Vous êtes sur l’emplacement',
     outOfReach: 'Trop loin — rapprochez-vous',
     unique: 'Un seul par colonie',
-    noOre: { text: 'Aucun filon ici', remedy: 'Cassez un rocher, puis posez la foreuse à sa place' },
+    /**
+     * Une foreuse hors de son assise (`footing`) : `vein`, le filon qu'elle
+     * couvre le plus (`veins`), `null` sans filon ; `ore` et `grass`, les cases
+     * qu'il en faut.
+     */
+    footing: {
+      text: (vein: string | null, ore: number, grass: number): string =>
+        vein === null
+          ? `Une foreuse se pose sur ${ore} cases d’un filon et ${grass} cases d’herbe.`
+          : `Une foreuse de ${vein} se pose sur ${ore} cases de ${vein} et ${grass} cases d’herbe.`,
+      remedy: 'À cheval sur le bord du filon : cassez ses rochers, gardez l’herbe',
+    },
+    /** Le nom court d'un filon, au milieu d'une phrase : « 2 cases de fer ». */
+    veins: { ironOre: 'fer', coal: 'charbon', stone: 'pierre' } satisfies Record<DrillDeposit, string>,
     road: { text: 'Une route passe ici', remedy: 'Retirez-la d’abord : Bâtir › Route › Retirer' },
     nearHall: { text: 'Trop près de la mairie', remedy: 'Éloignez-vous, hors du cercle autour d’elle' },
     treesAndRocks: { text: 'Des arbres et des rochers gênent', remedy: 'Adam peut les récolter' },

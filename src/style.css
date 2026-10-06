@@ -2363,6 +2363,26 @@ button.hud-stock:active {
   font-size: 16px;
 }
 
+/*
+ * L'assise d'une foreuse : « 2 » et les filons qu'elle accepte, « + 2 » et
+ * l'herbe. Elle reste sur la carte compacte du téléphone : c'est une règle de
+ * pose, pas de l'ambiance.
+ */
+.build-card-footing {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.build-card-footing-ores {
+  display: inline-flex;
+  margin-right: 2px;
+}
+
 /* Les ouvriers qu'il emploiera : la puce violette du sélecteur d'ouvriers. */
 .build-card-workers {
   display: inline-flex;
@@ -2479,9 +2499,15 @@ button.hud-stock:active {
     font-size: 14px;
   }
 
-  .build-card-cost .icon {
+  .build-card-cost .icon,
+  .build-card-footing .icon {
     width: 16px;
     height: 16px;
+  }
+
+  .build-card-footing {
+    gap: 2px;
+    font-size: 13px;
   }
 
   .build-card-new {

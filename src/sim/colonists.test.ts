@@ -110,7 +110,7 @@ describe('ouvriers de la colonie', () => {
 
   it('sans ouvrier libre, un poste reste vide ; un bâtiment tombé rend les siens, qui le pourvoient', () => {
     // Deux bûcherons, quatre fermiers, un puisatier : trois bâtisseurs pour quatre postes.
-    const world = scenario([CAMP, { building: 'farm', dx: 6, dy: 0 }, { building: 'well', dx: 0, dy: 9 }, { building: 'constructionPost', dx: -5, dy: 5 }]);
+    const world = scenario([CAMP, { building: 'farm', dx: 6, dy: 0 }, { building: 'well', dx: -3, dy: 9 }, { building: 'constructionPost', dx: -5, dy: 5 }]);
     const post = built(world, 'constructionPost');
     const camp = only(world, 'lumberCamp');
 

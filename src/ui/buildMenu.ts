@@ -3,7 +3,8 @@
  *
  * Un seul bouton à l'écran — « Bâtir » — qui ouvre un tiroir. Le tiroir
  * liste les bâtiments débloqués en cartes : vignette, nom, ce que fait le
- * bâtiment en une ligne (`effect`), coût et ouvriers en icônes. Choisir une carte ferme le tiroir et arme le placement
+ * bâtiment en une ligne (`effect`), coût et ouvriers en icônes — et, pour
+ * une foreuse, son assise : moitié filon, moitié herbe. Choisir une carte ferme le tiroir et arme le placement
  * (`input/placement.ts`) ; une barre remplace alors le bouton, avec le nom
  * du bâtiment choisi, « Poser », « Poser encore » et « Annuler ». « Poser »
  * rend la main au joystick ; « Poser encore » garde le bâtiment armé, pour
@@ -60,15 +61,16 @@
  */
 
 import { gridStep, type GridMove } from '../core/gridNav.ts';
-import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
+import { BUILDINGS, type BuildingId, type BuildingProto } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
 import { ROADS } from '../data/roads.ts';
 import type { Placement } from '../input/placement.ts';
+import { footingHalf } from '../sim/footing.ts';
 import type { World } from '../sim/world.ts';
 import { onLocale, t } from '../i18n/locale.ts';
 import { buildOrder } from './buildOrder.ts';
-import { buildingIcon, itemAmount, jobIcon, roadIcon, uiIcon } from './icons.ts';
-import { placementOutput, placementReason, roadReason } from './placementReason.ts';
+import { buildingIcon, itemAmount, itemIcon, jobIcon, roadIcon, uiIcon } from './icons.ts';
+import { footingText, placementOutput, placementReason, roadReason } from './placementReason.ts';
 
 /** Position physique → mouvement dans la grille : flèches, et ZQSD/WASD comme pour marcher. */
 const MOVES: Readonly<Record<string, GridMove>> = {
@@ -248,7 +250,7 @@ export class BuildMenu {
 
   /** Une carte : vignette, nom et badge « Nouveau », effet, coût et ouvriers en puces, emprise. */
   private card(id: BuildingId): HTMLButtonElement {
-    const proto = BUILDINGS[id];
+    const proto: BuildingProto = BUILDINGS[id];
     const card = button('', () => {
       if (this.swallowClick) {
         this.swallowClick = false;
@@ -293,6 +295,11 @@ export class BuildMenu {
     effect.className = 'build-card-effect';
     body.append(effect);
 
+    // Une foreuse rappelle son assise : la moitié sur un filon, l'autre sur l'herbe, en icônes.
+    const footing = proto.deposits ? footingRow(proto) : null;
+
+    if (footing) body.append(footing.row);
+
     const cost = document.createElement('div');
 
     cost.className = 'build-card-cost';
@@ -327,6 +334,7 @@ export class BuildMenu {
       icon.alt = text.buildings[id].label;
       name.textContent = text.buildings[id].label;
       effect.textContent = text.buildings[id].effect;
+      footing?.relabel();
       if (free) free.data = text.menu.free;
       if (workers) {
         const label = text.menu.employs(proto.workers);
@@ -429,8 +437,11 @@ export class BuildMenu {
 
   private showEffect(id: BuildingId): void {
     const { label, effect } = t().buildings[id];
+    const proto: BuildingProto = BUILDINGS[id];
+    // Sur un téléphone, la ligne d'effet est la seule à dire l'assise en toutes lettres.
+    const rule = proto.deposits ? ` ${footingText(null)}` : '';
 
-    setText(this.effectLine, t().menu.cardEffect(label, effect));
+    setText(this.effectLine, t().menu.cardEffect(label, effect + rule));
   }
 
   /** Range les cartes par utilité du moment. Seulement à l'ouverture : rien ne saute sous le doigt. */
@@ -723,4 +734,44 @@ function button(label: string, onTap: () => void): HTMLButtonElement {
   // de la cible.
   element.addEventListener('click', onTap);
   return element;
+}
+
+/**
+ * L'assise d'une foreuse sur sa carte : « 2 » et les icônes des filons
+ * qu'elle accepte, « + 2 » et l'herbe. `relabel` réécrit son libellé
+ * accessible à chaque changement de langue.
+ */
+function footingRow(proto: BuildingProto): { row: HTMLElement; relabel: () => void } {
+  const deposits = proto.deposits ?? [];
+  const half = footingHalf(proto.width, proto.height);
+  const grass = proto.width * proto.height - half;
+  const row = document.createElement('div');
+  const ores = document.createElement('span');
+  const grassIcon = uiIcon('grass', 18);
+
+  row.className = 'build-card-footing';
+  row.setAttribute('role', 'img');
+  ores.className = 'build-card-footing-ores';
+  for (const item of deposits) {
+    const icon = itemIcon(item, 18);
+
+    icon.setAttribute('aria-hidden', 'true');
+    ores.append(icon);
+  }
+  row.append(String(half), ores, `+ ${grass}`, grassIcon);
+
+  return {
+    row,
+    relabel: () => {
+      const veins: Partial<Record<ItemId, string>> = t().panel.placement.veins;
+      const label = t().menu.footing(
+        half,
+        deposits.map((item) => veins[item] ?? t().items[item]),
+        grass,
+      );
+
+      row.setAttribute('aria-label', label);
+      row.title = label;
+    },
+  };
 }

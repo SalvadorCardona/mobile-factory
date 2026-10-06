@@ -29,7 +29,7 @@ import { PERKS, type PerkProto } from './perks.ts';
 import { QUESTS, QUEST_IDS, TOOLS, type QuestProto } from './quests.ts';
 import { RECIPES, type RecipeProto } from './recipes.ts';
 import { RESEARCH, RESEARCH_STATS, type ResearchProto } from './research.ts';
-import { RESOURCES } from './resources.ts';
+import { RESOURCES, ROCK_OF_ORE } from './resources.ts';
 import { TEST_SCENARIOS, type TestScenarioProto } from './testScenario.ts';
 import { BUILDING_PARTS, RESOURCE_PARTS, SPRITES, UPGRADE_PARTS, WALKER_PARTS, type SpriteProto } from './sprites.ts';
 import { WEAPONS } from './weapons.ts';
@@ -104,6 +104,15 @@ export function validatePrototypes(): string[] {
     }
     if (building.weapon !== null && !(building.weapon in WEAPONS)) {
       errors.push(`BUILDINGS.${id} : arme inconnue « ${String(building.weapon)} »`);
+    }
+    // Une foreuse se pose au bord d'un filon : il lui faut des gisements que la carte pose vraiment.
+    const deposits: readonly string[] = (building as BuildingProto).deposits ?? [];
+
+    if (building.kind === 'drill' && deposits.length === 0) {
+      errors.push(`BUILDINGS.${id} : une foreuse sans gisement (deposits) ne se poserait nulle part`);
+    }
+    for (const item of deposits) {
+      if (!(item in ROCK_OF_ORE)) errors.push(`BUILDINGS.${id} : gisement « ${item} » qu'aucun filon ne porte`);
     }
     if (building.kind === 'tower' && building.weapon === null) {
       errors.push(`BUILDINGS.${id} : une tour sans arme ne sert à rien`);
