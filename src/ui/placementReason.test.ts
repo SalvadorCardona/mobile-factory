@@ -3,7 +3,7 @@ import { worldToTile } from '../core/grid.ts';
 import type { PlacementRejection } from '../sim/commands.ts';
 import { setLocale } from '../i18n/locale.ts';
 import { World } from '../sim/world.ts';
-import { placementOutput, placementReason } from './placementReason.ts';
+import { footingText, placementOutput, placementReason } from './placementReason.ts';
 
 /** Une partie et la première tuile, près d'Adam, qui porte une ressource de l'espèce voulue. */
 function worldWith(tree: boolean): { world: World; tx: number; ty: number } {
@@ -25,7 +25,7 @@ function worldWith(tree: boolean): { world: World; tx: number; ty: number } {
 describe('placementReason', () => {
   it('donne un motif en français pour chaque refus', () => {
     const world = new World(1);
-    const reasons: PlacementRejection[] = ['terrain', 'occupied', 'resource', 'onPlayer', 'noOre', 'outOfReach', 'locked'];
+    const reasons: PlacementRejection[] = ['terrain', 'occupied', 'resource', 'onPlayer', 'footing', 'outOfReach', 'locked'];
 
     for (const reason of reasons) {
       const tiles = reason === 'resource' ? [] : [{ tx: 0, ty: 0 }];
@@ -62,13 +62,31 @@ describe('placementReason', () => {
     expect(placementReason({ reason: 'outOfReach', tiles: [] }, world).remedy).toBeNull();
   });
 
-  it('une foreuse hors filon : dit où la poser', () => {
+  it('une foreuse hors de son assise : dit la règle, avec le filon qu’elle couvre', () => {
     const world = new World(1);
+    const remedy = 'À cheval sur le bord du filon : cassez ses rochers, gardez l’herbe';
 
-    expect(placementReason({ reason: 'noOre', tiles: [] }, world)).toEqual({
-      text: 'Aucun filon ici',
-      remedy: 'Cassez un rocher, puis posez la foreuse à sa place',
+    expect(placementReason({ reason: 'footing', tiles: [], ore: 'ironOre' }, world)).toEqual({
+      text: 'Une foreuse de fer se pose sur 2 cases de fer et 2 cases d’herbe.',
+      remedy,
     });
+    expect(placementReason({ reason: 'footing', tiles: [], ore: 'coal' }, world).text).toBe(
+      'Une foreuse de charbon se pose sur 2 cases de charbon et 2 cases d’herbe.',
+    );
+    expect(placementReason({ reason: 'footing', tiles: [], ore: null }, world)).toEqual({
+      text: 'Une foreuse se pose sur 2 cases d’un filon et 2 cases d’herbe.',
+      remedy,
+    });
+  });
+
+  it('la règle de la foreuse en anglais', () => {
+    setLocale('en');
+    try {
+      expect(footingText('ironOre')).toBe('An iron drill sits on 2 iron tiles and 2 grass tiles.');
+      expect(footingText('stone')).toBe('A stone drill sits on 2 stone tiles and 2 grass tiles.');
+    } finally {
+      setLocale('fr');
+    }
   });
 
   it('parle anglais quand la langue change', () => {

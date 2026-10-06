@@ -20,9 +20,15 @@ plus, du plus proche au plus loin) lâchent une unité (bois, fer, charbon,
 pierre), qu'il marche ou non. Il **heurte** le reste : un chantier heurté
 reçoit ce qu'il attend ; une foreuse ou une ferme heurtée vide son coffre
 dans le sac (« Tout prendre » dans sa fenêtre), ce qui la relance si elle
-était bloquée. Une foreuse ne se pose que sur un filon (refus `noOre`) :
-armée, elle montre les filons autour d'Adam, rochers compris — on casse le
-rocher, puis on pose la foreuse à sa place. Rochers et bâtiments sont solides ; d'un arbre, seul le tronc
+était bloquée. Une foreuse se pose au **bord** d'un filon : la moitié de
+son emprise sur un des gisements qu'elle accepte (`deposits` de
+`data/buildings.ts` : fer, charbon, pierre), l'autre moitié sur l'herbe —
+deux et deux pour un 2 × 2 (`sim/footing.ts`, `World.footing`, refus
+`footing` : « Une foreuse de fer se pose sur 2 cases de fer et 2 cases
+d'herbe. »). Armée, elle montre les filons autour d'Adam, rochers compris,
+et son fantôme colore chaque case : filon, herbe, fautive en corail ; sa
+carte du menu le rappelle en icônes. On casse les rochers du bord, puis on
+la pose ; une foreuse d'une ancienne sauvegarde reste où elle est. Rochers et bâtiments sont solides ; d'un arbre, seul le tronc
 l'arrête et il glisse autour — une forêt n'est jamais un mur. Un tap sur un
 chantier ouvre sa fenêtre : « Transférer » y vide d'un coup ce qu'il attend
 — le sac d'abord, puis le stock de la ville s'il est dans son rayon.
@@ -596,7 +602,8 @@ Rien ne joue avant un geste du joueur.
   sont régénérés depuis la seed (`sim/terrain.ts`). Seules les modifications
   du joueur (`sim/resources.ts`, entités) sont de l'état. Le départ aussi se
   tire de la seed, avec son foyer : bosquet, filon de pierre (≤ 12 tuiles) et
-  de fer (≤ 20) à portée de pas d'Adam — `terrain.test.ts` le vérifie sur
+  de fer (≤ 20) à portée de pas d'Adam, chacun avec un bord où poser une
+  foreuse — `terrain.test.ts` et `footing.test.ts` le vérifient sur
   1 000 seeds — et une clairière qui ouvre sur au moins 400 tuiles (l'eau et
   les rochers ferment, pas les arbres).
 - Sauvegarde automatique : `sim/save.ts` sérialise le monde (format versionné

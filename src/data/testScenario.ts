@@ -61,7 +61,7 @@ export const TEST_SCENARIOS = {
     buildings: [
       { building: 'lumberCamp', dx: -6, dy: 0 },
       { building: 'farm', dx: 6, dy: 0 },
-      { building: 'well', dx: 0, dy: 9 },
+      { building: 'well', dx: -3, dy: 9 },
       { building: 'constructionPost', dx: -5, dy: 5 },
       { building: 'lab', dx: 4, dy: 5, delivered: { wood: 14, stone: 3 } },
     ],
@@ -82,16 +82,16 @@ export const TEST_SCENARIOS = {
     adam: { dx: 3, dy: 4 },
   },
   /**
-   * La maison du forestier sous la mairie, son carré d'herbe nue : on
+   * La maison du forestier au sud-est de la mairie, son carré d'herbe nue : on
    * regarde le forestier le planter rang par rang, puis les pousses grandir.
    */
   forest: {
     label: 'Forestier',
     seed: 100,
-    buildings: [{ building: 'foresterHouse', dx: 0, dy: 9 }],
+    buildings: [{ building: 'foresterHouse', dx: 7, dy: 10 }],
     town: { wood: 40, stone: 30, food: 12, water: 12 },
     bag: {},
-    adam: { dx: 4, dy: 8 },
+    adam: { dx: 5, dy: 8 },
   },
   /**
    * Le soir tombe sur une base de dix ouvriers — bûcherons, bâtisseurs,

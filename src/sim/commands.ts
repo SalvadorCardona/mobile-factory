@@ -288,8 +288,11 @@ export type PlacementRejection =
   | 'resource'
   /** Le joueur est dans l'emprise : un bâtiment est solide, il y resterait coincé. */
   | 'onPlayer'
-  /** Une foreuse sans filon sous son emprise ne produirait jamais rien. */
-  | 'noOre'
+  /**
+   * Une foreuse se pose au bord d'un filon : la moitié de son emprise sur un
+   * de ses gisements, l'autre sur l'herbe (`sim/footing.ts`).
+   */
+  | 'footing'
   /** Trop près de la mairie : l'antenne se dresse à `hallDistance` tuiles au moins. */
   | 'nearHall'
   /**

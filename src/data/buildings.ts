@@ -93,6 +93,13 @@ export interface BuildingProto {
    */
   hallDistance?: number;
   /**
+   * Les gisements sur lesquels il se pose — une foreuse : fer, charbon,
+   * pierre. Son emprise doit en couvrir la moitié, sur un seul filon, et
+   * l'autre moitié d'herbe (`sim/footing.ts`) : deux et deux pour un 2 × 2.
+   * Il extrait le filon qu'il couvre. Absent : il se pose n'importe où.
+   */
+  deposits?: readonly ItemId[];
+  /**
    * Faut-il un plan pour le bâtir ? Un bâtiment à plan n'entre dans le menu
    * qu'une fois le plan donné par Ève, en récompense d'une quête (`data/quests.ts`).
    */
@@ -301,6 +308,8 @@ export const BUILDINGS = {
     width: 2,
     height: 2,
     cost: { stone: 6, ironOre: 4 },
+    // Au bord d'un filon : deux cases de gisement, deux d'herbe.
+    deposits: ['ironOre', 'coal', 'stone'],
     storage: 20,
     logisticRadius: 0,
     hp: 40,
@@ -592,6 +601,9 @@ export function bedsOf(id: BuildingId): number {
 
   return proto.beds ?? 0;
 }
+
+/** Un gisement sur lequel la foreuse se pose : chacun a son nom court au dictionnaire. */
+export type DrillDeposit = (typeof BUILDINGS.drill.deposits)[number];
 
 /** Le niveau le plus haut qu'atteint le bâtiment : 1 s'il ne s'améliore pas. */
 export function maxLevel(id: BuildingId): number {

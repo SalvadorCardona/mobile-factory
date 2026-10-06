@@ -97,7 +97,7 @@ export const content: Content = {
     drill: {
       label: 'Drill',
       sign: 'Drill',
-      siteDescription: 'A stone frame waiting for its iron. Set on an ore vein, it will mine it on its own.',
+      siteDescription: 'A stone frame waiting for its iron. Set on the edge of an ore vein, it will mine it on its own.',
       description: 'A salvaged machine that mines the vein beneath it.',
       effect: 'Mines the ore of the vein beneath it on its own.',
       upgrades: [],

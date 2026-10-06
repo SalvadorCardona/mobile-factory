@@ -10,6 +10,10 @@
  * Une foreuse armée montre les **filons** autour d'Adam : chaque case de
  * gisement teintée de la famille de son minerai, avec l'icône de ce qu'elle
  * donnerait — y compris sous les rochers, qu'il faut casser avant de poser.
+ * Son fantôme dit son **assise** case par case (`World.footing`) : les
+ * cases du filon qu'elle prendrait, liserées de la teinte du minerai ; les
+ * cases d'herbe voulues, en menthe ; les fautives, en corail — elle se pose
+ * à cheval sur le bord, moitié filon, moitié herbe.
  *
  * Le cercle jaune autour de la mairie finie est son rayon logistique : un
  * chantier posé dedans puisera dans le stock de la colonie. L'antenne armée
@@ -45,6 +49,7 @@ import { BUILDINGS, type BuildingId, type BuildingProto } from '../data/building
 import { PALETTE, RADIUS, STROKE, hex } from '../data/artDirection.ts';
 import { BUILD_REACH_TILES } from '../sim/player.ts';
 import { oreAt } from '../sim/terrain.ts';
+import type { Footing } from '../sim/footing.ts';
 import type { PlacementBlock, World } from '../sim/world.ts';
 import type { GhostState, RoadTool, RoadTrail } from '../input/placement.ts';
 import { ITEM_TONES, iconKey } from './indicatorLayer.ts';
@@ -182,6 +187,7 @@ export class GhostLayer {
     this.cells.visible = true;
 
     // Adam qui marche dans l'emprise change les cases sans changer le motif : elles sont dans la clé.
+    // L'assise ne dépend que de la case et de la seed : la case est déjà dans la clé.
     const tiles = block?.tiles.map(({ tx, ty }) => `${tx},${ty}`).join(';') ?? '';
     const key = `${ghost.building}:${ghost.tx}:${ghost.ty}:${block?.reason ?? 'ok'}:${tiles}`;
 
@@ -200,6 +206,7 @@ export class GhostLayer {
     this.animate(ghost.follow, 0);
 
     this.cells.clear();
+    this.drawFooting(this.world.footing(ghost.building, ghost.tx, ghost.ty));
     for (const tile of block?.tiles ?? []) {
       this.cells
         .roundRect(
@@ -225,6 +232,30 @@ export class GhostLayer {
       .stroke({ width: STROKE.width * 1.5, color, alignment: 1 });
 
     this.drawReach();
+  }
+
+  /**
+   * Les cases bonnes de l'assise d'une foreuse : le filon à la teinte de son
+   * minerai, l'herbe en menthe. Les fautives sont celles du refus, que
+   * `update` peint en corail par-dessus.
+   */
+  private drawFooting(footing: Footing | null): void {
+    for (const tile of footing?.tiles ?? []) {
+      if (tile.state === 'wrong') continue;
+
+      const tone = tile.state === 'ore' && footing?.ore ? PALETTE[ITEM_TONES[footing.ore]] : PALETTE.mint;
+
+      this.cells
+        .roundRect(
+          tile.tx * TILE_SIZE + CELL_INSET,
+          tile.ty * TILE_SIZE + CELL_INSET,
+          TILE_SIZE - CELL_INSET * 2,
+          TILE_SIZE - CELL_INSET * 2,
+          RADIUS.block,
+        )
+        .fill({ color: hex(tone.base), alpha: 0.45 })
+        .stroke({ width: STROKE.width, color: VALID, alignment: 1 });
+    }
   }
 
   /**

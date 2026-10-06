@@ -12,9 +12,13 @@ import type { Entity, EntityId } from './types.ts';
 import { HARVEST_MAX_NODES, HARVEST_PASS_TICKS, TICKS_PER_SECOND, World, siteMissing } from './world.ts';
 
 const DRILL = BUILDINGS.drill;
+const NURSERY = BUILDINGS.nursery;
 const CYCLE = RECIPES.mineOre.duration;
 
-/** Tuile à portée du joueur portant un gisement et posable, ou `null`. */
+/**
+ * Coin à portée du joueur où une foreuse se pose — moitié filon, moitié
+ * herbe —, ou `null`. Adam y a cassé les rochers du filon.
+ */
 function drillSpot(world: World): { tx: number; ty: number } | null {
   const origin = worldToTile(world.player.x, world.player.y);
 
@@ -22,8 +26,11 @@ function drillSpot(world: World): { tx: number; ty: number } | null {
     for (let dx = -BUILD_REACH_TILES; dx <= BUILD_REACH_TILES; dx += 1) {
       const tx = origin.tx + dx;
       const ty = origin.ty + dy;
+      const footing = world.footing('drill', tx, ty);
 
-      if (!oreAt(world.seed, tx, ty)) continue;
+      if (!footing?.valid) continue;
+      if (footing.tiles.some((tile) => tile.state === 'grass' && world.resources.isTaken(tile.tx, tile.ty))) continue;
+      for (const tile of footing.tiles) if (tile.state === 'ore') world.resources.clear(tile.tx, tile.ty);
       if (world.canPlace('drill', tx, ty) !== null) continue;
 
       return { tx, ty };
@@ -281,22 +288,22 @@ describe('World', () => {
     expect(rejections.length).toBe(2);
 
     // Sous les pieds d'Adam : il resterait emmuré.
-    expect(world.canPlace('drill', origin.tx, origin.ty)).toBe('onPlayer');
+    expect(world.canPlace('nursery', origin.tx, origin.ty)).toBe('onPlayer');
   });
 
   it('refuse de construire sur un arbre ou un rocher encore debout', () => {
     const { world, tx, ty } = worldWithHarvestable();
 
-    expect(world.canPlace('drill', tx, ty)).toBe('resource');
+    expect(world.canPlace('nursery', tx, ty)).toBe('resource');
   });
 
   it('désigne les cases qui bloquent, pas toute l’emprise', () => {
     const { world, tx, ty } = worldWithHarvestable();
-    const block = world.placementBlock('drill', tx, ty);
+    const block = world.placementBlock('nursery', tx, ty);
     const solid: { tx: number; ty: number }[] = [];
 
-    for (let y = ty; y < ty + DRILL.height; y += 1) {
-      for (let x = tx; x < tx + DRILL.width; x += 1) {
+    for (let y = ty; y < ty + NURSERY.height; y += 1) {
+      for (let x = tx; x < tx + NURSERY.width; x += 1) {
         if (world.resources.isSolid(x, y)) solid.push({ tx: x, ty: y });
       }
     }
@@ -309,11 +316,11 @@ describe('World', () => {
   it('sous Adam : seules les cases qu’il touche', () => {
     const { world } = worldWithOre();
     const origin = worldToTile(world.player.x, world.player.y);
-    const block = world.placementBlock('drill', origin.tx, origin.ty);
+    const block = world.placementBlock('nursery', origin.tx, origin.ty);
 
     expect(block?.reason).toBe('onPlayer');
     expect(block?.tiles).toContainEqual(origin);
-    expect(block!.tiles.length).toBeLessThan(DRILL.width * DRILL.height);
+    expect(block!.tiles.length).toBeLessThan(NURSERY.width * NURSERY.height);
   });
 
   it('trop loin : toute l’emprise est fautive', () => {
@@ -673,6 +680,8 @@ describe('World', () => {
     const log = world.commandLog().map((entry) => ({ ...entry }));
     const replay = new World(world.seed);
 
+    // Les rochers du filon, cassés pour la foreuse hors journal : la même main les casse ici.
+    drillSpot(replay);
     for (let tick = 1; tick <= world.tickCount; tick += 1) {
       for (const entry of log) {
         if (entry.tick === tick) replay.push(entry.command);
@@ -687,7 +696,7 @@ describe('World', () => {
     expect(replay.entities.size).toBe(world.entities.size);
   });
 
-  it('refuse une foreuse hors gisement, et la pose sur un filon', () => {
+  it('refuse une foreuse sur l’herbe seule : la moitié des cases sont fautives', () => {
     for (let seed = 1; seed < 200; seed += 1) {
       const world = new World(seed);
       const origin = worldToTile(world.player.x, world.player.y);
@@ -698,32 +707,33 @@ describe('World', () => {
           const ty = origin.ty + dy;
           const dry = world.placementBlock('drill', tx, ty);
 
-          if (dry?.reason !== 'noOre') continue;
+          if (dry?.reason !== 'footing' || world.oreUnder('drill', tx, ty) !== null) continue;
+          if (world.footing('drill', tx, ty)!.tiles.some((tile) => tile.state !== 'grass' && tile.state !== 'wrong')) continue;
+          if (dry.tiles.length !== DRILL.width * DRILL.height / 2) continue;
 
-          // Toute l'emprise est fautive, et le tick refuse comme l'aperçu.
-          expect(dry.tiles).toHaveLength(DRILL.width * DRILL.height);
-          expect(world.oreUnder('drill', tx, ty)).toBeNull();
+          // L'herbe en trop est fautive, et le tick refuse comme l'aperçu, en disant le filon couvert : aucun.
+          expect(dry.ore).toBeNull();
 
-          const rejections: PlacementRejection[] = [];
+          const rejections: { reason: PlacementRejection; ore: ItemId | null }[] = [];
 
-          world.events.on('placementRejected', ({ reason }) => rejections.push(reason));
+          world.events.on('placementRejected', (event) => rejections.push(event));
           world.push({ type: 'placeBuilding', building: 'drill', tx, ty });
           world.tick();
 
-          expect(rejections).toEqual(['noOre']);
+          expect(rejections).toEqual([{ reason: 'footing', ore: null }]);
           expect([...world.entities.values()].some((entity) => entity.proto === 'drill')).toBe(false);
           return;
         }
       }
     }
-    throw new Error('aucun emplacement sans gisement trouvé');
+    throw new Error('aucune herbe nue près du départ');
   });
 
   it('une foreuse sur un filon : aucun refus, et elle dit ce qu’elle extraira', () => {
     const { world, spot } = worldWithOre();
 
     expect(world.placementBlock('drill', spot.tx, spot.ty)).toBeNull();
-    expect(world.oreUnder('drill', spot.tx, spot.ty)).toBe(oreAt(world.seed, spot.tx, spot.ty)?.item);
+    expect(world.oreUnder('drill', spot.tx, spot.ty)).toBe(world.footing('drill', spot.tx, spot.ty)?.ore);
   });
 
   it('un rocher sur le filon : il faut d’abord le casser', () => {
@@ -1238,6 +1248,8 @@ describe('forge', () => {
     const world = new World(7);
 
     world.researchDone.push('metalworking');
+    // Rien à récolter en passant : la pierre du sac reste celle qu'on y met.
+    clearAround(world, worldToTile(world.player.x, world.player.y));
 
     const forge = buildNear(world, 'forge');
     const produced: ItemId[] = [];

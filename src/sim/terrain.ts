@@ -112,12 +112,26 @@ export function oreAt(seed: number, tx: number, ty: number): OreNode | null {
   if (terrainAt(seed, tx, ty) === 'water') return null;
 
   for (const node of homeOf(seed).ores) {
-    if (inDisc(tx, ty, node.tx, node.ty, node.radius)) return node;
+    if (inOre(tx, ty, node)) return node;
   }
 
   const node = nodeOfCell(seed, Math.floor(tx / ORE_CELL), Math.floor(ty / ORE_CELL));
 
-  return node && inDisc(tx, ty, node.tx, node.ty, node.radius) ? node : null;
+  return node && inOre(tx, ty, node) ? node : null;
+}
+
+/**
+ * La tuile est-elle sur ce filon ? Un disque arrondi (`r² + r`), pas un
+ * disque strict : chacun de ses quatre côtés a un bord droit d'au moins deux
+ * tuiles, où une foreuse se pose à cheval, deux cases sur le filon et deux
+ * sur l'herbe (`sim/footing.ts`). Le disque strict de rayon 2 n'en avait
+ * aucun. Il ne déborde jamais du carré de côté `2r + 1`.
+ */
+function inOre(tx: number, ty: number, node: OreNode): boolean {
+  const dx = tx - node.tx;
+  const dy = ty - node.ty;
+
+  return dx * dx + dy * dy <= node.radius * node.radius + node.radius;
 }
 
 function inDisc(tx: number, ty: number, cx: number, cy: number, radius: number): boolean {
@@ -143,6 +157,11 @@ function inDisc(tx: number, ty: number, cx: number, cy: number, radius: number):
  */
 export function findSpawn(seed: number): [number, number] {
   return homeOf(seed).spawn;
+}
+
+/** Les filons du foyer — la pierre, puis le fer — que la seed pose à portée de pas du départ. */
+export function homeOres(seed: number): readonly OreNode[] {
+  return homeOf(seed).ores;
 }
 
 /** La mairie, premier chantier : c'est elle que la clairière du départ doit accueillir. */
@@ -244,8 +263,17 @@ function planHome(seed: number, sx: number, sy: number, force = false): Home | n
     return true;
   };
 
-  /** Une tuile atteignable dans l'anneau, tirée de la seed parmi celles qui passent le filtre. */
-  const pick = (salt: number, ring: { min: number; max: number }, accept: (tx: number, ty: number) => boolean) => {
+  /**
+   * Une tuile atteignable dans l'anneau, tirée de la seed parmi celles qui
+   * passent le filtre. `edge`, coûteux, n'est jugé qu'à partir du tirage, en
+   * avançant dans la liste : la première qui le passe.
+   */
+  const pick = (
+    salt: number,
+    ring: { min: number; max: number },
+    accept: (tx: number, ty: number) => boolean,
+    edge: (tx: number, ty: number) => boolean = () => true,
+  ): [number, number] | null => {
     const candidates: [number, number][] = [];
 
     for (const key of reachable) {
@@ -256,22 +284,46 @@ function planHome(seed: number, sx: number, sy: number, force = false): Home | n
       if (distSq < ring.min * ring.min || distSq > ring.max * ring.max) continue;
       if (accept(tx, ty)) candidates.push([tx, ty]);
     }
-    return candidates.length > 0 ? candidates[hash3(seed ^ salt, sx, sy) % candidates.length]! : null;
+
+    const start = candidates.length > 0 ? hash3(seed ^ salt, sx, sy) % candidates.length : 0;
+
+    for (let i = 0; i < candidates.length; i += 1) {
+      const candidate = candidates[(start + i) % candidates.length]!;
+
+      if (edge(...candidate)) return candidate;
+    }
+    return null;
   };
 
+  // Le foyer d'office, sans bord nulle part : au plus dégagé, comme avant la règle des foreuses.
+  const fallback = (
+    salt: number,
+    ring: { min: number; max: number; radius: number },
+    accept: (tx: number, ty: number) => boolean,
+    last: [number, number],
+  ): [number, number] =>
+    pick(salt, ring, (tx, ty) => clear(tx, ty, ring.radius) && accept(tx, ty)) ??
+    pick(salt, ring, (tx, ty) => clear(tx, ty, 0) && accept(tx, ty)) ??
+    last;
+
+  // Chaque filon du foyer a son bord où poser une foreuse : deux cases de filon, deux d'herbe.
+  const edged = (item: ItemId, ring: { radius: number }, others: readonly OreNode[]) => (tx: number, ty: number) =>
+    hasDrillEdge(seed, homeNode(seed, item, [tx, ty], ring.radius), others);
+  const stoneEdge = edged('stone', HOME_STONE, []);
   const stoneAt =
-    pick(0x68e31da4, HOME_STONE, (tx, ty) => clear(tx, ty, HOME_STONE.radius)) ??
-    pick(0x68e31da4, HOME_STONE, (tx, ty) => clear(tx, ty, 0)) ??
-    (force ? [ax, ay + HOME_STONE.min] : null);
+    pick(0x68e31da4, HOME_STONE, (tx, ty) => clear(tx, ty, HOME_STONE.radius), stoneEdge) ??
+    pick(0x68e31da4, HOME_STONE, (tx, ty) => clear(tx, ty, 0), stoneEdge) ??
+    (force ? fallback(0x68e31da4, HOME_STONE, () => true, [ax, ay + HOME_STONE.min]) : null);
 
   if (!stoneAt) return null;
 
   const stone = homeNode(seed, 'stone', stoneAt, HOME_STONE.radius);
   const apart = (tx: number, ty: number): boolean => !inDisc(tx, ty, stone.tx, stone.ty, 2 * HOME_IRON.radius + 1);
+  const ironEdge = edged('ironOre', HOME_IRON, [stone]);
   const ironAt =
-    pick(0xb5297a4d, HOME_IRON, (tx, ty) => clear(tx, ty, HOME_IRON.radius) && apart(tx, ty)) ??
-    pick(0xb5297a4d, HOME_IRON, (tx, ty) => clear(tx, ty, 0) && apart(tx, ty)) ??
-    (force ? [ax, ay - HOME_IRON.min] : null);
+    pick(0xb5297a4d, HOME_IRON, (tx, ty) => clear(tx, ty, HOME_IRON.radius) && apart(tx, ty), ironEdge) ??
+    pick(0xb5297a4d, HOME_IRON, (tx, ty) => clear(tx, ty, 0) && apart(tx, ty), ironEdge) ??
+    (force ? fallback(0xb5297a4d, HOME_IRON, apart, [ax, ay - HOME_IRON.min]) : null);
 
   if (!ironAt) return null;
 
@@ -280,8 +332,8 @@ function planHome(seed: number, sx: number, sy: number, force = false): Home | n
   // Le cœur du bosquet porte toujours un arbre : ni filon ni clairière dessous.
   const bare = (tx: number, ty: number): boolean =>
     clear(tx, ty, 0) &&
-    !inDisc(tx, ty, stone.tx, stone.ty, stone.radius) &&
-    !inDisc(tx, ty, iron.tx, iron.ty, iron.radius) &&
+    !inOre(tx, ty, stone) &&
+    !inOre(tx, ty, iron) &&
     nodeAt(seed, tx, ty) === null;
   const groveAt =
     pick(0x1656567b, HOME_GROVE, (tx, ty) => bare(tx, ty) && terrainAt(seed, tx, ty) === 'grass') ??
@@ -292,6 +344,56 @@ function planHome(seed: number, sx: number, sy: number, force = false): Home | n
   if (!force && !hasWayOut(seed, sx, sy, [stone, iron])) return null;
 
   return { spawn: [sx, sy], ores: [stone, iron], grove: { tx: groveAt[0], ty: groveAt[1] } };
+}
+
+/**
+ * Le filon a-t-il un bord où poser une foreuse : une emprise de foreuse avec
+ * moitié de ses cases sur lui, l'autre moitié sur une herbe sans filon —
+ * ni les siens (`others`, le foyer en projet), ni ceux des cellules ? La
+ * règle de `sim/footing.ts`, rejouée avant que `oreAt` ne soit prêt.
+ */
+function hasDrillEdge(seed: number, node: OreNode, others: readonly OreNode[]): boolean {
+  const { width, height } = BUILDINGS.drill;
+  const half = Math.floor((width * height) / 2);
+  // Les emprises qui touchent le filon : leur coin va de `node - r - (w - 1)` à `node + r`.
+  const left = node.tx - node.radius - (width - 1);
+  const top = node.ty - node.radius - (height - 1);
+  const cols = 2 * node.radius + width;
+  const rows = 2 * node.radius + height;
+  // Chaque tuile classée une fois : 1 sur le filon, 2 herbe nue, 0 autre chose.
+  const kinds = new Uint8Array(cols * rows);
+
+  for (let y = 0; y < rows; y += 1) {
+    for (let x = 0; x < cols; x += 1) {
+      const tx = left + x;
+      const ty = top + y;
+      const terrain = terrainAt(seed, tx, ty);
+
+      if (terrain === 'water') continue;
+      if (inOre(tx, ty, node)) kinds[x + y * cols] = 1;
+      else if (terrain === 'grass' && !others.some((other) => inOre(tx, ty, other)) && nodeAt(seed, tx, ty) === null) {
+        kinds[x + y * cols] = 2;
+      }
+    }
+  }
+
+  for (let y = 0; y + height <= rows; y += 1) {
+    for (let x = 0; x + width <= cols; x += 1) {
+      let ore = 0;
+      let grass = 0;
+
+      for (let dy = 0; dy < height; dy += 1) {
+        for (let dx = 0; dx < width; dx += 1) {
+          const kind = kinds[x + dx + (y + dy) * cols];
+
+          if (kind === 1) ore += 1;
+          else if (kind === 2) grass += 1;
+        }
+      }
+      if (ore === half && grass === width * height - half) return true;
+    }
+  }
+  return false;
 }
 
 function homeNode(seed: number, item: ItemId, [tx, ty]: [number, number], radius: number): OreNode {
@@ -310,7 +412,7 @@ function hasWayOut(seed: number, sx: number, sy: number, ores: readonly OreNode[
     if (inClearing(sx, sy, tx, ty)) return tx >= sx - 1 && tx <= sx + 1 && ty < sy;
     if (!isWalkable(terrainAt(seed, tx, ty))) return true;
 
-    const ore = ores.find((node) => inDisc(tx, ty, node.tx, node.ty, node.radius)) ?? nodeAt(seed, tx, ty);
+    const ore = ores.find((node) => inOre(tx, ty, node)) ?? nodeAt(seed, tx, ty);
     const rock = ore ? rockOn(seed, ore, tx, ty) : null;
 
     return rock !== null && RESOURCES[rock].hitbox === 'tile';
@@ -341,7 +443,7 @@ function hasWayOut(seed: number, sx: number, sy: number, ores: readonly OreNode[
 function nodeAt(seed: number, tx: number, ty: number): OreNode | null {
   const node = nodeOfCell(seed, Math.floor(tx / ORE_CELL), Math.floor(ty / ORE_CELL));
 
-  return node && inDisc(tx, ty, node.tx, node.ty, node.radius) ? node : null;
+  return node && inOre(tx, ty, node) ? node : null;
 }
 
 /**

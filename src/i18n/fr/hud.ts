@@ -30,7 +30,6 @@ export const hud = {
     outOfReach: 'Trop loin — rapprochez-vous',
     resource: 'Dégagez d’abord les arbres et rochers',
     onPlayer: 'Vous êtes sur l’emplacement',
-    noOre: 'Aucun filon ici — une foreuse se pose sur un filon',
     locked: 'Pas encore débloqué — il faut son plan, ou tenir encore une nuit',
     unique: 'Un seul par colonie — il y en a déjà un',
     nearHall: `Trop près de la mairie — l’antenne se dresse à ${BUILDINGS.antenna.hallDistance} cases au moins`,
