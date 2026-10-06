@@ -42,8 +42,6 @@
   --cyan-light: #b8f1ff;
   --toxic: #7df25f;
   --grass: #93e8ae;
-  /* `PALETTE.paper.cream` : le fond des cartes du HUD de jeu. */
-  --cream: #fff6e0;
 
   /* Rôles. */
   --fg: var(--ink);
@@ -55,14 +53,6 @@
   /* La face avant d'une carte : pleine, lavande, sous la carte — la vue 3/4. */
   --face: 0 5px 0 var(--paper-shade);
   --face-pressed: 0 2px 0 var(--paper-shade);
-  /*
-   * Le HUD de jeu (barre du haut, puces, sac, « Construire », mode
-   * construction) : fond crème, contour marine épais, ombre portée plate et
-   * pleine, marine elle aussi — il se détache de la prairie sans voile.
-   */
-  --hud-line: 3px solid var(--ink);
-  --hud-drop: 0 4px 0 var(--ink);
-  --hud-drop-pressed: 0 1px 0 var(--ink);
   /* Voile des écrans plein cadre : l'indigo de la palette, pas du noir. */
   --veil: rgb(43 45 143 / 0.55);
 
@@ -217,81 +207,40 @@ button {
 /* ------------------------------------------------------------------ quête */
 
 /*
- * Le haut de l'écran, en colonne : la barre (Prestige, ville) et ses deux
- * boutons ronds, les puces de la population dessous, puis la quête. Quand
- * son conseil s'ouvre ou se replie, seule la quête grandit : rien au-dessus
- * ne bouge.
+ * Le haut de l'écran : une seule bande, en flux. La quête au centre (elle
+ * prend toute la place qui reste sur un téléphone), les boutons et le sac
+ * dans une colonne à droite. Sous la quête, seule la capsule météo : quand
+ * son conseil s'ouvre ou se replie, aucun bouton ne bouge.
  */
 .hud-top {
   position: absolute;
   top: calc(var(--safe-top) + 10px);
   left: calc(var(--safe-left) + 10px);
   right: calc(var(--safe-right) + 10px);
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: 1fr minmax(0, 380px) 1fr;
+  /* La colonne de droite couvre les deux rangées : la capsule météo, sous la
+   * quête, ne descend pas sous le sac. */
+  grid-template-rows: auto 1fr;
+  align-items: start;
   pointer-events: none;
 }
 
 .hud-quest {
-  width: min(380px, 100%);
+  grid-column: 2;
   min-width: 0;
   padding: 8px 14px 12px;
 }
 
-/* La quête porte le style du HUD : crème, contour marine, ombre plate. */
-.hud-top .panel,
-.hud .hud-bag {
-  background: var(--cream);
-  border: var(--hud-line);
-  box-shadow: var(--hud-drop);
-}
-
-/* Mode construction : l'étiquette tient le haut (`buildMenu.ts`), le HUD du haut s'efface derrière elle. */
-.hud:has(.build-mode:not([hidden])) .hud-top,
-.hud:has(.build-mode:not([hidden])) .hud-top *,
-.hud:has(.build-mode:not([hidden])) .hud-bag {
-  visibility: hidden;
-}
-
-/*
- * La barre du haut : une seule ligne, haute de 44 px. Le Prestige, un
- * séparateur, puis la ville ; ce qui ne tient pas défile de côté. Les deux
- * boutons ronds à sa droite.
- */
-.hud-topbar-row {
+.hud-side {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  justify-self: end;
+  margin-left: 10px;
   display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-}
-
-.hud .hud-topbar {
-  flex: 0 1 auto;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 44px;
-  padding: 0 12px 0 10px;
-  border-radius: 999px;
-  margin-right: auto;
-  font-variant-numeric: tabular-nums;
-  pointer-events: auto;
-}
-
-.hud-topbar-sep {
-  flex: none;
-  width: 3px;
-  height: 22px;
-  border-radius: 999px;
-  background: var(--paper-shade);
-}
-
-/* Sans Prestige, ni médaille ni séparateur. */
-.hud-prestige[hidden] + .hud-topbar-sep {
-  display: none;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
 }
 
 /* Le titre, et l'ampoule du conseil replié dans le coin : une ligne de hauteur fixe. */
@@ -828,30 +777,26 @@ button {
   gap: 8px;
 }
 
-/* Les boutons ronds de la maquette : un disque crème cerclé de marine, sur son ombre plate. */
+/* Les boutons ronds de la maquette : un disque blanc sur sa face lavande. */
 .hud-button {
   display: grid;
   place-items: center;
   width: 48px;
   height: 48px;
-  border: var(--hud-line);
+  border: none;
   border-radius: 50%;
-  background: var(--cream);
-  box-shadow: var(--hud-drop);
+  background: var(--paper);
+  box-shadow: var(--face);
 }
 
 .hud-button:active {
   transform: translateY(3px);
-  box-shadow: var(--hud-drop-pressed);
-}
-
-.hud-buttons {
-  flex: none;
+  box-shadow: var(--face-pressed);
 }
 
 /*
  * Le zoom : trois petits disques empilés sur le bord droit, à mi-hauteur —
- * entre les puces du haut et le bouton « Construire », loin du joystick.
+ * entre la colonne du sac et le bouton « Bâtir », loin du joystick.
  */
 .hud-zoom {
   position: absolute;
@@ -973,18 +918,31 @@ button {
 /* ------------------------------------------------------------ ville et sac */
 
 /*
- * La ville, dans la barre du haut : son pictogramme, puis ses objets côte à
- * côte (icône et nombre), sans jamais revenir à la ligne ; ce qui ne tient
- * pas défile de côté (la molette aussi), le bord droit estompé tant qu'il
- * en reste de cachés.
+ * Deux cartes compactes l'une sur l'autre : la ville (stock commun, titre
+ * jaune de la colonie) et le sac (titre violet, comme le sac à dos d'Adam,
+ * avec sa jauge). Les objets tiennent en pastilles sur deux colonnes : le
+ * détail est dans le panneau inventaire.
  */
-.hud .hud-town {
-  flex: 1 1 auto;
-  min-width: 0;
+.hud-stock {
+  width: 124px;
   display: flex;
-  align-items: center;
-  gap: 8px;
-  pointer-events: auto;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Le sac est un bouton : il garde l'allure d'une carte, et s'enfonce sur sa face au toucher. */
+button.hud-stock {
+  border: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+
+button.hud-stock:active {
+  transform: translateY(3px);
+  box-shadow: 0 2px 0 var(--paper-shade);
 }
 
 .hud-bag-title {
@@ -999,13 +957,7 @@ button {
 }
 
 .hud-town .hud-bag-title {
-  flex: none;
   color: var(--yellow-shade);
-}
-
-/* Le mot « Ville » se lit au survol et à l'appui long : la barre garde la place pour les objets. */
-.hud-town .hud-stock-name {
-  display: none;
 }
 
 .hud-stock-name {
@@ -1013,90 +965,10 @@ button {
 }
 
 .hud-town-state {
-  font-size: 13px;
+  font-size: 11px;
   letter-spacing: 0.02em;
   text-transform: none;
   color: var(--muted);
-}
-
-.hud-town .hud-stock-items {
-  display: flex;
-  min-width: 0;
-  gap: 12px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  white-space: nowrap;
-  font-size: 15px;
-}
-
-.hud-town .hud-stock-items::-webkit-scrollbar {
-  display: none;
-}
-
-.hud-town .hud-stock-items[data-more='true'] {
-  mask-image: linear-gradient(90deg, black calc(100% - 28px), transparent);
-}
-
-.hud-town .item-amount {
-  flex: none;
-  gap: 3px;
-}
-
-.hud-stock-items .icon {
-  width: 18px;
-  height: 18px;
-}
-
-.hud-town[data-empty='true'] .hud-stock-items {
-  display: none;
-}
-
-/*
- * Le sac, en bas à gauche, à portée de pouce : « Sac », le compte, la jauge
- * — et l'objet que le conseil réclame. Un tap ouvre le panneau, qui a le
- * détail ; sur un grand écran, ses objets s'alignent dessous.
- */
-.hud .hud-bag {
-  position: absolute;
-  left: calc(var(--safe-left) + 10px);
-  bottom: calc(var(--safe-bottom) + 14px);
-  width: min(170px, calc(50% - 20px));
-  min-height: 60px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 6px;
-  padding: 6px 12px 8px;
-  border-radius: 20px;
-  font: inherit;
-  color: inherit;
-  text-align: left;
-  font-variant-numeric: tabular-nums;
-}
-
-.hud .hud-bag:active {
-  transform: translateY(3px);
-  box-shadow: var(--hud-drop-pressed);
-}
-
-/* Un placement armé ou une fenêtre au bas de l'écran : le sac leur laisse la place. */
-.hud:has(.build-drawer:not([hidden])) .hud-bag,
-.hud:has(.build-armed:not([hidden])) .hud-bag {
-  visibility: hidden;
-}
-
-.hud-bag .hud-bag-title {
-  flex-wrap: wrap;
-  gap: 2px 6px;
-  font-size: 14px;
-  letter-spacing: 0.04em;
-}
-
-.hud-bag .hud-bag-count {
-  margin-left: auto;
-  font-size: 15px;
-  letter-spacing: 0;
-  color: var(--ink);
 }
 
 .hud-bag-title[data-full='true'] .hud-bag-count {
@@ -1104,9 +976,9 @@ button {
 }
 
 .hud-bag-fill {
-  height: 8px;
+  height: 6px;
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--violet) var(--fill, 0%), var(--paper-shade) var(--fill, 0%));
+  background: linear-gradient(90deg, var(--yellow-shade) var(--fill, 0%), var(--paper-shade) var(--fill, 0%));
 }
 
 .hud-bag-fill[data-full='true'] {
@@ -1114,48 +986,43 @@ button {
   animation: blink 0.8s steps(2) infinite;
 }
 
-.hud-bag .hud-stock-items {
-  display: none;
+.hud-stock-items {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 6px;
+  font-size: 15px;
 }
 
-/* L'objet que le conseil réclame : dans le titre du sac, à côté du compte. */
-.hud-bag-wanted {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  color: var(--ink);
-  letter-spacing: 0;
-}
-
-.hud-bag-wanted .icon {
+.hud-stock-items .icon {
   width: 18px;
   height: 18px;
 }
 
-@media (min-width: 1024px) and (min-height: 500px) {
-  .hud .hud-bag {
-    width: 220px;
-  }
-
-  .hud-bag:not([data-empty='true']) .hud-stock-items {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 4px 6px;
-    font-size: 15px;
-  }
+.hud-stock[data-empty='true'] .hud-stock-items {
+  display: none;
 }
 
 /*
- * Le Prestige de la colonie : sa médaille et son compte, au début de la
- * barre du haut. Le survol et l'appui long lisent son libellé.
+ * Le Prestige de la colonie : sa médaille et son compte, comme les compteurs
+ * de la population, dans la colonne de gauche, en haut. Le survol et l'appui
+ * long lisent son libellé.
  */
+.hud-corner {
+  display: contents;
+}
+
 .hud .hud-prestige {
-  flex: none;
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: start;
+  margin-right: 10px;
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  font-size: 16px;
-  font-weight: 700;
+  height: 32px;
+  padding: 0 10px 0 7px;
+  border-radius: 999px;
+  font-size: 15px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1164,85 +1031,196 @@ button {
 }
 
 .hud-prestige .icon {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
 }
 
 /*
- * Les puces sous la barre, à gauche : la population (au travail, inactifs,
- * enfants, logés / habitants, dehors, Bonheur), l'alerte de nourriture, la
- * météo. Une puce crème cerclée de marine, comme la barre ; en corail ce
- * qui va mal. Elles passent à la ligne plutôt que de se chevaucher.
+ * Sur un téléphone, la quête prend toute la largeur à gauche des boutons :
+ * le Prestige se range sous elle, au bord gauche, sur la ligne de la capsule
+ * météo, qui se centre dans ce qui reste.
  */
-.hud-chips {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 4px;
-  max-width: 100%;
+@media (max-width: 599px) {
+  .hud-corner {
+    grid-column: 2;
+    grid-row: 2;
+    min-width: 0;
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .hud .hud-prestige {
+    flex: none;
+    margin-right: 0;
+    height: 28px;
+    padding: 0 8px 0 6px;
+    font-size: 14px;
+  }
+
+  .hud-prestige .icon {
+    width: 15px;
+    height: 15px;
+  }
+
+  .hud-corner .hud-weather {
+    min-width: 0;
+    margin: 0 auto;
+  }
 }
 
+/*
+ * Sur un écran large, la ville quitte la colonne de droite pour la colonne
+ * de gauche, vide : un bandeau d'une ligne en haut à gauche, « Ville » puis
+ * ses objets côte à côte, de la hauteur du Prestige. Il s'arrête avant la
+ * quête ; ce qui ne tient pas défile de côté (la molette aussi), sans jamais
+ * revenir à la ligne.
+ */
+@media (min-width: 1024px) and (min-height: 500px) {
+  .hud .hud-town {
+    --town-left: 0px;
+
+    position: absolute;
+    top: 0;
+    left: var(--town-left);
+    width: auto;
+    max-width: calc((100% - 380px) / 2 - 10px - var(--town-left));
+    height: 32px;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    padding: 0 14px;
+    pointer-events: auto;
+  }
+
+  /* Le Prestige tient le coin : le bandeau se range à sa droite, sur sa ligne. */
+  .hud-top:has(.hud-prestige:not([hidden])) .hud-town {
+    --town-left: calc(var(--prestige-width, 0px) + 10px);
+  }
+
+  .hud-town .hud-bag-title {
+    flex: none;
+  }
+
+  .hud-town .hud-stock-items {
+    display: flex;
+    min-width: 0;
+    gap: 12px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    white-space: nowrap;
+  }
+
+  .hud-town .hud-stock-items::-webkit-scrollbar {
+    display: none;
+  }
+
+  .hud-town .hud-stock-items[data-more='true'] {
+    mask-image: linear-gradient(90deg, black calc(100% - 28px), transparent);
+  }
+
+  .hud-town .item-amount {
+    flex: none;
+  }
+}
+
+/*
+ * La population de la ville : au travail, inactifs, enfants. Seul le compteur
+ * d'inactifs se tape ; il passe en corail dès qu'un ouvrier glande.
+ */
 .hud .hud-people {
   pointer-events: none;
-  display: contents;
+  width: 124px;
+  display: flex;
+  justify-content: space-between;
+  gap: 2px;
+  padding: 6px 8px;
+  font-variant-numeric: tabular-nums;
 }
 
 .hud-people[hidden] {
   display: none;
 }
 
-.hud .hud-chip {
+.hud-people-count {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  height: 28px;
-  padding: 0 8px 0 5px;
-  border: 2.5px solid var(--ink);
-  border-radius: 999px;
-  background: var(--cream);
-  box-shadow: 0 3px 0 var(--ink);
-  font: inherit;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--ink);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+  gap: 1px;
+  font-size: 15px;
 }
 
-.hud-chip .icon {
-  width: 16px;
-  height: 16px;
+.hud-people-count .icon {
+  width: 18px;
+  height: 18px;
 }
 
 .hud .hud-people-idle {
   position: relative;
   pointer-events: auto;
+  padding: 1px 5px 1px 2px;
+  border: none;
+  border-radius: 999px;
+  background: var(--paper-shade);
+  box-shadow: 0 2px 0 var(--violet-light);
+  font: inherit;
+  font-size: 15px;
+  color: inherit;
   cursor: pointer;
 }
 
-/* La puce est petite, le doigt ne l'est pas : la zone de tap déborde jusqu'à 44 px. */
+/* La capsule est petite, le doigt ne l'est pas : la zone de tap déborde. */
 .hud-people-idle::after {
   content: '';
   position: absolute;
-  inset: -9px -4px;
+  inset: -8px -4px;
 }
 
-.hud .hud-people-idle[data-alert='true'],
-.hud .hud-people-outside,
-.hud .hud-people-happiness[data-alert='true'] {
+.hud .hud-people-idle[data-alert='true'] {
   background: var(--coral);
+  box-shadow: 0 2px 0 var(--coral-shade);
   color: var(--paper);
+  font-weight: 700;
 }
 
 .hud-people-idle:active {
   transform: translateY(2px);
-  box-shadow: 0 1px 0 var(--ink);
+  box-shadow: none;
+}
+
+/*
+ * L'Habitation, logés / habitants, et le Bonheur de la ville, sur leur
+ * propre ligne sous les trois compteurs : chacun en corail quand ça va mal
+ * — quelqu'un dort dehors, l'habitant moyen est malheureux. Ils prennent
+ * le survol et l'appui long, pour leur libellé.
+ */
+.hud .hud-people {
+  flex-wrap: wrap;
+}
+
+.hud-people-town {
+  display: flex;
+  flex-basis: 100%;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 2px;
 }
 
 .hud .hud-people-housing,
-.hud .hud-people-outside,
 .hud .hud-people-happiness {
   pointer-events: auto;
+  justify-content: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--paper-shade);
+}
+
+.hud .hud-people-housing[data-alert='true'],
+.hud .hud-people-happiness[data-alert='true'] {
+  background: var(--coral);
+  color: var(--paper);
+  font-weight: 700;
 }
 
 /* L'aube a fait bouger le Bonheur : la puce flashe, la flèche dit de quel côté. */
@@ -1302,22 +1280,26 @@ button {
 }
 
 /*
- * L'alerte de nourriture, dans les puces de la population : une puce
- * corail — ce qui va manquer et le temps qu'il reste. Un tap montre qui a faim.
+ * L'alerte de nourriture, sous la population : une capsule corail — ce qui
+ * va manquer et le temps qu'il reste. Un tap montre qui a faim.
  */
 .hud .hud-hunger {
   pointer-events: auto;
-  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 124px;
+  padding: 4px 8px;
+  border: none;
   background: var(--coral);
+  box-shadow: 0 3px 0 var(--coral-shade);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
   color: var(--paper);
   cursor: pointer;
   animation: hunger-pulse 1.6s ease-in-out infinite;
-}
-
-.hud-hunger::after {
-  content: '';
-  position: absolute;
-  inset: -9px -4px;
 }
 
 .hud-hunger[hidden] {
@@ -1331,7 +1313,7 @@ button {
 
 .hud-hunger:active {
   transform: translateY(2px);
-  box-shadow: 0 1px 0 var(--ink);
+  box-shadow: none;
 }
 
 @keyframes hunger-pulse {
@@ -1384,6 +1366,85 @@ button {
 @keyframes tip-in {
   from {
     opacity: 0;
+  }
+}
+
+/* Le résumé de la pastille (ville, objet réclamé) ne sert que sur un téléphone. */
+.hud-bag-town,
+.hud-bag-wanted {
+  display: none;
+}
+
+/*
+ * Sur un téléphone, on joue à la vue : la ville et le sac n'y font plus
+ * qu'une pastille, de la largeur des boutons. Le compte et la jauge du sac,
+ * ce que compte la ville, et l'objet que le conseil réclame ; un tap ouvre
+ * le panneau, qui a tout le détail.
+ */
+@media (max-width: 599px), (max-height: 499px) {
+  .hud-town {
+    display: none;
+  }
+
+  .hud .hud-people {
+    width: 104px;
+    padding: 4px 6px;
+    border-radius: 18px;
+  }
+
+  .hud .hud-hunger {
+    width: 104px;
+    padding: 3px 6px;
+    font-size: 14px;
+  }
+
+  .hud-people-count,
+  .hud .hud-people-idle {
+    font-size: 14px;
+  }
+
+  .hud-people-count .icon {
+    width: 15px;
+    height: 15px;
+  }
+
+  .hud-bag {
+    width: 104px;
+    gap: 4px;
+    padding: 6px 10px 8px;
+    border-radius: 18px;
+  }
+
+  .hud-bag .hud-bag-title {
+    flex-wrap: wrap;
+    gap: 2px 6px;
+    font-size: 15px;
+    letter-spacing: 0;
+  }
+
+  .hud-bag .hud-stock-name,
+  .hud-bag .hud-stock-items {
+    display: none;
+  }
+
+  .hud-bag-town,
+  .hud-bag-wanted {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+
+  .hud-bag-town {
+    color: var(--yellow-shade);
+  }
+
+  .hud-bag-wanted {
+    color: var(--ink);
+  }
+
+  .hud-bag-wanted .icon {
+    width: 18px;
+    height: 18px;
   }
 }
 
@@ -1577,11 +1638,23 @@ button {
 
 /* ----------------------------------------------------------------- météo */
 
-/* Une puce après celles de la population : ce qui arrive, puis ce qui tombe. */
-.hud .hud-weather {
-  gap: 7px;
-  padding: 0 12px 0 9px;
+/* Une capsule sous la quête : ce qui arrive, puis ce qui tombe. */
+/* Sous la quête, dans sa colonne : la colonne des boutons reste en place. */
+.hud-weather {
+  grid-column: 2;
+  grid-row: 2;
+  justify-self: center;
+  margin-top: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 14px 5px 10px;
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow: var(--face);
+  font-size: 15px;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
   animation: toast-in 280ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
 }
 
@@ -1626,7 +1699,7 @@ button {
 .hud {
   /*
    * Le bas de la zone du joystick. `--stick-lift` (`JoystickView.avoid`) : la
-   * hauteur d'une barre du bas qu'il croiserait — le bouton « Construire » d'un
+   * hauteur d'une barre du bas qu'il croiserait — le bouton « Bâtir » d'un
    * écran étroit, la barre du placement —, posé sur le HUD pour que les
    * bulles le lisent aussi.
    */
@@ -2204,70 +2277,12 @@ button {
   display: none;
 }
 
-/*
- * « Construire » : le gros bouton corail du bas, à portée de pouce, au style
- * du HUD — contour marine, ombre plate. 56 px minimum : sous cette taille,
- * une cible tactile se rate au pouce.
- */
+/* 56 px minimum : sous cette taille, une cible tactile se rate au pouce. */
 .build-toggle {
   min-width: 164px;
   min-height: 60px;
   padding: 0 22px 0 16px;
   font-size: 21px;
-  border: var(--hud-line);
-}
-
-.build-menu .build-toggle {
-  box-shadow: var(--hud-drop);
-}
-
-.build-menu .build-toggle:active {
-  box-shadow: var(--hud-drop-pressed);
-}
-
-/*
- * Mode construction (piste C) : une étiquette en haut à gauche, et à droite
- * un « × » rond qui en sort. Le HUD du haut s'efface derrière eux.
- */
-.build-mode {
-  position: fixed;
-  top: calc(var(--safe-top) + 10px);
-  left: calc(var(--safe-left) + 10px);
-  right: calc(var(--safe-right) + 10px);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  pointer-events: none;
-}
-
-.build-mode-label {
-  display: inline-flex;
-  align-items: center;
-  height: 36px;
-  padding: 0 16px;
-  border: var(--hud-line);
-  border-radius: 999px;
-  background: var(--cream);
-  box-shadow: var(--hud-drop);
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--ink);
-}
-
-.build-menu .build-mode-close {
-  display: grid;
-  place-items: center;
-  width: 48px;
-  height: 48px;
-  border: var(--hud-line);
-  border-radius: 50%;
-  background: var(--cream);
-  box-shadow: var(--hud-drop);
-}
-
-.build-mode-close:active {
-  transform: translateY(3px);
-  box-shadow: var(--hud-drop-pressed);
 }
 
 /*
@@ -2614,7 +2629,7 @@ button {
   display: none;
 }
 
-/* Le bouton « Construire » porte une pastille tant qu'une carte est nouvelle : on sait qu'il faut l'ouvrir. */
+/* Le bouton « Bâtir » porte une pastille tant qu'une carte est nouvelle : on sait qu'il faut l'ouvrir. */
 .build-toggle[data-new='true']::after {
   content: '';
   position: absolute;

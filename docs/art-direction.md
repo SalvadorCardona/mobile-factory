@@ -82,7 +82,7 @@ Valeurs relevées sur la maquette validée ; elles vivent dans `PALETTE`.
 | `cyan` | `#45d6ff` | `#2fb8ea` | `#b8f1ff` | l'eau ; les rochers de fer ; drapeaux en accent |
 | `toxic` — vert fluo | `#7df25f` | `#3fcf6a` | `#d2ffb8` | **réservé** aux mutants et à leurs flaques (et à la touffe de l'ex-mutant) |
 | `skin` — peau | `#ffc9a3` | `#f29a8c` | `#ffe2cf` | visages et mains |
-| `paper` — blanc | `#ffffff` | `#dcdcff` | `#ffffff` | HUD, yeux, os ; son ombre est lavande ; `cream` (`#fff6e0`) : fond des cartes du HUD de jeu |
+| `paper` — blanc | `#ffffff` | `#dcdcff` | `#ffffff` | HUD, yeux, os ; son ombre est lavande |
 
 Sur la maquette, l'ombre du jaune et de l'orange glisse vers l'ambre et le
 rouge plutôt que vers le bleu : c'est validé tel quel. La règle qui tient

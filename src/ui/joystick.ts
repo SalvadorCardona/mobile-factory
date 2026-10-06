@@ -20,7 +20,7 @@
  * Au repos il est voilé ; tenu, il est plein. Relâché, le bouton revient au
  * centre avec un petit ressort — des transitions CSS, pas de l'état.
  *
- * Une barre du bas qui le croiserait (le bouton « Construire » d'un écran
+ * Une barre du bas qui le croiserait (le bouton « Bâtir » d'un écran
  * étroit, la barre du placement) le fait monter au-dessus d'elle : il ne
  * cache rien, et rien ne le cache. Relu à chaque redimensionnement, donc
  * aussi quand l'écran tourne.

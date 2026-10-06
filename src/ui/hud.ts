@@ -31,17 +31,13 @@
  * - la **quête d'Ève** en cours, une fois qu'elle est arrivée ;
  * - la **bulle** d'Ève au-dessus de sa tête : son arrivée, ses quêtes, ce
  *   qu'elle répond quand on la tape. Courte, jamais bloquante ;
- * - en haut, **une seule barre** : le Prestige (médaille et nombre), un
- *   séparateur, puis la **ville** (le coffre de la mairie), objet par objet,
- *   qui défile de côté si elle ne tient pas ; à droite, les boutons ronds
- *   pause et réglages (l'engrenage) ;
- * - juste dessous, à gauche, les **puces de la population** : au travail,
- *   inactifs, enfants, logés / habitants, en corail ceux qui dorment dehors
- *   (s'il y en a), le Bonheur de la ville, puis l'alerte de nourriture et la
- *   capsule météo ; la quête vient sous elles ;
- * - en bas à gauche, la jauge du **sac** d'Adam, à portée de pouce à côté du
- *   bouton « Construire » (`buildMenu.ts`) — un tap ouvre le panneau
- *   inventaire (`inventoryPanel.ts`), qui a le détail ;
+ * - les boutons pause et réglages (l'engrenage) à droite de la quête, et dessous les deux
+ *   stocks, en version compacte : la **ville** (le coffre de la mairie) et
+ *   le **sac** d'Adam avec son remplissage — un tap sur le sac ouvre le
+ *   panneau inventaire (`inventoryPanel.ts`). Sur un téléphone, les deux
+ *   cartes n'en font plus qu'une, repliée en pastille : la jauge du sac, ce
+ *   que compte la ville, et la ressource que réclame le conseil — le
+ *   détail est dans le panneau ;
  * - des **bulles** empilées pour les événements, des gains qui flottent
  *   au-dessus de la tête d'Adam, et le nom d'un bâtiment achevé qui monte
  *   de son toit (« Mairie bâtie ! ») ;
@@ -194,10 +190,12 @@ export class Hud {
   private clockTipUntil = 0;
   /** Le sac, compact : un bouton qui ouvre le panneau inventaire. */
   public readonly bag: HTMLButtonElement;
-  /** Le stock de la ville, dans la barre du haut. */
+  /** Le stock de la ville, compact. */
   private readonly town: HTMLElement;
-  /** Le Prestige de la colonie : sa médaille et son compte, au début de la barre du haut. */
+  /** Le Prestige de la colonie : son icône et son compte, en haut à gauche. */
   private readonly prestige: HTMLElement;
+  /** Le Prestige et la capsule météo : sous la quête sur un téléphone (cf. `.hud-corner`). */
+  private readonly corner: HTMLElement;
   private lastPrestige = '';
   /** La population de la ville : au travail, inactifs, enfants. */
   private readonly people: HTMLElement;
@@ -352,11 +350,11 @@ export class Hud {
     clip.append(this.hint);
     fold.append(clip);
 
-    this.bag = element('button', 'panel hud-bag');
+    this.bag = element('button', 'panel hud-stock hud-bag');
     this.bag.type = 'button';
-    this.town = element('div', 'hud-town');
-    // La ville défile de côté : la molette aussi, et son bord droit
-    // s'estompe tant qu'il reste des objets cachés.
+    this.town = element('div', 'panel hud-stock hud-town');
+    // Le bandeau d'un écran large défile de côté : la molette aussi, et son
+    // bord droit s'estompe tant qu'il reste des objets cachés.
     this.town.addEventListener('wheel', (event) => {
       const items = this.townItems();
 
@@ -366,14 +364,14 @@ export class Hud {
     }, { passive: false });
     this.town.addEventListener('scroll', () => this.markTownOverflow(), true);
     window.addEventListener('resize', () => this.markTownOverflow());
-    this.prestige = element('div', 'hud-prestige');
+    this.prestige = element('div', 'panel hud-prestige');
     this.prestige.hidden = true;
     this.prestige.setAttribute('role', 'status');
-    this.people = element('div', 'hud-people');
+    this.people = element('div', 'panel hud-people');
     this.people.hidden = true;
     this.person = element('div', 'hud-speech hud-person');
     this.person.hidden = true;
-    this.hunger = element('button', 'hud-chip hud-hunger');
+    this.hunger = element('button', 'panel hud-hunger');
     this.hunger.type = 'button';
     this.hunger.hidden = true;
     this.hunger.addEventListener('click', () => this.focusHungry());
@@ -386,8 +384,10 @@ export class Hud {
     this.speech = element('div', 'hud-speech');
     this.speech.hidden = true;
     this.speech.setAttribute('aria-live', 'polite');
-    this.weather = element('div', 'hud-chip hud-weather');
+    this.weather = element('div', 'hud-weather');
     this.weather.hidden = true;
+    this.corner = element('div', 'hud-corner');
+    this.corner.append(this.prestige, this.weather);
 
     this.banner = element('div', 'hud-banner');
     this.banner.hidden = true;
@@ -458,29 +458,26 @@ export class Hud {
     this.celebration.setAttribute('role', 'status');
     this.confetti = element('div', 'hud-confetti');
 
-    // Le haut de l'écran se met en page tout seul, en colonne : la barre
-    // (Prestige, ville) et ses boutons ronds, les puces de la population,
-    // puis la quête et son conseil. Rien ne se chevauche, et la barre ne
-    // bouge pas quand le conseil change.
+    // Le haut de l'écran se met en page tout seul : la quête et son conseil,
+    // et à côté une colonne avec les boutons sur une ligne, le sac dessous.
+    // Rien ne se chevauche, et rien ne bouge quand le conseil change.
     this.top = element('div', 'hud-top');
 
-    const bar = element('div', 'panel hud-topbar');
-    const separator = element('span', 'hud-topbar-sep');
-    const barRow = element('div', 'hud-topbar-row');
-    const chips = element('div', 'hud-chips');
+    const side = element('div', 'hud-side');
 
-    separator.setAttribute('aria-hidden', 'true');
-    bar.append(this.prestige, separator, this.town);
-    barRow.append(bar, buttons);
-    chips.append(this.people, this.hunger, this.weather);
     this.quest.append(fold);
-    this.top.append(barRow, chips, this.quest);
+    side.append(buttons, this.town, this.people, this.hunger, this.bag);
+    this.top.append(this.quest, side, this.corner);
+    // Sur un écran large, le bandeau de la ville se range juste après le
+    // Prestige, sur sa ligne : il lit sa largeur ici (cf. `.hud-town` dans le CSS).
+    new ResizeObserver(() => {
+      this.top.style.setProperty('--prestige-width', `${this.prestige.offsetWidth}px`);
+    }).observe(this.prestige);
 
     this.root.append(
       // Les confettis d'abord : ils tombent derrière les cartes du HUD et les fenêtres.
       this.confetti,
       this.top,
-      this.bag,
       this.countdown,
       this.speech,
       this.person,
@@ -881,9 +878,7 @@ export class Hud {
   }
 
   /**
-   * La population de la ville, en puces sous la barre du haut : au travail,
-   * inactifs, enfants, logés / habitants, ceux qui dorment dehors (en
-   * corail, seulement s'il y en a) et le Bonheur de la ville. Les inactifs
+   * La population de la ville : au travail, inactifs, enfants. Les inactifs
    * sont un bouton, en corail dès qu'il y en a un : un tap centre la caméra
    * sur l'un d'eux, le tap suivant sur le suivant.
    */
@@ -902,13 +897,13 @@ export class Hud {
     this.lastPeople = key;
 
     const count = (icon: 'toil' | 'child', value: number, label: string): HTMLElement => {
-      const node = text('hud-chip hud-people-count', String(value));
+      const node = text('hud-people-count', String(value));
 
       node.prepend(uiIcon(icon, 18));
       setTip(node, label);
       return node;
     };
-    const lazy = text('hud-chip hud-people-count hud-people-idle', String(idle), 'button');
+    const lazy = text('hud-people-count hud-people-idle', String(idle), 'button');
 
     lazy.setAttribute('type', 'button');
     lazy.dataset['alert'] = String(idle > 0);
@@ -916,20 +911,16 @@ export class Hud {
     setTip(lazy, label.idle(idle));
     lazy.addEventListener('click', () => this.focusIdle());
 
-    // L'Habitation, logés / habitants ; ceux qui dorment dehors ont leur puce corail, à côté.
-    const housing = text('hud-chip hud-people-count hud-people-housing', `${housed}/${population}`);
+    // L'Habitation, logés / habitants : en corail dès que quelqu'un dort dehors.
+    const housing = text('hud-people-count hud-people-housing', `${housed}/${population}`);
 
+    housing.dataset['alert'] = String(housed < population);
     housing.prepend(uiIcon('home', 18));
     setTip(housing, label.housing(housed, population));
 
-    const outside = population - housed;
-    const sleepers = outside > 0 ? text('hud-chip hud-people-count hud-people-outside', label.outside(outside)) : null;
-
-    if (sleepers) setTip(sleepers, label.outsideTip(outside));
-
     // Le Bonheur de la ville, à côté : en corail quand l'habitant moyen est malheureux.
     // L'aube qui le fait bouger y pose une flèche, le temps de la voir.
-    const happiness = text('hud-chip hud-people-count hud-people-happiness', String(mood.total));
+    const happiness = text('hud-people-count hud-people-happiness', String(mood.total));
 
     happiness.dataset['alert'] = String(population > 0 && moodOf(mood.average) === 'unhappy');
     happiness.prepend(uiIcon('townMood', 18));
@@ -939,14 +930,15 @@ export class Hud {
     }
     setTip(happiness, label.happiness(mood.total, mood.average, mood.unhappy));
 
+    const town = element('div', 'hud-people-town');
+
+    town.append(housing, happiness);
     this.people.hidden = working + idle + children === 0;
     this.people.replaceChildren(
       count('toil', working, label.working(working)),
       lazy,
       count('child', children, label.children(children)),
-      housing,
-      ...(sleepers ? [sleepers] : []),
-      happiness,
+      town,
     );
   }
 
@@ -1011,9 +1003,9 @@ export class Hud {
     return this.quest.getBoundingClientRect().bottom;
   }
 
-  /** La barre du haut, ses boutons, les puces de la population et le sac : les repères de bord les contournent. */
+  /** Les boutons et le sac, posés à droite de la quête : les repères de bord les contournent. */
   public obstacles(): DOMRect[] {
-    return [this.buttons, this.town.parentElement ?? this.town, this.people, this.bag].map((node) => node.getBoundingClientRect());
+    return [this.buttons.getBoundingClientRect(), this.town.getBoundingClientRect(), this.bag.getBoundingClientRect()];
   }
 
   /** La ressource que le conseil envoie chercher, ou `null` : le renderer y pointe un repère. */
@@ -1555,11 +1547,13 @@ export class Hud {
   /* ------------------------------------------------------------------- sac */
 
   /**
-   * Le sac, en bas à gauche : son pictogramme, « Sac », « 7/60 », la jauge
-   * de remplissage, l'objet que réclame le conseil, et une pastille « icône
-   * + quantité » par objet, que seul un grand écran montre — le panneau a le
-   * détail. Le DOM n'est reconstruit que si le contenu change — comparer une
-   * clé texte coûte moins qu'un diff.
+   * Le sac : son pictogramme, « 7/60 », la jauge de remplissage, et une
+   * pastille « icône + quantité » par objet. Le DOM n'est reconstruit que si
+   * le contenu change — comparer une clé texte coûte moins qu'un diff.
+   *
+   * Sur un téléphone, la carte se replie en pastille (cf. `style.css`) :
+   * seuls restent le compte, la jauge, le total de la ville et l'objet que
+   * le conseil réclame, tous déjà là, cachés sur grand écran.
    */
   private updateBag(): void {
     const { inventory } = this.world.player;
@@ -1580,6 +1574,13 @@ export class Hud {
 
     title.append(uiIcon('bag', 20), text('hud-stock-name', label.bag), text('hud-bag-count', `${inventory.total()}/${inventory.capacity}`));
     setTip(title, label.bagTip(inventory.total(), inventory.capacity));
+    if (town !== null) {
+      const summary = text('hud-bag-town', String(town));
+
+      summary.prepend(uiIcon('town', 18));
+      setTip(summary, label.townTotal(town));
+      title.append(summary);
+    }
     if (wanted) {
       const chip = itemAmount(wanted, inventory.count(wanted));
 
@@ -1603,10 +1604,9 @@ export class Hud {
   }
 
   /**
-   * La ville, dans la barre du haut après le Prestige : le stock commun, ce
-   * que les chantiers et les porteurs consomment, objet par objet. Tant que
-   * la mairie est en chantier, il n'y a pas de ville — la barre le dit au
-   * lieu de montrer un stock vide.
+   * La ville : le stock commun, ce que les chantiers et les porteurs
+   * consomment. Tant que la mairie est en chantier, il n'y a pas de ville —
+   * la carte le dit au lieu de montrer un stock vide.
    */
   private updateTown(): void {
     const stock = this.world.townStock();
@@ -1647,7 +1647,7 @@ export class Hud {
     items.dataset['more'] = String(items.scrollLeft + items.clientWidth < items.scrollWidth - 1);
   }
 
-  /** Le Prestige : caché tant que la colonie n'en a pas, puis toujours là, au début de la barre du haut. */
+  /** Le Prestige : caché tant que la colonie n'en a pas, puis toujours là, en haut à gauche. */
   private updatePrestige(): void {
     const { prestige } = this.world;
     const key = String(prestige);
