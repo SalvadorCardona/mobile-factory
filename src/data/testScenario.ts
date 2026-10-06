@@ -94,6 +94,19 @@ export const TEST_SCENARIOS = {
     adam: { dx: 5, dy: 8 },
   },
   /**
+   * La ferme au sud-est de la mairie, son champ d'herbe nue : on regarde ses
+   * fermiers semer case par case, les cultures pousser, puis la récolte
+   * rentrer au coffre.
+   */
+  farm: {
+    label: 'Ferme',
+    seed: 100,
+    buildings: [{ building: 'farm', dx: 7, dy: 10 }],
+    town: { wood: 40, stone: 30, food: 12, water: 12 },
+    bag: {},
+    adam: { dx: 5, dy: 8 },
+  },
+  /**
    * Le soir tombe sur une base de dix ouvriers — bûcherons, bâtisseurs,
    * logisticiens — et une seule Maison de quatre lits : quatre vont s'y
    * coucher, les six autres dorment dehors devant leur travail. On pose une

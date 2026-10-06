@@ -60,6 +60,7 @@ export function selectionFrame(world: World, selected: Selection | null, alpha: 
     case 'worker':
     case 'lumberjack':
     case 'forester':
+    case 'farmer':
       // Rentré chez lui, on ne le voit plus : le cadre non plus.
       if (mobile.inside) return null;
       break;

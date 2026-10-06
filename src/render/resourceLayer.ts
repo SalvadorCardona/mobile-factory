@@ -14,7 +14,9 @@
  *
  * Les arbres que plante le forestier y vivent aussi : pousse, puis jeune
  * arbre (`sapling`), puis un arbre comme les autres — jamais un arbre mort.
- * Un changement de stade salit le chunk, qui se reconstruit.
+ * Un changement de stade salit le chunk, qui se reconstruit. Les cultures
+ * des fermiers aussi : la terre retournée au sol, avec les ombres, et les
+ * plants — semis, pousse, épis mûrs (`crop`) — triés avec le reste.
  *
  * Pendant un placement, l'arbre ou le rocher qui empêche de poser
  * **clignote** : c'est lui qu'Adam doit aller heurter.
@@ -93,8 +95,10 @@ export class ResourceLayer {
     world.events.on('resourceHarvested', (event) => struck(event, event.item === 'wood'));
     // Un coup de hache de bûcheron fait trembler l'arbre comme un passage d'Adam.
     world.events.on('treeChopped', (event) => struck(event, true));
-    // Une pousse qu'on vient de mettre en terre frémit.
+    // Une pousse qu'on vient de mettre en terre frémit, une case qu'on sème ou qu'on récolte aussi.
     world.events.on('treePlanted', (event) => struck(event, true));
+    world.events.on('cropSown', (event) => struck(event, true));
+    world.events.on('cropHarvested', (event) => struck(event, true));
   }
 
   /** `blocking` : les tuiles dont la ressource gêne le fantôme, à faire clignoter. */
@@ -173,7 +177,7 @@ export class ResourceLayer {
   private create(tx: number, ty: number): ResourceView | null {
     const resource = this.world.resources.at(tx, ty);
 
-    if (!resource) return this.createSapling(tx, ty);
+    if (!resource) return this.createSapling(tx, ty) ?? this.createCrop(tx, ty);
 
     const { seed } = this.world;
     // L'essence d'un arbre est tirée par tuile : elle reste la même une fois entamé. Le forestier ne plante pas d'arbre mort.
@@ -233,6 +237,31 @@ export class ResourceLayer {
     this.sorted.addChild(sprite);
     this.shadows.addChild(shadow);
     return { sprite, shadow, baseX, key };
+  }
+
+  /** La case semée par un fermier en (tx, ty) : sa terre au sol, ses plants au stade du jour ; `null` sans culture. */
+  private createCrop(tx: number, ty: number): ResourceView | null {
+    const stage = this.world.resources.crop(tx, ty);
+
+    if (!stage) return null;
+
+    const proto = SPRITES.crop;
+    const key = `crop.${stage}`;
+    const baseX = (tx + 0.5) * TILE_SIZE;
+    const baseY = (ty + 1) * TILE_SIZE;
+    const sprite = new Sprite(this.library.texture(key));
+    // La terre retournée n'a pas d'ombre : elle est le sol, sous tout ce qui passe.
+    const soil = new Sprite(this.library.texture('crop.soil'));
+
+    for (const part of [sprite, soil]) {
+      part.anchor.set(proto.anchorX, proto.anchorY);
+      part.position.set(baseX, baseY);
+    }
+    sprite.zIndex = baseY;
+
+    this.sorted.addChild(sprite);
+    this.shadows.addChild(soil);
+    return { sprite, shadow: soil, baseX, key };
   }
 
   /** Remet une tuile à jour après une récolte : entamée, ou disparue. */

@@ -69,3 +69,23 @@ export const SAPLING = {
   /** Les essences d'un arbre planté : on ne plante pas d'arbre mort. */
   sprites: ['tree', 'treePine'],
 } as const satisfies { sprites: readonly SpriteId[] } & Record<string, unknown>;
+
+/**
+ * Les cultures du fermier, case par case : semis, pousse, puis mûre — à
+ * récolter. Elles ne sont jamais une ressource : ni Adam ni la hache n'y
+ * touchent, elles n'arrêtent personne. L'âge se compte en ticks depuis le
+ * semis, du temps de jeu : la nuit, elles poussent encore. Elles grandissent
+ * au même passage que les pousses du forestier (`SAPLING.passTicks`).
+ *
+ * Calibrage : un champ plein de 30 cases mûrit une case toutes les 7 s
+ * environ, soit ~8 nourritures par minute — l'ancienne ferme au complet
+ * (4 nourritures toutes les 30 s).
+ */
+export const CROPS = {
+  /** Ticks de semis avant la pousse : une minute. */
+  growingTicks: 1200,
+  /** Ticks avant d'être mûre : trois minutes et demie. */
+  ripeTicks: 4200,
+  /** Nourriture d'une case récoltée, avant les recherches (`farmYield`). */
+  yield: 1,
+} as const;

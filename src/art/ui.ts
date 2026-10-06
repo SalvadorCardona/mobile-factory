@@ -425,6 +425,16 @@ export const UI_ICONS = {
     line(7, 11.5, 17, 11.5, orange.shade),
     line(14.5, 6, 17.5, 2.5, ink.base),
   ),
+  /** Un épi mûr : la tige menthe, l'épi doré qui penche — ce que le champ d'une ferme a de bon à récolter. */
+  wheat: svg(
+    S,
+    S,
+    line(11, 21, 12.5, 9, mint.shade),
+    group('translate(11.5 15) rotate(-140)', pill(0, -1.5, 5.5, 3, mint.base)),
+    pill(10, 2.5, 6, 10, yellow.shade),
+    pill(10, 2.5, 6, 8.5, yellow.base),
+    pill(11.3, 3.6, 2, 3.4, yellow.light),
+  ),
   /**
    * Une case d'herbe, en 3/4 : une motte menthe, trois brins et une fleur —
    * la moitié d'assise d'une foreuse, à côté de l'icône du filon.

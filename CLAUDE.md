@@ -103,8 +103,8 @@ déclare les `workers` qu'il emploie (maison des constructeurs et ferme :
 quatre), pris parmi eux. Les **libres** sont sur la carte (`Worker.free`) :
 au départ, dix devant le chantier de la mairie, où ils flânent (ni faim ni
 soif avant qu'elle soit bâtie). Un bâtiment prend les plus proches de sa
-porte : porteurs, bûcherons, forestier deviennent son équipe sous le même
-id (prénom gardé) ; ceux d'une ferme, d'une carrière, d'une foreuse y
+porte : porteurs, bûcherons, forestier, fermiers deviennent son équipe sous le même
+id (prénom gardé) ; ceux d'une carrière, d'un puits, d'une foreuse y
 entrent (`World.hosted`, non sauvegardé, refait de la répartition au
 chargement). Un ouvrier retiré, ou dont le bâtiment tombe, redevient libre
 sur place ; une ancienne sauvegarde garde ses équipes et pose les libres
@@ -142,6 +142,21 @@ elle n'est pas une ressource — ni coupée, ni récoltée, ni solide. Abattu,
 l'arbre libère sa case, que le forestier replante. Les arbres plantés
 (`ResourceIndex.planted` : tick de plantation, unités prises) sont
 sauvegardés sous `planted`. Carré mint au placement et à la sélection.
+La **ferme** (`farm`, quatre ouvriers au plus) loge ses **fermiers** (mobile
+`farmer`, `FARMERS` dans `src/data/workers.ts`, champ dans `src/sim/farmer.ts`,
+le carré du forestier de côté `FARMERS.plot`) : ils sèment la première case
+d'herbe nue libre du champ (`World.farmField`), rang par rang, sinon récoltent
+la première case mûre — sa place au coffre réservée au départ (`load`,
+rejouée au chargement) —, rapportent la récolte au coffre puis reviennent
+semer. Deux fermiers ne visent jamais la même case (`plot`). La culture
+pousse au temps de jeu, la nuit aussi (`CROPS`, `data/resources.ts` : semis,
+pousse, mûre ; ~9 nourritures par minute pour un champ plein de 30 cases) ;
+elle n'est jamais une ressource — ni récoltée par Adam, ni solide — et bloque
+la pose d'un bâtiment ou d'une route comme une pousse. Sans ferme qui couvre
+son champ, elle s'arrache. Pas de recette : toute la nourriture vient des
+récoltes. Coffre plein, les fermiers attendent à la porte (`storeFull`).
+Cultures sauvegardées sous `crops` (tuile → tick du semis) ; une ancienne
+sauvegarde charge un champ vide. Carré jaune au placement et à la sélection.
 Depuis sa fenêtre, un producteur (foreuse,
 ferme, forge, nurserie, cabane, maison du forestier) se met **en pause** (`pauseBuilding` : il ne
 produit ni ne consomme, ses ouvriers finissent leur geste, bulle ⏸ et sprite
@@ -166,7 +181,7 @@ une ligne. Elle paraît aussitôt et ne s'efface qu'après `holdTicks` sans
 problème (tout de suite si le coffre est vidé à moitié) : pas de
 clignotement. La pause voulue garde ⏸.
 La **carrière** (`quarry`, trois ouvriers, coût tout en bois) taille la
-pierre dans les ruines, sans rocher, comme une ferme sa nourriture (recette
+pierre dans les ruines, sans rocher, au rythme de ses ouvriers (recette
 `cutStone`) ; porteurs et logisticiens la vident.
 Le **poste de logistique** (`logisticsPost`, kind `depot`) loge quatre
 **logisticiens** (des `worker` à `logistician: true`, `LOGISTICIANS` dans

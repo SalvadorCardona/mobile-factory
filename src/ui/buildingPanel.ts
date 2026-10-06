@@ -80,13 +80,14 @@ import { NURSERY_CARE } from '../data/inhabitants.ts';
 import type { ItemId } from '../data/items.ts';
 import { RECIPES, type RecipeProto } from '../data/recipes.ts';
 import { WEAPONS } from '../data/weapons.ts';
-import { BUILDERS, FORESTERS, LOGISTICIANS, LUMBERJACKS, WORK_PRIORITIES, type WorkPriority } from '../data/workers.ts';
+import { BUILDERS, FARMERS, FORESTERS, LOGISTICIANS, LUMBERJACKS, WORK_PRIORITIES, type WorkPriority } from '../data/workers.ts';
 import { floorCost } from '../sim/antenna.ts';
 import { consumerTarget, forgeRecipe } from '../sim/consumers.ts';
 import { canDamage, isStanding, raidCapacity } from '../sim/enemyBases.ts';
+import { countField, type FieldCount } from '../sim/farmer.ts';
 import { countPlot, type PlotCount } from '../sim/forester.ts';
 import { canPause } from '../sim/staffing.ts';
-import type { Building, EnemyBase, Entity, EntityId, Forester, Forge, MobileId, Nursery } from '../sim/types.ts';
+import type { Building, EnemyBase, Entity, EntityId, Farmer, Forester, Forge, MobileId, Nursery } from '../sim/types.ts';
 import { TICKS_PER_SECOND, repairCost, siteMissing, type SiteCoverage, type World } from '../sim/world.ts';
 import type { UiIcon } from '../art/ui.ts';
 import { onLocale, t } from '../i18n/locale.ts';
@@ -811,17 +812,26 @@ export class BuildingPanel {
           break;
         }
 
-        case 'farm':
+        case 'farm': {
+          const count = countField(this.world.farmField(entity));
+
+          stats.push(
+            { icon: 'seed', value: String(count.growing), label: text.farm.growing(count.growing) },
+            { icon: 'wheat', value: String(count.ripe), label: text.farm.ripe(count.ripe) },
+            { icon: 'plot', value: String(count.free), label: text.farm.free(count.free) },
+          );
+          lines.push(text.farm.field(FARMERS.plot));
           lines.push(
             entity.paused
-              ? paused
+              ? text.farm.paused
               : full
                 ? text.storeFull
                 : stopped
                   ? text.farm.noOne
-                  : text.farm.growing,
+                  : farmLine(this.world.farmerOf(entity), count),
           );
           break;
+        }
 
         case 'quarry': {
           // Le puits est une carrière sur sa propre recette : ses mots à lui.
@@ -1409,6 +1419,16 @@ function clock(ticks: number): string {
   const rest = seconds % 60;
 
   return t().panel.duration(minutes, rest);
+}
+
+/** Ce que font les fermiers — vu du premier : ils sèment, récoltent, dorment, ou attendent que le champ mûrisse. */
+function farmLine(farmer: Farmer | undefined, count: FieldCount): string {
+  const text = t().panel.farm;
+
+  if (farmer?.state === 'toSow' || farmer?.state === 'sow') return text.sowing;
+  if (farmer?.state === 'toHarvest' || farmer?.state === 'harvest' || farmer?.state === 'toFarm') return text.harvesting;
+  if (count.free + count.growing + count.ripe === 0) return text.nowhere;
+  return farmer?.inside ? text.asleep : text.growingLine;
 }
 
 /** Ce que fait le forestier : il marche vers sa case, il plante, il dort, ou il n'a plus rien à planter — et pourquoi. */

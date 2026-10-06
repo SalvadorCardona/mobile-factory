@@ -34,6 +34,7 @@ import { ENEMY_BASE_SPRITE } from '../art/enemyBase.ts';
 import { EX_MUTANT_SPRITE } from '../art/exMutant.ts';
 import { EVE_SPRITE } from '../art/eve.ts';
 import { FARM } from '../art/farm.ts';
+import { FARMER } from '../art/farmer.ts';
 import { FORESTER } from '../art/forester.ts';
 import { FORESTER_HOUSE } from '../art/foresterHouse.ts';
 import { CHARCOAL_KILN } from '../art/charcoalKiln.ts';
@@ -63,6 +64,7 @@ import { QUEEN_SPRITE } from '../art/queen.ts';
 import { PUDDLE } from '../art/puddle.ts';
 import { ROCK_COAL, ROCK_IRON, ROCK_STONE } from '../art/rocks.ts';
 import { SAPLING_SPRITE } from '../art/sapling.ts';
+import { CROP_SPRITE } from '../art/crops.ts';
 import { TARGET } from '../art/target.ts';
 import { TOWN_HALL } from '../art/townHall.ts';
 import { TREE, TREE_DEAD, TREE_PINE } from '../art/trees.ts';
@@ -103,6 +105,8 @@ export const SPRITES = {
   lumberjack: LUMBERJACK,
   /** Un forestier : chapeau de paille, tablier menthe, et sa bêche, qui s'enfonce à chaque coup. */
   forester: FORESTER,
+  /** Un fermier : chapeau de paille au ruban corail, salopette cyan, panier d'épis, et sa binette, qui gratte la terre à chaque coup. */
+  farmer: FARMER,
   /** Un logisticien : caisse sur le dos, casquette cyan ; la charge dépasse de la caisse. */
   logistician: LOGISTICIAN,
   /** Un bâtisseur : casque jaune, ceinture à outils, et son marteau, qui s'abat à chaque coup. */
@@ -147,6 +151,8 @@ export const SPRITES = {
   treeDead: TREE_DEAD,
   /** Un arbre du forestier qui pousse : `sprout`, puis `young` ; adulte, il prend le sprite d'un arbre. */
   sapling: SAPLING_SPRITE,
+  /** Une case du champ d'une ferme : `sown`, `growing`, puis `ripe`, à récolter. */
+  crop: CROP_SPRITE,
   rockIron: ROCK_IRON,
   rockCoal: ROCK_COAL,
   rockStone: ROCK_STONE,

@@ -129,11 +129,13 @@ export interface House extends Built {
   kind: 'house';
 }
 
-/** La ferme : ses ouvriers font pousser de la nourriture dans son coffre, à la cadence de la recette. */
+/**
+ * La ferme : elle loge ses fermiers, qui cultivent un champ carré autour
+ * d'elle (`sim/farmer.ts`), et son coffre reçoit ce qu'ils récoltent. Les
+ * cultures sont à la carte (`ResourceIndex`), pas à elle.
+ */
 export interface Farm extends Built {
   kind: 'farm';
-  /** Vrai quand la ferme ne se replanifie plus : coffre plein, en pause, ou sans ouvrier. */
-  blocked: boolean;
 }
 
 /** La carrière : ses ouvriers taillent de la pierre dans son coffre, à la cadence de la recette, comme une ferme. */
@@ -631,6 +633,45 @@ export interface Forester extends Moving, Wandering, Needful, Housed {
 }
 
 /**
+ * Ce que fait un fermier :
+ * - `idle` : rien — il flâne devant la ferme, ou y dort la nuit ;
+ * - `toSow` : il marche vers la case libre qu'il va semer ;
+ * - `sow` : il la sème, `FARMERS.sowTicks` durant ;
+ * - `toHarvest` : il marche vers la case mûre qu'il va récolter ;
+ * - `harvest` : il la récolte, `FARMERS.harvestTicks` durant ;
+ * - `toFarm` : il rapporte la récolte au coffre de la ferme ;
+ * - `wait` : le coffre est plein — il attend devant la porte qu'on le vide.
+ */
+export type FarmerState = 'idle' | 'toSow' | 'sow' | 'toHarvest' | 'harvest' | 'toFarm' | 'wait';
+
+/**
+ * Un fermier de la ferme. Il sème les cases libres de son champ dans
+ * l'ordre, récolte les mûres et rapporte la récolte au coffre. Deux
+ * fermiers ne visent jamais la même case : celle de chacun (`plot`) est à
+ * lui tant qu'il y va ou y travaille. La place au coffre d'une récolte est
+ * réservée dès qu'il part la chercher (`load`) ; la réservation, qui n'est
+ * pas sauvegardée, se rejoue au chargement — comme celle d'un bûcheron.
+ */
+export interface Farmer extends Moving, Wandering, Needful, Housed {
+  kind: 'farmer';
+  /** Son âge, en années : une de plus à chaque aube. */
+  age: number;
+  /** La ferme qui le loge, et dont il cultive le champ. */
+  homeId: EntityId;
+  /** Vrai s'il est chez lui : invisible, immobile. */
+  inside: boolean;
+  state: FarmerState;
+  /** La case visée, `null` hors d'un semis ou d'une récolte. */
+  plot: { tx: number; ty: number } | null;
+  /** Ticks avant que le geste en cours — semer, récolter — soit fini. */
+  workTicks: number;
+  /** La récolte qu'il va chercher (sa place réservée au coffre), puis qu'il porte ; 0 sinon. */
+  load: number;
+  /** Ticks avant de chercher à nouveau une case. */
+  searchTicks: number;
+}
+
+/**
  * Un tas au sol : du butin lâché par un ennemi abattu, ou ce qu'Adam a jeté
  * de son sac. Il attend qu'Adam marche dessus.
  */
@@ -707,7 +748,7 @@ export interface Caravan extends Moving {
   met: boolean;
 }
 
-export type Mobile = Mutant | Beast | Arrow | Kid | Eve | Worker | Lumberjack | Forester | Pickup | Patient | Caravan;
+export type Mobile = Mutant | Beast | Arrow | Kid | Eve | Worker | Lumberjack | Forester | Farmer | Pickup | Patient | Caravan;
 
 /**
  * Les compteurs de la partie, que les objectifs lisent. Ils ne font que

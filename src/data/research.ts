@@ -210,7 +210,7 @@ export const RESEARCH = {
     cost: { food: 6, mutantGoo: 3 },
     duration: 20 * 60,
     requires: [],
-    effect: { stat: 'farmYield', amount: 2 },
+    effect: { stat: 'farmYield', amount: 1 },
     unlocks: [],
   },
 } as const satisfies Record<string, ResearchProto>;

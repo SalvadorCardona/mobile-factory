@@ -44,6 +44,7 @@ import type {
   EntityId,
   EveState,
   Facing,
+  FarmerState,
   ForesterState,
   Job,
   LumberjackState,
@@ -155,6 +156,11 @@ export interface WorldState {
    * dit leur stade, et unités déjà coupées. Absent d'avant le forestier : aucun.
    */
   planted?: Record<string, PlantedTree>;
+  /**
+   * Cultures des fermiers : `"tx,ty"` → tick du semis, qui dit leur stade.
+   * Absent d'avant les fermiers : les champs sont vides, les fermes resèment.
+   */
+  crops?: Record<string, number>;
   /** Tuiles pavées : `"cx,cy"` → index des tuiles dans le chunk. */
   roads: Record<string, number[]>;
   entities: SavedEntity[];
@@ -383,6 +389,8 @@ const LUMBERJACK_STATES: readonly LumberjackState[] = ['idle', 'toTree', 'chop',
 
 const FORESTER_STATES: readonly ForesterState[] = ['idle', 'toPlot', 'plant'];
 
+const FARMER_STATES: readonly FarmerState[] = ['idle', 'toSow', 'sow', 'toHarvest', 'harvest', 'toFarm', 'wait'];
+
 function parseState(raw: unknown): WorldState {
   const state = record(raw);
 
@@ -420,6 +428,8 @@ function parseState(raw: unknown): WorldState {
     resources: parseResources(state['resources']),
     // Absents d'une sauvegarde d'avant le forestier : rien n'était planté.
     planted: parsePlanted(state['planted'] ?? {}),
+    // Absentes d'une sauvegarde d'avant les fermiers : rien n'était semé.
+    crops: parseCrops(state['crops'] ?? {}),
     // Absentes d'une sauvegarde d'avant les routes : rien n'était pavé.
     roads: parseRoads(state['roads'] ?? {}),
     entities: unique(array(state['entities']).map(parseEntity)),
@@ -511,6 +521,16 @@ function parsePlanted(raw: unknown): Record<string, PlantedTree> {
   return planted;
 }
 
+function parseCrops(raw: unknown): Record<string, number> {
+  const crops: Record<string, number> = {};
+
+  for (const [key, value] of Object.entries(record(raw))) {
+    if (!/^-?\d+,-?\d+$/.test(key)) throw new SaveError(`tuile illisible : ${key}`);
+    crops[key] = int(value);
+  }
+  return crops;
+}
+
 function parseRoads(raw: unknown): Record<string, number[]> {
   const roads: Record<string, number[]> = {};
 
@@ -593,7 +613,9 @@ function parseEntity(raw: unknown): SavedEntity {
       };
     case 'tower':
       return { ...built, kind, armed: bool(entity['armed']) };
+    // Une ferme d'avant les fermiers avait un `blocked` : sa nourriture vient désormais des récoltes, il n'en reste rien.
     case 'farm':
+      return { ...built, kind };
     case 'quarry':
     case 'forge':
       return { ...built, kind, blocked: bool(entity['blocked']) };
@@ -777,6 +799,29 @@ function parseMobile(raw: unknown): Mobile {
         state: state as ForesterState,
         plot: plot === null ? null : { tx: int(record(plot)['tx']), ty: int(record(plot)['ty']) },
         plantTicks: int(mobile['plantTicks']),
+        searchTicks: int(mobile['searchTicks']),
+        ...wandering(mobile, base),
+      };
+    }
+    case 'farmer': {
+      const state = mobile['state'];
+      const plot = mobile['plot'];
+      const load = int(mobile['load']);
+
+      if (!FARMER_STATES.includes(state as FarmerState)) throw new SaveError(`fermier inconnu : ${String(state)}`);
+      if (load < 0) throw new SaveError(`récolte négative : ${load}`);
+      return {
+        ...base,
+        kind: 'farmer',
+        age: age(mobile['age']),
+        ...needful(mobile),
+        ...housed(mobile),
+        homeId: int(mobile['homeId']),
+        inside: bool(mobile['inside']),
+        state: state as FarmerState,
+        plot: plot === null ? null : { tx: int(record(plot)['tx']), ty: int(record(plot)['ty']) },
+        workTicks: int(mobile['workTicks']),
+        load,
         searchTicks: int(mobile['searchTicks']),
         ...wandering(mobile, base),
       };

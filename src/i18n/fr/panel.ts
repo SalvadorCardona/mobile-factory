@@ -125,8 +125,17 @@ export const panel = {
   },
 
   farm: {
-    noOne: 'À l’arrêt : personne aux champs — ajoutez un ouvrier.',
-    growing: 'Les sillons poussent.',
+    growing: (count: number): string => `${count} case${s(count)} semée${s(count)} en train de pousser`,
+    ripe: (count: number): string => `${count} case${s(count)} mûre${s(count)}, bonne${s(count)} à récolter`,
+    free: (count: number): string => `${count} case${s(count)} libre${s(count)} à semer`,
+    field: (side: number): string => `Champ : un carré de ${side} × ${side} cases autour de la ferme.`,
+    paused: 'En pause : les fermiers rapportent leur récolte, puis flânent.',
+    noOne: 'À l’arrêt : pas de fermier — ajoutez un ouvrier. Rien ne se sème.',
+    sowing: 'Les fermiers sèment, case par case.',
+    harvesting: 'Les fermiers récoltent ce qui est mûr.',
+    asleep: 'Les fermiers dorment ; les cultures poussent encore.',
+    growingLine: 'Le champ pousse : les fermiers attendent qu’il mûrisse.',
+    nowhere: 'Aucune case à cultiver ici : eau, sable, roche, routes ou bâtiments.',
   },
 
   quarry: {
@@ -233,6 +242,7 @@ export const panel = {
       builder: 'Bâtisseur',
       lumberjack: 'Bûcheron',
       forester: 'Forestier',
+      farmer: 'Fermier',
       child: 'Enfant',
       exMutant: 'Ex-mutant, porteur',
       survivor: 'Survivant, porteur',

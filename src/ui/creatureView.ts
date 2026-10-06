@@ -23,13 +23,13 @@ import { t } from '../i18n/locale.ts';
 import { occupationText } from './personText.ts';
 
 /** Le métier d'un habitant, tel que la fenêtre le nomme. */
-type Role = 'free' | 'porter' | 'logistician' | 'builder' | 'lumberjack' | 'forester' | 'child' | 'exMutant' | 'survivor';
+type Role = 'free' | 'porter' | 'logistician' | 'builder' | 'lumberjack' | 'forester' | 'farmer' | 'child' | 'exMutant' | 'survivor';
 
 /** Ce qu'on peut ouvrir dans la fenêtre : un bâtiment (ou chantier), ou une créature. */
 export type Selection = { kind: 'building'; id: EntityId } | { kind: 'creature'; id: MobileId };
 
 /** Une créature qui a une fenêtre : un habitant ou un ennemi. */
-export type Creature = Extract<Mobile, { kind: 'kid' | 'worker' | 'lumberjack' | 'forester' | 'mutant' | 'beast' }>;
+export type Creature = Extract<Mobile, { kind: 'kid' | 'worker' | 'lumberjack' | 'forester' | 'farmer' | 'mutant' | 'beast' }>;
 
 export interface CreatureView {
   name: string;
@@ -54,6 +54,7 @@ export function isCreature(mobile: Mobile): mobile is Creature {
     mobile.kind === 'worker' ||
     mobile.kind === 'lumberjack' ||
     mobile.kind === 'forester' ||
+    mobile.kind === 'farmer' ||
     mobile.kind === 'mutant' ||
     mobile.kind === 'beast'
   );
@@ -134,6 +135,7 @@ function roleOf(person: Inhabitant): Role {
   if (person.kind === 'kid') return 'child';
   if (person.kind === 'lumberjack') return 'lumberjack';
   if (person.kind === 'forester') return 'forester';
+  if (person.kind === 'farmer') return 'farmer';
   if (person.free) return 'free';
   if (person.logistician) return 'logistician';
   if (person.builder) return 'builder';
@@ -142,10 +144,11 @@ function roleOf(person: Inhabitant): Role {
   return 'porter';
 }
 
-/** La charge sur la tête d'un porteur, le bois d'un bûcheron qui rentre. */
+/** La charge sur la tête d'un porteur, le bois d'un bûcheron qui rentre, la récolte d'un fermier. */
 function carryOf(person: Inhabitant): CreatureView['carry'] {
   if (person.kind === 'worker' && person.job?.carried) return { item: person.job.item, amount: person.job.amount };
   if (person.kind === 'lumberjack' && person.load > 0) return { item: 'wood', amount: person.load };
+  if (person.kind === 'farmer' && person.state === 'toFarm' && person.load > 0) return { item: 'food', amount: person.load };
   return null;
 }
 
@@ -162,6 +165,8 @@ function portraitOf(creature: Creature): SpriteId {
       return 'lumberjack';
     case 'forester':
       return 'forester';
+    case 'farmer':
+      return 'farmer';
     case 'worker':
       if (creature.logistician) return 'logistician';
       if (creature.builder) return 'builder';

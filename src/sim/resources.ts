@@ -16,10 +16,15 @@
  * arbre (`SAPLING`), ils ne sont pas encore une ressource — ni coupés, ni
  * récoltés, ni solides ; adultes, ils sont un `tree` comme un autre. Coupé
  * jusqu'au bout, l'arbre planté s'efface de l'index : la case se replante.
+ *
+ * Les cultures des fermiers aussi : `tuile → tick du semis`, qui dit leur
+ * stade (`CROPS` : semis, pousse, mûre). Elles ne sont jamais une
+ * ressource — ni récoltées par Adam, ni solides — ; le fermier les récolte
+ * mûres (`reap`) et la case redevient libre.
  */
 
 import { coordKey, type TileCoord } from '../core/grid.ts';
-import { RESOURCES, SAPLING, type ResourceId } from '../data/resources.ts';
+import { CROPS, RESOURCES, SAPLING, type ResourceId } from '../data/resources.ts';
 import { resourceAt } from './terrain.ts';
 
 export type ResourceStage = 'full' | 'damaged' | 'gone';
@@ -39,6 +44,22 @@ export interface PlantedTree {
 export function growthStage(age: number): GrowthStage {
   if (age >= SAPLING.adultTicks) return 'tree';
   return age >= SAPLING.youngTicks ? 'young' : 'sprout';
+}
+
+/** Ce qu'est une culture, selon son âge : un semis, une pousse, une culture mûre à récolter. */
+export type CropStage = 'sown' | 'growing' | 'ripe';
+
+/** Le stade d'une culture semée depuis `age` ticks. */
+export function cropStage(age: number): CropStage {
+  if (age >= CROPS.ripeTicks) return 'ripe';
+  return age >= CROPS.growingTicks ? 'growing' : 'sown';
+}
+
+interface Crop {
+  /** Tick du semis : c'est lui qui est sauvegardé. */
+  tick: number;
+  /** Le stade au dernier passage de croissance : c'est lui que lisent le fermier et le rendu. */
+  stage: CropStage;
 }
 
 interface Planted extends PlantedTree {
@@ -61,6 +82,8 @@ export class ResourceIndex {
   private readonly taken = new Map<string, number>();
 
   private readonly planted = new Map<string, Planted>();
+
+  private readonly crops = new Map<string, Crop>();
 
   private readonly seed: number;
 
@@ -145,7 +168,7 @@ export class ResourceIndex {
   public plant(tx: number, ty: number, tick: number): boolean {
     const key = coordKey(tx, ty);
 
-    if (this.planted.has(key) || this.at(tx, ty) !== null) return false;
+    if (this.planted.has(key) || this.crops.has(key) || this.at(tx, ty) !== null) return false;
     this.planted.set(key, { tick, taken: 0, stage: 'sprout' });
     return true;
   }
@@ -162,18 +185,73 @@ export class ResourceIndex {
     return this.planted.has(coordKey(tx, ty));
   }
 
-  /** La tuile est-elle prise : une ressource debout, ou une pousse ? Ni bâtiment ni route ne s'y posent. */
+  /** La tuile est-elle prise : une ressource debout, une pousse, une culture ? Ni bâtiment ni route ne s'y posent. */
   public isTaken(tx: number, ty: number): boolean {
-    return this.isPlanted(tx, ty) || this.at(tx, ty) !== null;
+    return this.isPlanted(tx, ty) || this.crop(tx, ty) !== null || this.at(tx, ty) !== null;
   }
 
   /**
-   * Un passage de croissance au tick `now` : chaque pousse prend le stade de
-   * son âge. Renvoie les tuiles qui ont changé de stade — leur chunk est à
-   * redessiner.
+   * Sème une culture sur la tuile au tick `tick`. Refusé — `false` — si la
+   * tuile porte déjà une ressource, un arbre planté ou une culture : c'est à
+   * l'appelant de juger le terrain, le bâti et les routes.
+   */
+  public sow(tx: number, ty: number, tick: number): boolean {
+    const key = coordKey(tx, ty);
+
+    if (this.crops.has(key) || this.planted.has(key) || this.at(tx, ty) !== null) return false;
+    this.crops.set(key, { tick, stage: 'sown' });
+    return true;
+  }
+
+  /** Le stade de la culture semée sur la tuile, ou `null` s'il n'y en a pas. */
+  public crop(tx: number, ty: number): CropStage | null {
+    if (this.crops.size === 0) return null;
+    return this.crops.get(coordKey(tx, ty))?.stage ?? null;
+  }
+
+  /** Récolte la culture mûre de la tuile, qui redevient libre ; `false` si elle n'est pas mûre. */
+  public reap(tx: number, ty: number): boolean {
+    const key = coordKey(tx, ty);
+
+    if (this.crops.get(key)?.stage !== 'ripe') return false;
+    this.crops.delete(key);
+    return true;
+  }
+
+  /** Arrache la culture de la tuile, à n'importe quel stade : son champ n'est plus cultivé. Vrai s'il y en avait une. */
+  public wither(tx: number, ty: number): boolean {
+    return this.crops.delete(coordKey(tx, ty));
+  }
+
+  /** Les tuiles semées. */
+  public *cropTiles(): IterableIterator<TileCoord> {
+    for (const key of this.crops.keys()) {
+      const [tx, ty] = key.split(',').map(Number) as [number, number];
+
+      yield { tx, ty };
+    }
+  }
+
+  /**
+   * Un passage de croissance au tick `now` : chaque pousse et chaque
+   * culture prend le stade de son âge. Renvoie les tuiles qui ont changé de
+   * stade — leur chunk est à redessiner.
    */
   public grow(now: number): TileCoord[] {
     const changed: TileCoord[] = [];
+
+    for (const [key, crop] of this.crops) {
+      if (crop.stage === 'ripe') continue;
+
+      const stage = cropStage(now - crop.tick);
+
+      if (stage === crop.stage) continue;
+      crop.stage = stage;
+
+      const [tx, ty] = key.split(',').map(Number) as [number, number];
+
+      changed.push({ tx, ty });
+    }
 
     for (const [key, planted] of this.planted) {
       if (planted.stage === 'tree') continue;
@@ -204,16 +282,24 @@ export class ResourceIndex {
     return Object.fromEntries([...this.planted].map(([key, { tick, taken }]) => [key, { tick, taken }]));
   }
 
+  /** Les cultures semées : tuile → tick du semis, qui dit leur stade. */
+  public cropsJSON(): Record<string, number> {
+    return Object.fromEntries([...this.crops].map(([key, { tick }]) => [key, tick]));
+  }
+
   /**
-   * Remplace les tuiles entamées et les arbres plantés par ceux d'une
-   * sauvegarde ; `now`, le tick sauvegardé, redonne à chaque pousse son stade.
+   * Remplace les tuiles entamées, les arbres plantés et les cultures par ceux
+   * d'une sauvegarde ; `now`, le tick sauvegardé, redonne à chaque pousse et
+   * à chaque culture son stade.
    */
-  public restore(taken: Record<string, number>, planted: Record<string, PlantedTree> = {}, now = 0): void {
+  public restore(taken: Record<string, number>, planted: Record<string, PlantedTree> = {}, now = 0, crops: Record<string, number> = {}): void {
     this.taken.clear();
     for (const [key, amount] of Object.entries(taken)) this.taken.set(key, amount);
     this.planted.clear();
     for (const [key, { tick, taken: cut }] of Object.entries(planted)) {
       this.planted.set(key, { tick, taken: cut, stage: growthStage(now - tick) });
     }
+    this.crops.clear();
+    for (const [key, tick] of Object.entries(crops)) this.crops.set(key, { tick, stage: cropStage(now - tick) });
   }
 }

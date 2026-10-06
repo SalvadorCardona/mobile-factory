@@ -205,11 +205,12 @@ export const LORE = {
     farm: {
       name: 'Ferme',
       sign: 'Ferme',
-      site: 'Une cabane à outils à monter avant de retourner la terre. Quatre ouvriers y travailleront.',
+      site: 'Une cabane à outils à monter avant de retourner la terre. Quatre fermiers y travailleront.',
       description:
-        'Quelques sillons dans la terre irradiée et une cabane à outils. Quatre ' +
-        'ouvriers y font pousser de quoi nourrir la colonie.',
-      effect: 'Cultive la nourriture de la nurserie.',
+        'Quelques sillons dans la terre irradiée et une cabane à outils. Ses ' +
+        'fermiers sèment le champ autour, case par case, le regardent pousser, ' +
+        'puis rapportent la récolte au coffre.',
+      effect: 'Jusqu’à 4 fermiers cultivent un champ de 6 × 6 : environ 9 nourritures par minute.',
     },
     watchtower: {
       name: 'Tour de guet',
