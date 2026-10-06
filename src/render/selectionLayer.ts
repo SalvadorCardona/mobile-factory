@@ -1,6 +1,9 @@
 /**
  * Le cadre de sélection : un rectangle arrondi, en contour seul, autour de
- * l'emprise du bâtiment (ou du chantier) dont la fenêtre est ouverte.
+ * l'emprise du bâtiment (ou du chantier) dont la fenêtre est ouverte — ou
+ * autour de la silhouette de l'habitant ou de l'ennemi qu'on lit
+ * (`selectionFrame.ts` dit quoi entourer). Un seul à la fois : celui de la
+ * fenêtre.
  *
  * Avec plusieurs bâtiments proches, la fenêtre seule ne dit pas lequel on
  * lit : le cadre le montre sur la carte. Il est **au sol** — sous le conteneur
@@ -10,6 +13,11 @@
  * des coins en crochets : en 3/4, le toit cache le bord du fond, et des
  * crochets y perdraient leurs deux coins du haut ; le rectangle garde ses
  * deux côtés et son bord avant, toujours lisibles.
+ *
+ * Une créature, elle, n'a pas d'emprise : le même cadre entoure son pantin
+ * et le suit pas à pas, à la position interpolée. Il passe alors dans le
+ * conteneur trié, juste sous elle : un toit derrière elle ne le mange pas,
+ * un arbre devant elle, si.
  *
  * Jaune colonie, deux tons comme une capsule de l'interface : un trait
  * `shade` décalé vers le bas — la face avant, qui le détache du sable —
@@ -23,11 +31,11 @@
  * respiration ne touchent que l'échelle et l'opacité.
  */
 
-import { Graphics } from 'pixi.js';
-import { TILE_SIZE } from '../core/grid.ts';
+import { Container, Graphics } from 'pixi.js';
 import { PALETTE, RADIUS, STROKE, hex } from '../data/artDirection.ts';
-import type { EntityId } from '../sim/types.ts';
 import type { World } from '../sim/world.ts';
+import type { Selection } from '../ui/creatureView.ts';
+import { selectionFrame } from './selectionFrame.ts';
 
 const BASE = hex(PALETTE.yellow.base);
 const SHADE = hex(PALETTE.yellow.shade);
@@ -49,46 +57,57 @@ const BREATH_MS = 2400;
 const BREATH_DEPTH = 0.3;
 
 export class SelectionLayer {
-  public readonly container = new Graphics();
+  /** La place du cadre au sol, sous le conteneur trié : celle d'un bâtiment. */
+  public readonly container = new Container();
 
+  private readonly frame = new Graphics();
   private lastKey = '';
-  private shownId: EntityId | null = null;
+  private shownTarget: string | null = null;
   private popLeft = 0;
   private clock = 0;
   private readonly reducedMotion: MediaQueryList | null;
   private readonly world: World;
+  /** Le conteneur trié en profondeur, où passe le cadre d'une créature. */
+  private readonly sorted: Container;
 
-  public constructor(world: World) {
+  public constructor(world: World, sorted: Container) {
     this.world = world;
-    this.container.visible = false;
+    this.sorted = sorted;
+    this.frame.visible = false;
+    this.container.addChild(this.frame);
     this.reducedMotion = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
   }
 
-  /** `selected` : le bâtiment dont la fenêtre est ouverte, ou `null`. */
-  public update(selected: EntityId | null, deltaMs: number): void {
-    // Rasé ou annulé, il n'est plus dans le monde : le cadre part avec lui.
-    const entity = selected === null ? undefined : this.world.entities.get(selected);
+  /** `selected` : le bâtiment ou la créature dont la fenêtre est ouverte, ou `null`. */
+  public update(selected: Selection | null, alpha: number, deltaMs: number): void {
+    // Rasé, annulé, mort, parti ou rentré : le cadre part avec lui.
+    const frame = selectionFrame(this.world, selected, alpha);
 
-    this.container.visible = entity !== undefined;
-    if (!entity) {
-      this.shownId = null;
+    this.frame.visible = frame !== null;
+    if (!frame) {
+      this.shownTarget = null;
       return;
     }
 
-    if (entity.id !== this.shownId) {
-      this.shownId = entity.id;
+    if (frame.target !== this.shownTarget) {
+      this.shownTarget = frame.target;
       this.popLeft = POP_MS;
       this.clock = 0;
     }
 
-    const key = `${entity.tx}:${entity.ty}:${entity.width}:${entity.height}`;
+    const parent = frame.depth === null ? this.container : this.sorted;
+
+    if (this.frame.parent !== parent) parent.addChild(this.frame);
+    if (frame.depth !== null) this.frame.zIndex = frame.depth;
+
+    const key = `${frame.width}:${frame.height}`;
 
     if (key !== this.lastKey) {
       this.lastKey = key;
-      this.redraw(entity.width * TILE_SIZE, entity.height * TILE_SIZE);
-      // Centré sur l'emprise : le rebond part du milieu.
-      this.container.position.set((entity.tx + entity.width / 2) * TILE_SIZE, (entity.ty + entity.height / 2) * TILE_SIZE);
+      this.redraw(frame.width, frame.height);
     }
+    // Centré sur ce qu'il entoure : le rebond part du milieu.
+    this.frame.position.set(frame.x, frame.y);
 
     this.animate(deltaMs);
   }
@@ -98,7 +117,7 @@ export class SelectionLayer {
     const h = height + MARGIN * 2;
     const radius = Math.min(RADIUS.block, w / 2, h / 2);
 
-    this.container
+    this.frame
       .clear()
       .roundRect(-w / 2, -h / 2 + FACE_DROP, w, h, radius)
       .stroke({ width: WIDTH, color: SHADE, cap: STROKE.cap, join: STROKE.join })
@@ -110,23 +129,25 @@ export class SelectionLayer {
   private animate(deltaMs: number): void {
     if (this.reducedMotion?.matches) {
       this.popLeft = 0;
-      this.container.scale.set(1);
-      this.container.alpha = 1;
+      this.frame.scale.set(1);
+      this.frame.alpha = 1;
       return;
     }
 
     this.popLeft = Math.max(0, this.popLeft - deltaMs);
-    this.container.scale.set(popScale(1 - this.popLeft / POP_MS));
+    this.frame.scale.set(popScale(1 - this.popLeft / POP_MS));
 
     if (this.popLeft > 0) {
-      this.container.alpha = 1;
+      this.frame.alpha = 1;
       return;
     }
     this.clock = (this.clock + deltaMs) % BREATH_MS;
-    this.container.alpha = 1 - (BREATH_DEPTH * (1 - Math.cos((this.clock / BREATH_MS) * Math.PI * 2))) / 2;
+    this.frame.alpha = 1 - (BREATH_DEPTH * (1 - Math.cos((this.clock / BREATH_MS) * Math.PI * 2))) / 2;
   }
 
   public destroy(): void {
+    // Dans le conteneur trié, il a pu partir avec lui.
+    if (!this.frame.destroyed) this.frame.destroy();
     this.container.destroy();
   }
 }

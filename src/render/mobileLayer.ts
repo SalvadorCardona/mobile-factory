@@ -63,7 +63,8 @@ import type { Mobile, MobileId, Mutant, Pickup } from '../sim/types.ts';
 import { terrainAt } from '../sim/terrain.ts';
 import { deprivedNeed } from '../sim/needs.ts';
 import type { Inhabitant, Laborer, World } from '../sim/world.ts';
-import { Puppet, type Lounge, type PuppetId } from './puppet.ts';
+import { Puppet, type Lounge } from './puppet.ts';
+import { puppetOf } from './puppetOf.ts';
 import type { SpriteLibrary } from './spriteLibrary.ts';
 import type { TerrainTiles } from './terrainTiles.ts';
 
@@ -133,38 +134,6 @@ const STARS_HURRY_TICKS = 20 * 3;
 const LOUNGES: readonly Lounge[] = ['sit', 'lean', 'stretch', 'yawn'];
 const LOUNGE_MS = 2600;
 const LOUNGE_JITTER_MS = 3200;
-
-/** Le pantin de chaque marcheur : sprite, ombre, écart des pieds, allure. */
-function puppetOf(
-  mobile: Exclude<Mobile, { kind: 'arrow' | 'pickup' | 'caravan' }>,
-): { id: PuppetId; shadowWidth: number; stride: number; gait?: 'scuttle' | 'limp' | 'hop' } {
-  switch (mobile.kind) {
-    case 'mutant':
-      return mobile.proto === 'queen'
-        ? { id: 'queen', shadowWidth: 72, stride: 12 }
-        : { id: ENEMIES[mobile.proto].sprite, shadowWidth: 22, stride: 4 };
-    case 'patient':
-      return { id: 'patient', shadowWidth: 22, stride: 4, gait: 'limp' };
-    case 'kid':
-      return { id: 'kid', shadowWidth: 15, stride: 3, gait: 'hop' };
-    case 'eve':
-      return { id: 'eve', shadowWidth: 20, stride: 4 };
-    case 'worker':
-      if (mobile.logistician) return { id: 'logistician', shadowWidth: 17, stride: 3 };
-      if (mobile.builder) return { id: 'builder', shadowWidth: 16, stride: 3 };
-      return mobile.exMutant
-        ? { id: 'exMutant', shadowWidth: 18, stride: 3.5 }
-        : { id: 'worker', shadowWidth: 16, stride: 3 };
-    case 'lumberjack':
-      return { id: 'lumberjack', shadowWidth: 16, stride: 3 };
-    case 'forester':
-      return { id: 'forester', shadowWidth: 16, stride: 3 };
-    case 'beast':
-      return mobile.proto === 'crab'
-        ? { id: WILDLIFE.crab.sprite, shadowWidth: 22, stride: 8, gait: 'scuttle' }
-        : { id: WILDLIFE.wolf.sprite, shadowWidth: 26, stride: 3 };
-  }
-}
 
 interface MobileView {
   root: Container;

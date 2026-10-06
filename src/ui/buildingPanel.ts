@@ -88,7 +88,7 @@ import type { Building, EnemyBase, Entity, EntityId, Forester, Forge, MobileId, 
 import { TICKS_PER_SECOND, repairCost, siteMissing, type SiteCoverage, type World } from '../sim/world.ts';
 import type { UiIcon } from '../art/ui.ts';
 import { onLocale, t } from '../i18n/locale.ts';
-import { creatureView, isCreature, type CreatureView } from './creatureView.ts';
+import { creatureView, isCreature, type CreatureView, type Selection } from './creatureView.ts';
 import { buildingIcon, buildingIconUrl, creatureIconUrl, enemyBaseIconUrl, itemAmount, uiIcon } from './icons.ts';
 import { needMeter } from './needMeter.ts';
 import { PanelTabs } from './panelTabs.ts';
@@ -433,9 +433,11 @@ export class BuildingPanel {
     return this.creatureId;
   }
 
-  /** Le bâtiment affiché, ou `null` si la fenêtre est fermée ou montre une créature. */
-  public get shown(): EntityId | null {
-    return this.entityId;
+  /** Ce que la fenêtre montre, bâtiment ou créature — ce qu'entoure le cadre de sélection —, ou `null`. */
+  public get selection(): Selection | null {
+    if (this.entityId !== null) return { kind: 'building', id: this.entityId };
+    if (this.creatureId !== null) return { kind: 'creature', id: this.creatureId };
+    return null;
   }
 
   public show(id: EntityId): void {
