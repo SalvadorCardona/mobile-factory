@@ -46,8 +46,8 @@
 
 import { Emitter } from '../core/events.ts';
 import { CHUNK_TILES, TILE_SIZE, coordKey, distanceSq, floorDiv, type TileCoord } from '../core/grid.ts';
-import { mulberry32, type StatefulRng } from '../core/rng.ts';
-import { BUILDINGS, MENU_BUILDING_IDS, REPAIR, RUIN, buildingLevel, nextUpgrade, type BuildingId, type BuildingProto } from '../data/buildings.ts';
+import { hash3, mulberry32, type StatefulRng } from '../core/rng.ts';
+import { BUILDINGS, MENU_BUILDING_IDS, REPAIR, RUIN, bedsOf, buildingLevel, nextUpgrade, type BuildingId, type BuildingProto } from '../data/buildings.ts';
 import { CARAVAN, RARE_OFFERS, type RareOfferId } from '../data/caravan.ts';
 import { CLINIC } from '../data/clinic.ts';
 import { DAWN_REWARD, SURVIVORS } from '../data/dayNight.ts';
@@ -70,6 +70,7 @@ import {
 import { ENEMY_BASE, enemyBaseLevel } from '../data/enemyBases.ts';
 import { EVE } from '../data/eve.ts';
 import { GEAR_WORKSHOP, MAX_GEAR, gearOf } from '../data/gear.ts';
+import { HOUSING } from '../data/housing.ts';
 import { AGES, COLONY, NURSERY_CARE } from '../data/inhabitants.ts';
 import { TOWN_PLENTY, type ItemId } from '../data/items.ts';
 import { NEED_ALERT, NEED_IDS, NEEDS, type NeedId } from '../data/needs.ts';
@@ -121,6 +122,7 @@ import { createEve, currentQuest, harvestYieldWithTools, isUnlocked, mostDamaged
 import { ADAM_SALT, adultAge, canWork, foeAge, nameOf, yearsToWork } from './inhabitants.ts';
 import { KID_SPRINT, stepKid } from './kids.ts';
 import { drainNeeds, stuntingNeed, freshNeeds, needState, needsPace, pacedTick, urgentNeed } from './needs.ts';
+import { assignBeds, freshHousing, moodCauses, nightlyMood, moodOf, type Lodging } from './housing.ts';
 import { rollLoot, stepPickup } from './loot.ts';
 import { copyStats, emptyStats, objectiveDone } from './objectives.ts';
 import { denSize, densOfChunk, stepBeast, type Den } from './wildlife.ts';
@@ -305,13 +307,15 @@ export interface Workforce {
  * - `child` : un enfant, qui travaillera dans `days` aubes ;
  * - `working` : un ouvrier à la tâche, au bâtiment `at` (sa maison s'il est entre deux) ;
  * - `idle` : un ouvrier sans travail, qui glande dehors ;
- * - `home` : chez lui — il dort, ou s'abrite d'une vague.
+ * - `home` : chez lui — il dort, ou s'abrite d'une vague ;
+ * - `outside` : il dort dehors, faute de lit.
  */
 export type Occupation =
   | { kind: 'child'; days: number }
   | { kind: 'working'; at: BuildingId | null }
   | { kind: 'idle' }
-  | { kind: 'home' };
+  | { kind: 'home' }
+  | { kind: 'outside' };
 
 /** Un habitant qu'on peut taper : un enfant, un ouvrier, un bûcheron, un forestier. */
 export type Inhabitant = Kid | Worker | Lumberjack | Forester;
@@ -980,7 +984,8 @@ export class World {
     // chargement — sauf s'il attend les bâtisseurs d'un poste de construction.
     this.settleSites();
 
-    // Une maison d'une sauvegarde d'avant les porteurs : ses ouvriers s'y installent.
+    // Une maison d'une sauvegarde d'avant les porteurs : ses ouvriers s'y installent. Les lits se
+    // revoient avec : une sauvegarde d'avant eux attribue les siens.
     this.duty = null;
     this.lodgeCrews();
   }
@@ -3151,6 +3156,7 @@ export class World {
   public occupation(mobile: Inhabitant): Occupation {
     if (mobile.kind === 'kid') return { kind: 'child', days: yearsToWork(mobile.age) };
     if (mobile.inside) return { kind: 'home' };
+    if (mobile.sleepingOut) return { kind: 'outside' };
     if (this.isIdle(mobile)) return { kind: 'idle' };
 
     const place =
@@ -3166,7 +3172,7 @@ export class World {
   private noteIdle(mobile: Laborer): void {
     const busy = mobile.meal !== null || (mobile.kind === 'worker' ? mobile.job !== null || mobile.build !== null : mobile.state !== 'idle');
 
-    if (busy || mobile.inside || !this.mobiles.has(mobile.id) || !this.entities.has(mobile.homeId)) {
+    if (busy || mobile.inside || mobile.sleepingOut || !this.mobiles.has(mobile.id) || !this.entities.has(mobile.homeId)) {
       this.idleSince.delete(mobile.id);
     } else if (!this.idleSince.has(mobile.id)) {
       this.idleSince.set(mobile.id, this.tickCount);
@@ -3234,6 +3240,8 @@ export class World {
 
   private stepMobiles(): void {
     if (this.lodging) this.lodgeCrews();
+    // Une fois par seconde : les lits suivent les maisons finies ou tombées, les ouvriers venus ou partis.
+    if (this.tickCount % HOUSING.assignTicks === 0) this.settleBeds();
 
     // Une fois par tick, pas une fois par ouvrier.
     const alarm = this.hasMutants();
@@ -3297,16 +3305,22 @@ export class World {
           break;
 
         case 'worker':
+          // Couché dehors, il ne l'est que tant que `sleep` l'y remet.
+          mobile.sleepingOut = false;
           if (!this.stepNeeds(mobile, alarm)) this.stepWorker(mobile, alarm, bedtime);
           this.noteIdle(mobile);
           break;
 
         case 'lumberjack':
+          // Couché dehors, il ne l'est que tant que `sleep` l'y remet.
+          mobile.sleepingOut = false;
           if (!this.stepNeeds(mobile, alarm)) this.stepLumberjack(mobile, alarm, bedtime);
           this.noteIdle(mobile);
           break;
 
         case 'forester':
+          // Couché dehors, il ne l'est que tant que `sleep` l'y remet.
+          mobile.sleepingOut = false;
           if (!this.stepNeeds(mobile, alarm)) this.stepForester(mobile, alarm, bedtime);
           this.noteIdle(mobile);
           break;
@@ -3794,6 +3808,7 @@ export class World {
       kind: 'worker',
       id,
       ...freshNeeds(),
+      ...freshHousing(),
       age: adultAge(this.seed, id),
       x: door.x,
       y: door.y,
@@ -4422,6 +4437,7 @@ export class World {
 
       this.events.emit('lootDropped', { id: pickup.id, item, x: pickup.x, y: pickup.y });
     }
+    this.restInhabitants();
     this.ageInhabitants();
 
     // La nuit est survécue : la mairie tient encore (`stepClock` s'arrête à la défaite).
@@ -4451,6 +4467,7 @@ export class World {
         kind: 'worker',
         id,
         ...freshNeeds(),
+        ...freshHousing(),
         age: adultAge(this.seed, id),
         x,
         y: door.y,
@@ -4474,6 +4491,88 @@ export class World {
       this.mobiles.set(worker.id, worker);
     }
     this.events.emit('survivorsArrived', { count, x: door.x, y: door.y });
+  }
+
+  /**
+   * La nuit passée pèse sur le moral : chaque ouvrier qui avait un lit se
+   * lève plus heureux, celui qui a dormi dehors moins (`MOOD`).
+   */
+  private restInhabitants(): void {
+    this.settleBeds();
+    for (const mobile of this.mobiles.values()) {
+      if (isLaborer(mobile)) mobile.happiness = nightlyMood(mobile.happiness, moodCauses(mobile));
+    }
+  }
+
+  /**
+   * Les lits de la ville (`sim/housing.ts`) : chaque ouvrier garde le sien
+   * tant que sa maison tient, les autres prennent les lits libres les plus
+   * proches de leur travail. Les maisons tombées — redevenues chantiers —
+   * n'ont plus de lit.
+   */
+  private settleBeds(): void {
+    const lodgings: Lodging[] = [];
+    const sleepers: Laborer[] = [];
+
+    for (const entity of this.entities.values()) {
+      const beds = entity.kind === 'site' ? 0 : bedsOf(entity.proto);
+
+      if (beds > 0) lodgings.push({ id: entity.id, beds, ...doorOf(entity) });
+    }
+    for (const mobile of this.mobiles.values()) {
+      if (isLaborer(mobile)) sleepers.push(mobile);
+    }
+
+    const beds = assignBeds(
+      sleepers.map((sleeper) => {
+        const work = this.entities.get(sleeper.homeId);
+
+        return { id: sleeper.id, bed: sleeper.bed, ...(work ? doorOf(work) : { x: sleeper.x, y: sleeper.y }) };
+      }),
+      lodgings,
+    );
+
+    for (const sleeper of sleepers) sleeper.bed = beds.get(sleeper.id) ?? null;
+  }
+
+  /**
+   * L'Habitation : `housed` ouvriers ont un lit, sur `population` ouvriers
+   * adultes sur la carte, et `beds` lits en tout dans la ville.
+   */
+  public housing(): { housed: number; population: number; beds: number } {
+    let housed = 0;
+    let population = 0;
+    let beds = 0;
+
+    for (const mobile of this.mobiles.values()) {
+      if (!isLaborer(mobile)) continue;
+      population += 1;
+      if (mobile.bed !== null) housed += 1;
+    }
+    for (const entity of this.entities.values()) {
+      if (entity.kind !== 'site') beds += bedsOf(entity.proto);
+    }
+    return { housed, population, beds };
+  }
+
+  /** Les ouvriers qui ont leur lit dans ce bâtiment. */
+  public sleepersIn(id: EntityId): Laborer[] {
+    const sleepers: Laborer[] = [];
+
+    for (const mobile of this.mobiles.values()) {
+      if (isLaborer(mobile) && mobile.bed === id) sleepers.push(mobile);
+    }
+    return sleepers;
+  }
+
+  /** Les malheureux, du plus malheureux au moins : le HUD centre la caméra sur l'un, puis le suivant. */
+  public unhappyInhabitants(): Laborer[] {
+    const unhappy: Laborer[] = [];
+
+    for (const mobile of this.mobiles.values()) {
+      if (isLaborer(mobile) && moodOf(mobile.happiness) === 'unhappy') unhappy.push(mobile);
+    }
+    return unhappy.sort((a, b) => a.happiness - b.happiness || a.id - b.id);
   }
 
   /**
@@ -4758,6 +4857,8 @@ export class World {
       if (entity.kind === 'lumberCamp') this.staffCamp(entity);
       if (entity.kind === 'foresterHouse') this.staffForester(entity);
     }
+    // Une maison finie ou tombée, des ouvriers venus ou partis : les lits suivent sans attendre.
+    this.settleBeds();
   }
 
   /** Effectifs, bâtiments ou colonie ont changé : la répartition est à refaire, les logés à revoir. */
@@ -4787,6 +4888,7 @@ export class World {
         kind: 'worker',
         id,
         ...freshNeeds(),
+        ...freshHousing(),
         age: adultAge(this.seed, id),
         x: door.x,
         y: door.y,
@@ -4915,10 +5017,10 @@ export class World {
     else if (walkToward(worker, door.x, door.y, STEP_SECONDS, this.onRoad)) worker.inside = true;
   }
 
-  /** Sans travail : il dort chez lui à la nuit tombée, et flâne devant sa porte le reste du temps. */
+  /** Sans travail : il va dormir à la nuit tombée, et flâne devant sa porte le reste du temps. */
   private idle(worker: Laborer, door: { x: number; y: number }, bedtime: boolean): void {
     if (bedtime) {
-      this.goHome(worker, door);
+      this.sleep(worker, door);
       return;
     }
     if (worker.inside) {
@@ -4927,6 +5029,49 @@ export class World {
       Object.assign(worker, wanderFrom(door.x, door.y));
     }
     wander(worker, door, this.seed, this.tickCount, STEP_SECONDS, this.onRoad);
+  }
+
+  /**
+   * L'heure de dormir : dans son lit (`bed`), s'il en a un — il entre dans la
+   * maison, comme chez lui —, sinon dehors, allongé à quelques pas de la
+   * porte de son travail (`door`) : la mairie, pour un survivant.
+   */
+  private sleep(sleeper: Laborer, door: { x: number; y: number }): void {
+    const bed = sleeper.bed === null ? undefined : this.entities.get(sleeper.bed);
+
+    if (bed && bed.kind !== 'site') {
+      this.goHome(sleeper, doorOf(bed));
+      return;
+    }
+
+    // Abrité chez son employeur pendant une vague, ou d'une sauvegarde : il ressort se coucher sur le seuil.
+    if (sleeper.inside) {
+      sleeper.inside = false;
+      Object.assign(sleeper, { x: door.x, y: door.y, prevX: door.x, prevY: door.y });
+    }
+
+    const spot = this.outsideSpot(sleeper, door);
+
+    if (walkToward(sleeper, spot.x, spot.y, STEP_SECONDS, this.onRoad)) {
+      sleeper.facing = 'down';
+      sleeper.sleepingOut = true;
+    }
+  }
+
+  /**
+   * Où il s'allonge dehors : un point haché de la seed et de son id, devant la
+   * porte, pour que les dormeurs d'un même bâtiment ne s'empilent pas. Si la
+   * ligne droite passe par l'eau, devant la porte même. Le point ne bouge pas
+   * d'une nuit à l'autre : il ne se recalcule qu'en chemin (`sleep`).
+   */
+  private outsideSpot(sleeper: Laborer, door: { x: number; y: number }): { x: number; y: number } {
+    const spread = HOUSING.outsideSpread * TILE_SIZE;
+    const roll = (salt: number): number => hash3(this.seed ^ sleeper.id, salt, 0x5ee9) / 4294967296;
+    const x = door.x + (roll(1) * 2 - 1) * spread;
+    const y = door.y + TILE_SIZE * 0.4 + roll(2) * spread;
+
+    if (sleeper.x === x && sleeper.y === y) return { x, y };
+    return clearLine(this.seed, door.x, door.y, x, y) ? { x, y } : door;
   }
 
   /** Le crépuscule et la nuit : les ouvriers sans travail vont se coucher. Sans cycle — mairie en chantier —, jamais. */
@@ -5206,6 +5351,7 @@ export class World {
         kind: 'lumberjack',
         id,
         ...freshNeeds(),
+        ...freshHousing(),
         age: adultAge(this.seed, id),
         x: door.x,
         y: door.y,
@@ -5418,7 +5564,7 @@ export class World {
       }
     }
     if (bedtime && lumberjack.load === 0) {
-      this.goHome(lumberjack, door);
+      this.sleep(lumberjack, door);
       return;
     }
     lumberjack.inside = false;
@@ -5477,6 +5623,7 @@ export class World {
         kind: 'forester',
         id,
         ...freshNeeds(),
+        ...freshHousing(),
         age: adultAge(this.seed, id),
         x: door.x,
         y: door.y,

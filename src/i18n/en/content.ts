@@ -120,6 +120,15 @@ export const content: Content = {
       effect: 'Houses 4 workers. No other effect yet.',
       upgrades: [],
     },
+    home: {
+      label: 'House',
+      sign: 'House',
+      siteDescription: 'A floor, some posts and four bed frames waiting for their walls.',
+      description:
+        'A two-storey house, its chimney smoking and a quilt airing at the window. Four inhabitants sleep warm here: without a bed, you sleep outside, wake up unhappy and drag your feet.',
+      effect: '4 beds: 4 inhabitants sleep warm.',
+      upgrades: [],
+    },
     farm: {
       label: 'Farm',
       sign: 'Farm',
@@ -457,5 +466,6 @@ export const content: Content = {
     base: 'Small base',
     lab: 'Lab',
     forest: 'Forester',
+    housing: 'Houses',
   },
 };

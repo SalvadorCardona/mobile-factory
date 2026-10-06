@@ -413,11 +413,15 @@ describe('bûcherons', () => {
     expect(chopped).toBeGreaterThan(0);
   });
 
-  it('au crépuscule, les bûcherons sans voyage rentrent dormir', () => {
+  it('au crépuscule, les bûcherons sans voyage vont dormir — sans maison, dehors devant la cabane', () => {
     const world = colony({ dusk: true });
 
     run(world, 250);
-    expect(lumberjacks(world).every((lumberjack) => lumberjack.inside)).toBe(true);
+    for (const lumberjack of lumberjacks(world)) {
+      expect(lumberjack.bed).toBeNull();
+      expect(lumberjack.inside).toBe(false);
+      expect(lumberjack.sleepingOut).toBe(true);
+    }
   });
 
   it('une sauvegarde en pleine coupe se recharge avec ses arbres réservés, et la suite est identique', () => {

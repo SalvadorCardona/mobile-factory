@@ -1044,6 +1044,32 @@ button.hud-stock:active {
   box-shadow: none;
 }
 
+/*
+ * L'Habitation, logés / habitants, sur sa propre ligne sous les trois
+ * compteurs : en corail dès que quelqu'un dort dehors. Elle prend le
+ * survol et l'appui long, pour son libellé.
+ */
+.hud .hud-people {
+  flex-wrap: wrap;
+}
+
+.hud .hud-people-housing {
+  pointer-events: auto;
+  flex-basis: 100%;
+  justify-content: center;
+  gap: 3px;
+  margin-top: 2px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--paper-shade);
+}
+
+.hud .hud-people-housing[data-alert='true'] {
+  background: var(--coral);
+  color: var(--paper);
+  font-weight: 700;
+}
+
 /* L'infobulle d'un habitant : la bulle d'Ève, plus petite. */
 .hud-person {
   max-width: 220px;

@@ -113,6 +113,8 @@ export const panel: Messages['panel'] = {
 
   house: {
     sleeping: 'The workers sleep here between shifts.',
+    beds: 'Whoever has no bed finds one here, the closest to their work.',
+    bedsTaken: (used: number, beds: number): string => `Beds taken: ${used}/${beds}`,
   },
 
   lumberCamp: {
@@ -196,8 +198,10 @@ export const panel: Messages['panel'] = {
       exMutant: 'Ex-mutant, porter',
       survivor: 'Survivor, porter',
     },
-    home: (building: string): string => `Lives at: ${building}`,
-    homeless: 'No home',
+    home: (building: string): string => `Works for: ${building}`,
+    homeless: 'No job',
+    sleepsIn: (building: string): string => `Sleeps at: ${building}`,
+    sleepsOutside: 'Sleeps at: outside, no bed',
     carrying: (load: string): string => `Carrying: ${load}`,
     emerging: 'Crawling out of its puddle',
     marchesOn: (building: string): string => `Marching on: ${building}`,

@@ -61,6 +61,7 @@ import type { NeedId } from '../data/needs.ts';
 import { SPRITES } from '../data/sprites.ts';
 import type { Mobile, MobileId, Mutant, Pickup } from '../sim/types.ts';
 import { terrainAt } from '../sim/terrain.ts';
+import { moodOf } from '../sim/housing.ts';
 import { deprivedNeed } from '../sim/needs.ts';
 import type { Inhabitant, Laborer, World } from '../sim/world.ts';
 import { Puppet, type Lounge, type PuppetId } from './puppet.ts';
@@ -77,8 +78,10 @@ const QUEEN_PUDDLE = 2.6;
 
 const SPAWN_MS = 500;
 
-/** La bulle d'un habitant à bout d'un besoin : l'épi de la faim, la goutte de la soif. */
-const NEED_BUBBLES: Record<NeedId, 'hungry' | 'thirsty'> = { hunger: 'hungry', thirst: 'thirsty' };
+/** La bulle d'un habitant à bout d'un besoin : l'épi de la faim, la goutte de la soif ; ou la moue d'un malheureux. */
+type Bubble = 'hungry' | 'thirsty' | 'unhappy';
+
+const NEED_BUBBLES: Record<NeedId, Bubble> = { hunger: 'hungry', thirst: 'thirsty' };
 const DEATH_MS = 520;
 /** Un mort se tasse (hauteur à `DEATH_FLAT`) en autant de ms, puis s'efface à plat. */
 const DEATH_SQUASH_MS = 200;
@@ -193,8 +196,10 @@ interface MobileView {
   loungeLeft: number;
   /** La bulle « affamé » d'un habitant à court de nourriture, ou « assoiffé » à court d'eau. */
   hungry: Sprite | null;
-  /** Le besoin que dit sa bulle en ce moment : sa texture n'est changée que s'il change. */
-  need: NeedId;
+  /** Ce que dit sa bulle en ce moment : sa texture n'est changée que si ça change. */
+  need: Bubble;
+  /** L'ouvrier couché dehors, faute de lit : montré à la place du pantin. */
+  sleeper: Sprite | null;
 }
 
 /** Le vélo-cargo — une ombre, le cadre avec Ève en selle, deux roues qui tournent — ou la charrette du marchand. */
@@ -375,6 +380,7 @@ export class MobileLayer {
           puppet.carry(mobile.load > 0 ? 'wood' : null);
           this.loiter(view, mobile, deltaMs);
           this.starve(view, mobile);
+          this.bedDown(view, mobile);
           puppet.update(deltaMs, view.lounge ? 'down' : mobile.facing, mobile.state === 'chop' ? 'act' : mobile.moving ? 'walk' : 'idle');
           break;
         }
@@ -387,6 +393,7 @@ export class MobileLayer {
           this.ground(view, x, y);
           this.loiter(view, mobile, deltaMs);
           this.starve(view, mobile);
+          this.bedDown(view, mobile);
           puppet.update(deltaMs, view.lounge ? 'down' : mobile.facing, mobile.state === 'plant' ? 'act' : mobile.moving ? 'walk' : 'idle');
           break;
         }
@@ -406,6 +413,7 @@ export class MobileLayer {
             this.loiter(view, mobile, deltaMs);
           }
           if (mobile.kind === 'kid' || mobile.kind === 'worker') this.starve(view, mobile);
+          if (mobile.kind === 'worker') this.bedDown(view, mobile);
 
           if ((mobile.kind === 'mutant' || mobile.kind === 'beast') && view.hp) {
             const max = mobile.kind === 'mutant' ? ENEMIES[mobile.proto].hp : WILDLIFE[mobile.proto].hp;
@@ -454,18 +462,30 @@ export class MobileLayer {
   /**
    * La bulle « affamé » — ou « assoiffé » — flotte au-dessus de la tête d'un
    * habitant à court de nourriture ou d'eau ; s'il manque des deux, celle du
-   * besoin le plus bas.
+   * besoin le plus bas. Sinon, la moue d'un ouvrier malheureux, qui a trop
+   * dormi dehors : la faim et la soif pressent davantage.
    */
   private starve(view: MobileView, mobile: Inhabitant): void {
     const bubble = view.hungry!;
     const need = deprivedNeed(mobile.needs);
+    const shown: Bubble | null = need !== null ? NEED_BUBBLES[need] : mobile.kind !== 'kid' && moodOf(mobile.happiness) === 'unhappy' ? 'unhappy' : null;
 
-    bubble.visible = need !== null;
-    if (need !== null && view.need !== need) {
-      view.need = need;
-      bubble.texture = this.library.part(NEED_BUBBLES[need], 'bubble');
+    bubble.visible = shown !== null;
+    if (shown !== null && view.need !== shown) {
+      view.need = shown;
+      bubble.texture = this.library.part(shown, 'bubble');
     }
-    if (bubble.visible) bubble.y = (mobile.kind === 'kid' ? -30 : -40) + Math.sin(this.clock * 0.004 + mobile.id) * 2;
+
+    // Couché dehors, la tête est au ras du sol : la bulle descend avec elle.
+    const top = mobile.kind === 'kid' ? -30 : mobile.sleepingOut ? -20 : -40;
+
+    if (bubble.visible) bubble.y = top + Math.sin(this.clock * 0.004 + mobile.id) * 2;
+  }
+
+  /** Un ouvrier sans lit dort dehors : allongé sous sa couverture, à la place de son pantin. */
+  private bedDown(view: MobileView, mobile: Laborer): void {
+    view.puppet!.root.visible = !mobile.sleepingOut;
+    view.sleeper!.visible = mobile.sleepingOut;
   }
 
   /**
@@ -686,7 +706,7 @@ export class MobileLayer {
       }
       sprite.anchor.set(SPRITES.arrow.anchorX, SPRITES.arrow.anchorY);
       root.addChild(sprite);
-      view = { root, puppet: null, hp: null, lastHp: 0, age: SPAWN_MS, tile: '', bike: null, stars: null, size: 1, puddle: 1, recoil: null, kind: mobile.kind, lounge: null, loungeLeft: 0, hungry: null, need: 'hunger' };
+      view = { root, puppet: null, hp: null, lastHp: 0, age: SPAWN_MS, tile: '', bike: null, stars: null, size: 1, puddle: 1, recoil: null, kind: mobile.kind, lounge: null, loungeLeft: 0, hungry: null, need: 'hungry', sleeper: null };
     } else if (mobile.kind === 'pickup') {
       const tx = floorDiv(mobile.x, TILE_SIZE);
       const ty = floorDiv(mobile.y, TILE_SIZE);
@@ -705,14 +725,14 @@ export class MobileLayer {
       // Butin rechargé d'une sauvegarde : déjà posé, pas de saut.
       const fresh = LOOT_DROPS.lifetimeTicks - mobile.ttl < 20;
 
-      view = { root, puppet: null, hp: null, lastHp: 0, age: fresh ? 0 : LOOT_DROP_MS, tile: '', bike: null, stars: null, size: 1, puddle: 1, recoil: null, kind: mobile.kind, lounge: null, loungeLeft: 0, hungry: null, need: 'hunger' };
+      view = { root, puppet: null, hp: null, lastHp: 0, age: fresh ? 0 : LOOT_DROP_MS, tile: '', bike: null, stars: null, size: 1, puddle: 1, recoil: null, kind: mobile.kind, lounge: null, loungeLeft: 0, hungry: null, need: 'hungry', sleeper: null };
     } else if (mobile.kind === 'caravan') {
       const cart = this.cart(this.tiles.shadow('grass'));
 
       // Rechargée garée, elle garde le sens où elle roulait.
       cart.figure.scale.x = mobile.facing === 'left' ? -1 : 1;
       root.addChild(cart.root);
-      view = { root, puppet: null, hp: null, lastHp: 0, age: SPAWN_MS, tile: '', bike: cart, stars: null, size: 1, puddle: 1, recoil: null, kind: mobile.kind, lounge: null, loungeLeft: 0, hungry: null, need: 'hunger' };
+      view = { root, puppet: null, hp: null, lastHp: 0, age: SPAWN_MS, tile: '', bike: cart, stars: null, size: 1, puddle: 1, recoil: null, kind: mobile.kind, lounge: null, loungeLeft: 0, hungry: null, need: 'hungry', sleeper: null };
     } else {
       const foe = mobile.kind === 'mutant' || mobile.kind === 'beast';
       const { id, ...options } = puppetOf(mobile);
@@ -749,9 +769,17 @@ export class MobileLayer {
         hungry.visible = false;
         root.addChild(hungry);
       }
+      let sleeper: Sprite | null = null;
+
+      if (mobile.kind === 'worker' || mobile.kind === 'lumberjack' || mobile.kind === 'forester') {
+        sleeper = new Sprite(this.library.part('sleeper', 'body'));
+        sleeper.anchor.set(SPRITES.sleeper.anchorX, SPRITES.sleeper.anchorY);
+        sleeper.visible = false;
+        root.addChildAt(sleeper, 0);
+      }
       const puddle = mobile.kind === 'mutant' ? puddleSize(mobile) : 1;
 
-      view = { root, puppet, hp, lastHp: foe ? mobile.hp : 0, age: foe ? 0 : SPAWN_MS, tile: '', bike, stars, size: scale, puddle, recoil: null, kind: mobile.kind, lounge: null, loungeLeft: 0, hungry, need: 'hunger' };
+      view = { root, puppet, hp, lastHp: foe ? mobile.hp : 0, age: foe ? 0 : SPAWN_MS, tile: '', bike, stars, size: scale, puddle, recoil: null, kind: mobile.kind, lounge: null, loungeLeft: 0, hungry, need: 'hungry', sleeper };
       if (mobile.kind === 'mutant' && mobile.emerge > 0) this.spill(mobile, puddle);
     }
 

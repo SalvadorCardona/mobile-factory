@@ -42,6 +42,7 @@ export const BUILD_PRESTIGE = {
   drill: 2,
   nursery: 3,
   builderHouse: 3,
+  home: 2,
   farm: 2,
   watchtower: 2,
   forge: 3,

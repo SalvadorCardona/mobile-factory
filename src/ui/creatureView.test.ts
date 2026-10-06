@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ENEMIES, WILDLIFE } from '../data/enemies.ts';
 import { TEST_SCENARIOS } from '../data/testScenario.ts';
-import { setLocale } from '../i18n/locale.ts';
+import { setLocale, t } from '../i18n/locale.ts';
 import { foeName, nameOf } from '../sim/inhabitants.ts';
 import { stageScenario } from '../sim/testScenario.ts';
 import type { Beast, Mutant } from '../sim/types.ts';
@@ -34,7 +34,7 @@ function mutant(world: World, hp: number): Mutant {
 }
 
 describe('creatureView', () => {
-  it('un habitant : son prénom, son âge, son métier, ce qu’il fait, où il loge — pas de points de vie', () => {
+  it('un habitant : son prénom, son âge, son métier, ce qu’il fait, pour qui il travaille, où il dort — pas de points de vie', () => {
     const world = base();
     const jack = first(world, 'lumberjack');
     const view = creatureView(world, jack);
@@ -46,7 +46,19 @@ describe('creatureView', () => {
     expect(view.hp).toBeNull();
     expect(view.lines[0]).toBe('Bûcheron');
     expect(camp.proto).toBe('lumberCamp');
-    expect(view.lines).toContain('Logé : Cabane de bûcheron');
+    expect(view.lines).toContain('Travaille pour : Cabane de bûcheron');
+    // La petite base n'a pas de Maison : il dort dehors, et son bonheur se lit sous ses jauges.
+    expect(view.lines).toContain('Dort à : dehors, faute de lit');
+    expect(view.happiness).toBe(jack.happiness);
+  });
+
+  it('dit dans quelle maison dort un habitant qui a un lit', () => {
+    const world = base();
+    const jack = first(world, 'lumberjack');
+    const house = [...world.entities.values()].find((entity) => entity.kind !== 'site')!;
+
+    jack.bed = house.id;
+    expect(creatureView(world, jack).lines).toContain(`Dort à : ${t().buildings[house.proto].label}`);
   });
 
   it('dit ce que porte un bûcheron qui rentre', () => {

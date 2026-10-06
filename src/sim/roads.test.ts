@@ -4,6 +4,7 @@ import { BUILDINGS } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
 import { ROADS, ROAD_LINK } from '../data/roads.ts';
 import type { RoadRejection } from './commands.ts';
+import { freshHousing } from './housing.ts';
 import { freshNeeds } from './needs.ts';
 import { RoadNetwork, stepsBetween, type RoadTest } from './roads.ts';
 import { decodeSave, encodeSave } from './save.ts';
@@ -78,6 +79,7 @@ function porter(x: number, y: number): Worker {
     searchTicks: 0,
     ...wanderFrom(x, y),
     ...freshNeeds(),
+    ...freshHousing(),
   };
 }
 

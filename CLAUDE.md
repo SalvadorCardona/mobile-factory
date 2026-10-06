@@ -193,6 +193,30 @@ tuiles du départ. Elle n'entre dans aucune recette : un besoin est son
 débouché (`validatePrototypes()`). Une sauvegarde d'avant l'eau (version 8)
 reçoit l'eau de départ dans sa mairie (`migrateV8`).
 
+**Habitation et bonheur** (`data/housing.ts`, `sim/housing.ts`) — un
+bâtiment déclare ses lits (`beds` de `data/buildings.ts`, `bedsOf`) : la
+**Maison** (`home`, kind `house` sans ouvriers, 4 lits, au menu dès le
+départ), le dortoir des porteurs (4), la maisonnette du forestier (1).
+L'Habitation est leur somme ; elle ne bloque rien. Chaque ouvrier adulte sur
+la carte (porteur, logisticien, bâtisseur, bûcheron, forestier, ex-mutant,
+survivant — pas les enfants, qui dorment à leur nurserie) reçoit un lit
+(`Housed.bed`, sauvegardé) : il garde le sien tant que la maison tient, les
+autres prennent le lit libre le plus proche de leur travail (`assignBeds`,
+`World.settleBeds` : chaque seconde, à chaque changement de maisons ou
+d'ouvriers, au chargement). À la nuit, un oisif entre dans sa maison
+(`inside`) ou, sans lit, s'allonge devant la porte de son travail
+(`sleepingOut`, recalculé à chaque tick : sprite `sleeper`) ; une vague le
+renvoie s'abriter chez son employeur. À chaque aube, `MOOD` s'ajoute au
+`happiness` (0–100, sauvegardé ; 50 au départ et d'une vieille sauvegarde) :
+lit +15, dehors −10 ; sous 30, malheureux (bulle `unhappy`, `moodOf`) et
+×0,7 sur son pas (`moodPace`, lu par `walkToward`) — Adam jamais. Un autre
+besoin qui pèsera sur le moral est une entrée de `MOOD` et une ligne de
+`moodCauses`. Le HUD montre « logés / habitants » (`World.housing`) sous la
+population, en corail si quelqu'un dort dehors ; la fenêtre d'un habitant,
+son bonheur et « Dort à : Maison / dehors » ; celle d'un bâtiment à lits,
+ses lits occupés. Partie de test `/test/housing` : le soir tombe, dix
+ouvriers, quatre lits.
+
 **Jour et nuit** — dès que la mairie est debout, le cycle démarre
 (`src/data/dayNight.ts`, horloge pure dans `src/sim/dayNight.ts`) : une
 journée sans mutant (~3 min), un crépuscule (carte teintée indigo, lampions

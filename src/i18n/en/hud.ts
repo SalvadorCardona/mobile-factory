@@ -186,6 +186,9 @@ export const hud: Messages['hud'] = {
     working: (n: number): string => `${n} worker${n === 1 ? '' : 's'} working`,
     idle: (n: number): string => `${n} idle worker${n === 1 ? '' : 's'}${n > 0 ? ' — tap to see one' : ''}`,
     children: (n: number): string => `${n} child${n === 1 ? '' : 'ren'}`,
+    housing: (housed: number, population: number): string =>
+      `Housing — ${housed} housed out of ${population} inhabitant${population === 1 ? '' : 's'}` +
+      (population > housed ? `: ${population - housed} sleep${population - housed === 1 ? 's' : ''} outside, build a House` : ''),
   },
   stock: {
     bag: 'Bag',
@@ -241,6 +244,9 @@ export const hud: Messages['hud'] = {
     workingAt: (building: string): string => `working: ${building}`,
     idle: 'no job',
     home: 'at home',
+    outside: 'asleep',
+    mood: { content: 'happy', neutral: 'neutral', unhappy: 'unhappy' },
+    moodLabel: (value: number): string => `Happiness: ${value}/100 — a night in a bed raises it, a night outside lowers it`,
     needs: {
       hunger: { sated: 'well fed', wanting: 'hungry', deprived: 'starving' },
       thirst: { sated: 'not thirsty', wanting: 'thirsty', deprived: 'parched' },

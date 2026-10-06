@@ -12,6 +12,7 @@
  * | foreuse | derrick en treillis | orange (moteur) | roue, tonneau, pierre extraite |
  * | nurserie | maison basse au toit en dôme | peau (rose pêche) | berceau, linge, ballon |
  * | constructeurs | atelier plat et une grue | cyan (bâche) | grue, marteau, scie |
+ * | maison | haute et étroite, à étage, toit pointu | indigo (ardoise) | édredon en patchwork à la fenêtre, cheminée qui fume, chat sur le paillasson |
  * | ferme | champ bas, sans toit | ambre (terre) et menthe | sillons, épouvantail |
  * | tour de guet | la plus haute, sur pilotis | blanc (auvent de toile) | plateforme, drapeau |
  * | tour renforcée (niveau 2 de la tour de guet) | celle de la tour de guet | cyan (plaques de fer) | plaques rivetées, drapeau jaune |
