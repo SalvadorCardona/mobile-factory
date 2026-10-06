@@ -25,6 +25,7 @@ import type { BuildingId } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
 import type { GhostState, RoadTool, RoadTrail } from '../input/placement.ts';
 import type { EntityId } from '../sim/types.ts';
+import type { Selection } from '../ui/creatureView.ts';
 import { STEP_MS, type World } from '../sim/world.ts';
 import { Camera, ZOOM, stepZoom } from './camera.ts';
 import { ChunkLayer } from './chunkLayer.ts';
@@ -62,7 +63,7 @@ export class GameRenderer {
   private readonly workReach: WorkReachLayer;
   private readonly selection: SelectionLayer;
   /** Le bâtiment dont la fenêtre est ouverte : un cadre l'entoure, une cabane y montre son rayon de coupe. */
-  private selected: EntityId | null = null;
+  private selected: Selection | null = null;
   private readonly nightLayer: NightLayer;
   public readonly particles: ParticleLayer;
   private readonly library: SpriteLibrary;
@@ -97,7 +98,7 @@ export class GameRenderer {
     this.indicators = new IndicatorLayer(world, library);
     this.ghostLayer = new GhostLayer(world, library);
     this.workReach = new WorkReachLayer(world);
-    this.selection = new SelectionLayer(world);
+    this.selection = new SelectionLayer(world, this.entityLayer.container);
     this.nightLayer = new NightLayer(app.renderer, world);
     this.weather = new WeatherLayer(world, library);
     this.particles = new ParticleLayer(library);
@@ -180,9 +181,9 @@ export class GameRenderer {
     this.indicators.pointTo(id, item);
   }
 
-  /** Le bâtiment sélectionné — sa fenêtre est ouverte —, ou `null`. */
-  public setSelected(id: EntityId | null): void {
-    this.selected = id;
+  /** Le bâtiment ou la créature sélectionné — sa fenêtre est ouverte —, ou `null`. */
+  public setSelected(selected: Selection | null): void {
+    this.selected = selected;
   }
 
   /** Le réglage « Pancartes » : montre ou masque celles de tous les bâtiments. */
@@ -308,8 +309,8 @@ export class GameRenderer {
     this.nightLayer.update(alpha);
     if (road) this.ghostLayer.updateRoad(road.tool, road.trail, this.app.ticker.deltaMS);
     else this.ghostLayer.update(armed, ghost, block, this.app.ticker.deltaMS);
-    this.workReach.update(building ? ghost : null, this.selected);
-    this.selection.update(this.selected, this.app.ticker.deltaMS);
+    this.workReach.update(building ? ghost : null, this.selected?.kind === 'building' ? this.selected.id : null);
+    this.selection.update(this.selected, alpha, this.app.ticker.deltaMS);
     this.weather.update(this.camera, this.app.ticker.deltaMS, alpha);
     this.signal.update(this.camera, this.app.ticker.deltaMS);
     this.indicators.update(this.camera, this.app.ticker.deltaMS, alpha);

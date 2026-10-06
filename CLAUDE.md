@@ -423,7 +423,9 @@ Les règles, en résumé :
   tap affiche le libellé, aussi en `aria-label` —, le coffre en pictogramme
   au-dessus de ses objets. Sur la carte, un cadre jaune en contour seul
   entoure au sol l'emprise du bâtiment ouvert (`render/selectionLayer.ts`,
-  rebond puis respiration) ; un tap dans le vide ferme la fenêtre.
+  rebond puis respiration) — ou, le même, la silhouette de l'habitant ou de
+  l'ennemi ouvert, qu'il suit pas à pas (`render/selectionFrame.ts`), effacé
+  s'il rentre chez lui ou meurt ; un tap dans le vide ferme la fenêtre.
 - Chaque bâtiment fini porte au pied de sa façade une **pancarte** : son nom
   court (`sign` de `data/buildings.ts`, `t().buildings[id].sign`) et l'icône
   de ce qu'il produit ou consomme (`render/signs.ts` décide, `signboard.ts`

@@ -497,7 +497,7 @@ async function main(): Promise<void> {
     }
     zoom.update(renderer.zoomLimits);
     renderer.setObjective(hud.wantedItem());
-    renderer.setSelected(panel.shown);
+    renderer.setSelected(panel.selection);
     buildMenu.refresh();
     panel.update();
     inventory.update();
