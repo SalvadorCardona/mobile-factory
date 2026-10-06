@@ -29,9 +29,10 @@
  * ville n'a plus en corail. Elle s'efface au marteau des bâtisseurs, et au
  * dézoom, où elle deviendrait illisible.
  *
- * Au pied de chaque bâtiment fini, sa pancarte (`signboard.ts`) : son nom
- * court et l'icône de ce qu'il produit. En reculant, elle ne garde que
- * l'icône, puis s'efface ; le réglage « Pancartes » la masque partout.
+ * Au pied de chaque bâtiment fini, sa pancarte (`signboard.ts`) : le
+ * médaillon de son métier et son nom court — loin des bulles d'état, qui
+ * flottent au-dessus du toit. En reculant, elle ne garde que le médaillon,
+ * puis s'efface ; le réglage « Pancartes » la masque partout.
  *
  * Un bâtiment amélioré (`buildingUpgraded`) change de sprite sur place : celui
  * de son niveau (`BUILDINGS[proto].upgrades`), et il rebondit comme à l'achèvement.
@@ -472,12 +473,12 @@ export class EntityLayer {
     view.needs.update(lines, (entity.width * TILE_SIZE) / 2, barTop(entity) + BAR_HEIGHT + NEEDS_DIP, deltaMs);
   }
 
-  /** La pancarte : nom et icône, l'icône seule en reculant, rien plus loin ou si le réglage la masque. */
+  /** La pancarte : médaillon et nom, le médaillon seul en reculant, rien plus loin ou si le réglage la masque. */
   private showSign(view: EntityView, entity: Entity, zoom: number): void {
     if (!view.sign || entity.kind === 'site') return;
 
-    const item = signItem(entity.proto, entity.kind, entity.kind === 'drill' ? entity.output : null);
-    const mode = this.signsOn ? signMode(zoom, item) : 'none';
+    const item = signItem(entity.kind, entity.kind === 'drill' ? entity.output : null);
+    const mode = this.signsOn ? signMode(zoom) : 'none';
 
     view.sign.visible = mode !== 'none';
     if (mode === 'none') return;
@@ -486,7 +487,7 @@ export class EntityLayer {
 
     if (key === view.signKey) return;
     view.signKey = key;
-    view.sign.texture = this.signboards.texture(t().buildings[entity.proto].sign, item, mode);
+    view.sign.texture = this.signboards.texture(entity.proto, t().buildings[entity.proto].sign, item, mode);
     // Jamais plus large que l'emprise : un tap sur la pancarte est un tap sur le bâtiment.
     view.sign.scale.set(Math.min(1, (entity.width * TILE_SIZE - SIGN_MARGIN * 2) / view.sign.texture.width));
   }

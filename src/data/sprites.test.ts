@@ -7,6 +7,7 @@ import { DIAL_ARCS } from '../sim/dayNight.ts';
 import { GROUND, PALETTE, auditSvg, type Ground } from './artDirection.ts';
 import { BUILDINGS, BUILDING_IDS } from './buildings.ts';
 import { ITEM_ICONS } from './icons.ts';
+import { JOB_ICONS } from './jobIcons.ts';
 import { BUILDING_PARTS, SPRITES, SPRITE_IDS, WALKER_PARTS, type SpriteProto } from './sprites.ts';
 
 const TOXIC: readonly string[] = Object.values(PALETTE.toxic);
@@ -38,6 +39,7 @@ function everySvg(): [string, string][] {
   ];
   const icons = [
     ...Object.entries(ITEM_ICONS).map(([item, svg]): [string, string] => [`icon.${item}`, svg]),
+    ...Object.entries(JOB_ICONS).map(([building, svg]): [string, string] => [`job.${building}`, svg]),
     ...Object.entries(UI_ICONS).map(([name, svg]): [string, string] => [`ui.${name}`, svg]),
     ['ui.horloge.jour', dayDialSvg(DIAL_ARCS, 0.3, false, false)] as [string, string],
     ['ui.horloge.alerte', dayDialSvg(DIAL_ARCS, 0.66, false, true)] as [string, string],

@@ -1,13 +1,14 @@
 /**
  * Les pancartes des bâtiments : un panneau planté au pied de la façade, qui
- * dit son nom court et, d'une icône, ce qu'il produit ou consomme
- * (`signs.ts` décide quoi et à quel zoom).
+ * porte le médaillon de son métier, son nom court et, pour une foreuse, le
+ * filon qu'elle extrait (`signs.ts` décide quoi et à quel zoom).
  *
  * Vue de 3/4 comme les façades : le panneau fait face à la caméra, une
  * capsule blanche et sa face avant lavande — les couleurs des cartes du HUD
- * —, posée sur deux piquets indigo. Une pancarte n'a pas de vie propre :
- * c'est un sprite du bâtiment (`entityLayer.ts`), qui bouge, se trie et
- * disparaît avec lui.
+ * —, posée sur deux piquets indigo. Le médaillon, un disque jaune, emplit
+ * son bout gauche ; de loin, la pancarte ne garde que lui, agrandi. Une
+ * pancarte n'a pas de vie propre : c'est un sprite du bâtiment
+ * (`entityLayer.ts`), qui bouge, se trie et disparaît avec lui.
  *
  * Une texture par (bâtiment, objet, mode, langue), dessinée une fois et
  * partagée par tous les bâtiments du même type : le texte n'est jamais
@@ -22,17 +23,24 @@
 
 import { Container, Graphics, Rectangle, Sprite, Text, type Renderer, type Texture } from 'pixi.js';
 import { PALETTE, hex } from '../data/artDirection.ts';
+import type { BuildingId } from '../data/buildings.ts';
 import { ICON_SIZE } from '../data/icons.ts';
 import type { ItemId } from '../data/items.ts';
 import { ZOOM } from './camera.ts';
 import type { SignMode } from './signs.ts';
 import { screenResolution, type SpriteLibrary } from './spriteLibrary.ts';
 
-/** Taille du nom et côté de l'icône, en pixels monde. */
+/** Taille du nom et côté de l'icône d'objet, en pixels monde. */
 const FONT = 9;
 const ICON = 11;
-/** Hauteur du panneau, marge intérieure, écart icône–nom. */
-const HEIGHT = 13;
+/**
+ * Hauteur du panneau et diamètre du médaillon, de près (`full`) et de loin
+ * (`icon`) : seul, le médaillon grandit — à 0,8 de zoom, il paraît à peu
+ * près aussi grand que de près au zoom 1.
+ */
+const HEIGHT = { full: 13, icon: 17 } as const;
+const MEDAL = { full: 12, icon: 16 } as const;
+/** Marge intérieure, écart entre deux éléments. */
 const PAD = 4;
 const GAP = 2;
 /** La face avant, plus sombre, sous le panneau : son épaisseur. */
@@ -76,21 +84,21 @@ export class Signboards {
       });
   }
 
-  /** La texture d'une pancarte : `name` et l'icône de `item` (`full`), ou l'icône seule (`icon`). */
-  public texture(name: string, item: ItemId | null, mode: Exclude<SignMode, 'none'>): Texture {
-    const key = `${mode}:${item ?? ''}:${mode === 'full' ? name : ''}`;
+  /** La texture d'une pancarte : le médaillon de `job`, `name` (`full` seulement) et l'icône de `item`. */
+  public texture(job: BuildingId, name: string, item: ItemId | null, mode: Exclude<SignMode, 'none'>): Texture {
+    const key = `${mode}:${job}:${item ?? ''}:${mode === 'full' ? name : ''}`;
     const cached = this.textures.get(key);
 
     if (cached) return cached;
 
-    const texture = this.draw(mode === 'full' ? name : null, item);
+    const texture = this.draw(job, mode === 'full' ? name : null, item, mode);
 
     this.textures.set(key, texture);
     return texture;
   }
 
-  /** Panneau, face avant, piquets, puis icône et nom : rendus une fois dans une texture. */
-  private draw(name: string | null, item: ItemId | null): Texture {
+  /** Panneau, face avant, piquets, puis médaillon, nom et icône : rendus une fois dans une texture. */
+  private draw(job: BuildingId, name: string | null, item: ItemId | null, mode: Exclude<SignMode, 'none'>): Texture {
     const board = new Container();
     const back = new Graphics();
     const text =
@@ -101,35 +109,45 @@ export class Signboards {
             style: { fontFamily: FONT_FAMILY, fontWeight: FONT_WEIGHT, fontSize: FONT, fill: INK },
             resolution: this.resolution,
           });
+    const boardHeight = HEIGHT[mode];
+    const medalSize = MEDAL[mode];
+    const medal = new Sprite(this.library.part('jobs', job));
     const icon = item === null ? null : new Sprite(this.library.part('loot', item));
-    const content = (icon ? ICON : 0) + (icon && text ? GAP : 0) + (text ? Math.ceil(text.width) : 0);
-    const width = Math.max(HEIGHT, content + PAD * 2);
-    const height = HEIGHT + FACE + POST_H;
+    // Le médaillon emplit le bout arrondi de gauche : sa marge est celle qui reste autour de lui.
+    const inset = (boardHeight - medalSize) / 2;
+    const rest = (text ? GAP + Math.ceil(text.width) : 0) + (icon ? GAP + ICON : 0);
+    const width = inset + medalSize + (rest > 0 ? rest + PAD : inset);
+    const height = boardHeight + FACE + POST_H;
 
     // Les piquets d'abord : le panneau les recouvre en haut.
     for (const x of width > POST_INSET * 4 ? [POST_INSET, width - POST_INSET - POST_W] : [(width - POST_W) / 2]) {
-      back.rect(x, HEIGHT, POST_W, FACE + POST_H).fill(INK);
+      back.rect(x, boardHeight, POST_W, FACE + POST_H).fill(INK);
     }
     back
-      .roundRect(0, 0, width, HEIGHT + FACE, HEIGHT / 2)
+      .roundRect(0, 0, width, boardHeight + FACE, boardHeight / 2)
       .fill(hex(PALETTE.paper.shade))
-      .roundRect(0, 0, width, HEIGHT, HEIGHT / 2)
+      .roundRect(0, 0, width, boardHeight, boardHeight / 2)
       .fill(hex(PALETTE.paper.base));
     board.addChild(back);
 
-    let left = (width - content) / 2;
+    medal.anchor.set(0.5);
+    medal.scale.set(medalSize / ICON_SIZE);
+    medal.position.set(inset + medalSize / 2, boardHeight / 2);
+    board.addChild(medal);
 
+    let left = inset + medalSize + GAP;
+
+    if (text) {
+      text.anchor.set(0, 0.5);
+      text.position.set(left, boardHeight / 2 + 0.5);
+      board.addChild(text);
+      left += Math.ceil(text.width) + GAP;
+    }
     if (icon) {
       icon.anchor.set(0.5);
       icon.scale.set(ICON / ICON_SIZE);
-      icon.position.set(left + ICON / 2, HEIGHT / 2);
+      icon.position.set(left + ICON / 2, boardHeight / 2);
       board.addChild(icon);
-      left += ICON + GAP;
-    }
-    if (text) {
-      text.anchor.set(0, 0.5);
-      text.position.set(left, HEIGHT / 2 + 0.5);
-      board.addChild(text);
     }
 
     const texture = this.renderer.generateTexture({

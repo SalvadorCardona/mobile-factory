@@ -5,9 +5,10 @@
  * visuel du jeu est déjà un SVG, il n'y a rien à baker : le navigateur le
  * dessine lui-même, net à toutes les densités d'écran.
  *
- * Quatre sources : les icônes d'objets (`data/icons.ts`, une par objet,
+ * Cinq sources : les icônes d'objets (`data/icons.ts`, une par objet,
  * garanti par le type), le bâtiment fini de chaque sprite, pour que le menu
- * de construction montre ce qu'on va poser, le portrait d'une créature
+ * de construction montre ce qu'on va poser, le médaillon de son métier
+ * (`data/jobIcons.ts`, un par bâtiment), le portrait d'une créature
  * (ses morceaux de face), et les pictogrammes de l'interface (`art/ui.ts`).
  */
 
@@ -15,6 +16,7 @@ import { ROAD_THUMB } from '../art/road.ts';
 import { UI_ICONS, type UiIcon } from '../art/ui.ts';
 import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
 import { ITEM_ICONS, PRESTIGE_ICON } from '../data/icons.ts';
+import { JOB_ICONS } from '../data/jobIcons.ts';
 import type { ItemId } from '../data/items.ts';
 import { PERKS, type PerkId } from '../data/perks.ts';
 import { embed, svg } from '../data/artDirection.ts';
@@ -42,6 +44,11 @@ export function itemIconUrl(item: ItemId): string {
 /** URL de la vignette d'un bâtiment : son morceau `built`. */
 export function buildingIconUrl(building: BuildingId): string {
   return url(`building:${building}`, SPRITES[BUILDINGS[building].sprite].parts.built);
+}
+
+/** URL du médaillon de métier d'un bâtiment. */
+export function jobIconUrl(building: BuildingId): string {
+  return url(`job:${building}`, JOB_ICONS[building]);
 }
 
 /** URL de la vignette d'une base mutante : son campement. */
@@ -96,6 +103,15 @@ export function buildingIcon(building: BuildingId, size = 40): HTMLImageElement 
   const element = image(buildingIconUrl(building), 'icon icon-building', size, size);
 
   element.alt = t().buildings[building].label;
+  return element;
+}
+
+/** Un `<img>` du médaillon de métier d'un bâtiment, décoratif : son nom est écrit à côté. */
+export function jobIcon(building: BuildingId, size = 20): HTMLImageElement {
+  const element = image(jobIconUrl(building), 'icon icon-job', size, size);
+
+  element.alt = '';
+  element.setAttribute('aria-hidden', 'true');
   return element;
 }
 

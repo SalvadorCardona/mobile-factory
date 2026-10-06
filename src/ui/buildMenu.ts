@@ -67,7 +67,7 @@ import type { Placement } from '../input/placement.ts';
 import type { World } from '../sim/world.ts';
 import { onLocale, t } from '../i18n/locale.ts';
 import { buildOrder } from './buildOrder.ts';
-import { buildingIcon, itemAmount, roadIcon, uiIcon } from './icons.ts';
+import { buildingIcon, itemAmount, jobIcon, roadIcon, uiIcon } from './icons.ts';
 import { placementOutput, placementReason, roadReason } from './placementReason.ts';
 
 /** Position physique → mouvement dans la grille : flèches, et ZQSD/WASD comme pour marcher. */
@@ -263,9 +263,13 @@ export class BuildMenu {
     card.className = 'build-card';
     this.longPress(card, () => this.showEffect(id));
     card.addEventListener('focus', () => this.showEffect(id));
+    // La vignette du bâtiment, et le médaillon de son métier épinglé à son coin.
+    const thumb = document.createElement('span');
     const icon = buildingIcon(id);
 
-    card.append(icon);
+    thumb.className = 'build-card-thumb';
+    thumb.append(icon, jobIcon(id));
+    card.append(thumb);
 
     const body = document.createElement('div');
 

@@ -88,7 +88,7 @@ import { TICKS_PER_SECOND, repairCost, siteMissing, type SiteCoverage, type Worl
 import type { UiIcon } from '../art/ui.ts';
 import { onLocale, t } from '../i18n/locale.ts';
 import { creatureView, isCreature, type CreatureView, type Selection } from './creatureView.ts';
-import { buildingIcon, buildingIconUrl, creatureIconUrl, enemyBaseIconUrl, itemAmount, uiIcon } from './icons.ts';
+import { buildingIcon, buildingIconUrl, creatureIconUrl, enemyBaseIconUrl, itemAmount, jobIcon, jobIconUrl, uiIcon } from './icons.ts';
 import { moodMeter } from './moodMeter.ts';
 import { needMeter } from './needMeter.ts';
 import { PanelTabs } from './panelTabs.ts';
@@ -116,6 +116,8 @@ export class BuildingPanel {
   /** « Bâtiment » et « Inventaire », sous le titre. */
   private readonly tabs: PanelTabs<BuildingTab>;
   private readonly thumb: HTMLImageElement;
+  /** Le médaillon du métier, juste avant le nom ; caché pour une base ou une créature. */
+  private readonly job: HTMLImageElement;
   private readonly infoButton: HTMLButtonElement;
   private readonly description: HTMLElement;
   private readonly lines: HTMLElement;
@@ -193,6 +195,7 @@ export class BuildingPanel {
     this.thumb = buildingIcon('townHall', 36);
     this.thumb.alt = '';
     this.thumb.setAttribute('aria-hidden', 'true');
+    this.job = jobIcon('townHall', 24);
     this.title = document.createElement('h2');
 
     this.description = document.createElement('p');
@@ -216,7 +219,7 @@ export class BuildingPanel {
     close.append(uiIcon('close'));
     close.addEventListener('click', () => this.close());
 
-    header.append(this.thumb, this.title, this.infoButton, close);
+    header.append(this.thumb, this.job, this.title, this.infoButton, close);
 
     this.meter = document.createElement('div');
     this.meter.className = 'building-panel-meter';
@@ -561,8 +564,10 @@ export class BuildingPanel {
 
     if (this.thumb.src !== thumb) {
       this.thumb.src = thumb;
+      this.job.src = jobIconUrl(entity.proto);
       this.tabs.setIcon('building', buildingIcon(entity.proto, 24));
     }
+    this.job.hidden = false;
 
     // Le labo fini : sa fenêtre devient le panneau Recherche, qui a besoin de toute la place.
     const lab = entity.kind === 'lab';
@@ -932,6 +937,7 @@ export class BuildingPanel {
     const thumb = enemyBaseIconUrl();
 
     if (this.thumb.src !== thumb) this.thumb.src = thumb;
+    this.job.hidden = true;
     this.root.dataset['kind'] = 'enemyBase';
     this.meter.hidden = false;
     this.infoButton.hidden = false;
@@ -984,6 +990,7 @@ export class BuildingPanel {
     const thumb = creatureIconUrl(view.portrait);
 
     if (this.thumb.src !== thumb) this.thumb.src = thumb;
+    this.job.hidden = true;
     this.infoButton.hidden = true;
     this.setDescription(false);
     this.research.root.hidden = true;
