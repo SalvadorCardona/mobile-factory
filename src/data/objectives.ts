@@ -33,14 +33,16 @@ import { QUEST_IDS } from './quests.ts';
  *   la mairie debout) — « tenir », c'est à partir de maintenant ;
  * - `produce` : `count` objets `item` sortis des machines depuis le début ;
  * - `births` : `count` enfants nés à la nurserie depuis le début ;
- * - `quests` : `count` quêtes d'Ève finies.
+ * - `quests` : `count` quêtes d'Ève finies ;
+ * - `happiness` : un Bonheur de la ville (`World.happiness`) d'au moins `count`.
  */
 export type Goal =
   | { type: 'build'; building: BuildingId; count: number; level?: number }
   | { type: 'nights'; count: number }
   | { type: 'produce'; item: ItemId; count: number }
   | { type: 'births'; count: number }
-  | { type: 'quests'; count: number };
+  | { type: 'quests'; count: number }
+  | { type: 'happiness'; count: number };
 
 /**
  * Ce que rapporte un objectif réussi. Tout est concret : rien qui annonce un

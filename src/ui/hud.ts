@@ -72,6 +72,7 @@ import { nameOf } from '../sim/inhabitants.ts';
 import type { Entity, Mobile, MobileId } from '../sim/types.ts';
 import { DIAL_ARCS } from '../sim/dayNight.ts';
 import { currentQuest, questProgress } from '../sim/eve.ts';
+import { moodOf } from '../sim/housing.ts';
 import { currentObjective, goalProgress, goalWait, type GoalWait } from '../sim/objectives.ts';
 import { TICKS_PER_SECOND, type Inhabitant, type Workforce, type World } from '../sim/world.ts';
 import { locale, onLocale, t } from '../i18n/locale.ts';
@@ -96,6 +97,9 @@ const PRESTIGE_FLOAT_MS = 1600;
 
 /** Durée de vie d'un gain flottant, en ms (cf. `hud-float-up` dans le CSS). */
 const FLOAT_MS = 1000;
+
+/** Le temps où la flèche de l'aube reste à côté du Bonheur de la ville, en ms. */
+const MOOD_TREND_MS = 6000;
 
 /** Durée de vie du « Mairie bâtie ! » qui monte d'un bâtiment achevé, en ms (cf. `hud-built-up` dans le CSS). */
 const BUILT_MS = 1800;
@@ -193,6 +197,8 @@ export class Hud {
   /** La population de la ville : au travail, inactifs, enfants. */
   private readonly people: HTMLElement;
   private lastPeople = '';
+  /** Le sens où l'aube a fait bouger le Bonheur de la ville, et jusqu'à quand la flèche le montre. */
+  private moodTrend: { up: boolean; until: number } | null = null;
   /** Rang, dans `World.idleWorkers()`, du prochain inactif que montre un tap sur leur compteur. */
   private idleCursor = 0;
   /** L'alerte de nourriture : la ville va en manquer. Un tap montre qui a faim, puis le suivant. */
@@ -622,6 +628,9 @@ export class Hud {
       this.showBanner('cleared', t().hud.wave.cleared(night), t().hud.wave.clearedText, null, BANNER_CLEARED_MS),
     );
     world.events.on('lootPicked', ({ item, amount }) => this.float(item, amount));
+    world.events.on('happinessChanged', ({ from, to }) => {
+      this.moodTrend = to === from ? null : { up: to > from, until: performance.now() + MOOD_TREND_MS };
+    });
     world.events.on('dawnBroke', ({ night, reward }) => {
       this.notify(t().hud.toast.dawn(night), 'good');
       for (const [item, amount] of reward) this.float(item, amount);
@@ -862,7 +871,11 @@ export class Hud {
   private updatePeople(): void {
     const { working, idle, children } = this.world.census();
     const { housed, population } = this.world.housing();
-    const key = `${working}:${idle}:${children}:${housed}/${population}`;
+    const mood = this.world.happiness();
+
+    if (this.moodTrend && performance.now() >= this.moodTrend.until) this.moodTrend = null;
+    const trend = this.moodTrend ? (this.moodTrend.up ? 'up' : 'down') : '';
+    const key = `${working}:${idle}:${children}:${housed}/${population}:${mood.total}:${mood.unhappy}:${trend}`;
 
     if (key === this.lastPeople) return;
     const label = t().hud.people;
@@ -891,12 +904,27 @@ export class Hud {
     housing.prepend(uiIcon('home', 18));
     setTip(housing, label.housing(housed, population));
 
+    // Le Bonheur de la ville, à côté : en corail quand l'habitant moyen est malheureux.
+    // L'aube qui le fait bouger y pose une flèche, le temps de la voir.
+    const happiness = text('hud-people-count hud-people-happiness', String(mood.total));
+
+    happiness.dataset['alert'] = String(population > 0 && moodOf(mood.average) === 'unhappy');
+    happiness.prepend(uiIcon('townMood', 18));
+    if (trend) {
+      happiness.dataset['trend'] = trend;
+      happiness.append(uiIcon(trend === 'up' ? 'trendUp' : 'trendDown', 14));
+    }
+    setTip(happiness, label.happiness(mood.total, mood.average, mood.unhappy));
+
+    const town = element('div', 'hud-people-town');
+
+    town.append(housing, happiness);
     this.people.hidden = working + idle + children === 0;
     this.people.replaceChildren(
       count('toil', working, label.working(working)),
       lazy,
       count('child', children, label.children(children)),
-      housing,
+      town,
     );
   }
 
@@ -1918,7 +1946,9 @@ function goalIcon(goal: Goal): HTMLElement {
     ? tipped(buildingIcon(goal.building, 22), t().buildings[goal.building].label)
     : goal.type === 'produce'
       ? tipped(itemIcon(goal.item, 18), t().items[goal.item])
-      : uiIcon(goal.type === 'nights' ? 'mutant' : goal.type === 'quests' ? 'eve' : 'people', 18);
+      : goal.type === 'happiness'
+        ? tipped(uiIcon('townMood', 18), t().hud.people.happinessName)
+        : uiIcon(goal.type === 'nights' ? 'mutant' : goal.type === 'quests' ? 'eve' : 'people', 18);
 }
 
 /** Une ligne de quête : icône, barre, « 7/20 ». */

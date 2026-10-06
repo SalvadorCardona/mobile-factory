@@ -340,6 +340,23 @@ export const UI_ICONS = {
     circle(15, 10.5, 1.2, ink.base),
     curve('M8.4 14.4 Q12 17.8 15.6 14.4', ink.base),
   ),
+  /**
+   * Le Bonheur de la ville : le visage qui sourit, et un cœur corail posé
+   * contre sa joue — la somme de tous les sourires, pas celui d'un seul.
+   */
+  townMood: svg(
+    S,
+    S,
+    circle(11, 11.6, 8.4, PALETTE.skin.shade),
+    circle(10.5, 11, 8, PALETTE.skin.base),
+    pill(5.5, 5.8, 3.8, 1.7, PALETTE.skin.light),
+    circle(7.8, 9.6, 1.1, ink.base),
+    circle(13.2, 9.6, 1.1, ink.base),
+    curve('M7.3 13.2 Q10.5 16.2 13.7 13.2', ink.base),
+    heart(18.6, 17.4, 2.9, coral.shade),
+    heart(18.3, 17, 2.6, coral.base),
+    pill(15.6, 15.5, 2.4, 1.2, coral.light),
+  ),
   /** Un enfant : la tête, la casquette jaune des enfants de la colonie, la tunique orange. */
   child: svg(
     S,
@@ -477,6 +494,10 @@ export const UI_ICONS = {
     rect(10.5, 9.5, 3, 5, ink.base, 1.5),
   ),
   /** « Tout prendre » : une flèche blanche qui descend vers le sac. */
+  /** Le Bonheur de la ville a monté à l'aube : une flèche menthe vers le haut. */
+  trendUp: svg(S, S, group('translate(0.6 0.8)', arrow(false, mint.shade)), arrow(false, mint.base)),
+  /** Il a baissé : une flèche corail vers le bas. */
+  trendDown: svg(S, S, group('translate(0.6 0.8)', arrow(true, coral.shade)), arrow(true, coral.base)),
   takeAll: svg(S, S, group('translate(0.6 0.8)', arrow(true, violet.shade)), arrow(true, paper.base)),
   /** « Tout déposer » : une flèche blanche qui remonte vers le coffre. */
   depositAll: svg(S, S, group('translate(0.6 0.8)', arrow(false, mint.shade)), arrow(false, paper.base)),

@@ -596,6 +596,8 @@ export type WorldEvents = {
   signalSent: { id: EntityId; x: number; y: number };
   /** L'aube après le Signal : `count` survivants arrivent à la mairie, en (x, y). */
   survivorsArrived: { count: number; x: number; y: number };
+  /** L'aube a fait passer le Bonheur de la ville de `from` à `to` : le HUD montre de quel côté. */
+  happinessChanged: { from: number; to: number };
   /** Une flèche a entamé une base mutante. */
   enemyBaseHit: { id: number; hp: number; x: number; y: number };
   /** Une base mutante est tombée : sa zone est libre, le Prestige gagné, son butin au sol. */
@@ -4629,6 +4631,8 @@ export class World {
    * d'Adam, comme le butin : rien n'est jeté.
    */
   private dawn(): void {
+    const mood = this.happiness().total;
+
     for (const mobile of [...this.mobiles.values()]) {
       if (mobile.kind !== 'mutant') continue;
       this.mobiles.delete(mobile.id);
@@ -4660,6 +4664,7 @@ export class World {
 
     // Après le Signal, des survivants ont entendu l'antenne : ils arrivent avec le jour.
     if (this.victory) this.welcomeSurvivors();
+    this.events.emit('happinessChanged', { from: mood, to: this.happiness().total });
   }
 
   /**
@@ -4768,6 +4773,28 @@ export class World {
       if (entity.kind !== 'site') beds += bedsOf(entity.proto);
     }
     return { housed, population, beds };
+  }
+
+  /**
+   * Le Bonheur de la ville : la somme des jauges de ceux que compte
+   * l'Habitation — les ouvriers adultes sur la carte, ni Adam ni les
+   * enfants. Une ressource dérivée, relue à chaque appel : rien à
+   * sauvegarder, une vieille sauvegarde la retrouve dès le chargement.
+   * `unhappy` compte les malheureux, `average` est arrondie à l'unité.
+   */
+  public happiness(): { total: number; population: number; average: number; unhappy: number } {
+    let total = 0;
+    let population = 0;
+    let unhappy = 0;
+
+    for (const mobile of this.mobiles.values()) {
+      if (!isLaborer(mobile)) continue;
+      population += 1;
+      total += mobile.happiness;
+      if (moodOf(mobile.happiness) === 'unhappy') unhappy += 1;
+    }
+    total = Math.round(total);
+    return { total, population, average: population === 0 ? 0 : Math.round(total / population), unhappy };
   }
 
   /** Les ouvriers qui ont leur lit dans ce bâtiment. */

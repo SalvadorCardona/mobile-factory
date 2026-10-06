@@ -242,6 +242,10 @@ export const hud = {
     housing: (housed: number, population: number): string =>
       `Habitation — ${housed} logé${s(housed)} sur ${population} habitant${s(population)}` +
       (population > housed ? ` : ${population - housed} dor${population - housed > 1 ? 'ment' : 't'} dehors, bâtissez une Maison` : ''),
+    /** Le Bonheur de la ville : la somme des bonheurs de ses habitants. */
+    happinessName: 'Bonheur de la ville',
+    happiness: (total: number, average: number, unhappy: number): string =>
+      `Bonheur de la ville : ${total} (moyenne ${average} par habitant, ${unhappy} malheureux)`,
   },
   /** Le sac et la ville, en version compacte. */
   stock: {

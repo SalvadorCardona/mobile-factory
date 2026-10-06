@@ -59,6 +59,9 @@ function count(world: World, goal: Goal): number {
 
     case 'quests':
       return world.questsDone;
+
+    case 'happiness':
+      return world.happiness().total;
   }
 }
 
