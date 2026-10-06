@@ -8,12 +8,13 @@
  * sur une hampe de ferraille, deux tonneaux qui suintent, une fleur qui
  * pousse quand même au pied de la palissade.
  *
- * La pancarte du niveau est un morceau à part (`sign1`, `sign2`, `sign3`),
- * posé par-dessus dans le même cadre : une planche blanche sur un piquet, le
- * chiffre tracé au trait indigo — pas de texte dans un sprite.
+ * Le badge est un morceau à part (`sign0` à `sign9`), posé par-dessus dans
+ * le même cadre : une planche blanche sur un piquet, le nombre d'assaillants
+ * que la base tient en réserve tracé au trait indigo — pas de texte dans un
+ * sprite. Il monte le jour, retombe à zéro quand elle les lâche, la nuit.
  *
  * Morceaux : `built`, `damaged` (sous la moitié de ses points de vie : la
- * hutte trouée, des planches clouées dessus), `sign1` à `sign3`.
+ * hutte trouée, des planches clouées dessus), `sign0` à `sign9`.
  */
 
 import {
@@ -113,28 +114,55 @@ function camp(): string {
   );
 }
 
-/** Le chiffre du niveau, au trait, centré en (cx, cy) dans une case de 8 × 11. */
-function digit(level: 1 | 2 | 3, cx: number, cy: number): string {
-  switch (level) {
+/** Un chiffre, au trait, centré en (cx, cy) dans une case de 8 × 11. */
+function digit(value: number, cx: number, cy: number): string {
+  const top = cy - 5.5;
+  const bottom = cy + 5.5;
+  const left = cx - 3.5;
+  const right = cx + 3.5;
+
+  switch (value) {
+    case 0:
+      return curve(`M${cx} ${top}C${cx + 4.8} ${top} ${cx + 4.8} ${bottom} ${cx} ${bottom}C${cx - 4.8} ${bottom} ${cx - 4.8} ${top} ${cx} ${top}Z`, ink.base);
     case 1:
-      return polyline([cx - 2.5, cy - 3, cx + 0.5, cy - 5.5, cx + 0.5, cy + 5.5], ink.base);
+      return polyline([cx - 2.5, cy - 3, cx + 0.5, top, cx + 0.5, bottom], ink.base);
     case 2:
       return curve(
-        `M${cx - 3.5} ${cy - 2.5}C${cx - 3.5} ${cy - 7} ${cx + 3.5} ${cy - 7} ${cx + 3.5} ${cy - 2.5}` +
-          `C${cx + 3.5} ${cy} ${cx - 3.5} ${cy + 2.5} ${cx - 3.5} ${cy + 5.5}L${cx + 3.5} ${cy + 5.5}`,
+        `M${left} ${cy - 2.5}C${left} ${cy - 7} ${right} ${cy - 7} ${right} ${cy - 2.5}` +
+          `C${right} ${cy} ${left} ${cy + 2.5} ${left} ${bottom}L${right} ${bottom}`,
         ink.base,
       );
     case 3:
+      return curve(`M${left} ${top}L${right} ${top}L${cx - 0.5} ${cy - 1}C${cx + 5} ${cy - 1} ${cx + 5} ${cy + 6.5} ${left} ${cy + 4.5}`, ink.base);
+    case 4:
+      return polyline([cx + 1.5, bottom, cx + 1.5, top, left, cy + 2, right, cy + 2], ink.base);
+    case 5:
+      return curve(`M${cx + 3} ${top}L${cx - 2.5} ${top}L${cx - 3} ${cy - 0.5}C${cx + 4.5} ${cy - 2.5} ${cx + 4.5} ${cy + 6.5} ${left} ${cy + 4.5}`, ink.base);
+    case 6:
       return curve(
-        `M${cx - 3.5} ${cy - 5.5}L${cx + 3.5} ${cy - 5.5}L${cx - 0.5} ${cy - 1}` +
-          `C${cx + 5} ${cy - 1} ${cx + 5} ${cy + 6.5} ${cx - 3.5} ${cy + 4.5}`,
+        `M${cx + 2.5} ${top}Q${left} ${cy - 3} ${left} ${cy + 2}C${left} ${cy + 6.5} ${right} ${cy + 6.5} ${right} ${cy + 2}` +
+          `C${right} ${cy - 1.5} ${left} ${cy - 1.5} ${left} ${cy + 2}`,
+        ink.base,
+      );
+    case 7:
+      return polyline([left, top, right, top, cx - 1, bottom], ink.base);
+    case 8:
+      return curve(
+        `M${cx} ${cy - 0.5}C${cx - 4.5} ${cy - 0.5} ${cx - 4.5} ${top} ${cx} ${top}C${cx + 4.5} ${top} ${cx + 4.5} ${cy - 0.5} ${cx} ${cy - 0.5}` +
+          `C${cx - 5} ${cy - 0.5} ${cx - 5} ${bottom} ${cx} ${bottom}C${cx + 5} ${bottom} ${cx + 5} ${cy - 0.5} ${cx} ${cy - 0.5}`,
+        ink.base,
+      );
+    default:
+      return curve(
+        `M${cx - 2.5} ${bottom}Q${right} ${cy + 3} ${right} ${cy - 2}C${right} ${cy - 6.5} ${left} ${cy - 6.5} ${left} ${cy - 2}` +
+          `C${left} ${cy + 1.5} ${right} ${cy + 1.5} ${right} ${cy - 2}`,
         ink.base,
       );
   }
 }
 
-/** La pancarte du niveau : un piquet, une planche blanche, un crâne rond à gauche du chiffre. */
-function sign(level: 1 | 2 | 3): string {
+/** Le badge : un piquet, une planche blanche, un crâne de mutant à gauche du nombre d'assaillants en réserve. */
+function sign(count: number): string {
   return svg(
     W,
     H,
@@ -142,13 +170,16 @@ function sign(level: 1 | 2 | 3): string {
     rect(2, 70, 26, 20, paper.shade, RADIUS.small),
     rect(2, 70, 26, 17, paper.base, RADIUS.small),
     pill(5, 72, 8, 2.5, paper.shade),
-    // Le crâne : une tête de mutant en fluo, pour dire à qui est la base.
+    // Le crâne : une tête de mutant en fluo, pour dire ce qui attend dedans.
     circle(9.5, 79, 3.6, toxic.base),
     circle(8.3, 78.5, 0.9, ink.base),
     circle(10.9, 78.5, 0.9, ink.base),
-    digit(level, 20.5, 78.5),
+    digit(count, 20.5, 78.5),
   );
 }
+
+/** Les badges de 0 à 9 assaillants (`RAIDS.capacityMax`) : `sign0` à `sign9`. */
+const SIGNS = Object.fromEntries(Array.from({ length: 10 }, (_, count) => [`sign${count}`, sign(count)]));
 
 export const ENEMY_BASE_SPRITE = {
   width: W,
@@ -158,8 +189,6 @@ export const ENEMY_BASE_SPRITE = {
   parts: {
     built: svg(W, H, camp()),
     damaged: svg(W, H, camp(), damageMarks(20, 54, 56, 50)),
-    sign1: sign(1),
-    sign2: sign(2),
-    sign3: sign(3),
+    ...SIGNS,
   },
 } satisfies SpriteProto;

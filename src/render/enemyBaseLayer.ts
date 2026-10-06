@@ -3,8 +3,8 @@
  *
  * Le campement est un sprite trié en profondeur avec les bâtiments, les
  * arbres et les personnages (`EntityLayer.container`) : Adam passe derrière
- * le drapeau. La pancarte du niveau (`sign1` à `sign3`) se pose dessus dans
- * le même cadre. Entamée, la base montre sa barre de vie au-dessus du
+ * le drapeau. Le badge de ses assaillants en réserve (`sign0` à `sign9`) se
+ * pose dessus dans le même cadre : il monte le jour et retombe la nuit. Entamée, la base montre sa barre de vie au-dessus du
  * drapeau ; sous la moitié, sa version `damaged`. Frappée, elle tremble — un
  * minuteur de vue, la simulation n'en sait rien. Abattue, elle disparaît.
  *
@@ -37,6 +37,9 @@ const WOBBLE_MS = 220;
 interface BaseView {
   root: Container;
   main: Sprite;
+  sign: Sprite;
+  /** Le nombre que montre le badge : sa texture n'est changée que s'il change. */
+  raiders: number;
   shadow: Sprite;
   bar: Graphics;
   /** Morceau affiché et ratio de la barre : rien n'est refait s'ils n'ont pas changé. */
@@ -114,7 +117,7 @@ export class EnemyBaseLayer {
     const root = new Container();
     const height = ENEMY_BASE.height * TILE_SIZE;
     const main = new Sprite(this.library.texture('enemyBase.built'));
-    const sign = new Sprite(this.library.texture(`enemyBase.sign${Math.min(3, Math.max(1, base.level))}`));
+    const sign = new Sprite(this.library.texture(signPart(base.raiders)));
 
     for (const sprite of [main, sign]) {
       sprite.anchor.set(0, 1);
@@ -143,7 +146,7 @@ export class EnemyBaseLayer {
     this.sorted.addChild(root);
     this.shadows.addChild(shadow);
 
-    const view: BaseView = { root, main, shadow, bar, part: 'built', barKey: '', wobble: 0 };
+    const view: BaseView = { root, main, sign, raiders: base.raiders, shadow, bar, part: 'built', barKey: '', wobble: 0 };
 
     this.views.set(base.id, view);
     return view;
@@ -157,6 +160,10 @@ export class EnemyBaseLayer {
     if (part !== view.part) {
       view.part = part;
       view.main.texture = this.library.texture(`enemyBase.${part}`);
+    }
+    if (base.raiders !== view.raiders) {
+      view.raiders = base.raiders;
+      view.sign.texture = this.library.texture(signPart(base.raiders));
     }
 
     view.bar.visible = ratio < 1;
@@ -191,4 +198,9 @@ export class EnemyBaseLayer {
     this.views.clear();
     this.zones.destroy();
   }
+}
+
+/** Le morceau du badge pour `raiders` assaillants en réserve : un seul chiffre (`RAIDS.capacityMax`). */
+function signPart(raiders: number): string {
+  return `enemyBase.sign${Math.max(0, Math.min(9, raiders))}`;
 }

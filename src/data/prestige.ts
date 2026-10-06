@@ -60,4 +60,5 @@ export const KILL_PRESTIGE = {
   larva: 1,
   crab: 1,
   wolf: 2,
+  guardian: 2,
 } as const satisfies Record<EnemyId | WildlifeId, number>;

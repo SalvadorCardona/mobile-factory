@@ -590,9 +590,9 @@ export class Hud {
     world.events.on('repairRejected', ({ reason }) => {
       if (reason !== 'missing') this.notify(t().hud.repair[reason], 'bad');
     });
-    world.events.on('waveCountdown', ({ seconds, night, wave, count, boss, queen, from, targetProto, x, y }) => {
+    world.events.on('waveCountdown', ({ seconds, night, wave, count, bases, boss, queen, from, targetProto, x, y }) => {
       this.showCountdown(String(seconds));
-      this.announce(night, wave, count, boss, queen, from, targetProto, { x, y });
+      this.announce(night, wave, count, bases, boss, queen, from, targetProto, { x, y });
     });
     // La veille au soir : Ève prévient, dans sa bulle — ou par radio si elle n'est pas là.
     world.events.on('queenAnnounced', () => {
@@ -604,8 +604,8 @@ export class Hud {
     );
     world.events.on('duskFell', () => this.notify(t().hud.toast.dusk, 'bad'));
     // Une vague qui n'a pas eu son compte à rebours (partie reprise pile avant) s'annonce quand même.
-    world.events.on('waveStarted', ({ night, wave, count, boss, queen, from, targetProto, x, y }) => {
-      this.announce(night, wave, count, boss, queen, from, targetProto, { x, y });
+    world.events.on('waveStarted', ({ night, wave, count, bases, boss, queen, from, targetProto, x, y }) => {
+      this.announce(night, wave, count, bases, boss, queen, from, targetProto, { x, y });
       this.unfoldQuest(QUEST_ALERT_TICKS);
     });
     world.events.on('buildingDamaged', ({ id, hp }) => {
@@ -1011,6 +1011,7 @@ export class Hud {
     night: number,
     wave: number,
     count: number,
+    bases: number,
     boss: boolean,
     queen: boolean,
     from: Compass,
@@ -1029,7 +1030,7 @@ export class Hud {
     this.showBanner(
       'wave',
       wave === 1 ? text.night(night) : text.reinforcements,
-      queen ? text.queen(direction) : boss ? text.boss(direction, aim) : text.mutants(count, direction, aim),
+      queen ? text.queen(direction) : boss ? text.boss(direction, aim) : text.mutants(count, bases, direction, aim),
       origin,
       BANNER_WAVE_MS,
     );

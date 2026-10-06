@@ -90,7 +90,8 @@ function findHabitat(seed: number, habitat: 'shore' | 'forest', solid: (tx: numb
 
 describe('tanières', () => {
   it('ne mettent les crabes que sur la rive, et les loups qu’en forêt', () => {
-    const count = { crab: 0, wolf: 0 };
+    // Le gardien n'a pas de tanière : sa base le loge.
+    const count = { crab: 0, wolf: 0, guardian: 0 };
 
     for (const seed of SEEDS) {
       for (let cy = -4; cy <= 4; cy += 1) {
@@ -105,6 +106,7 @@ describe('tanières', () => {
     // Les deux espèces existent bel et bien sur ces cartes.
     expect(count.crab).toBeGreaterThan(10);
     expect(count.wolf).toBeGreaterThan(10);
+    expect(count.guardian).toBe(0);
   });
 
   it('sont les mêmes pour la même seed, et différentes pour une autre', () => {
@@ -128,7 +130,8 @@ describe('apparition', () => {
 
     const check = (): void => {
       for (const beast of beasts(world)) {
-        if (seen.has(beast.id)) continue;
+        // Les gardiens sortent de leur base, pas d'une tanière (`enemyBases.test.ts`).
+        if (seen.has(beast.id) || beast.guardOf !== undefined) continue;
         seen.add(beast.id);
         spawned += 1;
 

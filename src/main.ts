@@ -131,6 +131,8 @@ declare global {
 const BEAST_PARTICLES: Record<WildlifeId, ParticleStyle> = {
   crab: PARTICLES.claw,
   wolf: PARTICLES.fur,
+  // Un gardien est un mutant : il gicle fluo.
+  guardian: PARTICLES.mutant,
 };
 /** Les éclats d'un mur frappé : ceux de la pierre, dans l'ombre de la roche. */
 const CHIP_PARTICLES: ParticleStyle = { ...PARTICLES.stone, colors: [GROUND.rock.shade] };

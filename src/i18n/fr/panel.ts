@@ -194,6 +194,10 @@ export const panel = {
     weak: 'Il vous faut un meilleur équipement : vos flèches n’y font rien. Forgez un meilleur arc à la forge.',
     ready: 'Votre arc l’entame : approchez-vous, il tire seul.',
     prestige: (amount: number): string => `Abattue, elle rapporte ${amount} Prestige et libère sa zone.`,
+    raiders: (count: number, capacity: number): string => `Assaillants en réserve : ${count} sur ${capacity}`,
+    guards: (count: number, max: number): string => `Gardiens : ${count} sur ${max}`,
+    raid: 'Le jour, elle produit des assaillants ; à la nuit tombée, ils sortent tous attaquer la ville.',
+    asleep: (night: number): string => `Elle n’enverra ses premiers assaillants qu’à la nuit ${night}.`,
   },
 
   /** La forge d'équipement, dans la fenêtre de la forge. */

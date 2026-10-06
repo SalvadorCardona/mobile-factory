@@ -11,7 +11,9 @@
  *   quand il s'éloigne — cf. `World.stepWildlife`.
  *
  * Une bête n'a qu'une idée à la fois (`BeastState`) : flâner autour de chez
- * elle, charger Adam, ou rentrer. Pas de pathfinding : un loup qui charge
+ * elle, charger Adam, ou rentrer. Le gardien d'une base mutante est une bête
+ * comme les autres, dont la « tanière » est sa base (`Beast.guardOf`) : il
+ * charge qui entre dans la zone et n'en sort jamais. Pas de pathfinding : un loup qui charge
  * droit dans un arbre glisse le long, et c'est très bien comme ça.
  */
 
@@ -43,6 +45,9 @@ export function densOfChunk(seed: number, cx: number, cy: number): Den[] {
 
   for (const [index, species] of WILDLIFE_IDS.entries()) {
     const proto = WILDLIFE[species];
+
+    // Les gardiens n'ont pas de tanière : c'est leur base qui les loge.
+    if (proto.habitat === 'base') continue;
 
     for (let draw = 0; draw < proto.densPerChunk; draw += 1) {
       const id = hash3(hash3(seed ^ 0x6a09e667, index, draw), cx, cy);
@@ -77,7 +82,10 @@ export interface BeastStep {
  *
  * `isSolid` est le monde (eau, ressources, bâtiments) ; l'habitat s'y ajoute
  * ici. Un crabe ne quitte jamais le sable, même en chargeant ; un loup ne
- * quitte la forêt que pour charger ou rentrer.
+ * quitte la forêt que pour charger ou rentrer. Un gardien compte depuis sa
+ * base, pas depuis lui : il charge Adam qui entre à `aggroRadius` du centre,
+ * le lâche au-delà de `giveUpRadius`, et sa laisse est un mur — une tuile
+ * plus loin que `leashRadius` du centre lui est solide, même en chargeant.
  */
 export function stepBeast(
   beast: Beast,
@@ -100,14 +108,17 @@ export function stepBeast(
   const aggro = proto.aggroRadius * TILE_SIZE;
   const giveUp = proto.giveUpRadius * TILE_SIZE;
   const leash = proto.leashRadius * TILE_SIZE;
+  const guard = proto.habitat === 'base';
+  // Un gardien mesure Adam depuis sa base : c'est la zone qu'il défend.
+  const watchSq = guard ? (player.x - beast.homeX) ** 2 + (player.y - beast.homeY) ** 2 : playerSq;
 
   switch (beast.state) {
     case 'roam':
-      if (playerSq <= aggro * aggro) beast.state = 'chase';
+      if (watchSq <= aggro * aggro) beast.state = 'chase';
       break;
 
     case 'chase':
-      if (playerSq > giveUp * giveUp || homeSq > leash * leash) beast.state = 'return';
+      if (watchSq > giveUp * giveUp || (!guard && homeSq > leash * leash)) beast.state = 'return';
       break;
 
     case 'return':
@@ -119,7 +130,11 @@ export function stepBeast(
   }
 
   const confined = beast.state === 'roam' || proto.habitat === 'shore';
-  const solid: SolidTest = confined ? (tx, ty) => isSolid(tx, ty) || habitatAt(seed, tx, ty) !== proto.habitat : isSolid;
+  const solid: SolidTest = guard
+    ? (tx, ty) => isSolid(tx, ty) || ((tx + 0.5) * TILE_SIZE - beast.homeX) ** 2 + ((ty + 0.5) * TILE_SIZE - beast.homeY) ** 2 > leash * leash
+    : confined
+      ? (tx, ty) => isSolid(tx, ty) || habitatAt(seed, tx, ty) !== proto.habitat
+      : isSolid;
   let dirX = 0;
   let dirY = 0;
   let speed: number = proto.speed;

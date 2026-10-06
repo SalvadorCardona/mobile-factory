@@ -241,6 +241,7 @@ export const content: Content = {
   wildlife: {
     crab: 'Ruin crab',
     wolf: 'Indigo wolf',
+    guardian: 'Base guardian',
   },
   enemyBase: {
     label: 'Mutant base',

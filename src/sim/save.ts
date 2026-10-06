@@ -18,7 +18,7 @@
 import { CHUNK_TILES } from '../core/grid.ts';
 import { BUILDINGS, MENU_BUILDING_IDS, maxLevel, type BuildingId } from '../data/buildings.ts';
 import { RARE_OFFERS, type RareOfferId } from '../data/caravan.ts';
-import { ENEMY_BASE_LEVELS } from '../data/enemyBases.ts';
+import { ENEMY_BASE_LEVELS, RAIDS, enemyBaseLevel } from '../data/enemyBases.ts';
 import { ENEMIES, WILDLIFE, type EnemyId, type WildlifeId } from '../data/enemies.ts';
 import { MAX_GEAR } from '../data/gear.ts';
 import { HAPPINESS } from '../data/housing.ts';
@@ -96,8 +96,6 @@ export interface WorldState {
   night: number;
   /** Lever du premier jour, cf. `World.cycleStartTick` ; 0 tant que la mairie est en chantier. */
   cycleStartTick: number;
-  /** Direction, en radians, d'où viendra la prochaine vague. */
-  nextWaveHeading: number;
   /** Le bâtiment que vise la prochaine vague, une fois annoncée. Absent : pas encore tirée. */
   nextWaveTarget?: EntityId;
   kills: number;
@@ -386,7 +384,6 @@ function parseState(raw: unknown): WorldState {
     contactTicks: int(state['contactTicks']),
     night: int(state['night']),
     cycleStartTick: int(state['cycleStartTick']),
-    nextWaveHeading: finite(state['nextWaveHeading']),
     ...(state['nextWaveTarget'] !== undefined && { nextWaveTarget: int(state['nextWaveTarget']) }),
     kills: int(state['kills']),
     // Absents d'une sauvegarde d'avant le Prestige : la colonie repart de zéro, ses bâtiments déjà payés.
@@ -640,6 +637,7 @@ function parseMobile(raw: unknown): Mobile {
         hp: finite(mobile['hp']),
         age: mobile['age'] === undefined ? WILDLIFE[proto].age.min : age(mobile['age']),
         denId: int(mobile['denId']),
+        ...(mobile['guardOf'] !== undefined && { guardOf: int(mobile['guardOf']) }),
         homeX: finite(mobile['homeX']),
         homeY: finite(mobile['homeY']),
         state: state as BeastState,
@@ -872,7 +870,21 @@ function parseEnemyBase(raw: unknown): EnemyBase {
 
   if (level < 1 || level > ENEMY_BASE_LEVELS.length) throw new SaveError(`niveau de base mutante inconnu : ${level}`);
   if (hp < 0) throw new SaveError('base mutante aux points de vie négatifs');
-  return { id: int(base['id']), tx: int(base['tx']), ty: int(base['ty']), level, hp };
+
+  const id = int(base['id']);
+
+  // Une sauvegarde d'avant les vagues des bases : réserve vide, gardiens au complet.
+  return {
+    id,
+    tx: int(base['tx']),
+    ty: int(base['ty']),
+    level,
+    hp,
+    raiders: base['raiders'] === undefined ? 0 : Math.max(0, Math.min(RAIDS.capacityMax, int(base['raiders']))),
+    brood: base['brood'] === undefined ? 0 : int(base['brood']),
+    guards: base['guards'] === undefined ? (hp > 0 ? enemyBaseLevel(level).guards.count : 0) : int(base['guards']),
+    mend: base['mend'] === undefined ? 0 : int(base['mend']),
+  };
 }
 
 function parseDen(raw: unknown): SavedDen {

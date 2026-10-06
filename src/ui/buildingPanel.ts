@@ -80,7 +80,7 @@ import { WEAPONS } from '../data/weapons.ts';
 import { BUILDERS, FORESTERS, LOGISTICIANS, LUMBERJACKS } from '../data/workers.ts';
 import { floorCost } from '../sim/antenna.ts';
 import { forgeRecipe } from '../sim/consumers.ts';
-import { canDamage, isStanding } from '../sim/enemyBases.ts';
+import { canDamage, isStanding, raidCapacity } from '../sim/enemyBases.ts';
 import { countPlot, type PlotCount } from '../sim/forester.ts';
 import { canPause } from '../sim/staffing.ts';
 import type { Building, EnemyBase, Entity, EntityId, Forester, Forge, MobileId, Nursery } from '../sim/types.ts';
@@ -941,11 +941,16 @@ export class BuildingPanel {
     delete this.items.dataset['layout'];
     this.setItems([], 'none');
 
+    const night = this.world.clock()?.cycle ?? 1;
+    const capacity = raidCapacity(base.level, night);
     const stats: Stat[] = [
-      { icon: 'mutant', value: String(base.level), label: text.level(base.level) },
+      { icon: 'goal', value: String(base.level), label: text.level(base.level) },
       { icon: 'range', value: String(level.zoneRadius), label: text.zone(level.zoneRadius) },
+      { icon: 'moon', value: `${base.raiders}/${capacity}`, label: text.raiders(base.raiders, capacity) },
+      { icon: 'mutant', value: `${base.guards}/${level.guards.count}`, label: text.guards(base.guards, level.guards.count) },
     ];
     const lines = [
+      capacity > 0 ? text.raid : text.asleep(level.raid.from),
       text.required(gear, base.level),
       canDamage(base, this.world.player.gear) ? text.ready : text.weak,
       text.prestige(level.prestige),

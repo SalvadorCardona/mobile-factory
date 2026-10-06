@@ -17,7 +17,8 @@ import { TILE_SIZE } from '../core/grid.ts';
 import { auditSvg } from './artDirection.ts';
 import { BUILDINGS, RUIN, type BuildingProto } from './buildings.ts';
 import { DAWN_REWARD, DAY_CYCLE } from './dayNight.ts';
-import { ENEMIES, LOOT_DROPS, NIGHT_PLAN, WAVES, WILDLIFE, WILDLIFE_SPAWN, type LootTable, type WaveSpec, type WildlifeProto } from './enemies.ts';
+import { ENEMY_BASE_LEVELS, GUARD_RANGE, RAIDS, type EnemyBaseLevel } from './enemyBases.ts';
+import { ENEMIES, LOOT_DROPS, NIGHT_BOSSES, WAVES, WILDLIFE, WILDLIFE_SPAWN, type LootTable, type WaveSpec, type WildlifeProto } from './enemies.ts';
 import { EVE } from './eve.ts';
 import { ICON_SIZE, ITEM_ICONS, PRESTIGE_ICON } from './icons.ts';
 import { ITEMS } from './items.ts';
@@ -300,7 +301,7 @@ export function validatePrototypes(): string[] {
     if (proto.aggroRadius <= 0 || proto.giveUpRadius <= proto.aggroRadius || proto.leashRadius <= proto.aggroRadius) {
       errors.push(`WILDLIFE.${id} : rayons d'aggro, d'abandon et de laisse incohérents`);
     }
-    if (proto.groupMin < 1 || proto.groupMax < proto.groupMin || proto.densPerChunk < 0 || proto.respawnTicks <= 0) {
+    if (proto.groupMin < 1 || proto.groupMax < proto.groupMin || proto.densPerChunk < 0 || (proto.densPerChunk > 0 && proto.respawnTicks <= 0)) {
       errors.push(`WILDLIFE.${id} : effectif, densité ou repeuplement incohérents`);
     }
     errors.push(...lootErrors(`WILDLIFE.${id}`, proto.loot));
@@ -337,18 +338,30 @@ export function validatePrototypes(): string[] {
     errors.push('LOOT_DROPS : durée, rayons, vitesse, dispersion ou plafond incohérents');
   }
 
-  if (WAVES.minDistance > WAVES.maxDistance || WAVES.perNight <= 0 || WAVES.interval <= 0 || WAVES.firstAt < 0) {
-    errors.push('WAVES : distances ou délais incohérents');
+  if (WAVES.perNight <= 0 || WAVES.interval <= 0 || WAVES.firstAt < 0) {
+    errors.push('WAVES : délais incohérents');
   }
-  if (WAVES.cycle <= 0 || WAVES.cycle > NIGHT_PLAN.length || WAVES.growPerCycle < 0) {
-    errors.push('WAVES.cycle : doit tenir dans NIGHT_PLAN');
+  if (WAVES.cycle <= 0 || WAVES.cycle > NIGHT_BOSSES.length) {
+    errors.push('WAVES.cycle : doit tenir dans NIGHT_BOSSES');
   }
-  NIGHT_PLAN.forEach((night: readonly WaveSpec[], index) => {
-    if (night.length !== WAVES.perNight) errors.push(`NIGHT_PLAN[${index}] : ${WAVES.perNight} vagues attendues`);
-    for (const wave of night) {
-      if (Object.values(wave).reduce((sum, count) => sum + count, 0) <= 0) errors.push(`NIGHT_PLAN[${index}] : vague vide`);
-    }
+  NIGHT_BOSSES.forEach((night: WaveSpec, index) => {
+    if (Object.values(night).some((count) => count < 0)) errors.push(`NIGHT_BOSSES[${index}] : effectif négatif`);
   });
+
+  for (const [index, level] of ENEMY_BASE_LEVELS.entries()) {
+    const { raid, guards }: EnemyBaseLevel = level;
+
+    if (raid.from < 1 || raid.ticksPerRaider <= 0 || raid.capacity < 1 || raid.capacity > RAIDS.capacityMax) {
+      errors.push(`ENEMY_BASE_LEVELS[${index}].raid : nuit, cadence ou capacité incohérentes`);
+    }
+    if (guards.count < 0 || guards.respawnTicks <= 0) errors.push(`ENEMY_BASE_LEVELS[${index}].guards : effectif ou cadence incohérents`);
+    // Un gardien sortirait de la zone qu'il tient.
+    if (WILDLIFE.guardian.leashRadius > level.zoneRadius) errors.push(`ENEMY_BASE_LEVELS[${index}] : zone plus petite que la laisse des gardiens`);
+  }
+  if (RAIDS.paceGrowth < 0 || RAIDS.capacityEvery <= 0 || RAIDS.capacityMax > 9 || RAIDS.exitStagger <= 0) {
+    errors.push('RAIDS : croissance, capacité (un chiffre au badge) ou sortie incohérentes');
+  }
+  if (GUARD_RANGE.showTiles >= GUARD_RANGE.hideTiles) errors.push('GUARD_RANGE : les gardiens rentreraient aussitôt sortis');
 
   if (QUEST_IDS.length < 3) errors.push('QUESTS : Ève doit donner au moins trois quêtes');
   if (EVE.arrivalNight < 1 || EVE.rideSpeed <= 0 || EVE.walkSpeed <= 0 || EVE.repairTicks <= 0 || EVE.repairAmount <= 0) {

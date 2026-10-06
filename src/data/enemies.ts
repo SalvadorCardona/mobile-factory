@@ -141,10 +141,10 @@ export const ENEMIES = {
 
 export type EnemyId = keyof typeof ENEMIES;
 
-/** Les espèces, dans l'ordre où une vague les fait sortir (la larve n'y est jamais : la Reine la pond). */
+/** Les espèces, dans l'ordre où une base les fait sortir (la larve n'y est jamais : la Reine la pond). */
 export const ENEMY_IDS = Object.keys(ENEMIES) as EnemyId[];
 
-/** Une vague : son effectif par espèce de mutant. */
+/** Des mutants : un effectif par espèce. */
 export type WaveSpec = Partial<Record<EnemyId, number>>;
 
 /**
@@ -152,40 +152,33 @@ export type WaveSpec = Partial<Record<EnemyId, number>>;
  *
  * Rien n'attaque tant que la mairie est en chantier : le joueur apprend à
  * récolter et à livrer en paix. Une fois le toit posé, le cycle jour / nuit
- * démarre (`data/dayNight.ts`) : les mutants ne sortent que la nuit, en
- * `perNight` vagues espacées de `interval`, la première `firstAt` après la
- * tombée de la nuit. Leur effectif suit `NIGHT_PLAN` ; au-delà, ses `cycle` dernières
- * nuits se répètent, avec `growPerCycle` mutants de plus par vague à chaque
- * tour.
+ * démarre (`data/dayNight.ts`). Le jour, les bases mutantes produisent leurs
+ * assaillants (`RAIDS`, `data/enemyBases.ts`) ; la nuit tombée, elles les
+ * lâchent tous d'un coup : c'est **la** vague de la nuit (`perNight`), qui
+ * sort `firstAt` après la tombée. Chaque assaillant passe la porte de sa
+ * base, l'un après l'autre, et marche sur la ville. Rien ne sort d'ailleurs :
+ * sans base debout, la nuit est calme. Les gros mutants et la Reine
+ * (`NIGHT_BOSSES`) sortent de la base la plus proche de la mairie.
  *
- * Une vague se voit : elle vient d'**une** direction, tirée dès que la
- * précédente est partie pour que l'annonce la donne, et elle surgit **dans le champ**
- * d'un téléphone tenu droit quand Adam est à la mairie — assez près pour que
- * la flaque se voie, pas à vingt tuiles. Chaque mutant sort de sa flaque en
- * `emergeTicks` : ni les arcs ni les tours ne le visent tant qu'il n'est pas
- * debout, si bien qu'on le voit toujours avant de le voir tomber.
+ * Un mutant sort de sa flaque en `emergeTicks` : ni les arcs ni les tours ne
+ * le visent tant qu'il n'est pas debout.
  *
- * Une vague a **une** cible, tirée à son annonce : avec `targetChance`, le
- * bâtiment de `targets` fini le plus proche de son point d'apparition — la
- * foreuse isolée, la ferme au bout du champ —, sinon la mairie. L'usine se
- * défend donc aussi : c'est là que le placement des tours compte.
+ * Une vague a **une** cible, tirée à son annonce : avec `targetChance`,
+ * chaque base envoie les siens sur le bâtiment de `targets` fini le plus
+ * proche d'elle — la foreuse isolée, la ferme au bout du champ —, sinon tous
+ * vont à la mairie. L'usine se défend donc aussi : c'est là que le placement
+ * des tours compte.
  */
 export const WAVES = {
-  perNight: 3,
-  /** Ticks entre la tombée de la nuit et la première vague. */
-  firstAt: 20 * 15,
+  perNight: 1,
+  /** Ticks entre la tombée de la nuit et la sortie des bases. */
+  firstAt: 0,
+  /** Ticks entre deux vagues d'une même nuit, s'il y en avait plusieurs. */
   interval: 20 * 30,
+  /** Au-delà de `NIGHT_BOSSES`, ses `cycle` dernières nuits se répètent. */
   cycle: 5,
-  growPerCycle: 2,
-  /** Distance d'apparition depuis le centre de la mairie, en tuiles. */
-  minDistance: 6,
-  maxDistance: 7.5,
-  /** Écart maximal, en radians, entre un mutant et la direction de sa vague. */
-  spread: 0.45,
   /** Ticks passés à sortir de la flaque, immobile et hors d'atteinte. */
   emergeTicks: 40,
-  /** Retard de chaque mutant sur le précédent : une vague sort l'un après l'autre. */
-  emergeStagger: 6,
   /** Chance qu'une vague vise l'usine plutôt que la mairie. */
   targetChance: 0.5,
   /** Ce qu'une vague peut viser hors de la mairie : les bâtiments qui produisent. */
@@ -195,8 +188,8 @@ export const WAVES = {
 /**
  * La Reine des flaques, nuit par nuit et phase par phase.
  *
- * Elle mène la dernière vague d'une nuit sur cinq à partir de la dixième —
- * c'est `NIGHT_PLAN` qui la place, et son cycle qui la ramène aux nuits 15,
+ * Elle sort d'une base une nuit sur cinq à partir de la dixième —
+ * c'est `NIGHT_BOSSES` qui la place, et son cycle qui la ramène aux nuits 15,
  * 20… La nuit 5 garde son gros mutant d'initiation. Ève l'annonce la veille,
  * au crépuscule ; le soir venu, le bandeau compte jusqu'à sa sortie.
  *
@@ -224,9 +217,9 @@ export const QUEEN = {
   /** Distance, en tuiles, entre le centre de la tour visée et le point où elle ressort. */
   surfaceDistance: 4,
   /**
-   * En phase 2, elle charge la tour à ce multiple de son pas. La dernière
-   * vague sort 25 s avant l'aube (`WAVES`) : à son pas de marche, elle
-   * n'atteindrait la tour qu'avec le jour.
+   * En phase 2, elle charge la tour à ce multiple de son pas : elle vient de
+   * loin, de sa base — à son pas de marche, elle n'atteindrait la tour
+   * qu'avec le jour.
    */
   chargePace: 2,
 } as const;
@@ -276,70 +269,54 @@ export const LOOT_DROPS = {
 } as const;
 
 /**
- * La courbe, nuit par nuit — c'est ici qu'on la retouche. Une ligne par
- * nuit, une entrée par vague (`WAVES.perNight`).
- *
- * Des dents de scie plutôt qu'une rampe : un premier pic dès la nuit 3,
- * la dernière avant qu'Ève n'arrive réparer ; un répit net après chaque
- * grosse nuit ; un gros mutant à la nuit 5, puis au moins toutes les cinq
- * nuits. Entre deux, Adam répare au bois (`REPAIR`, `data/buildings.ts`),
- * puis Ève.
+ * Les chefs, nuit par nuit — le nombre d'assaillants, lui, vient des bases
+ * (`RAIDS`). Une ligne par nuit : un gros mutant à la nuit 5, puis à la 8 ;
+ * la Reine des flaques à la 10. Au-delà, les `WAVES.cycle` dernières nuits se
+ * répètent : un gros mutant toutes les cinq nuits, la Reine aux nuits 15,
+ * 20… Ils sortent de la base debout la plus proche de la mairie.
  */
-export const NIGHT_PLAN = [
-  [{ mutant: 1 }, { mutant: 1 }, { mutant: 2 }],
-  [{ mutant: 2 }, { mutant: 2 }, { mutant: 2 }],
-  /** Premier pic. */
-  [{ mutant: 2 }, { mutant: 3 }, { mutant: 4 }],
-  /** Répit : Ève arrive, la mairie se refait. */
-  [{ mutant: 2 }, { mutant: 3 }, { mutant: 3 }],
+export const NIGHT_BOSSES = [
+  {},
+  {},
+  {},
+  {},
   /** Premier gros mutant. */
-  [{ mutant: 3 }, { mutant: 3 }, { mutant: 2, brute: 1 }],
-  [{ mutant: 3 }, { mutant: 4 }, { mutant: 5 }],
-  [{ mutant: 4 }, { mutant: 4 }, { mutant: 4 }],
+  { brute: 1 },
+  {},
+  {},
   /** Un gros mutant de plus. */
-  [{ mutant: 3 }, { mutant: 5 }, { mutant: 3, brute: 1 }],
-  [{ mutant: 4 }, { mutant: 5 }, { mutant: 5 }],
-  /** La Reine des flaques : sans tours qui se couvrent, elle en rase une. Le cycle de cinq qui se répète au-delà commence à la nuit 6 : il la ramène toutes les cinq nuits. */
-  [{ mutant: 5 }, { mutant: 5 }, { mutant: 4, queen: 1 }],
-] as const satisfies readonly (readonly WaveSpec[])[];
+  { brute: 1 },
+  {},
+  /** La Reine des flaques : sans tours qui se couvrent, elle en rase une. */
+  { queen: 1 },
+] as const satisfies readonly WaveSpec[];
 
-/** La vague numéro `wave` (la première vaut 1) de la nuit numéro `night` (la première vaut 1). */
-export function waveSpec(night: number, wave: number): WaveSpec {
+/** Les chefs qui sortent la nuit numéro `night` (la première vaut 1). */
+export function nightBosses(night: number): WaveSpec {
   const index = Math.max(0, night - 1);
-  const slot = Math.min(Math.max(0, wave - 1), WAVES.perNight - 1);
 
-  if (index < NIGHT_PLAN.length) return NIGHT_PLAN[index]![slot]!;
+  if (index < NIGHT_BOSSES.length) return NIGHT_BOSSES[index]!;
 
-  const past = index - NIGHT_PLAN.length;
-  const base: WaveSpec = NIGHT_PLAN[NIGHT_PLAN.length - WAVES.cycle + (past % WAVES.cycle)]![slot]!;
-  const extra = (Math.floor(past / WAVES.cycle) + 1) * WAVES.growPerCycle;
+  const past = index - NIGHT_BOSSES.length;
 
-  return { ...base, mutant: (base.mutant ?? 0) + extra };
+  return NIGHT_BOSSES[NIGHT_BOSSES.length - WAVES.cycle + (past % WAVES.cycle)]!;
 }
 
-/** Effectif total d'une vague. */
-export function waveSize(night: number, wave: number): number {
-  return Object.values(waveSpec(night, wave)).reduce((sum, count) => sum + count, 0);
-}
-
-/** Vrai si la vague amène un gros mutant ou la Reine : le bandeau l'annonce autrement. */
-export function isBossWave(night: number, wave: number): boolean {
-  const spec = waveSpec(night, wave);
+/** Vrai si la nuit amène un gros mutant ou la Reine : le bandeau l'annonce autrement. */
+export function isBossNight(night: number): boolean {
+  const spec = nightBosses(night);
 
   return (spec.brute ?? 0) > 0 || (spec.queen ?? 0) > 0;
 }
 
-/** Vrai si la Reine des flaques mène cette vague. */
-export function isQueenWave(night: number, wave: number): boolean {
-  return (waveSpec(night, wave).queen ?? 0) > 0;
+/** Vrai si la Reine des flaques sort cette nuit. */
+export function isQueenNight(night: number): boolean {
+  return (nightBosses(night).queen ?? 0) > 0;
 }
 
 /** La vague de la nuit `night` que mène la Reine, ou `null` si elle ne sort pas cette nuit-là. */
 export function queenWave(night: number): number | null {
-  for (let wave = 1; wave <= WAVES.perNight; wave += 1) {
-    if (isQueenWave(night, wave)) return wave;
-  }
-  return null;
+  return isQueenNight(night) ? WAVES.perNight : null;
 }
 
 /* ------------------------------------------------------------------ faune */
@@ -356,8 +333,12 @@ export function queenWave(night: number): number | null {
  * - `shore` : le sable, le long de l'eau. Un crabe ne le quitte jamais.
  * - `forest` : le cœur des massifs d'arbres. Un loup en sort pour charger,
  *   jamais bien loin.
+ * - `base` : la zone d'une base mutante. Ses gardiens n'ont pas de tanière
+ *   tirée de la seed (`densPerChunk` nul) : c'est la base qui les loge et les
+ *   refait (`data/enemyBases.ts`). Ils chargent Adam dès qu'il entre dans
+ *   leur laisse, et n'en sortent jamais, même en chargeant.
  */
-export type Habitat = 'shore' | 'forest';
+export type Habitat = 'shore' | 'forest' | 'base';
 
 export interface WildlifeProto {
   label: string;
@@ -452,6 +433,41 @@ export const WILDLIFE = {
     halfW: 9,
     halfH: 6,
     age: { min: 1, max: 9 },
+  },
+  /**
+   * Le gardien d'une base mutante : un mutant trapu casqué d'un seau de
+   * ruine, son couvercle pour bouclier. Il ne part jamais en vague : il tient
+   * la zone de sa base (`leashRadius`, sous la plus petite zone), charge Adam
+   * qui y entre, et le lâche dès qu'il en sort.
+   */
+  guardian: {
+    label: 'Gardien de base',
+    hp: 5,
+    speed: 0.7,
+    chargeSpeed: 1.9,
+    damage: 2,
+    attackTicks: 24,
+    // Comptés depuis le centre de sa base, pas depuis lui : il charge qui entre dans la zone qu'il tient,
+    // le lâche qui en sort, et sa laisse est un mur (`stepBeast`) — sous la plus petite zone, 8 tuiles.
+    aggroRadius: 7,
+    giveUpRadius: 8,
+    leashRadius: 7.5,
+    habitat: 'base',
+    throughTrees: true,
+    densPerChunk: 0,
+    groupMin: 1,
+    groupMax: 1,
+    // La base le refait le jour (`ENEMY_BASE_LEVELS[].guards`), pas une tanière.
+    respawnTicks: 0,
+    // Sa gelée, et la ferraille de son casque.
+    loot: [
+      { item: 'mutantGoo', min: 1, max: 1, chance: 0.6 },
+      { item: 'ironOre', min: 1, max: 2, chance: 1 },
+    ],
+    sprite: 'guardian',
+    halfW: 9,
+    halfH: 6,
+    age: { min: 20, max: 60 },
   },
 } as const satisfies Record<string, WildlifeProto>;
 

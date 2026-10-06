@@ -203,9 +203,12 @@ describe('l’Antenne', () => {
       if (night !== 1) return;
       waves += 1;
       targets.push(targetProto);
+      // Chaque base envoie les siens sur elle, pas seulement la plus proche.
+      for (const mobile of world.mobiles.values()) if (mobile.kind === 'mutant') targets.push(String(mobile.target === antenna.id ? 'antenna' : mobile.target));
     });
     runTo(world, 1, 'dawn');
-    expect(waves).toBeGreaterThan(1);
+    expect(waves).toBe(1);
+    expect(targets.length).toBeGreaterThan(2);
     expect(targets.every((proto) => proto === 'antenna')).toBe(true);
 
     // Une nuit sans étage fini : les vagues reprennent leurs cibles habituelles.

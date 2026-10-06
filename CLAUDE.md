@@ -220,7 +220,7 @@ ouvriers, quatre lits.
 **Jour et nuit** — dès que la mairie est debout, le cycle démarre
 (`src/data/dayNight.ts`, horloge pure dans `src/sim/dayNight.ts`) : une
 journée sans mutant (~3 min), un crépuscule (carte teintée indigo, lampions
-allumés, « La nuit tombe — rentrez »), une nuit de trois vagues (~100 s, la première 15 s après la tombée), puis
+allumés, « La nuit tombe — rentrez »), une nuit (~100 s) dont la vague sort des bases mutantes à sa tombée, puis
 l'aube : les mutants restants fuient et le butin tombe dans le sac. Le rendu
 (`render/nightLayer.ts`) n'applique que la teinte : un quad `multiply` et des
 lueurs `add`, pas de filtre. Le HUD l'affiche en **horloge** au bout de la tête
@@ -230,26 +230,31 @@ le soleil, la lune la nuit, « J2 » à côté (un de plus à chaque aube) ; à
 `DAY_DIAL.nightWarning` de la nuit, elle bat en corail ; un tap dit « Jour 2 ·
 nuit dans 1:31 » (c'est aussi son `aria-label`).
 
-**Menace** — la nuit, des **mutants** arrivent par
-vagues (`src/data/enemies.ts`) et marchent droit sur la cible de leur vague
-(`Mutant.target`, sauvegardée) : une fois sur deux le bâtiment de l'usine
-fini le plus proche de leur apparition (`WAVES.targets` : foreuse, ferme,
+**Menace** — la nuit, des **mutants** sortent des bases mutantes : une
+vague par nuit (`WAVES`, `src/data/enemies.ts`), à sa tombée, faite des
+assaillants que chaque base a produits le jour (voir Bases mutantes) ; rien
+n'apparaît ailleurs, et sans base debout la nuit est calme. Ils marchent
+droit sur la cible de leur vague (`Mutant.target`, sauvegardée) : une fois
+sur deux, pour chaque base, le bâtiment de l'usine fini le plus proche
+d'elle (`WAVES.targets` : foreuse, ferme,
 carrière, cabane, forge), sinon la mairie, qui reprend la main si la cible
 tombe ; ils traversent tout sauf le bâti, qu'ils cassent. Un bâtiment de
 l'usine abattu redevient son chantier, à moitié livré (`RUIN`). Une vague
-s'annonce trois secondes avant (bandeau avec sa direction et sa cible, cor grave, léger recul de caméra vers elle —
+s'annonce trois secondes avant (bandeau avec son effectif, ses bases, la direction de la plus proche — `World.leadBase` — et sa cible, cor grave, léger recul de caméra vers elle —
 pas si un bâtiment est armé ou une fenêtre ouverte, et un tap n'ouvre rien
 pendant que la carte glisse),
-surgit dans le champ d'une flaque vert fluo — un mutant qui émerge
+sort de chaque base par sa porte, l'un après l'autre (`RAIDS.exitStagger`), d'une flaque vert fluo — un mutant qui émerge
 (`WAVES.emergeTicks`) n'est pas visable — et finit sur « Nuit N — vague repoussée ! » ;
 tout ennemi abattu (mutant, crabe, loup) lâche au sol le butin de sa table
 (`loot`, tirée du PRNG du monde ; `LOOT_DROPS`, `src/sim/loot.ts`) qu'Adam
 ramasse en marchant dessus — sac plein, il reste au sol. L'arc d'Adam et la tour de guet
 (`src/data/weapons.ts`) tirent seuls. La mairie à zéro = partie perdue.
-La courbe est une table, nuit par nuit (`NIGHT_PLAN`) : pic à la nuit 3,
-répit après chaque grosse nuit, un **gros mutant** (`brute`) dès la nuit 5 ;
-au-delà, les cinq dernières se répètent en plus gros. Aux nuits 10, 15, 20…
-la **Reine des flaques** (`queen`, `QUEEN`) mène la dernière vague :
+La courbe vient des bases : chaque nuit, elles produisent plus vite
+(`RAIDS.paceGrowth`) et en gardent plus (`capacityEvery`), les anneaux
+lointains s'éveillent plus tard (`raid.from`). Les chefs sont une table
+(`NIGHT_BOSSES`, cinq dernières nuits répétées) : un **gros mutant**
+(`brute`) dès la nuit 5, et aux nuits 10, 15, 20…
+la **Reine des flaques** (`queen`, `QUEEN`), tous sortis de la base la plus proche de la mairie :
 annoncée la veille au crépuscule par Ève, compte à rebours au bandeau
 (`World.queenCountdown()`). Phase 1, elle marche sur la mairie et pond des
 larves (`larva`) ; sous la moitié de ses PV, elle plonge (`stepQueen`,
@@ -371,9 +376,23 @@ faut un meilleur équipement ». Abattue, elle reste à zéro PV dans
 `World.enemyBases` (sauvegardé) : zone libre, `World.prestige` monte, butin
 au sol. Un tap ouvre sa fenêtre (`BuildingPanel.showBase`). Une sauvegarde
 d'avant les pose au chargement, sauf là où le bâti tient déjà la zone.
+Deux sortes de mutants par base. Les **assaillants** (`RAIDS.proto`, le
+mutant) : le jour seulement, elle en produit à la cadence de son niveau
+(`raid` de `ENEMY_BASE_LEVELS` ; `breed`, compte `brood` qui tient d'un jour
+à l'autre) jusqu'à sa capacité (`raidCapacity`) ; le badge de la base
+(`sign0`…`sign9`) dit sa réserve (`raiders`), qu'elle lâche toute à la
+tombée de la nuit — le badge retombe. Les **gardiens** (`WILDLIFE.guardian`,
+seau violet et couvercle-bouclier, `art/guardian.ts`) : des bêtes logées
+par la base (`Beast.guardOf`, `guards` comptés et refaits le jour,
+`mend`), qui ne sortent flâner devant que quand Adam passe à
+`GUARD_RANGE.showTiles` et rentrent au-delà de `hideTiles`
+(`World.stepGuards`, comme une tanière) ; ils chargent Adam qui entre dans
+la zone et ne quittent jamais leur laisse (`stepBeast`). Abattue, une base
+ne produit ni n'envoie plus rien. Réserve, comptes et gardiens sont
+sauvegardés ; une sauvegarde d'avant charge ses bases à réserve vide.
 
 **Faune** — en plus des mutants, des **crabes** vivent sur le sable et des
-**loups** au cœur des forêts (`WILDLIFE`, `src/data/enemies.ts` ;
+**loups** au cœur des forêts (les gardiens des bases sont de la même famille, sans tanière) (`WILDLIFE`, `src/data/enemies.ts` ;
 `src/sim/wildlife.ts`). Leurs tanières se tirent de la seed par chunk ; une
 tanière se peuple hors de la vue d'Adam et loin du village, sous un
 plafond. Ils ne s'en prennent qu'à Adam (qui a des PV et se réveille à la
