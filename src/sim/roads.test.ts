@@ -73,6 +73,7 @@ function porter(x: number, y: number): Worker {
     logistician: false,
     builder: false,
     survivor: false,
+    free: false,
     build: null,
     inside: false,
     job: null,

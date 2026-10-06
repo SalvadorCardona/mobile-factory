@@ -105,8 +105,14 @@ function kids(world: World): Kid[] {
   return [...world.mobiles.values()].filter((mobile): mobile is Kid => mobile.kind === 'kid');
 }
 
+/** Les porteurs logés : ceux qu'emploie un bâtiment, pas les ouvriers libres. */
 function workers(world: World): Worker[] {
-  return [...world.mobiles.values()].filter((mobile): mobile is Worker => mobile.kind === 'worker');
+  return [...world.mobiles.values()].filter((mobile): mobile is Worker => mobile.kind === 'worker' && !mobile.free);
+}
+
+/** Les ouvriers libres de la colonie, qui flânent devant la mairie. */
+function freeWorkers(world: World): Worker[] {
+  return [...world.mobiles.values()].filter((mobile): mobile is Worker => mobile.kind === 'worker' && mobile.free);
 }
 
 function run(world: World, ticks: number): void {
@@ -178,7 +184,8 @@ describe('travail à 14 ans', () => {
     expect(kids(world)).toHaveLength(1);
     expect(workers(world)).toHaveLength(0);
     expect(world.workforce()).toEqual(pool);
-    expect(world.census()).toMatchObject({ children: 1, idle: 0 });
+    // Les dix, libres, flânent devant la mairie : inactifs ; l'enfant n'en est pas.
+    expect(world.census()).toMatchObject({ children: 1, idle: COLONY.startingWorkers });
     expect(world.population().children).toBe(1);
   });
 
@@ -239,7 +246,7 @@ describe('nurserie', () => {
 
     // L'aîné a 14 ans : il part travailler, sa place se libère, un bébé naît.
     toDawn(world);
-    expect(world.mobiles.has(eldest!.id)).toBe(false);
+    expect(world.mobiles.get(eldest!.id)).toMatchObject({ kind: 'worker', free: true });
     expect(nursery.born).toBe(2);
     expect(world.nurseryKids(nursery)).toHaveLength(NURSERY_CARE.capacity);
   });
@@ -263,9 +270,10 @@ describe('ouvriers inactifs', () => {
 
     run(world, 200);
     expect(world.clock()?.phase).toBe('day');
-    expect(world.idleWorkers()).toHaveLength(4);
-    expect(world.census()).toMatchObject({ idle: 4, children: 0 });
-    for (const worker of workers(world)) expect(world.occupation(worker)).toEqual({ kind: 'idle' });
+    // Les quatre porteurs sans rien à porter, et les six ouvriers libres.
+    expect(world.idleWorkers()).toHaveLength(COLONY.startingWorkers);
+    expect(world.census()).toMatchObject({ idle: COLONY.startingWorkers, children: 0 });
+    for (const worker of [...workers(world), ...freeWorkers(world)]) expect(world.occupation(worker)).toEqual({ kind: 'idle' });
   });
 
   it('retire de son poste l’ouvrier, qui rentre libre ; le lui rendre le remet au travail', () => {
@@ -297,14 +305,15 @@ describe('ouvriers inactifs', () => {
     const world = colony({ house: true });
 
     run(world, 200);
-    expect(world.idleWorkers()).toHaveLength(4);
+    expect(world.idleWorkers()).toHaveLength(COLONY.startingWorkers);
     for (const worker of workers(world)) {
       worker.inside = true;
     }
     world.cycleStartTick -= DAY_CYCLE.day;
     run(world, 2);
     expect(world.clock()?.phase).toBe('dusk');
-    expect(world.idleWorkers()).toHaveLength(0);
+    // Les porteurs, couchés dans la maison ; les libres, sans lit, cherchent encore où s'allonger.
+    expect(world.idleWorkers().filter((worker) => worker.kind !== 'worker' || !worker.free)).toHaveLength(0);
     for (const worker of workers(world)) expect(world.occupation(worker)).toEqual({ kind: 'home' });
   });
 });
@@ -350,7 +359,8 @@ describe('sauvegarde des âges', () => {
 
     expect(loaded.player.age).toBe(adultAge(loaded.seed, ADAM_SALT));
     expect(kids(loaded)).toHaveLength(0);
-    expect(loaded.mobiles.has(kid!.id)).toBe(false);
+    // L'enfant devenu grand est un ouvrier libre, sous le même id.
+    expect(loaded.mobiles.get(kid!.id)).toMatchObject({ kind: 'worker', free: true });
     // Les ouvriers de la maison, gardés, et l'enfant devenu grand.
     expect(loaded.colonists).toBe(BUILDINGS.builderHouse.workers + 1);
     expect(workers(loaded)).toHaveLength(BUILDINGS.builderHouse.workers);

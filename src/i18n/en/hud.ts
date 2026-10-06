@@ -151,7 +151,7 @@ export const hud: Messages['hud'] = {
     status: (night: number, mutants: number): string => `Night ${night} · ${mutants} mutant${s(mutants)}`,
     inhabitants: 'Inhabitants',
     kills: 'Mutants defeated',
-    crew: (total: number): string => `${total} worker${s(total)} — see details`,
+    crew: (free: number, total: number): string => `${free} free worker${s(free)} of ${total} — see details`,
     noCrew: 'No workers yet.',
     assigned: 'Assigned',
     free: 'Free',

@@ -105,7 +105,7 @@ function yardOf(world: World): Yard {
 }
 
 function workers(world: World): Worker[] {
-  return [...world.mobiles.values()].filter((mobile): mobile is Worker => mobile.kind === 'worker');
+  return [...world.mobiles.values()].filter((mobile): mobile is Worker => mobile.kind === 'worker' && !mobile.free);
 }
 
 function builders(world: World): Worker[] {

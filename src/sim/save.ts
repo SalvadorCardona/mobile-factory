@@ -704,6 +704,8 @@ function parseMobile(raw: unknown): Mobile {
         logistician: mobile['logistician'] === undefined ? false : bool(mobile['logistician']),
         // Absents des sauvegardes d'avant le poste de construction : aucun bâtisseur.
         builder: mobile['builder'] === undefined ? false : bool(mobile['builder']),
+        // Absent des sauvegardes d'avant les ouvriers libres sur la carte : ils y apparaissent au chargement.
+        free: mobile['free'] === undefined ? false : bool(mobile['free']),
         // Absent des sauvegardes d'avant le Signal : aucun survivant.
         survivor: mobile['survivor'] === undefined ? false : bool(mobile['survivor']),
         grown: bool(mobile['grown']),

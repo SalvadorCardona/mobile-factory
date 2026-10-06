@@ -110,7 +110,7 @@ function depotOf(world: World): Depot {
 }
 
 function workers(world: World): Worker[] {
-  return [...world.mobiles.values()].filter((mobile): mobile is Worker => mobile.kind === 'worker');
+  return [...world.mobiles.values()].filter((mobile): mobile is Worker => mobile.kind === 'worker' && !mobile.free);
 }
 
 function logisticians(world: World): Worker[] {
@@ -320,7 +320,8 @@ describe('poste de logistique', () => {
     const world = colony({}, [DEPOT, { proto: 'drill', ...NEAR_A, store: { ironOre: 20 } }]);
     const hall = hallOf(world);
 
-    run(world, 60);
+    // Ils viennent de la mairie, libres : le temps de rejoindre la foreuse.
+    for (let i = 0; i < 600 && !logisticians(world).some((worker) => worker.job?.carried); i += 1) world.tick();
     expect(logisticians(world).some((worker) => worker.job?.carried)).toBe(true);
 
     const x = (hall.tx + 1.5) * TILE_SIZE;

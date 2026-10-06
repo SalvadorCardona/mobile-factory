@@ -1312,7 +1312,7 @@ export class Hud {
     const line = element('div', 'hud-quest-line');
     const chips = element('div', 'hud-quest-chips');
 
-    chips.append(chip('people', people + workers, words.inhabitants), this.crewChip(crew.total), chip('mutant', world.kills, words.kills));
+    chips.append(chip('people', people + workers, words.inhabitants), this.crewChip(crew.free, crew.total), chip('mutant', world.kills, words.kills));
     if (status) line.append(text('hud-quest-wave', status));
     line.append(chips);
     this.questBody.replaceChildren(goal, ...meters, hp, line);
@@ -1394,14 +1394,17 @@ export class Hud {
     if (this.quest.dataset['folded'] !== folded) this.quest.dataset['folded'] = folded;
   }
 
-  /** Le compteur d'ouvriers : un tap déplie leur détail sous la ligne, un autre le replie — le temps s'en charge sinon. */
-  private crewChip(total: number): HTMLElement {
-    const node = text('hud-quest-chip hud-quest-crew', String(total), 'button');
+  /**
+   * Le compteur d'ouvriers, « libres/total » : ce qui reste pour pourvoir un
+   * bâtiment. Un tap déplie leur détail sous la ligne, un autre le replie — le temps s'en charge sinon.
+   */
+  private crewChip(free: number, total: number): HTMLElement {
+    const node = text('hud-quest-chip hud-quest-crew', `${free}/${total}`, 'button');
 
     node.setAttribute('type', 'button');
     node.setAttribute('aria-expanded', String(this.crewOpen));
     node.prepend(uiIcon('worker', 18));
-    setTip(node, t().hud.quest.crew(total));
+    setTip(node, t().hud.quest.crew(free, total));
     node.addEventListener('click', () => {
       this.crewOpen = !this.crewOpen;
       this.crewSince = this.world.tickCount;

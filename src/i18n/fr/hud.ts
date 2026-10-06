@@ -189,7 +189,8 @@ export const hud = {
     status: (night: number, mutants: number): string => `Nuit ${night} · ${mutants} mutant${s(mutants)}`,
     inhabitants: 'Habitants',
     kills: 'Mutants abattus',
-    crew: (total: number): string => `${total} ouvrier${s(total)} — voir le détail`,
+    /** Le compteur d'ouvriers : « 6/10 », libres sur le total. */
+    crew: (free: number, total: number): string => `${free} ouvrier${s(free)} libre${s(free)} sur ${total} — voir le détail`,
     noCrew: 'Aucun ouvrier pour l’instant.',
     assigned: 'Affectés',
     free: 'Libres',
