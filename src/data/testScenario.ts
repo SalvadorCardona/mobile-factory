@@ -44,6 +44,12 @@ export interface TestScenarioProto {
   bag: Partial<Record<ItemId, number>>;
   /** Où se tient Adam, en tuiles du coin de la mairie. */
   adam: { dx: number; dy: number };
+  /**
+   * Rayon, en tuiles, exploré d'office autour de la mairie : la base et ses
+   * abords sont connus, le brouillard de guerre commence au-delà. Absent :
+   * `SCENARIO_REVEAL`.
+   */
+  reveal?: number;
   /** Vrai : la partie s'ouvre au crépuscule du premier jour, plutôt qu'au matin — le moment où l'on va dormir. */
   dusk?: boolean;
   /** Le niveau de l'arc d'Adam (`data/gear.ts`) ; absent : l'arc de fortune. */
@@ -54,6 +60,9 @@ export interface TestScenarioProto {
    */
   nearBase?: number;
 }
+
+/** Le rayon exploré d'office autour de la mairie d'une partie de test. */
+export const SCENARIO_REVEAL = 24;
 
 export const TEST_SCENARIOS = {
   /**

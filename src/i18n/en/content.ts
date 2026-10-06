@@ -143,8 +143,8 @@ export const content: Content = {
       sign: 'Watchtower',
       siteDescription: 'Four posts in the ground, a platform to nail on top. The bow comes later.',
       description:
-        'A plank platform on four posts, with a bow and a quiver. It shoots on its own at any mutant that wanders into range.',
-      effect: 'Shoots mutants within 8 tiles.',
+        'A plank platform on four posts, with a bow and a quiver. It shoots on its own at any mutant that wanders into range, and spots from afar what the fog hides.',
+      effect: 'Shoots mutants within 8 tiles, sees 13 out.',
       upgrades: [
         {
           label: 'Reinforced watchtower',

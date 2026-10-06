@@ -218,8 +218,8 @@ export const LORE = {
       site: 'Quatre poteaux plantés, une plateforme à clouer dessus. L’arc viendra ensuite.',
       description:
         'Une plateforme de planches sur quatre poteaux, avec un arc et un carquois. ' +
-        'Elle tire seule sur tout mutant qui passe à sa portée.',
-      effect: 'Tire sur les mutants à 8 cases.',
+        'Elle tire seule sur tout mutant qui passe à sa portée, et voit venir de loin ce que le brouillard cache.',
+      effect: 'Tire sur les mutants à 8 cases, voit à 13.',
       /** Le niveau 2, gagné depuis la fenêtre de la tour : `BUILDINGS.watchtower.upgrades`. */
       reinforced: {
         name: 'Tour de guet renforcée',

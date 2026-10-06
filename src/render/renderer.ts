@@ -10,7 +10,7 @@
  *   monde : le sol baké, l'eau qui bouge par-dessus, les zones des bases
  *   mutantes, le rayon de coupe d'une cabane, les ombres portées (et celles des particules, leurs flaques), le
  *   cadre de sélection au sol, puis le conteneur trié en profondeur (bâtiments, arbres, rochers, personnages), les particules, la
- *   nuit (une passe de teinte et ses lueurs) et le fantôme de construction ;
+ *   nuit (une passe de teinte et ses lueurs), le brouillard de guerre (un voile indigo, `fogLayer.ts`) et le fantôme de construction ;
  * - `hud`, en pixels écran, où vivent la météo, les ondes du Signal et les repères de bord (le
  *   joystick, lui, est dans le DOM : `ui/joystick.ts`).
  *
@@ -32,6 +32,7 @@ import { ChunkLayer } from './chunkLayer.ts';
 import { trailsOf } from './meadow.ts';
 import { EnemyBaseLayer } from './enemyBaseLayer.ts';
 import { EntityLayer } from './entityLayer.ts';
+import { FogLayer } from './fogLayer.ts';
 import { GhostLayer } from './ghostLayer.ts';
 import { IndicatorLayer, indicatorSources, type ScreenRect } from './indicatorLayer.ts';
 import { NightLayer } from './nightLayer.ts';
@@ -72,6 +73,7 @@ export class GameRenderer {
   /** Le bâtiment dont la fenêtre est ouverte : un cadre l'entoure, une cabane y montre son rayon de coupe. */
   private selected: Selection | null = null;
   private readonly nightLayer: NightLayer;
+  private readonly fogLayer: FogLayer;
   public readonly particles: ParticleLayer;
   private readonly library: SpriteLibrary;
   private readonly signboards: Signboards;
@@ -107,6 +109,7 @@ export class GameRenderer {
     this.workReach = new WorkReachLayer(world);
     this.selection = new SelectionLayer(world, this.entityLayer.container);
     this.nightLayer = new NightLayer(app.renderer, world);
+    this.fogLayer = new FogLayer(world);
     this.weather = new WeatherLayer(world, library);
     this.particles = new ParticleLayer(library);
     this.signal = new SignalLayer(world);
@@ -125,6 +128,7 @@ export class GameRenderer {
       this.entityLayer.container,
       this.particles.container,
       this.nightLayer.container,
+      this.fogLayer.container,
       this.ghostLayer.container,
     );
 
@@ -335,6 +339,7 @@ export class GameRenderer {
     this.enemyBases.update(this.app.ticker.deltaMS);
     this.particles.update(this.app.ticker.deltaMS);
     this.nightLayer.update(alpha);
+    this.fogLayer.update(this.camera);
     if (road) this.ghostLayer.updateRoad(road.tool, road.trail, this.app.ticker.deltaMS);
     else this.ghostLayer.update(armed, ghost, block, this.app.ticker.deltaMS);
     this.workReach.update(building ? ghost : null, this.selected?.kind === 'building' ? this.selected.id : null);
@@ -395,6 +400,7 @@ export class GameRenderer {
     this.workReach.destroy();
     this.selection.destroy();
     this.nightLayer.destroy();
+    this.fogLayer.destroy();
     this.indicators.destroy();
     this.weather.destroy();
     this.signal.destroy();

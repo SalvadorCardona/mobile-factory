@@ -310,6 +310,7 @@ export const panel: Messages['panel'] = {
     trees: { text: 'Trees in the way', remedy: 'Adam can chop them' },
     tree: { text: 'A tree is in the way', remedy: 'Adam can chop it' },
     enemyZone: { text: 'A mutant base holds this zone', remedy: 'Take it down with a bow of its level' },
+    unexplored: 'Unexplored area — go there first',
     extracts: (item: string): string => `Will extract: ${item}`,
     roads: {
       noStone: { text: 'Out of stone for the rest', remedy: 'Break some rocks, or draw within the town hall radius' },
@@ -317,6 +318,7 @@ export const panel: Messages['panel'] = {
       occupied: { text: 'A building is on the path', remedy: '' },
       resource: { text: 'A tree or rock is in the way', remedy: 'Adam can harvest it' },
       enemyZone: { text: 'A mutant base holds the zone', remedy: 'Take it down with a bow of its level' },
+      unexplored: { text: 'The path runs into the unknown', remedy: 'Explore the area first' },
     },
   },
 };

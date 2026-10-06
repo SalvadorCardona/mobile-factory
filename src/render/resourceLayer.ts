@@ -18,6 +18,10 @@
  * des fermiers aussi : la terre retournée au sol, avec les ombres, et les
  * plants — semis, pousse, épis mûrs (`crop`) — triés avec le reste.
  *
+ * Le brouillard de guerre (`sim/fog.ts`) : une case vue de loin montre ce
+ * qu'on y a vu la dernière fois (`World.lookAt`) — l'arbre coupé hors de
+ * vue y reste debout jusqu'à ce qu'on revienne.
+ *
  * Pendant un placement, l'arbre ou le rocher qui empêche de poser
  * **clignote** : c'est lui qu'Adam doit aller heurter.
  *
@@ -32,6 +36,7 @@ import { hash3 } from '../core/rng.ts';
 import { LIGHT } from '../data/artDirection.ts';
 import { RESOURCES, SAPLING } from '../data/resources.ts';
 import { SPRITES, type SpriteId } from '../data/sprites.ts';
+import type { TileLook } from '../sim/resources.ts';
 import { terrainAt } from '../sim/terrain.ts';
 import type { World } from '../sim/world.ts';
 import type { Camera } from './camera.ts';
@@ -175,18 +180,18 @@ export class ResourceLayer {
 
   /** Le sprite de la ressource en (tx, ty), ou `null` si la tuile est nue. */
   private create(tx: number, ty: number): ResourceView | null {
-    const resource = this.world.resources.at(tx, ty);
+    const look = this.world.lookAt(tx, ty);
 
-    if (!resource) return this.createSapling(tx, ty) ?? this.createCrop(tx, ty);
+    if (!look.resource) return this.createSapling(tx, ty, look.sapling) ?? this.createCrop(tx, ty);
 
     const { seed } = this.world;
     // L'essence d'un arbre est tirée par tuile : elle reste la même une fois entamé. Le forestier ne plante pas d'arbre mort.
-    const sprites: readonly SpriteId[] = this.world.resources.isPlanted(tx, ty) ? SAPLING.sprites : RESOURCES[resource.id].sprites;
+    const sprites: readonly SpriteId[] = look.planted ? SAPLING.sprites : RESOURCES[look.resource].sprites;
     const id = sprites[hash3(seed ^ 0x510e527f, tx, ty) % sprites.length]!;
     const proto = SPRITES[id];
-    const part = resource.stage === 'damaged' ? 'damaged' : 'full';
+    const part = look.stage === 'damaged' ? 'damaged' : 'full';
     const key = `${id}.${part}`;
-    const tree = resource.id === 'tree';
+    const tree = look.resource === 'tree';
     // Un léger décalage par tuile : la forêt ne pousse pas au cordeau.
     const jitter = tree ? (hash3(seed ^ 0x2545f491, tx, ty) % 7) - 3 : 0;
     const baseX = (tx + 0.5) * TILE_SIZE + jitter;
@@ -212,9 +217,7 @@ export class ResourceLayer {
   }
 
   /** La pousse ou le jeune arbre qu'un forestier a planté en (tx, ty), ou `null`. */
-  private createSapling(tx: number, ty: number): ResourceView | null {
-    const stage = this.world.resources.sapling(tx, ty);
-
+  private createSapling(tx: number, ty: number, stage: TileLook['sapling']): ResourceView | null {
     if (!stage) return null;
 
     const proto = SPRITES.sapling;
@@ -272,9 +275,9 @@ export class ResourceLayer {
 
     const key = coordKey(tx, ty);
     const existing = views.get(key);
-    const resource = this.world.resources.at(tx, ty);
+    const look = this.world.lookAt(tx, ty);
 
-    if (existing && resource && existing.key.endsWith(resource.stage === 'damaged' ? '.damaged' : '.full')) return;
+    if (existing && look.resource && existing.key.endsWith(look.stage === 'damaged' ? '.damaged' : '.full')) return;
 
     if (existing) {
       existing.sprite.destroy();

@@ -24,6 +24,7 @@ export const hud: Messages['hud'] = {
     unique: 'Only one per colony — you already have one',
     nearHall: `Too close to the town hall — the antenna stands at least ${BUILDINGS.antenna.hallDistance} tiles away`,
     enemyZone: 'A mutant base holds this zone — take it down first',
+    unexplored: 'Unexplored area — go there first',
   },
   road: {
     noStone: (paved: number): string => `Out of stone: road stopped after ${paved} tile${s(paved)}`,
@@ -32,6 +33,7 @@ export const hud: Messages['hud'] = {
     occupied: 'A road can’t run under a building',
     resource: 'Skipped trees and rocks: clear them to pave',
     enemyZone: 'No roads inside a mutant base’s zone',
+    unexplored: 'No roads into the unknown: explore first',
   },
   gear: {
     outOfReach: 'Too far from the forge — get closer',

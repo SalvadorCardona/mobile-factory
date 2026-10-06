@@ -69,6 +69,7 @@ import {
 } from '../data/enemies.ts';
 import { ENEMY_BASE, GUARD_RANGE, RAIDS, enemyBaseLevel } from '../data/enemyBases.ts';
 import { EVE } from '../data/eve.ts';
+import { FOG_VISION } from '../data/fog.ts';
 import { GEAR_WORKSHOP, MAX_GEAR, gearOf } from '../data/gear.ts';
 import { HOUSING } from '../data/housing.ts';
 import { AGES, COLONY, NURSERY_CARE } from '../data/inhabitants.ts';
@@ -165,7 +166,8 @@ import {
   unlockingResearch,
 } from './research.ts';
 import { TownFlows } from './flows.ts';
-import { ResourceIndex } from './resources.ts';
+import { ResourceIndex, type TileLook } from './resources.ts';
+import { FogOfWar, type Sight } from './fog.ts';
 import { RoadNetwork } from './roads.ts';
 import type { SavedEntity, WorldState } from './save.ts';
 import { Scheduler } from './scheduler.ts';
@@ -658,6 +660,12 @@ export class World {
   public readonly resources: ResourceIndex;
   /** Les tuiles pavées : une modification du joueur, sauvegardée comme les tuiles entamées. */
   public readonly roads = new RoadNetwork();
+  /**
+   * Le brouillard de guerre : cases explorées, cases vues, et ce qu'on
+   * se rappelle de celles qu'on ne voit plus (`sim/fog.ts`). Une case revue
+   * oublie sa capture : ses ressources sont à redessiner.
+   */
+  public readonly fog = new FogOfWar((tx, ty) => this.dirtyTile(tx, ty));
   public readonly entities = new Map<EntityId, Entity>();
   public readonly mobiles = new Map<MobileId, Mobile>();
   public readonly events = new Emitter<WorldEvents>();
@@ -856,6 +864,7 @@ export class World {
   public constructor(seed: number) {
     this.seed = seed >>> 0;
     this.resources = new ResourceIndex(this.seed);
+    this.resources.watch((tx, ty) => this.rememberTile(tx, ty));
     this.rng = mulberry32(this.seed ^ 0x3c6ef372);
 
     const [sx, sy] = findSpawn(this.seed);
@@ -883,6 +892,9 @@ export class World {
 
     // Les dix ouvriers de la colonie attendent, libres, devant le chantier de la mairie.
     this.settleColonists();
+
+    // Au départ, seuls les alentours de la mairie et d'Adam sont connus.
+    this.watchSight();
   }
 
   /* ---------------------------------------------------------------- entrée */
@@ -949,6 +961,7 @@ export class World {
       planted: this.resources.plantedJSON(),
       crops: this.resources.cropsJSON(),
       roads: this.roads.toJSON(),
+      fog: this.fog.toJSON(),
       entities: [...this.entities.values()].map(saveEntity),
       mobiles: [...this.mobiles.values()].map(copyMobile),
       dens: [...this.dens].map(([id, den]) => ({ id, ...den })),
@@ -1079,6 +1092,20 @@ export class World {
     this.posts = state.staffPosts ? new Map(state.staffPosts.map(({ id, filled, since }) => [id, { filled, since }])) : null;
     this.hostStaff(true);
     this.lodgeCrews();
+
+    // Une sauvegarde d'avant le brouillard connaît déjà les alentours de ce qu'elle a bâti, et d'Adam.
+    if (state.fog) {
+      this.fog.restore(state.fog);
+    } else {
+      this.fog.restore({ explored: {}, looks: {}, bases: [] });
+      for (const entity of this.entities.values()) {
+        const center = centerTile(entity);
+
+        this.fog.reveal(center.tx, center.ty, FOG_VISION.legacy + Math.max(entity.width, entity.height) / 2);
+      }
+      this.fog.reveal(floorDiv(this.player.x, TILE_SIZE), floorDiv(this.player.y, TILE_SIZE), FOG_VISION.legacy);
+    }
+    this.watchSight();
   }
 
   /** Les postes de tous les bâtiments finis : la colonie d'une sauvegarde d'avant `colonists`. */
@@ -1133,6 +1160,7 @@ export class World {
     this.checkObjectives();
     this.watchUnlocks();
     this.flows.observe(this.tickCount, this.townStock());
+    this.watchSight();
   }
 
   private drainCommands(): void {
@@ -1204,6 +1232,11 @@ export class World {
 
       case 'applyPerks':
         this.applyPerks(command.perks);
+        break;
+
+      case 'setFog':
+        this.fog.enabled = command.enabled;
+        this.fog.revision += 1;
         break;
 
       case 'startResearch':
@@ -2447,6 +2480,11 @@ export class World {
     // Pas de plan ou pas encore la vague, pas de chantier : le tick refuse comme le menu.
     if (!this.isUnlocked(building)) return { reason: 'locked', tiles: tiles(() => true) };
 
+    // On ne bâtit pas sur l'inconnu : il faut y être allé. Une case explorée hors de vue suffit.
+    const unknown = tiles((x, y) => !this.known(x, y));
+
+    if (unknown.length > 0) return { reason: 'unexplored', tiles: unknown };
+
     // Une foreuse au bord d'un filon : moitié gisement, moitié herbe. L'eau et le sable y sont des cases
     // fautives comme les autres ; le rocher du filon se casse ensuite (« resource »).
     const footing = this.footing(building, tx, ty);
@@ -2503,6 +2541,7 @@ export class World {
    * tracé fantôme et du tick, comme `placementBlock()` pour un bâtiment.
    */
   public roadBlock(tx: number, ty: number): Exclude<RoadRejection, 'noStone'> | null {
+    if (!this.known(tx, ty)) return 'unexplored';
     if (!isWalkable(terrainAt(this.seed, tx, ty))) return 'terrain';
     if (this.chunks.occupantAt(tx, ty) !== undefined) return 'occupied';
     if (this.resources.isTaken(tx, ty)) return 'resource';
@@ -7358,6 +7397,126 @@ export class World {
     return candidates.find((tile) => !this.isSolid(tile.tx, tile.ty)) ?? null;
   }
 
+  /* ------------------------------------------------------------ brouillard */
+
+  /**
+   * Les sources de vision de ce tick : Adam, chaque bâtiment du joueur
+   * (chantier compris), les habitants dehors. Une source qui n'a pas changé
+   * de tuile ne coûte rien (`FogOfWar.source`). Puis les bases mutantes :
+   * revue, une base oublie sa capture ; sortie de la vue, elle est copiée
+   * telle qu'on l'a vue.
+   */
+  private watchSight(): void {
+    const fog = this.fog;
+
+    fog.begin();
+    fog.source(-1, floorDiv(this.player.x, TILE_SIZE), floorDiv(this.player.y, TILE_SIZE), FOG_VISION.player);
+    for (const entity of this.entities.values()) {
+      const { tx, ty } = centerTile(entity);
+      const reach = FOG_VISION.buildings[entity.proto] ?? FOG_VISION.building;
+
+      // Une tour de guet en chantier ne guette pas encore : elle voit comme un chantier.
+      fog.source(entity.id * 2, tx, ty, (entity.kind === 'site' ? FOG_VISION.building : reach) + Math.max(entity.width, entity.height) / 2);
+    }
+    for (const mobile of this.mobiles.values()) {
+      if (!seesAround(mobile)) continue;
+      fog.source(mobile.id * 2 + 1, floorDiv(mobile.x, TILE_SIZE), floorDiv(mobile.y, TILE_SIZE), FOG_VISION.people);
+    }
+    fog.end();
+
+    for (const base of this.enemyBases) {
+      const sight = this.baseSight(base, false);
+
+      if (sight === 'visible') fog.bases.delete(base.id);
+      else if (sight === 'explored' && !fog.bases.has(base.id)) fog.bases.set(base.id, { ...base });
+    }
+  }
+
+  /** Une tuile va changer : vue de loin, sa capture garde ce qu'elle montrait. */
+  private rememberTile(tx: number, ty: number): void {
+    if (this.fog.sight(tx, ty) !== 'explored') return;
+
+    const key = coordKey(tx, ty);
+
+    if (!this.fog.looks.has(key)) this.fog.looks.set(key, this.resources.look(tx, ty));
+  }
+
+  /** L'état de la case pour le joueur : tout est visible quand le brouillard est levé (débogage). */
+  public sightAt(tx: number, ty: number): Sight {
+    return this.fog.enabled ? this.fog.sight(tx, ty) : 'visible';
+  }
+
+  /**
+   * Le joueur connaît-il la case — explorée, ou sous les yeux d'Adam en ce
+   * moment même, avant que la passe de vision du tick ne l'ait notée ?
+   */
+  private known(tx: number, ty: number): boolean {
+    if (this.sightAt(tx, ty) !== 'unexplored') return true;
+
+    const dx = tx - floorDiv(this.player.x, TILE_SIZE);
+    const dy = ty - floorDiv(this.player.y, TILE_SIZE);
+    const reach = FOG_VISION.player + 0.5;
+
+    return dx * dx + dy * dy <= reach * reach;
+  }
+
+  /** Le point monde (x, y) est-il vu en direct ? Ce qui bouge hors de vue ne se montre ni ne se tape. */
+  public sees(x: number, y: number): boolean {
+    return this.sightAt(floorDiv(x, TILE_SIZE), floorDiv(y, TILE_SIZE)) === 'visible';
+  }
+
+  /** Ce que le joueur voit des ressources de la tuile : en direct, ou la capture d'une case vue de loin. */
+  public lookAt(tx: number, ty: number): TileLook {
+    if (this.fog.looks.size > 0 && this.sightAt(tx, ty) === 'explored') {
+      const look = this.fog.looks.get(coordKey(tx, ty));
+
+      if (look) return look;
+    }
+    return this.resources.look(tx, ty);
+  }
+
+  /** La base est-elle vue — une case de son emprise suffit —, explorée, ou inconnue ? */
+  private baseSight(base: EnemyBase, honorSetting = true): Sight {
+    let sight: Sight = 'unexplored';
+
+    for (let ty = base.ty; ty < base.ty + ENEMY_BASE.height; ty += 1) {
+      for (let tx = base.tx; tx < base.tx + ENEMY_BASE.width; tx += 1) {
+        const tile = honorSetting ? this.sightAt(tx, ty) : this.fog.sight(tx, ty);
+
+        if (tile === 'visible') return 'visible';
+        if (tile === 'explored') sight = 'explored';
+      }
+    }
+    return sight;
+  }
+
+  /**
+   * Les bases mutantes telles que le joueur les connaît : en direct si on
+   * les voit, telles qu'on les a vues la dernière fois sinon — debout,
+   * peut-être, alors qu'elles sont tombées. Une base jamais vue n'y est pas.
+   */
+  public knownEnemyBases(): EnemyBase[] {
+    const known: EnemyBase[] = [];
+
+    for (const base of this.enemyBases) {
+      const sight = this.baseSight(base);
+
+      if (sight === 'visible') known.push(base);
+      else if (sight === 'explored') known.push(this.fog.bases.get(base.id) ?? base);
+    }
+    return known;
+  }
+
+  /** La base `id` telle que le joueur la connaît, ou `undefined` s'il ne l'a jamais vue. */
+  public knownEnemyBase(id: number): EnemyBase | undefined {
+    return this.knownEnemyBases().find((base) => base.id === id);
+  }
+
+  /** Une partie de test, une ancienne sauvegarde : le disque autour de (tx, ty) est exploré d'office. */
+  public revealAround(tx: number, ty: number, radius: number): void {
+    this.fog.reveal(tx, ty, radius);
+  }
+
   /** Chunk sous le joueur — pratique pour le HUD et le culling. */
   public playerChunk(): { cx: number; cy: number } {
     return {
@@ -7451,6 +7610,25 @@ function isWaveTarget(proto: BuildingId): boolean {
 }
 
 /** Objets `REPAIR.item` qu'il faut pour remettre un bâtiment à neuf. */
+/** La tuile au centre de l'emprise : d'où un bâtiment voit. */
+function centerTile(entity: Entity): TileCoord {
+  return { tx: entity.tx + floorDiv(entity.width, 2), ty: entity.ty + floorDiv(entity.height, 2) };
+}
+
+/** Un habitant dehors voit autour de lui : porteur, bûcheron, forestier, Ève une fois descendue de vélo. */
+function seesAround(mobile: Mobile): boolean {
+  switch (mobile.kind) {
+    case 'worker':
+    case 'lumberjack':
+    case 'forester':
+      return !mobile.inside;
+    case 'eve':
+      return mobile.state !== 'arriving';
+    default:
+      return false;
+  }
+}
+
 export function repairCost(building: Building): number {
   return Math.ceil(Math.max(0, buildingLevel(building.proto, building.level).hp - building.hp) / REPAIR.hp);
 }

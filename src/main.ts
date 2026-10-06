@@ -209,6 +209,11 @@ async function main(): Promise<void> {
   );
 
   const debug = import.meta.env.DEV && new URLSearchParams(window.location.search).has('debug');
+
+  // Débogage : `?nofog` (en dev) lève le brouillard de guerre — toute la carte se voit et se bâtit.
+  if (import.meta.env.DEV && new URLSearchParams(window.location.search).has('nofog')) {
+    world.push({ type: 'setFog', enabled: false });
+  }
   const hud = new Hud(world, debug);
   const buildMenu = new BuildMenu(world, placement, MENU_BUILDING_IDS, () => audio.play('open'));
   // La fenêtre d'un bâtiment, le sac et le troc occupent la même place : l'un ferme les autres.
@@ -454,6 +459,10 @@ async function main(): Promise<void> {
       else if (started && !paused && !settings.open && !world.defeated) worldMap.show();
     }
     if (event.code === 'Backquote' && import.meta.env.DEV) hud.toggleDebug();
+    // Débogage : F lève ou rabat le brouillard de guerre — en dev, panneau de debug ouvert.
+    if (event.code === 'KeyF' && import.meta.env.DEV && hud.debugOn && !isTyping(event.target)) {
+      world.push({ type: 'setFog', enabled: !world.fog.enabled });
+    }
   });
 
   // Taper le repère de la mairie : sa fenêtre si Adam est à portée de

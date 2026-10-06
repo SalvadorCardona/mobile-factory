@@ -109,10 +109,23 @@ describe('creatureAt', () => {
     expect(creatureAt([{ kind: 'mutant', id: 12, proto: 'mutant', x: 100, y: 200, emerge: 5 } as Mobile], 100, 180)).toBeUndefined();
     expect(creatureAt([{ kind: 'arrow', id: 14, x: 100, y: 200 } as Mobile], 100, 195)).toBeUndefined();
   });
+
+  it('ne vise pas une créature hors de vue : le brouillard de guerre la cache', () => {
+    const mutant = { kind: 'mutant', id: 12, proto: 'mutant', x: 100, y: 200, emerge: 0 } as Mobile;
+
+    expect(creatureAt([mutant], 100, 180, () => false)).toBeUndefined();
+    expect(creatureAt([mutant], 100, 180, (x, y) => x === 100 && y === 200)).toBe(12);
+  });
 });
 
 describe('tap dans le vide', () => {
-  const world = { eve: () => null, mobiles: new Map(), entities: new Map([[1, HALL]]), enemyBases: [] } as unknown as World;
+  const world = {
+    eve: () => null,
+    mobiles: new Map(),
+    entities: new Map([[1, HALL]]),
+    knownEnemyBases: () => [],
+    sees: () => true,
+  } as unknown as World;
 
   function inspector(open: boolean): { inspect: Inspect; taps: number[]; dismissed: () => number } {
     const taps: number[] = [];
@@ -175,6 +188,8 @@ describe('un tap sur un bâtiment, un habitant ou un ennemi', () => {
       [21, mutant],
     ]),
     entities: new Map([[1, HALL]]),
+    knownEnemyBases: () => [],
+    sees: () => true,
   } as unknown as World;
 
   function tap(x: number, y: number): Selection[] {

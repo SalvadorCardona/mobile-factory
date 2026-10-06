@@ -57,6 +57,8 @@ function spotInZone(world: World, base: EnemyBase): { building: BuildingId; tx: 
   const radius = enemyBaseLevel(base.level).zoneRadius;
   const { x, y } = centerTiles(base);
 
+  // On y est déjà allé : le brouillard de guerre ne cache plus la zone.
+  world.revealAround(Math.floor(x), Math.floor(y), radius + 2);
   for (let ty = Math.floor(y - radius); ty <= y + radius; ty += 1) {
     for (let tx = Math.floor(x - radius); tx <= x + radius; tx += 1) {
       if (world.placementBlock(building, tx, ty)?.reason === 'enemyZone') return { building, tx, ty };
