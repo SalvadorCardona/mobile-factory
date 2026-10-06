@@ -5,16 +5,18 @@
  * visuel du jeu est déjà un SVG, il n'y a rien à baker : le navigateur le
  * dessine lui-même, net à toutes les densités d'écran.
  *
- * Cinq sources : les icônes d'objets (`data/icons.ts`, une par objet,
+ * Six sources : les icônes d'objets (`data/icons.ts`, une par objet,
  * garanti par le type), le bâtiment fini de chaque sprite, pour que le menu
  * de construction montre ce qu'on va poser, le médaillon de son métier
  * (`data/jobIcons.ts`, un par bâtiment), le portrait d'une créature
- * (ses morceaux de face), et les pictogrammes de l'interface (`art/ui.ts`).
+ * (ses morceaux de face), les familles du menu de construction
+ * (`data/categoryIcons.ts`) et les pictogrammes de l'interface (`art/ui.ts`).
  */
 
 import { ROAD_THUMB } from '../art/road.ts';
 import { UI_ICONS, type UiIcon } from '../art/ui.ts';
 import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
+import { CATEGORY_ICONS, type CategoryFilter } from '../data/categoryIcons.ts';
 import { ITEM_ICONS, PRESTIGE_ICON } from '../data/icons.ts';
 import { JOB_ICONS } from '../data/jobIcons.ts';
 import type { ItemId } from '../data/items.ts';
@@ -109,6 +111,15 @@ export function buildingIcon(building: BuildingId, size = 40): HTMLImageElement 
 /** Un `<img>` du médaillon de métier d'un bâtiment, décoratif : son nom est écrit à côté. */
 export function jobIcon(building: BuildingId, size = 20): HTMLImageElement {
   const element = image(jobIconUrl(building), 'icon icon-job', size, size);
+
+  element.alt = '';
+  element.setAttribute('aria-hidden', 'true');
+  return element;
+}
+
+/** L'icône d'une puce de filtre du menu de construction, décorative : la puce porte son nom. */
+export function categoryIcon(filter: CategoryFilter, size = 20): HTMLImageElement {
+  const element = image(url(`category:${filter}`, CATEGORY_ICONS[filter]), 'icon icon-ui', size, size);
 
   element.alt = '';
   element.setAttribute('aria-hidden', 'true');

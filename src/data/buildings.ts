@@ -35,6 +35,22 @@ export type BuildingKind =
   | 'yard'
   | 'antenna';
 
+/**
+ * Les familles du menu de construction : une puce de filtre chacune, dans
+ * cet ordre, après « Tous ». Le `kind` dit ce que la simulation fait du
+ * bâtiment ; la catégorie, où le joueur le cherche.
+ */
+export const BUILDING_CATEGORIES = {
+  ore: 'Minerai',
+  production: 'Production',
+  defense: 'Attaque',
+  logistics: 'Logistique',
+  housing: 'Habitat',
+  research: 'Recherche',
+} as const;
+
+export type BuildingCategory = keyof typeof BUILDING_CATEGORIES;
+
 export interface BuildingProto {
   label: string;
   /** Nom court, écrit sur la pancarte du bâtiment sur la carte : « Bûcherons », « Labo ». */
@@ -46,6 +62,8 @@ export interface BuildingProto {
   /** Ce que fait le bâtiment, en une ligne : sa carte du menu de construction. */
   effect: string;
   kind: BuildingKind;
+  /** Sa famille au menu de construction : la puce de filtre qui le montre. Obligatoire. */
+  category: BuildingCategory;
   /** Emprise en tuiles. */
   width: number;
   height: number;
@@ -145,6 +163,7 @@ export const BUILDINGS = {
     description: LORE.buildings.townHall.description,
     effect: LORE.buildings.townHall.effect,
     kind: 'townHall',
+    category: 'logistics',
     width: 3,
     height: 3,
     cost: { wood: 20, stone: 12 },
@@ -167,6 +186,7 @@ export const BUILDINGS = {
     description: LORE.buildings.lumberCamp.description,
     effect: LORE.buildings.lumberCamp.effect,
     kind: 'lumberCamp',
+    category: 'production',
     width: 2,
     height: 2,
     cost: { wood: 8, stone: 4 },
@@ -189,6 +209,7 @@ export const BUILDINGS = {
     description: LORE.buildings.foresterHouse.description,
     effect: LORE.buildings.foresterHouse.effect,
     kind: 'foresterHouse',
+    category: 'production',
     width: 2,
     height: 2,
     // Du bois pour en faire repousser : la pierre, rare, n'y entre presque pas.
@@ -214,6 +235,7 @@ export const BUILDINGS = {
     description: LORE.buildings.quarry.description,
     effect: LORE.buildings.quarry.effect,
     kind: 'quarry',
+    category: 'ore',
     width: 2,
     height: 2,
     // Tout en bois, la ressource abondante : c'est elle qui donne la pierre qui manque.
@@ -238,6 +260,7 @@ export const BUILDINGS = {
     effect: LORE.buildings.well.effect,
     // Une carrière sur sa propre recette (`drawWater`) : un producteur sans entrée, posé n'importe où.
     kind: 'quarry',
+    category: 'production',
     width: 2,
     height: 2,
     // Du bois pour le treuil, un peu de pierre pour la margelle : à la portée d'une colonie qui démarre.
@@ -261,6 +284,7 @@ export const BUILDINGS = {
     description: LORE.buildings.logisticsPost.description,
     effect: LORE.buildings.logisticsPost.effect,
     kind: 'depot',
+    category: 'logistics',
     width: 2,
     height: 2,
     cost: { wood: 12, stone: 8 },
@@ -283,6 +307,7 @@ export const BUILDINGS = {
     description: LORE.buildings.constructionPost.description,
     effect: LORE.buildings.constructionPost.effect,
     kind: 'yard',
+    category: 'logistics',
     width: 2,
     height: 2,
     cost: { wood: 14, stone: 8 },
@@ -305,6 +330,7 @@ export const BUILDINGS = {
     description: LORE.buildings.drill.description,
     effect: LORE.buildings.drill.effect,
     kind: 'drill',
+    category: 'ore',
     width: 2,
     height: 2,
     cost: { stone: 6, ironOre: 4 },
@@ -329,6 +355,7 @@ export const BUILDINGS = {
     description: LORE.buildings.nursery.description,
     effect: LORE.buildings.nursery.effect,
     kind: 'nursery',
+    category: 'housing',
     width: 2,
     height: 2,
     // Le bois abonde, la pierre manque : les bâtiments du début en demandent peu.
@@ -352,6 +379,7 @@ export const BUILDINGS = {
     description: LORE.buildings.builderHouse.description,
     effect: LORE.buildings.builderHouse.effect,
     kind: 'house',
+    category: 'logistics',
     width: 2,
     height: 2,
     cost: { wood: 16, stone: 8 },
@@ -377,6 +405,7 @@ export const BUILDINGS = {
     effect: LORE.buildings.home.effect,
     // Une maison sans ouvriers : rien que des lits (`beds`).
     kind: 'house',
+    category: 'housing',
     width: 2,
     height: 2,
     // Du bois pour les murs et les lits, un peu de pierre pour la cheminée : à la portée d'une colonie qui démarre.
@@ -401,6 +430,7 @@ export const BUILDINGS = {
     description: LORE.buildings.farm.description,
     effect: LORE.buildings.farm.effect,
     kind: 'farm',
+    category: 'production',
     width: 2,
     height: 2,
     cost: { wood: 10, stone: 4 },
@@ -423,6 +453,7 @@ export const BUILDINGS = {
     description: LORE.buildings.watchtower.description,
     effect: LORE.buildings.watchtower.effect,
     kind: 'tower',
+    category: 'defense',
     width: 2,
     height: 2,
     cost: { wood: 16, stone: 2 },
@@ -456,6 +487,7 @@ export const BUILDINGS = {
     description: LORE.buildings.forge.description,
     effect: LORE.buildings.forge.effect,
     kind: 'forge',
+    category: 'production',
     width: 2,
     height: 2,
     cost: { wood: 8, stone: 10, ironOre: 4 },
@@ -479,6 +511,7 @@ export const BUILDINGS = {
     effect: LORE.buildings.charcoalKiln.effect,
     // Un four comme la forge : il consomme sa recette, `burnCharcoal`, et range le charbon dans son coffre.
     kind: 'forge',
+    category: 'production',
     width: 2,
     height: 2,
     cost: { stone: 10, wood: 6 },
@@ -501,6 +534,7 @@ export const BUILDINGS = {
     description: LORE.buildings.clinic.description,
     effect: LORE.buildings.clinic.effect,
     kind: 'clinic',
+    category: 'housing',
     width: 2,
     height: 2,
     cost: { wood: 12, stone: 8, food: 4 },
@@ -523,6 +557,7 @@ export const BUILDINGS = {
     description: LORE.buildings.lab.description,
     effect: LORE.buildings.lab.effect,
     kind: 'lab',
+    category: 'research',
     width: 2,
     height: 2,
     cost: { wood: 14, stone: 10, ironOre: 4 },
@@ -548,6 +583,7 @@ export const BUILDINGS = {
     // Ses étages 2 et 3 sont ses `upgrades` : pas payés d'un coup, mais livrés dans son coffre
     // comme sur un chantier — le sac, la ville dans son rayon, les porteurs (`sim/antenna.ts`).
     kind: 'antenna',
+    category: 'research',
     width: 3,
     height: 3,
     cost: { stone: 60, wood: 40, ironPlate: 20 },

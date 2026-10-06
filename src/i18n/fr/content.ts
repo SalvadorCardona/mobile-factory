@@ -5,7 +5,7 @@
  * entrée de `data/` sans traduction ne compile pas.
  */
 
-import { BUILDINGS, type BuildingId, type BuildingProto } from '../../data/buildings.ts';
+import { BUILDING_CATEGORIES, BUILDINGS, type BuildingId, type BuildingProto } from '../../data/buildings.ts';
 import { RARE_OFFERS } from '../../data/caravan.ts';
 import { ENEMY_BASE } from '../../data/enemyBases.ts';
 import { ENEMIES, WILDLIFE } from '../../data/enemies.ts';
@@ -73,6 +73,8 @@ export const content = {
   },
   items: mapTable(ITEMS, (item): string => item.label),
   buildings: mapTable<BuildingId, BuildingProto, BuildingText>(BUILDINGS, buildingText),
+  /** Les puces de filtre du menu de construction. */
+  buildingCategories: mapTable(BUILDING_CATEGORIES, (label): string => label),
   resources: mapTable(RESOURCES, (resource): string => resource.verb),
   recipes: mapTable(RECIPES, (recipe): string => recipe.label),
   weapons: mapTable(WEAPONS, (weapon): string => weapon.label),

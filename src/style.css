@@ -2522,6 +2522,96 @@ button.hud-stock:active {
   box-shadow: 0 3px 0 var(--mint-shade);
 }
 
+/*
+ * Les puces de filtre, sous le titre : capsules sur fond lavande, l'active
+ * pleine en violet avec sa face, comme les onglets d'une fenêtre. Une seule
+ * ligne : sur téléphone, elle défile de côté plutôt que de pousser la liste.
+ */
+.build-filters {
+  display: flex;
+  flex: none;
+  gap: 6px;
+  margin: 0 -14px;
+  padding: 2px 14px 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  touch-action: pan-x;
+}
+
+.build-filters::-webkit-scrollbar {
+  display: none;
+}
+
+.build-filter {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 8px 0 10px;
+  border: none;
+  border-radius: 999px;
+  background: var(--paper-shade);
+  box-shadow: 0 3px 0 var(--violet-light);
+  color: var(--violet-shade);
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.build-filter[aria-pressed='true'] {
+  background: var(--violet);
+  box-shadow: 0 3px 0 var(--violet-shade);
+  color: var(--paper);
+}
+
+.build-filter:focus {
+  outline: none;
+}
+
+.build-filter:focus-visible {
+  background: var(--cyan-light);
+  box-shadow: 0 3px 0 var(--cyan-shade);
+  color: var(--ink);
+}
+
+/* Le nombre de cartes de la famille, en pastille blanche au bout de la puce. */
+.build-filter-count {
+  min-width: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--violet-shade);
+  font-size: 13px;
+  line-height: 22px;
+  text-align: center;
+}
+
+.build-filter[hidden],
+.build-filter-notice[hidden] {
+  display: none;
+}
+
+/* « 2 résultats dans Tous » : la famille active n'a rien, un tap mène à ce qui existe. */
+.build-filter-notice {
+  align-self: flex-start;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 999px;
+  background: var(--yellow-light);
+  box-shadow: 0 3px 0 var(--yellow-shade);
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.build-filter-notice:disabled {
+  cursor: default;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+}
+
 /* Sur grand écran, chaque carte porte son effet : la ligne du pied ne sert qu'au téléphone. */
 .build-drawer-effect {
   display: none;
