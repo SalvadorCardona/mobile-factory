@@ -1089,29 +1089,69 @@ button.hud-stock:active {
 }
 
 /*
- * L'Habitation, logés / habitants, sur sa propre ligne sous les trois
- * compteurs : en corail dès que quelqu'un dort dehors. Elle prend le
- * survol et l'appui long, pour son libellé.
+ * L'Habitation, logés / habitants, et le Bonheur de la ville, sur leur
+ * propre ligne sous les trois compteurs : chacun en corail quand ça va mal
+ * — quelqu'un dort dehors, l'habitant moyen est malheureux. Ils prennent
+ * le survol et l'appui long, pour leur libellé.
  */
 .hud .hud-people {
   flex-wrap: wrap;
 }
 
-.hud .hud-people-housing {
-  pointer-events: auto;
+.hud-people-town {
+  display: flex;
   flex-basis: 100%;
   justify-content: center;
-  gap: 3px;
+  gap: 4px;
   margin-top: 2px;
+}
+
+.hud .hud-people-housing,
+.hud .hud-people-happiness {
+  pointer-events: auto;
+  justify-content: center;
+  gap: 3px;
   padding: 1px 6px;
   border-radius: 999px;
   background: var(--paper-shade);
 }
 
-.hud .hud-people-housing[data-alert='true'] {
+.hud .hud-people-housing[data-alert='true'],
+.hud .hud-people-happiness[data-alert='true'] {
   background: var(--coral);
   color: var(--paper);
   font-weight: 700;
+}
+
+/* L'aube a fait bouger le Bonheur : la puce flashe, la flèche dit de quel côté. */
+.hud .hud-people-happiness .icon + .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.hud .hud-people-happiness[data-trend] {
+  animation: mood-flash 0.5s ease-out 3;
+}
+
+.hud .hud-people-happiness[data-trend='up'] {
+  --mood-flash: var(--mint-light);
+}
+
+.hud .hud-people-happiness[data-trend='down'] {
+  --mood-flash: var(--coral-light);
+}
+
+@keyframes mood-flash {
+  30% {
+    transform: scale(1.12);
+    box-shadow: 0 0 0 3px var(--mood-flash);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud .hud-people-happiness[data-trend] {
+    animation: none;
+  }
 }
 
 /* L'infobulle d'un habitant : la bulle d'Ève, plus petite. */
