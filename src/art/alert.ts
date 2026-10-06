@@ -8,12 +8,14 @@
  * - `storeFull` : une caisse jaune de la colonie, pleine à ras bord — un bloc
  *   de fer, un épi, un galet dépassent du couvercle ;
  * - `noWorker` : un ouvrier, casquette orange des humains, dont le poste
- *   attend quelqu'un.
+ *   attend quelqu'un ;
+ * - `starved` : la même caisse, vide — on voit son fond —, et une flèche
+ *   orange qui plonge dedans : elle attend qu'on la remplisse.
  *
  * Le rendu la fait battre doucement.
  */
 
-import { PALETTE, circle, pill, polygon, shadedBlock, shadedCircle, shadedPill, svg } from '../data/artDirection.ts';
+import { PALETTE, circle, pill, polygon, rect, shadedBlock, shadedCircle, shadedPill, svg } from '../data/artDirection.ts';
 import type { SpriteProto } from '../data/sprites.ts';
 
 const W = 30;
@@ -62,6 +64,21 @@ export const ALERT = {
       pill(11, 10, 9, 2, orange.shade),
       circle(10.6, 13.8, 0.9, ink.base),
       circle(14, 13.8, 0.9, ink.base),
+      ...BADGE,
+    ),
+    starved: svg(
+      W,
+      H,
+      ...BUBBLE,
+      // La caisse ouverte, vide : son fond, plus sombre, sous le rebord.
+      shadedBlock(4, 13, 16, 9, 2.5, 'yellow', 2.5),
+      rect(6, 14.5, 12, 3.5, yellow.shade, 1.5),
+      circle(7, 20.2, 0.9, orange.shade),
+      circle(17, 20.2, 0.9, orange.shade),
+      // La flèche qui plonge dedans.
+      shadedPill(10.5, 4.5, 4, 6.5, 1, 'orange'),
+      polygon([7.5, 10, 17.5, 10, 12.5, 15], orange.shade),
+      polygon([8.5, 9.5, 16.5, 9.5, 12.5, 13.5], orange.base),
       ...BADGE,
     ),
   },

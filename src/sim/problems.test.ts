@@ -6,7 +6,7 @@ import { ProblemWatch, problemsOf, type ProblemFacts } from './problems.ts';
 import { stageScenario } from './testScenario.ts';
 import type { Farm, LumberCamp } from './types.ts';
 
-const CALM: ProblemFacts = { stoppedByPlayer: false, storeFull: false, noWorker: false, drained: false };
+const CALM: ProblemFacts = { stoppedByPlayer: false, storeFull: false, noWorker: false, starved: false, drained: false };
 const FULL: ProblemFacts = { ...CALM, storeFull: true };
 
 describe('problèmes d’un bâtiment', () => {
@@ -14,6 +14,8 @@ describe('problèmes d’un bâtiment', () => {
     expect(problemsOf({ ...CALM, storeFull: true, noWorker: true })).toEqual(['storeFull', 'noWorker']);
     expect(problemsOf({ ...CALM, noWorker: true })).toEqual(['noWorker']);
     expect(problemsOf(CALM)).toEqual([]);
+    // Un consommateur qui attend sa livraison : après les deux autres.
+    expect(problemsOf({ ...CALM, noWorker: true, starved: true })).toEqual(['noWorker', 'starved']);
   });
 
   it('ne comptent pas la pause voulue par le joueur', () => {

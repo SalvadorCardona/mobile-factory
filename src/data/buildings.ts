@@ -96,6 +96,13 @@ export interface BuildingProto {
    * simulation les attribue (`sim/housing.ts`). Absent : aucun.
    */
   beds?: number;
+  /**
+   * Le stock visé d'un bâtiment qui consomme, par entrée de sa recette : sous
+   * ce niveau, il demande la différence aux transports (`sim/consumers.ts`),
+   * et porteurs ou logisticiens la lui livrent. Absent : la part de l'entrée
+   * dans le coffre, au prorata de la recette.
+   */
+  demand?: Partial<Record<ItemId, number>>;
   /** Proposé dans le menu de construction ? La mairie, unique, ne l'est pas. */
   menu: boolean;
   /** Un seul par colonie, chantier compris : le labo de recherche, l'antenne. */
@@ -361,6 +368,8 @@ export const BUILDINGS = {
     // Le bois abonde, la pierre manque : les bâtiments du début en demandent peu.
     cost: { wood: 18, stone: 3 },
     storage: 12,
+    // De quoi tenir une journée (~5 min) : deux naissances de six nourritures.
+    demand: { food: 12 },
     logisticRadius: 0,
     hp: 60,
     workers: 0,

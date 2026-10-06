@@ -82,7 +82,7 @@ import { RECIPES, type RecipeProto } from '../data/recipes.ts';
 import { WEAPONS } from '../data/weapons.ts';
 import { BUILDERS, FORESTERS, LOGISTICIANS, LUMBERJACKS, WORK_PRIORITIES, type WorkPriority } from '../data/workers.ts';
 import { floorCost } from '../sim/antenna.ts';
-import { forgeRecipe } from '../sim/consumers.ts';
+import { consumerTarget, forgeRecipe } from '../sim/consumers.ts';
 import { canDamage, isStanding, raidCapacity } from '../sim/enemyBases.ts';
 import { countPlot, type PlotCount } from '../sim/forester.ts';
 import { canPause } from '../sim/staffing.ts';
@@ -91,7 +91,7 @@ import { TICKS_PER_SECOND, repairCost, siteMissing, type SiteCoverage, type Worl
 import type { UiIcon } from '../art/ui.ts';
 import { onLocale, t } from '../i18n/locale.ts';
 import { creatureView, isCreature, type CreatureView, type Selection } from './creatureView.ts';
-import { buildingIcon, buildingIconUrl, creatureIconUrl, enemyBaseIconUrl, itemAmount, jobIcon, jobIconUrl, uiIcon } from './icons.ts';
+import { buildingIcon, buildingIconUrl, creatureIconUrl, enemyBaseIconUrl, itemAmount, itemIcon, jobIcon, jobIconUrl, uiIcon } from './icons.ts';
 import { moodMeter } from './moodMeter.ts';
 import { needMeter } from './needMeter.ts';
 import { PanelTabs } from './panelTabs.ts';
@@ -105,9 +105,10 @@ const TIP_MS = 2200;
 /** Les onglets de la fenêtre d'un bâtiment. */
 type BuildingTab = 'building' | 'inventory';
 
-/** Une puce : un pictogramme, un nombre, et ce qu'il compte. */
+/** Une puce : un pictogramme — ou l'icône d'un objet —, un nombre, et ce qu'il compte. */
 interface Stat {
   icon: UiIcon;
+  item?: ItemId;
   value: string;
   label: string;
 }
@@ -765,6 +766,19 @@ export class BuildingPanel {
             },
             { icon: 'worker', value: String(entity.born), label: text.nursery.born(entity.born) },
           );
+          // Son stock de nourriture, rapporté au stock visé, et ce qui est en route.
+          for (const item of Object.keys(RECIPES.raiseChild.inputs) as ItemId[]) {
+            const count = entity.store.count(item);
+            const target = consumerTarget(entity, item);
+            const coming = entity.store.expected(item);
+
+            stats.push({
+              icon: 'chest',
+              item,
+              value: `${count}/${target}${coming > 0 ? ` +${coming}` : ''}`,
+              label: text.nursery.stock(t().items[item], count, target, coming),
+            });
+          }
           break;
         }
 
@@ -1088,7 +1102,7 @@ export class BuildingPanel {
 
   /** Les puces ne sont reconstruites que si l'une change. */
   private setStats(stats: readonly Stat[]): void {
-    const key = stats.map(({ icon, value, label }) => `${icon}:${value}:${label}`).join('|');
+    const key = stats.map(({ icon, item, value, label }) => `${item ?? icon}:${value}:${label}`).join('|');
 
     if (key === this.lastStats) return;
     this.lastStats = key;
@@ -1296,14 +1310,19 @@ export class BuildingPanel {
  * Une puce « pictogramme + nombre ». Un bouton, pour que le tap et le clavier
  * l'atteignent : il ne fait qu'afficher son libellé.
  */
-function statChip({ icon, value, label }: Stat): HTMLButtonElement {
+function statChip({ icon, item, value, label }: Stat): HTMLButtonElement {
   const chip = document.createElement('button');
 
   chip.type = 'button';
   chip.className = 'building-panel-stat';
   chip.setAttribute('aria-label', label);
   chip.title = label;
-  chip.append(uiIcon(icon, 20), value);
+  const picture = item ? itemIcon(item, 20) : uiIcon(icon, 20);
+
+  // La puce porte déjà son libellé : l'icône de l'objet n'est qu'un décor.
+  picture.alt = '';
+  picture.setAttribute('aria-hidden', 'true');
+  chip.append(picture, value);
   return chip;
 }
 

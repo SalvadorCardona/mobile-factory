@@ -1,6 +1,6 @@
 /**
  * Les problèmes d'un bâtiment : ce qui l'arrête sans que le joueur l'ait
- * voulu — coffre plein, ouvrier manquant (`data/problems.ts`).
+ * voulu — coffre plein, ouvrier manquant, entrée attendue (`data/problems.ts`).
  *
  * `problemsOf` les range par priorité à partir de faits que `World` relève
  * tous les `PROBLEMS.everyTicks` ; `ProblemWatch` en tire celui que la carte
@@ -21,6 +21,8 @@ export interface ProblemFacts {
   storeFull: boolean;
   /** Des postes demandés, pas un ouvrier en poste. */
   noWorker: boolean;
+  /** Un consommateur attend de quoi lancer son prochain cycle : la nurserie, sa nourriture. */
+  starved: boolean;
   /** Le coffre est redescendu à `PROBLEMS.releaseRatio` de sa capacité ou moins. */
   drained: boolean;
 }

@@ -2,10 +2,18 @@
  * Les bâtiments qui consomment — la nurserie, la forge et le four à charbon,
  * une forge sur sa propre recette — et ce que leur
  * coffre accepte. Adam les remplit (sac, contact, « Transférer »), les
- * porteurs aussi, depuis la mairie : les deux décident sur ces fonctions.
+ * porteurs et les logisticiens aussi, depuis la mairie ou une ferme
+ * voisine : tous décident sur ces fonctions.
+ *
+ * C'est la demande d'un consommateur : un stock visé par entrée (`demand`
+ * de `data/buildings.ts`, sinon sa part du coffre). Sous ce niveau, il
+ * demande la différence (`consumerDemands`) ; le tableau des jobs en fait
+ * des transports, réservés à leur création.
  */
 
 import type { ItemId } from '../data/items.ts';
+import { BUILDINGS, type BuildingProto } from '../data/buildings.ts';
+import { JOB_PRIORITY, type JobPriority } from '../data/workers.ts';
 import { RECIPES, recipeOf, type RecipeProto } from '../data/recipes.ts';
 import type { Entity, Forge, Nursery } from './types.ts';
 
@@ -39,9 +47,8 @@ export function forgeOutputs(forge: Forge): ItemId[] {
 }
 
 /**
- * Combien d'unités de `item` le coffre prend encore. Chaque entrée de la
- * recette a sa part du coffre, au prorata de la recette — le fer ne prend
- * pas la place du charbon.
+ * Combien d'unités de `item` le coffre prend encore, jusqu'à son stock
+ * visé (`consumerTarget`).
  */
 export function consumerRoom(consumer: Nursery | Forge, item: ItemId): number {
   return roomFor(consumer, item, 0);
@@ -56,19 +63,61 @@ export function consumerWants(consumer: Nursery | Forge, item: ItemId): number {
   return roomFor(consumer, item, consumer.store.expected(item));
 }
 
-function roomFor(consumer: Nursery | Forge, item: ItemId, promised: number): number {
+/**
+ * Le stock visé de `item` : la `demand` du bâtiment, sinon la part de
+ * l'entrée dans le coffre, au prorata de la recette — le fer ne prend pas la
+ * place du charbon. Zéro pour ce que la recette ne consomme pas.
+ */
+export function consumerTarget(consumer: Nursery | Forge, item: ItemId): number {
   const recipe = consumerRecipe(consumer);
   const needed = recipe.inputs[item] ?? 0;
 
   if (needed <= 0) return 0;
 
+  const proto: BuildingProto = BUILDINGS[consumer.proto];
+  const declared = proto.demand?.[item];
+
+  if (declared !== undefined) return Math.min(declared, consumer.store.capacity);
+
   let total = 0;
 
   for (const amount of Object.values(recipe.inputs)) total += amount;
 
-  const share = Math.floor((consumer.store.capacity * needed) / total);
+  return Math.floor((consumer.store.capacity * needed) / total);
+}
 
-  return Math.max(0, Math.min(share - consumer.store.count(item) - promised, consumer.store.freeSpace()));
+function roomFor(consumer: Nursery | Forge, item: ItemId, promised: number): number {
+  const target = consumerTarget(consumer, item);
+
+  if (target <= 0) return 0;
+  return Math.max(0, Math.min(target - consumer.store.count(item) - promised, consumer.store.freeSpace()));
+}
+
+/** Une demande de livraison : ce qui manque au stock visé et qu'aucun transport n'apporte encore. */
+export interface Demand {
+  item: ItemId;
+  amount: number;
+  priority: JobPriority;
+}
+
+/**
+ * Les demandes du consommateur : une par entrée sous son stock visé. En
+ * pause, il ne consomme rien et ne demande rien. En famine — pas de quoi
+ * lancer le prochain cycle —, la demande passe avant un ravitaillement
+ * préventif.
+ */
+export function consumerDemands(consumer: Nursery | Forge): Demand[] {
+  if (consumer.paused) return [];
+
+  const priority = isStarving(consumer) ? JOB_PRIORITY.starving : JOB_PRIORITY.refill;
+  const demands: Demand[] = [];
+
+  for (const item of Object.keys(consumerRecipe(consumer).inputs) as ItemId[]) {
+    const amount = consumerWants(consumer, item);
+
+    if (amount > 0) demands.push({ item, amount, priority });
+  }
+  return demands;
 }
 
 /** Il manque au coffre de quoi lancer le prochain cycle : la machine est en famine. */

@@ -98,7 +98,10 @@ export const panel = {
     /** `recipe` : « 6 nourriture ». */
     perBirth: (recipe: string): string => `Chaque naissance mange ${recipe}.`,
     /** `why` : d'où vient la famine (`starved`). */
-    hungry: (why: string): string => `En attente d’un repas. ${why}`,
+    hungry: (why: string): string => `En attente de nourriture. ${why}`,
+    /** Le coffre, rapporté au stock visé (`demand`), et ce que porteurs ou logisticiens apportent. */
+    stock: (item: string, count: number, target: number, coming: number): string =>
+      `${item} au coffre : ${count} sur ${target} visés${coming > 0 ? ` — ${coming} en route` : ''}`,
     next: (time: string): string => `Prochain enfant dans ${time}`,
     full: 'Pleine : le prochain enfant attend qu’un grand parte travailler.',
     /** `time` : jusqu'à l'aube où le plus âgé a l'âge de travailler. */
