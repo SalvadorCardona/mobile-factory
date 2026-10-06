@@ -3106,6 +3106,16 @@ button.hud-stock:active {
   color: var(--danger);
 }
 
+/* La recherche choisie : le relevé d'un chantier, un objet par ligne ; rouge seulement ce qui est à sec. */
+.research-cost[data-layout='ledger'] {
+  flex-direction: column;
+  gap: 4px;
+}
+
+.research-cost[data-layout='ledger'] .site-need[data-dry='false'] .item-amount[data-done='false'] {
+  color: var(--ink);
+}
+
 .research-list {
   max-height: min(36dvh, 340px);
   margin-top: 12px;

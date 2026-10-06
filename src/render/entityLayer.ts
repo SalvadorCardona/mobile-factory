@@ -46,12 +46,15 @@ import { Container, Graphics, Sprite, type Ticker } from 'pixi.js';
 import { TILE_SIZE, floorDiv } from '../core/grid.ts';
 import { LIGHT, PALETTE, hex } from '../data/artDirection.ts';
 import { BUILDINGS, buildingLevel } from '../data/buildings.ts';
+import { RESEARCH } from '../data/research.ts';
 import { SPRITES, type SpriteId, type SpriteProto } from '../data/sprites.ts';
 import { locale, t } from '../i18n/locale.ts';
 import { LUMBERJACKS } from '../data/workers.ts';
 import type { Entity, EntityId } from '../sim/types.ts';
 import { terrainAt } from '../sim/terrain.ts';
 import { floorCost, floorMissing } from '../sim/antenna.ts';
+import { isCollecting, labMissing, researchCost } from '../sim/research.ts';
+import type { SiteLine } from '../sim/siteLedger.ts';
 import { canPause } from '../sim/staffing.ts';
 import { siteMissing, type World } from '../sim/world.ts';
 import { PLAYER_MAX_HP } from '../sim/player.ts';
@@ -71,6 +74,8 @@ const PROGRESS_FG = hex(PALETTE.yellow.shade);
 /** La construction au marteau, une fois tout livré : la teinte du cercle du poste de construction. */
 const BUILD_FG = hex(PALETTE.violet.base);
 const HP_FG = hex(PALETTE.coral.base);
+/** Le compte à rebours d'une recherche payée : la teinte de sa barre dans la fenêtre du labo. */
+const RESEARCH_FG = hex(PALETTE.mint.shade);
 const BAR_HEIGHT = 8;
 /** La rangée des objets d'un chantier commence autant de pixels sous la barre. */
 const NEEDS_DIP = 2;
@@ -310,7 +315,7 @@ export class EntityLayer {
 
     let needs: SiteNeeds | null = null;
 
-    if (entity.kind === 'site') {
+    if (entity.kind === 'site' || entity.kind === 'lab') {
       needs = new SiteNeeds(this.library);
       needs.root.visible = false;
       root.addChild(needs.root);
@@ -408,6 +413,17 @@ export class EntityLayer {
 
       ratio = total === 0 ? 1 : 1 - floorMissing(entity) / total;
       color = PROGRESS_FG;
+    } else if (entity.kind === 'lab' && entity.research !== null && entity.hp >= buildingLevel(entity.proto, entity.level).hp) {
+      // Intact, le labo montre sa recherche : le coût qui se dépose comme un chantier, puis le compte à rebours.
+      if (isCollecting(entity)) {
+        const total = researchCost(entity.research).reduce((sum, [, amount]) => sum + amount, 0);
+
+        ratio = total === 0 ? 1 : 1 - labMissing(entity) / total;
+        color = PROGRESS_FG;
+      } else {
+        ratio = 1 - Math.max(0, entity.endTick - this.world.tickCount) / RESEARCH[entity.research].duration;
+        color = RESEARCH_FG;
+      }
     } else {
       const max = buildingLevel(entity.proto, entity.level).hp;
 
@@ -435,16 +451,22 @@ export class EntityLayer {
     if (fill > 0) view.bar.roundRect(x + 2, y + 2, Math.max(4, fill), 4, 2).fill(color);
   }
 
-  /** La rangée des objets attendus, juste sous la barre — tant qu'il en reste à livrer et qu'elle se lit. */
+  /**
+   * La rangée des objets attendus, juste sous la barre — tant qu'il en reste à livrer et qu'elle se lit. Le labo
+   * a la même, le temps que le coût de sa recherche arrive ; payée, la barre du compte à rebours reste seule.
+   */
   private showNeeds(view: EntityView, entity: Entity, zoom: number, deltaMs: number): void {
     if (!view.needs) return;
 
-    const shown = entity.kind === 'site' && zoom >= NEEDS_MIN_ZOOM && !this.world.awaitsBuilders(entity);
+    let lines: SiteLine[] = [];
 
-    view.needs.root.visible = shown;
-    if (!shown) return;
+    if (zoom >= NEEDS_MIN_ZOOM && entity.kind === 'site' && !this.world.awaitsBuilders(entity)) lines = this.world.siteLedger(entity);
+    else if (zoom >= NEEDS_MIN_ZOOM && entity.kind === 'lab') lines = this.world.labLedger(entity);
 
-    view.needs.update(this.world.siteLedger(entity), (entity.width * TILE_SIZE) / 2, barTop(entity) + BAR_HEIGHT + NEEDS_DIP, deltaMs);
+    view.needs.root.visible = lines.length > 0;
+    if (lines.length === 0) return;
+
+    view.needs.update(lines, (entity.width * TILE_SIZE) / 2, barTop(entity) + BAR_HEIGHT + NEEDS_DIP, deltaMs);
   }
 
   /** La pancarte : nom et icône, l'icône seule en reculant, rien plus loin ou si le réglage la masque. */
