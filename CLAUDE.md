@@ -380,7 +380,7 @@ sauvegarde : 0), ni porté ni stocké. Chaque bâtiment achevé rapporte
 `BUILD_PRESTIGE` une seule fois par emplacement (`prestigeSites` : une
 ruine rebâtie ne paie pas), chaque ennemi vaincu `KILL_PRESTIGE` ;
 événement `prestigeGained`, « +N Prestige » flottant, médaille et nombre
-en haut à gauche du HUD (sous la quête sur un téléphone). Rien ne le dépense encore.
+en haut à gauche du HUD, le bandeau de la ville sur sa ligne (sous la quête sur un téléphone). Rien ne le dépense encore.
 
 **Bases mutantes** (`src/data/enemyBases.ts`, `src/sim/enemyBases.ts`) —
 à la création de la partie, des anneaux de campements (`ENEMY_BASE_RINGS` :

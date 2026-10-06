@@ -468,6 +468,11 @@ export class Hud {
     this.quest.append(fold);
     side.append(buttons, this.town, this.people, this.hunger, this.bag);
     this.top.append(this.quest, side, this.corner);
+    // Sur un écran large, le bandeau de la ville se range juste après le
+    // Prestige, sur sa ligne : il lit sa largeur ici (cf. `.hud-town` dans le CSS).
+    new ResizeObserver(() => {
+      this.top.style.setProperty('--prestige-width', `${this.prestige.offsetWidth}px`);
+    }).observe(this.prestige);
 
     this.root.append(
       // Les confettis d'abord : ils tombent derrière les cartes du HUD et les fenêtres.
@@ -1698,7 +1703,7 @@ export class Hud {
     }
 
     const quest = this.quest.getBoundingClientRect();
-    // Sur un téléphone, le Prestige et la météo sont sous la quête ; ailleurs, le Prestige est plus haut.
+    // Sur un téléphone, le Prestige et la météo sont sous la quête ; ailleurs, le Prestige est en haut à gauche.
     const under = [this.prestige, this.weather].filter((node) => !node.hidden);
     const above = Math.max(quest.bottom, ...under.map((node) => node.getBoundingClientRect().bottom));
 

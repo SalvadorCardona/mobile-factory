@@ -977,26 +977,30 @@ button.hud-stock:active {
 /*
  * Sur un écran large, la ville quitte la colonne de droite pour la colonne
  * de gauche, vide : un bandeau d'une ligne en haut à gauche, « Ville » puis
- * ses objets côte à côte. Il s'arrête avant la quête ; ce qui ne tient pas
- * défile de côté (la molette aussi), sans jamais revenir à la ligne.
+ * ses objets côte à côte, de la hauteur du Prestige. Il s'arrête avant la
+ * quête ; ce qui ne tient pas défile de côté (la molette aussi), sans jamais
+ * revenir à la ligne.
  */
 @media (min-width: 1024px) and (min-height: 500px) {
   .hud .hud-town {
+    --town-left: 0px;
+
     position: absolute;
     top: 0;
-    left: 0;
+    left: var(--town-left);
     width: auto;
-    max-width: calc((100% - 380px) / 2 - 10px);
+    max-width: calc((100% - 380px) / 2 - 10px - var(--town-left));
+    height: 32px;
     flex-direction: row;
     align-items: center;
     gap: 10px;
-    padding: 6px 14px;
+    padding: 0 14px;
     pointer-events: auto;
   }
 
-  /* Le Prestige tient le coin : le bandeau se range dessous. */
+  /* Le Prestige tient le coin : le bandeau se range à sa droite, sur sa ligne. */
   .hud-top:has(.hud-prestige:not([hidden])) .hud-town {
-    top: 42px;
+    --town-left: calc(var(--prestige-width, 0px) + 10px);
   }
 
   .hud-town .hud-bag-title {
