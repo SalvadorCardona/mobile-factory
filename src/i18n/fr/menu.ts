@@ -23,6 +23,12 @@ export const menu = {
   searchClear: 'Effacer la recherche',
   /** La recherche n'a rien trouvé parmi les cartes du menu. */
   searchEmpty: 'Aucun bâtiment ne correspond',
+  /** La première puce du filtre : toutes les familles. */
+  allCategories: 'Tous',
+  /** Le libellé d'une puce : « Minerai, 2 bâtiments ». */
+  categoryCount: (category: string, n: number): string => `${category}, ${count(n, 'bâtiment')}`,
+  /** La puce active n'a rien pour la recherche, une autre si : « 2 résultats dans Tous ». */
+  resultsElsewhere: (n: number, category: string): string => `${count(n, 'résultat')} dans ${category}`,
   /** La ligne d'effet au pied du tiroir, tant qu'aucune carte n'a été lue. */
   effectPrompt: 'Appui long sur une carte : à quoi sert le bâtiment',
   /** La ligne d'effet d'une carte lue : « Forge : … ». */

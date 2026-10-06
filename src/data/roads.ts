@@ -12,6 +12,7 @@
  * bâtiment : on la retire d'abord.
  */
 
+import type { BuildingCategory } from './buildings.ts';
 import type { ItemId } from './items.ts';
 
 export interface RoadProto {
@@ -21,12 +22,15 @@ export interface RoadProto {
   speed: number;
   /** Tuiles au plus par tracé : un doigt qui glisse ne vide pas la ville d'un geste. */
   maxTiles: number;
+  /** Sa puce au menu de construction, comme un bâtiment : elle sert le transport. */
+  category: BuildingCategory;
 }
 
 export const ROADS = {
   item: 'stone',
   speed: 1.6,
   maxTiles: 40,
+  category: 'logistics',
 } as const satisfies RoadProto;
 
 /** Voisines pavées d'une tuile, en bits : haut, droite, bas, gauche. Le dessin de la dalle en dépend. */

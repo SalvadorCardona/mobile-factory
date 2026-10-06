@@ -368,6 +368,14 @@ export const content: Content = {
     drillTicks: { label: 'Mining time', unit: ' s' },
     farmYield: { label: 'Food per harvest', unit: '' },
   },
+  buildingCategories: {
+    ore: 'Ore',
+    production: 'Production',
+    defense: 'Attack',
+    logistics: 'Logistics',
+    housing: 'Housing',
+    research: 'Research',
+  },
   researchThemes: {
     building: 'Buildings',
     combat: 'Combat',

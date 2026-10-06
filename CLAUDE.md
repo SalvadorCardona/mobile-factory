@@ -484,7 +484,12 @@ Les règles, en résumé :
   cadenas. Un champ de recherche (loupe) en tête du tiroir prend le focus à chaque
   ouverture, vidé, et filtre à la frappe sur le nom, le métier et ce que produit le bâtiment,
   sans casse ni accents (`ui/buildSearch.ts`) ; il ne révèle rien de verrouillé. Entrée choisit
-  la première carte, Échap vide puis ferme ; ses touches n'atteignent pas le jeu. Ce qui vient d'y entrer (labo, plan, objectif) porte « Nouveau » jusqu'à ce qu'on
+  la première carte, Échap vide puis ferme ; ses touches n'atteignent pas le jeu. Dessous, des
+  puces filtrent par famille (`category` de `data/buildings.ts`, `BUILDING_CATEGORIES` : Minerai,
+  Production, Attaque, Logistique, Habitat, Recherche ; icônes `data/categoryIcons.ts`,
+  logique `ui/buildFilter.ts`) : « Tous », puis les familles qui ont une carte au menu ; la
+  famille choisie tient toute la partie, et s'applique avec le texte (« 2 résultats dans
+  Tous » si elle n'a rien pour lui). Ce qui vient d'y entrer (labo, plan, objectif) porte « Nouveau » jusqu'à ce qu'on
   le choisisse ou le pose (`seeBuilding`, `World.seenBuildings`, sauvegardé) et s'annonce en
   toast (`buildingsUnlocked`).
 - La fenêtre d'un bâtiment (`ui/buildingPanel.ts`) laisse voir le jeu : vignette
