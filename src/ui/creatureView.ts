@@ -23,7 +23,7 @@ import { t } from '../i18n/locale.ts';
 import { occupationText } from './personText.ts';
 
 /** Le métier d'un habitant, tel que la fenêtre le nomme. */
-type Role = 'porter' | 'logistician' | 'builder' | 'lumberjack' | 'forester' | 'child' | 'exMutant' | 'survivor';
+type Role = 'free' | 'porter' | 'logistician' | 'builder' | 'lumberjack' | 'forester' | 'child' | 'exMutant' | 'survivor';
 
 /** Ce qu'on peut ouvrir dans la fenêtre : un bâtiment (ou chantier), ou une créature. */
 export type Selection = { kind: 'building'; id: EntityId } | { kind: 'creature'; id: MobileId };
@@ -69,11 +69,10 @@ function inhabitantView(world: World, person: Inhabitant): CreatureView {
   const home = world.entities.get(person.homeId);
   const occupation = occupationText(world.occupation(person));
   const carry = carryOf(person);
-  const lines = [
-    text.role[roleOf(person)],
-    occupation.charAt(0).toUpperCase() + occupation.slice(1),
-    home ? text.home(t().buildings[home.proto].label) : text.homeless,
-  ];
+  const lines = [text.role[roleOf(person)], occupation.charAt(0).toUpperCase() + occupation.slice(1)];
+
+  // Un ouvrier libre ne travaille pour personne : il attend devant la mairie qu'un bâtiment le prenne.
+  if (person.kind !== 'worker' || !person.free) lines.push(home ? text.home(t().buildings[home.proto].label) : text.homeless);
 
   // Où il dort : son lit, ou dehors. Un enfant dort à sa nurserie, sans lit à lui.
   if (person.kind !== 'kid') {
@@ -135,6 +134,7 @@ function roleOf(person: Inhabitant): Role {
   if (person.kind === 'kid') return 'child';
   if (person.kind === 'lumberjack') return 'lumberjack';
   if (person.kind === 'forester') return 'forester';
+  if (person.free) return 'free';
   if (person.logistician) return 'logistician';
   if (person.builder) return 'builder';
   if (person.exMutant) return 'exMutant';

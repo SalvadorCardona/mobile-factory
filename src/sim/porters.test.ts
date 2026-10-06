@@ -148,7 +148,7 @@ function sites(world: World): Site[] {
 }
 
 function workers(world: World): Worker[] {
-  return [...world.mobiles.values()].filter((mobile): mobile is Worker => mobile.kind === 'worker');
+  return [...world.mobiles.values()].filter((mobile): mobile is Worker => mobile.kind === 'worker' && !mobile.free);
 }
 
 /** Où se trouve chaque objet : mairie, foreuses, mains des porteurs, chantiers. Rien d'autre n'en crée ni n'en détruit ici. */

@@ -513,7 +513,7 @@ export interface Wandering {
  *
  * Un ex-mutant sorti de la clinique est un ouvrier comme les autres, logé à
  * la clinique ; il porte plus lourd et marche plus lentement (`EX_MUTANT`).
- * Un enfant de la colonie, à 14 ans, devient un porteur logé à sa nurserie.
+ * Un enfant de la colonie, à 14 ans, devient un ouvrier libre (`free`).
  *
  * Un logisticien est un ouvrier logé au poste de logistique : même vie, mais
  * il ne fait qu'un travail — vider les producteurs du rayon de son poste
@@ -540,6 +540,12 @@ export interface Worker extends Moving, Wandering, Needful, Housed {
   logistician: boolean;
   /** Vrai pour un bâtisseur du poste de construction. */
   builder: boolean;
+  /**
+   * Vrai pour un ouvrier libre de la colonie : sans poste, logé nulle part,
+   * il flâne devant la mairie (`homeId`) jusqu'à ce qu'un bâtiment qui
+   * emploie le prenne — le plus proche d'abord.
+   */
+  free: boolean;
   /**
    * Vrai pour un survivant venu à l'appel de l'antenne : un porteur logé à
    * la mairie, toujours au travail comme un ex-mutant, de force ordinaire.

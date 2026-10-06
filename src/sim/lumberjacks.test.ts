@@ -162,7 +162,7 @@ function lumberjacks(world: World): Lumberjack[] {
 }
 
 function porters(world: World): Worker[] {
-  return [...world.mobiles.values()].filter((mobile): mobile is Worker => mobile.kind === 'worker');
+  return [...world.mobiles.values()].filter((mobile): mobile is Worker => mobile.kind === 'worker' && !mobile.free);
 }
 
 /** Tout le bois du monde de test : cabane, mairie, bras des bûcherons, charges des porteurs. */
@@ -320,9 +320,9 @@ describe('bûcherons', () => {
     world.push({ type: 'setWorkers', id: camp.id, count: 1 });
     run(world, 600);
 
-    // Le second a rapporté son bois et il est rentré : un ouvrier libre de la colonie, plus logé à la cabane.
+    // Le second a rapporté son bois : un ouvrier libre de la colonie, sous le même id, plus logé à la cabane.
     expect(lumberjacks(world).map((lumberjack) => lumberjack.id)).toEqual([first!.id]);
-    expect(world.mobiles.has(second!.id)).toBe(false);
+    expect(world.mobiles.get(second!.id)).toMatchObject({ kind: 'worker', free: true, homeId: world.townHallId });
 
     const out = new Set<number>();
 

@@ -78,7 +78,7 @@ function kid(world: World): Kid {
 }
 
 function workers(world: World): Worker[] {
-  return [...world.mobiles.values()].filter((mobile): mobile is Worker => mobile.kind === 'worker');
+  return [...world.mobiles.values()].filter((mobile): mobile is Worker => mobile.kind === 'worker' && !mobile.free);
 }
 
 /** Pose un chantier : Adam s'en approche le temps de la pose, puis retourne à l'écart. */
@@ -179,14 +179,16 @@ describe('faim', () => {
 
   it('interrompt son transport pour manger, puis le reprend : rien de perdu', () => {
     const world = colony({ food: 10, stone: 0 });
-    const worker = workers(world)[0]!;
 
     // Un chantier proche à livrer en pierre, de la pierre en ville : les porteurs partent.
     world.townStock()!.add('stone', 30);
     const hall = world.warehouse()!;
 
     place(world, hall.tx + 6, hall.ty - 4);
-    for (let i = 0; i < 20 * 20 && !worker.job; i += 1) world.tick();
+    for (let i = 0; i < 20 * 20 && !workers(world).some((mobile) => mobile.job); i += 1) world.tick();
+
+    const worker = workers(world).find((mobile) => mobile.job)!;
+
     expect(worker.job).not.toBeNull();
 
     const job = { ...worker.job! };

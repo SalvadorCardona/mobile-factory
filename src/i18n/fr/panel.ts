@@ -222,6 +222,7 @@ export const panel = {
     age: (years: number): string => `${years} an${s(years)} — un de plus à chaque aube`,
     /** Ce qu'il est : son métier, ou son espèce pour un ennemi. */
     role: {
+      free: 'Ouvrier libre',
       porter: 'Porteur',
       logistician: 'Logisticien',
       builder: 'Bâtisseur',

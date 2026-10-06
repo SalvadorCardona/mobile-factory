@@ -81,7 +81,7 @@ function patient(x: number, y: number, clinicId: number, state: Patient['state']
 }
 
 function exMutant(id: number, clinicId: number, x: number, y: number): Worker {
-  return { kind: 'worker', id, x, y, prevX: x, prevY: y, facing: 'down', moving: false, homeId: clinicId, exMutant: true, grown: false, age: 30, logistician: false, builder: false, survivor: false, build: null, inside: true, job: null, searchTicks: 1, wanderX: x, wanderY: y, wanderTicks: 0, ...freshNeeds(), ...freshHousing() };
+  return { kind: 'worker', id, x, y, prevX: x, prevY: y, facing: 'down', moving: false, homeId: clinicId, exMutant: true, grown: false, age: 30, logistician: false, builder: false, survivor: false, free: false, build: null, inside: true, job: null, searchTicks: 1, wanderX: x, wanderY: y, wanderTicks: 0, ...freshNeeds(), ...freshHousing() };
 }
 
 function mobilesOf<K extends Mobile['kind']>(world: World, kind: K): Extract<Mobile, { kind: K }>[] {
@@ -168,7 +168,7 @@ describe('clinique', () => {
     expect(events).toEqual(['following', 'admitted', 'healed']);
     expect(mobilesOf(world, 'patient')).toHaveLength(0);
 
-    const [healed] = mobilesOf(world, 'worker');
+    const healed = mobilesOf(world, 'worker').find((worker) => worker.exMutant);
 
     expect(healed).toMatchObject({ exMutant: true, homeId: clinicId });
     expect(world.population().workers).toBe(before + 1);

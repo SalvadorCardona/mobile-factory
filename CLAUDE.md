@@ -94,8 +94,16 @@ ressource qu'on récolterait pour rien.
 (`World.colonists`, `COLONY` de `data/inhabitants.ts`, sauvegardé) et n'en
 gagne qu'à la nurserie : un bâtiment n'en crée aucun. Chaque bâtiment
 déclare les `workers` qu'il emploie (maison des constructeurs et ferme :
-quatre), pris parmi eux ; il ne loge que ses postes pourvus, et un ouvrier
-retiré rentre chez lui puis redevient libre. Ceux de la maison sont des **porteurs** (mobile
+quatre), pris parmi eux. Les **libres** sont sur la carte (`Worker.free`) :
+au départ, dix devant le chantier de la mairie, où ils flânent (ni faim ni
+soif avant qu'elle soit bâtie). Un bâtiment prend les plus proches de sa
+porte : porteurs, bûcherons, forestier deviennent son équipe sous le même
+id (prénom gardé) ; ceux d'une ferme, d'une carrière, d'une foreuse y
+entrent (`World.hosted`, non sauvegardé, refait de la répartition au
+chargement). Un ouvrier retiré, ou dont le bâtiment tombe, redevient libre
+sur place ; une ancienne sauvegarde garde ses équipes et pose les libres
+qui manquent devant la mairie (`settleColonists`). Le HUD compte
+« libres/total ». Ceux de la maison sont des **porteurs** (mobile
 `worker`, `src/sim/workers.ts`, `PORTERS` dans `src/data/workers.ts`) : ils
 vident foreuses, fermes et cabanes de bûcheron dans la mairie et livrent les chantiers,
 la forge et la nurserie depuis la mairie (`sim/consumers.ts` ; une machine en
@@ -162,7 +170,7 @@ sauvegardé, qui prend un an à chaque aube (`ageInhabitants`) ; un adulte
 arrivé tout fait a un âge haché de la seed et de son id, son prénom aussi
 (`nameOf`, jamais stocké). L'enfant sort de la nurserie à 10 ans et n'est
 affecté à rien ; à 14, il rejoint les ouvriers de la colonie (`colonists`
-+ 1, toast « Lina a 14 ans… ») — le porteur `grown` ne survit que dans les
++ 1, un ouvrier libre sous le même id, toast « Lina a 14 ans… ») — le porteur `grown` ne survit que dans les
 anciennes sauvegardes.
 Un ouvrier dehors sans tâche depuis `IDLE.graceTicks` est **inactif**
 (`World.isIdle`, compte non sauvegardé) : le rendu le fait glander (assis,

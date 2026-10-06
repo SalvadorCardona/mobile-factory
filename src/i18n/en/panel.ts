@@ -194,6 +194,7 @@ export const panel: Messages['panel'] = {
   creature: {
     age: (years: number): string => `${years} year${s(years)} old — one more at every dawn`,
     role: {
+      free: 'Free worker',
       porter: 'Porter',
       logistician: 'Logistician',
       builder: 'Builder',
