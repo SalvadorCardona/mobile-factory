@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { TILE_SIZE } from '../core/grid.ts';
 import { Camera, ZOOM, clampZoom, stepZoom } from './camera.ts';
 
 /** Une caméra posée sur le joueur immobile en (0, 0), écran de téléphone. */
@@ -155,5 +156,42 @@ describe('zoom du joueur', () => {
     camera.zoomTo(ZOOM.max, null, true);
     run(camera, 1000);
     expect(camera.zoom).toBeCloseTo(0.82, 2);
+  });
+});
+
+describe('Camera.lookAt', () => {
+  it('pose la caméra d’un coup sur le point, et l’y laisse tant qu’Adam ne marche pas', () => {
+    const camera = still();
+
+    camera.lookAt(3200, -640);
+    run(camera, 2000);
+    expect(camera.centerX).toBeCloseTo(3200);
+    expect(camera.centerY).toBeCloseTo(-640);
+    expect(camera.atHome).toBe(false);
+    expect(camera.drifting).toBe(false);
+    expect(camera.screenToWorld(195, 422).x).toBeCloseTo(3200);
+  });
+
+  it('revient sur Adam quand il se remet en marche', () => {
+    const camera = still();
+
+    camera.lookAt(3200, 0);
+    camera.follow(4, 0, 0.25, 0, 16);
+    run(camera, 1000);
+    expect(Math.abs(camera.centerX)).toBeLessThan(TILE_SIZE);
+    expect(camera.atHome).toBe(true);
+  });
+
+  it('glisse de près pour revenir sur Adam, par « Revenir sur Adam »', () => {
+    const camera = still();
+
+    camera.lookAt(200, 0);
+    camera.resetZoom();
+    camera.follow(0, 0, 0, 0, 16);
+    expect(camera.drifting).toBe(true);
+    expect(camera.centerX).toBeGreaterThan(100);
+    run(camera, 1500);
+    expect(Math.abs(camera.centerX)).toBeLessThan(1);
+    expect(camera.atHome).toBe(true);
   });
 });

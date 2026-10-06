@@ -201,6 +201,26 @@ export class GameRenderer {
     this.camera.peek(x, y);
   }
 
+  /** Pose la caméra sur (x, y) monde jusqu'à ce qu'Adam marche : le tap sur la carte du monde. */
+  public lookAt(x: number, y: number): void {
+    this.camera.lookAt(x, y);
+  }
+
+  /** Le centre de ce que montre la caméra, et sa taille, en pixels monde : le cadre de la carte du monde. */
+  public get cameraView(): { x: number; y: number; width: number; height: number } {
+    const { camera } = this;
+
+    return { x: camera.centerX, y: camera.centerY, width: camera.viewWidth / camera.zoom, height: camera.viewHeight / camera.zoom };
+  }
+
+  /**
+   * Masque la scène — la carte du monde la couvre — ou la remontre. Masquée,
+   * elle ne coûte plus rien au GPU ; `draw` continue de suivre le monde.
+   */
+  public setHidden(hidden: boolean): void {
+    this.app.stage.visible = !hidden;
+  }
+
   /** La carte glisse d'elle-même (recul, coup d'œil) : cf. `Camera.drifting`. */
   public get cameraDrifting(): boolean {
     return this.camera.drifting;

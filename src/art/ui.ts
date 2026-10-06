@@ -540,6 +540,18 @@ export const UI_ICONS = {
     circle(10, 10, 5, cyan.base),
     pill(6.8, 6.6, 3.6, 1.8, cyan.light),
   ),
+  /** La carte du monde : trois volets dépliés, une route indigo et l'épingle corail du lieu visé. */
+  map: svg(
+    S,
+    S,
+    rect(2.5, 5, 7, 14.5, mint.base, 2),
+    rect(9, 4, 6.5, 14.5, mint.shade, 2),
+    rect(15, 5, 6.5, 14.5, mint.base, 2),
+    pill(4, 6.5, 2, 5, mint.light),
+    pill(16.5, 6.5, 2, 5, mint.light),
+    polyline([5.5, 16, 9.5, 13, 13, 15, 16.5, 12], ink.base),
+    shadedCircle(17, 9, 3.2, 'coral'),
+  ),
   /** Revenir sur Adam : une mire indigo, son cœur corail au centre. */
   recenter: svg(
     S,
