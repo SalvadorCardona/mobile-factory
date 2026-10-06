@@ -138,19 +138,19 @@ describe('ouvriers de la colonie', () => {
     expect(crew.map((id) => world.mobiles.get(id)?.kind)).toEqual(['worker', 'worker']);
   });
 
-  it('une ferme fait entrer ses ouvriers ; abattue, elle les rend libres, à sa porte', () => {
-    const world = scenario([{ building: 'farm', dx: 6, dy: 0 }]);
-    const farm = only(world, 'farm');
-    const door = doorOf(farm);
-    const workers = BUILDINGS.farm.workers;
+  it('une carrière fait entrer ses ouvriers ; abattue, elle les rend libres, à sa porte', () => {
+    const world = scenario([{ building: 'quarry', dx: 6, dy: 0 }]);
+    const quarry = only(world, 'quarry');
+    const door = doorOf(quarry);
+    const workers = BUILDINGS.quarry.workers;
 
     run(world, 2);
-    // Entrés aux champs : plus sur la carte, toujours dans la colonie.
+    // Entrés à la taille : plus sur la carte, toujours dans la colonie.
     expect(freeWorkers(world)).toHaveLength(COLONY.startingWorkers - workers);
     expect(world.population().workers).toBe(COLONY.startingWorkers);
     expect(world.workforce()).toMatchObject({ assigned: workers, free: COLONY.startingWorkers - workers });
 
-    destroy(world, farm.id);
+    destroy(world, quarry.id);
     run(world, 1);
 
     const free = freeWorkers(world);
@@ -162,7 +162,7 @@ describe('ouvriers de la colonie', () => {
   });
 
   it('une ancienne sauvegarde garde ses ouvriers à leurs bâtiments et pose les libres devant la mairie', () => {
-    const world = scenario([CAMP, { building: 'farm', dx: 6, dy: 0 }]);
+    const world = scenario([CAMP, { building: 'quarry', dx: 6, dy: 0 }]);
 
     run(world, 2);
 
@@ -188,11 +188,11 @@ describe('ouvriers de la colonie', () => {
 
     expect(ids(lumberjacks(loaded))).toEqual(crew);
     expect(lumberjacks(loaded).every((lumberjack) => lumberjack.homeId === camp.id)).toBe(true);
-    // Les fermiers n'ont jamais été sur la carte : ils restent aux champs, les quatre autres attendent devant la mairie.
-    expect(freeWorkers(loaded)).toHaveLength(COLONY.startingWorkers - 2 - BUILDINGS.farm.workers);
-    expect(loaded.workforce()).toMatchObject({ total: 10, assigned: 6, free: 4 });
+    // Les carriers n'ont jamais été sur la carte : ils restent à la taille, les autres attendent devant la mairie.
+    expect(freeWorkers(loaded)).toHaveLength(COLONY.startingWorkers - 2 - BUILDINGS.quarry.workers);
+    expect(loaded.workforce()).toMatchObject({ total: 10, assigned: 2 + BUILDINGS.quarry.workers, free: 8 - BUILDINGS.quarry.workers });
     run(loaded, 10);
-    expect(people(loaded)).toHaveLength(COLONY.startingWorkers - BUILDINGS.farm.workers);
+    expect(people(loaded)).toHaveLength(COLONY.startingWorkers - BUILDINGS.quarry.workers);
   });
 
   it('est déterministe : même seed, mêmes commandes, mêmes ouvriers', () => {

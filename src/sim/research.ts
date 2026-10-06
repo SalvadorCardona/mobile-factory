@@ -14,6 +14,7 @@
 import type { BuildingId } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
 import { RECIPES } from '../data/recipes.ts';
+import { CROPS } from '../data/resources.ts';
 import { RESEARCH, RESEARCH_IDS, type ResearchId, type ResearchStat } from '../data/research.ts';
 import { WEAPONS } from '../data/weapons.ts';
 import { PORTERS } from '../data/workers.ts';
@@ -29,7 +30,7 @@ export const STAT_BASE: Readonly<Record<ResearchStat, number>> = {
   porterCarry: PORTERS.carry,
   woodYield: 0,
   drillTicks: RECIPES.mineOre.duration,
-  farmYield: RECIPES.growFood.outputs.food,
+  farmYield: CROPS.yield,
 };
 
 /** Ce que les recherches finies ajoutent à la statistique. */

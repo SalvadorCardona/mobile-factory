@@ -279,7 +279,6 @@ export function validatePrototypes(): string[] {
   for (const [id, building] of Object.entries(BUILDINGS)) {
     if (
       (building.kind === 'drill' ||
-        building.kind === 'farm' ||
         building.kind === 'quarry' ||
         building.kind === 'nursery' ||
         building.kind === 'forge') &&

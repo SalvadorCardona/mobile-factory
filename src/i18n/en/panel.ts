@@ -101,8 +101,17 @@ export const panel: Messages['panel'] = {
   },
 
   farm: {
-    noOne: 'Stopped: nobody in the fields. Add a worker.',
-    growing: 'The furrows are sprouting.',
+    growing: (count: number): string => `${count} sown tile${s(count)} growing`,
+    ripe: (count: number): string => `${count} ripe tile${s(count)}, ready to harvest`,
+    free: (count: number): string => `${count} free tile${s(count)} to sow`,
+    field: (side: number): string => `Field: a ${side} × ${side} square around the farm.`,
+    paused: 'Paused: the farmers bring back their harvest, then loaf around.',
+    noOne: 'Stopped: no farmer. Add a worker. Nothing gets sown.',
+    sowing: 'The farmers are sowing, tile by tile.',
+    harvesting: 'The farmers are harvesting what is ripe.',
+    asleep: 'The farmers are asleep; the crops keep growing.',
+    growingLine: 'The field is growing: the farmers wait for it to ripen.',
+    nowhere: 'No tile to farm here: water, sand, rock, roads or buildings.',
   },
 
   quarry: {
@@ -202,6 +211,7 @@ export const panel: Messages['panel'] = {
       builder: 'Builder',
       lumberjack: 'Lumberjack',
       forester: 'Forester',
+      farmer: 'Farmer',
       child: 'Child',
       exMutant: 'Ex-mutant, porter',
       survivor: 'Survivor, porter',

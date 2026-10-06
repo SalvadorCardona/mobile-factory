@@ -132,9 +132,10 @@ export const content: Content = {
     farm: {
       label: 'Farm',
       sign: 'Farm',
-      siteDescription: 'A tool shed to put up before turning the soil. Four workers will work here.',
-      description: 'A few furrows in the irradiated soil and a tool shed. Four workers grow enough here to feed the colony.',
-      effect: 'Grows food for the nursery.',
+      siteDescription: 'A tool shed to put up before turning the soil. Four farmers will work here.',
+      description:
+        'A few furrows in the irradiated soil and a tool shed. Its farmers sow the field around it, tile by tile, watch it grow, then bring the harvest back to the chest.',
+      effect: 'Up to 4 farmers work a 6 × 6 field: about 9 food per minute.',
       upgrades: [],
     },
     watchtower: {
@@ -220,7 +221,6 @@ export const content: Content = {
   },
   recipes: {
     mineOre: 'Mining',
-    growFood: 'Farming',
     cutStone: 'Stonecutting',
     drawWater: 'Drawing water',
     raiseChild: 'Birth',
@@ -475,6 +475,7 @@ export const content: Content = {
     base: 'Small base',
     lab: 'Lab',
     forest: 'Forester',
+    farm: 'Farm',
     housing: 'Houses',
     nursery: 'Nursery',
   },

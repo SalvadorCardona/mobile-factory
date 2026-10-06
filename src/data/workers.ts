@@ -100,6 +100,28 @@ export const FORESTERS = {
 } as const;
 
 /**
+ * Fermiers — les ouvriers de la ferme (`BUILDINGS.farm`).
+ *
+ * Comme le forestier, ils travaillent un carré autour du bâtiment, le champ
+ * (`sim/farmer.ts`) : semer la première case libre, rang par rang, la
+ * laisser pousser (`CROPS`, `data/resources.ts`), puis la récolter quand
+ * elle est mûre, rapporter la récolte au coffre de la ferme et revenir la
+ * semer. Deux fermiers ne prennent jamais la même case.
+ */
+export const FARMERS = {
+  /** Côté du champ, en tuiles, centré sur la ferme : c'est le carré affiché. */
+  plot: 6,
+  /** Vitesse de marche, en tuiles par seconde : celle d'un forestier. */
+  speed: 2.2,
+  /** Ticks pour semer une case, une fois dessus. */
+  sowTicks: 40,
+  /** Ticks pour récolter une case mûre. */
+  harvestTicks: 40,
+  /** Ticks avant qu'un fermier sans case à semer ni à récolter cherche à nouveau. */
+  retryTicks: 40,
+} as const;
+
+/**
  * Logisticiens — les ouvriers du poste de logistique (`BUILDINGS.logisticsPost`).
  *
  * En boucle : choisir, parmi les producteurs (foreuses, fermes, cabanes de

@@ -110,7 +110,7 @@ export class Puppet {
   private readonly halo: Sprite | null;
   private readonly claws: Sprite | null;
   private readonly load: Sprite | null;
-  /** L'outil qui s'abat à chaque coup : la hache du bûcheron, le marteau du bâtisseur, la bêche du forestier. */
+  /** L'outil qui s'abat à chaque coup : la hache du bûcheron, le marteau du bâtisseur, la bêche du forestier, la binette du fermier. */
   private readonly tool: Sprite | null;
   private readonly toolName: string;
   private loadItem: ItemId | null = null;
@@ -158,10 +158,10 @@ export class Puppet {
         : null;
     this.claws = 'claws' in this.proto.parts ? this.part('claws') : null;
     this.load =
-      id === 'worker' || id === 'exMutant' || id === 'lumberjack' || id === 'logistician' || id === 'builder'
+      id === 'worker' || id === 'exMutant' || id === 'lumberjack' || id === 'logistician' || id === 'builder' || id === 'farmer'
         ? this.part('load.wood')
         : null;
-    this.toolName = 'hammer' in this.proto.parts ? 'hammer' : 'spade' in this.proto.parts ? 'spade' : 'axe';
+    this.toolName = 'hammer' in this.proto.parts ? 'hammer' : 'spade' in this.proto.parts ? 'spade' : 'hoe' in this.proto.parts ? 'hoe' : 'axe';
     this.tool = this.toolName in this.proto.parts ? this.part(this.toolName) : null;
     this.zzz = 'zzz' in this.proto.parts ? this.part('zzz') : null;
 
@@ -517,6 +517,7 @@ export type PuppetId = Extract<
   | 'builder'
   | 'lumberjack'
   | 'forester'
+  | 'farmer'
   | 'exMutant'
   | 'patient'
   | 'crab'

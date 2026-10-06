@@ -168,6 +168,20 @@ export function spade(x: number, y: number): string {
 }
 
 /**
+ * La binette du fermier, tenue manche en main en (x, y) : un manche long qui
+ * descend vers le sol, et au bout une petite lame cyan en travers — c'est
+ * elle qui gratte la terre, quand il sème comme quand il récolte.
+ */
+export function hoe(x: number, y: number): string {
+  return (
+    line(x, y - 7, x + 2.5, y + 6, orange.shade) +
+    rect(x - 0.5, y + 5, 7.5, 3.4, cyan.shade, 1.5) +
+    rect(x - 0.5, y + 5, 7.5, 2.4, cyan.base, 1.5) +
+    pill(x + 0.5, y + 5.3, 2.6, 1, cyan.light)
+  );
+}
+
+/**
  * La pioche, tenue manche en main en (x, y) : un fer cyan long et fin, en
  * travers du manche, à deux pointes — la hache, elle, n'a qu'un tranchant carré.
  */

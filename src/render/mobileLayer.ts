@@ -41,7 +41,8 @@
  * tête tant que son job est ramassé. Un ex-mutant a son propre pantin, un
  * logisticien aussi : sa charge dépasse de la caisse qu'il a au dos. Un
  * bûcheron abat sa hache sur l'arbre qu'il coupe, et rapporte son bois sur
- * la tête ; un forestier enfonce sa bêche là où il plante.
+ * la tête ; un forestier enfonce sa bêche là où il plante ; un fermier gratte
+ * la terre de sa binette, et rapporte sa récolte sur la tête.
  *
  * Un enfant sautille : il court à petits bonds et saute sur place. Un
  * ouvrier qui glande (`World.isIdle`) et s'arrête prend une pose tirée au
@@ -364,6 +365,22 @@ export class MobileLayer {
           this.starve(view, mobile);
           this.bedDown(view, mobile);
           puppet.update(deltaMs, view.lounge ? 'down' : mobile.facing, mobile.state === 'plant' ? 'act' : mobile.moving ? 'walk' : 'idle');
+          break;
+        }
+
+        case 'farmer': {
+          const puppet = view.puppet!;
+          const working = mobile.state === 'sow' || mobile.state === 'harvest';
+
+          view.root.zIndex = y + 6;
+          view.root.visible = !mobile.inside;
+          this.ground(view, x, y);
+          // La récolte sur la tête, de la case mûre jusqu'au coffre.
+          puppet.carry(mobile.state === 'toFarm' && mobile.load > 0 ? 'food' : null);
+          this.loiter(view, mobile, deltaMs);
+          this.starve(view, mobile);
+          this.bedDown(view, mobile);
+          puppet.update(deltaMs, view.lounge ? 'down' : mobile.facing, working ? 'act' : mobile.moving ? 'walk' : 'idle');
           break;
         }
 
@@ -732,7 +749,7 @@ export class MobileLayer {
 
       let hungry: Sprite | null = null;
 
-      if (mobile.kind === 'kid' || mobile.kind === 'worker' || mobile.kind === 'lumberjack' || mobile.kind === 'forester') {
+      if (mobile.kind === 'kid' || mobile.kind === 'worker' || mobile.kind === 'lumberjack' || mobile.kind === 'forester' || mobile.kind === 'farmer') {
         hungry = new Sprite(this.library.part('hungry', 'bubble'));
         hungry.anchor.set(SPRITES.hungry.anchorX, SPRITES.hungry.anchorY);
         hungry.visible = false;
@@ -740,7 +757,7 @@ export class MobileLayer {
       }
       let sleeper: Sprite | null = null;
 
-      if (mobile.kind === 'worker' || mobile.kind === 'lumberjack' || mobile.kind === 'forester') {
+      if (mobile.kind === 'worker' || mobile.kind === 'lumberjack' || mobile.kind === 'forester' || mobile.kind === 'farmer') {
         sleeper = new Sprite(this.library.part('sleeper', 'body'));
         sleeper.anchor.set(SPRITES.sleeper.anchorX, SPRITES.sleeper.anchorY);
         sleeper.visible = false;

@@ -4,7 +4,7 @@ import { COLONY } from '../data/inhabitants.ts';
 import { RECIPES } from '../data/recipes.ts';
 import { decodeSave, encodeSave, type SavedEntity } from './save.ts';
 import { allocateStaff, canPause, clampStaff } from './staffing.ts';
-import type { Drill, Entity, Farm, Forge, Nursery } from './types.ts';
+import type { Drill, Entity, Forge, Nursery } from './types.ts';
 import { World } from './world.ts';
 
 /**
@@ -32,7 +32,7 @@ function colony(): World {
   const entities: SavedEntity[] = [
     { ...base('townHall', 0), id: world.townHallId, tx: hall.tx, ty: hall.ty, kind: 'townHall', store: {} },
     { ...base('drill', 0), kind: 'drill', store: {}, output: 'ironOre', blocked: false },
-    { ...base('farm', 1), kind: 'farm', store: {}, blocked: false },
+    { ...base('farm', 1), kind: 'farm', store: {} },
     { ...base('forge', 2), kind: 'forge', store: { ironOre: 10, coal: 10 }, blocked: false },
     {
       ...base('nursery', 3),
@@ -143,27 +143,6 @@ describe('pause', () => {
     world.push({ type: 'pauseBuilding', id: drill.id, paused: false });
     run(world, cycle * 4);
     expect(drill.store.total()).toBeLessThanOrEqual(5);
-  });
-
-  it('une ferme en pause ne récolte plus ; sans ouvrier, c’est une pause de fait ; à moitié d’ouvriers, deux fois plus lente', () => {
-    const world = colony();
-    const farm: Farm = find(world, 'farm');
-    const cycle = RECIPES.growFood.duration;
-
-    world.push({ type: 'pauseBuilding', id: farm.id, paused: true });
-    run(world, cycle * 3);
-    expect(farm.store.total()).toBe(0);
-
-    world.push({ type: 'pauseBuilding', id: farm.id, paused: false });
-    world.push({ type: 'setWorkers', id: farm.id, count: 0 });
-    run(world, cycle * 3);
-    expect(farm.store.total()).toBe(0);
-    expect(world.stopped(farm)).toBe(true);
-    expect(farm.paused).toBe(false);
-
-    world.push({ type: 'setWorkers', id: farm.id, count: 2 });
-    run(world, cycle * 4 + 1);
-    expect(farm.store.total()).toBe(2 * (RECIPES.growFood.outputs.food ?? 1));
   });
 
   it('une forge en pause ne consomme ni fer ni charbon', () => {

@@ -15,7 +15,9 @@
  * La maison du forestier, elle, a un **carré** : la forêt qu'il plante
  * (`sim/forester.ts`), même carré que la simulation, chaque case libre
  * marquée d'une pastille — là où il plantera. Les cases prises (eau, bâti,
- * route, rocher) n'en ont pas : elles sont ignorées.
+ * route, rocher) n'en ont pas : elles sont ignorées. La ferme aussi : son
+ * champ (`sim/farmer.ts`), carré jaune, une pastille sur chaque case libre à
+ * semer.
  *
  * Le `Graphics` n'est redessiné que si le cercle change de place, ou qu'une
  * case du carré change d'état.
@@ -25,7 +27,7 @@ import { Graphics } from 'pixi.js';
 import { TILE_SIZE } from '../core/grid.ts';
 import { PALETTE, RADIUS, STROKE, hex } from '../data/artDirection.ts';
 import { BUILDINGS, type BuildingId, type BuildingKind } from '../data/buildings.ts';
-import { BUILDERS, FORESTERS, LOGISTICIANS, LUMBERJACKS } from '../data/workers.ts';
+import { BUILDERS, FARMERS, FORESTERS, LOGISTICIANS, LUMBERJACKS } from '../data/workers.ts';
 import type { GhostState } from '../input/placement.ts';
 import { plotOrigin } from '../sim/forester.ts';
 import type { EntityId } from '../sim/types.ts';
@@ -38,8 +40,18 @@ const REACHES: Partial<Record<BuildingKind, { radius: number; color: number }>> 
   yard: { radius: BUILDERS.radius, color: hex(PALETTE.violet.shade) },
 };
 
-/** Le carré du forestier : sa couleur, et le retrait d'une pastille de case libre dans sa tuile. */
-const PLOT_COLOR = hex(PALETTE.mint.shade);
+type Footprint = { tx: number; ty: number; width: number; height: number };
+
+/**
+ * Les bâtiments qui ont un carré : son côté en tuiles, sa couleur, et l'état
+ * de chaque case — la forêt du forestier, le champ de la ferme.
+ */
+const PLOTS: Partial<Record<BuildingKind, { side: number; color: number; tiles: (world: World, area: Footprint) => readonly { tx: number; ty: number; state: string }[] }>> = {
+  foresterHouse: { side: FORESTERS.plot, color: hex(PALETTE.mint.shade), tiles: (world, area) => world.forestPlot(area) },
+  farm: { side: FARMERS.plot, color: hex(PALETTE.yellow.shade), tiles: (world, area) => world.farmField(area) },
+};
+
+/** Le retrait d'une pastille de case libre dans sa tuile. */
 const PLOT_DOT_INSET = 10;
 
 export class WorkReachLayer {
@@ -57,9 +69,11 @@ export class WorkReachLayer {
   public update(ghost: GhostState | null, selected: EntityId | null): void {
     const area = this.area(ghost, selected);
 
-    if (area && BUILDINGS[area.proto].kind === 'foresterHouse') {
+    const plot = area && PLOTS[BUILDINGS[area.proto].kind];
+
+    if (area && plot) {
       this.container.visible = true;
-      this.drawPlot(area);
+      this.drawPlot(area, plot);
       return;
     }
 
@@ -85,23 +99,23 @@ export class WorkReachLayer {
       .stroke({ width: STROKE.width, color: reach.color, alpha: 0.45 });
   }
 
-  /** Le carré de forêt : son contour, et une pastille sur chaque case que le forestier plantera. */
-  private drawPlot(area: { proto: BuildingId; tx: number; ty: number }): void {
+  /** Le carré de forêt ou le champ : son contour, et une pastille sur chaque case que le forestier plantera, que les fermiers sèmeront. */
+  private drawPlot(area: { proto: BuildingId; tx: number; ty: number }, plot: NonNullable<(typeof PLOTS)[BuildingKind]>): void {
     const { width, height } = BUILDINGS[area.proto];
-    const tiles = this.world.forestPlot({ tx: area.tx, ty: area.ty, width, height });
+    const tiles = plot.tiles(this.world, { tx: area.tx, ty: area.ty, width, height });
     const key = `${area.proto}:${area.tx}:${area.ty}:${tiles.map((tile) => tile.state[0]).join('')}`;
 
     if (key === this.lastKey) return;
     this.lastKey = key;
 
-    const origin = plotOrigin({ tx: area.tx, ty: area.ty, width, height });
-    const side = FORESTERS.plot * TILE_SIZE;
+    const origin = plotOrigin({ tx: area.tx, ty: area.ty, width, height }, plot.side);
+    const side = plot.side * TILE_SIZE;
 
     this.container
       .clear()
       .roundRect(origin.tx * TILE_SIZE, origin.ty * TILE_SIZE, side, side, RADIUS.large)
-      .fill({ color: PLOT_COLOR, alpha: 0.06 })
-      .stroke({ width: STROKE.width, color: PLOT_COLOR, alpha: 0.45 });
+      .fill({ color: plot.color, alpha: 0.06 })
+      .stroke({ width: STROKE.width, color: plot.color, alpha: 0.45 });
 
     for (const tile of tiles) {
       if (tile.state !== 'free') continue;
@@ -113,7 +127,7 @@ export class WorkReachLayer {
           TILE_SIZE - PLOT_DOT_INSET * 2,
           RADIUS.small,
         )
-        .fill({ color: PLOT_COLOR, alpha: 0.35 });
+        .fill({ color: plot.color, alpha: 0.35 });
     }
   }
 
@@ -121,7 +135,7 @@ export class WorkReachLayer {
   private area(ghost: GhostState | null, selected: EntityId | null): { proto: BuildingId; tx: number; ty: number } | null {
     const kind = ghost && BUILDINGS[ghost.building].kind;
 
-    if (ghost && kind && (REACHES[kind] || kind === 'foresterHouse')) return { proto: ghost.building, tx: ghost.tx, ty: ghost.ty };
+    if (ghost && kind && (REACHES[kind] || PLOTS[kind])) return { proto: ghost.building, tx: ghost.tx, ty: ghost.ty };
 
     const entity = selected === null ? undefined : this.world.entities.get(selected);
 

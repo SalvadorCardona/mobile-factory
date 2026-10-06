@@ -206,7 +206,8 @@ function isUnder(mobile: Mobile, x: number, y: number): boolean {
     case 'kid':
     case 'worker':
     case 'lumberjack':
-    case 'forester': {
+    case 'forester':
+    case 'farmer': {
       if (mobile.kind !== 'kid' && mobile.inside) return false;
 
       const top = mobile.kind === 'kid' ? KID_TOP : PERSON_TOP;

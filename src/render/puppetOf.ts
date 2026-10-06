@@ -33,6 +33,8 @@ export function puppetOf(
       return { id: 'lumberjack', shadowWidth: 16, stride: 3 };
     case 'forester':
       return { id: 'forester', shadowWidth: 16, stride: 3 };
+    case 'farmer':
+      return { id: 'farmer', shadowWidth: 16, stride: 3 };
     case 'beast':
       if (mobile.proto === 'guardian') return { id: WILDLIFE.guardian.sprite, shadowWidth: 24, stride: 4 };
       return mobile.proto === 'crab'

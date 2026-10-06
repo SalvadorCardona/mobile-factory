@@ -191,5 +191,7 @@ function producerOf(world: World, item: ItemId): EntityId | null {
 
 function producesItem(entity: Entity, item: ItemId): boolean {
   if (entity.kind === 'lumberCamp') return item === 'wood';
+  // La ferme n'a pas de recette : ses fermiers récoltent la nourriture de son champ.
+  if (entity.kind === 'farm') return item === 'food';
   return Object.values(RECIPES).some((recipe) => recipe.building === entity.proto && item in recipe.outputs);
 }
