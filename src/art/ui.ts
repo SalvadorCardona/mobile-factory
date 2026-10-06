@@ -531,6 +531,15 @@ export const UI_ICONS = {
   zoomIn: svg(S, S, pill(4, 9.75, 16, 4.5, ink.base), pill(9.75, 4, 4.5, 16, ink.base), pill(5.5, 10.5, 4, 1.4, ink.light)),
   /** Dézoomer : la barre seule. */
   zoomOut: svg(S, S, pill(4, 9.75, 16, 4.5, ink.base), pill(5.5, 10.5, 4, 1.4, ink.light)),
+  /** Chercher : une loupe, verre cyan cerclé d'indigo, son manche en capsule vers le bas à droite. */
+  search: svg(
+    S,
+    S,
+    group('translate(15.5 15.5) rotate(-45)', pill(-2, 0, 4, 8.5, ink.shade), pill(-2, 0, 3.2, 7.5, ink.base)),
+    circle(10, 10, 7.5, ink.base),
+    circle(10, 10, 5, cyan.base),
+    pill(6.8, 6.6, 3.6, 1.8, cyan.light),
+  ),
   /** Revenir sur Adam : une mire indigo, son cœur corail au centre. */
   recenter: svg(
     S,

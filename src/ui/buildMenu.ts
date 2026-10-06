@@ -46,13 +46,23 @@
  * carte pour une ligne au pied du tiroir, qu'un appui long (ou le focus
  * clavier) remplit ; la ligne est toujours là, la liste ne bouge pas.
  *
+ * En haut du tiroir, un champ de recherche (loupe, « × » pour le vider) prend
+ * le focus à chaque ouverture, vidé : on tape tout de suite. Il filtre les
+ * cartes à la frappe (`buildSearch.ts` : nom, métier, ce que le bâtiment
+ * produit, sans casse ni accents), sans jamais montrer une carte verrouillée ;
+ * rien ne correspond, une ligne le dit. Dans le champ, Entrée choisit la
+ * première carte, Échap le vide puis ferme le tiroir, la flèche du bas
+ * descend dans les cartes (et celle du haut, depuis la première ligne, y
+ * remonte) ; aucune touche tapée n'atteint le reste du jeu. Sur téléphone, le
+ * clavier qui monte soulève le tiroir (`visualViewport`) : la liste reste
+ * au-dessus de lui ; le champ écrit en 16 px, sous quoi iOS zoomerait.
+ *
  * La dernière carte n'est pas un bâtiment : la **route**, une pierre par
  * tuile. Choisie, elle arme le tracé (`Placement.selectRoad`) ; la barre dit
  * combien de tuiles et de pierres, « Poser » pave, et « Retirer » change
  * l'outil pour le marteau, qui retire les dalles et rend leur pierre.
  *
- * Au clavier (`handleKey`) : Espace ouvre le tiroir sur la première carte
- * (ou sur le bâtiment déjà armé), les flèches ou ZQSD/WASD passent d'une
+ * Au clavier (`handleKey`) : Espace ouvre le tiroir sur le champ de recherche, les flèches ou ZQSD/WASD passent d'une
  * carte à l'autre dans la grille, Entrée choisit, Espace ou Échap referment.
  * La sélection est le vrai focus du navigateur : un lecteur d'écran suit, et
  * Tab continue de marcher. Tant que le tiroir est ouvert, ces touches sont au
@@ -69,6 +79,7 @@ import { footingHalf } from '../sim/footing.ts';
 import type { World } from '../sim/world.ts';
 import { onLocale, t } from '../i18n/locale.ts';
 import { buildOrder } from './buildOrder.ts';
+import { buildingTerms, matchesSearch, searchKey } from './buildSearch.ts';
 import { buildingIcon, itemAmount, itemIcon, jobIcon, roadIcon, uiIcon } from './icons.ts';
 import { footingText, placementOutput, placementReason, roadReason } from './placementReason.ts';
 
@@ -98,6 +109,10 @@ export class BuildMenu {
   private readonly toggleButton: HTMLButtonElement;
   private readonly drawer: HTMLElement;
   private readonly list: HTMLElement;
+  private readonly search: HTMLInputElement;
+  private readonly searchClear: HTMLButtonElement;
+  /** « Aucun bâtiment ne correspond » : la recherche a vidé la liste. */
+  private readonly searchEmpty: HTMLElement;
   private readonly effectLine: HTMLElement;
   private readonly armedBar: HTMLElement;
   private readonly armedLabel: HTMLElement;
@@ -116,6 +131,8 @@ export class BuildMenu {
   /** Les libellés fixes des cartes, réécrits à chaque changement de langue. */
   private readonly relabels: (() => void)[] = [];
   private opened = false;
+  /** Les cartes que garde la recherche ; `null` : le champ est vide, toutes. */
+  private matches: Set<BuildingId | 'road'> | null = null;
   /** L'appui long vient de montrer un effet : le `click` qui suit le relâchement ne choisit pas la carte. */
   private swallowClick = false;
 
@@ -164,6 +181,28 @@ export class BuildMenu {
 
     header.append(title, keys, close);
 
+    // La recherche : la loupe, le champ, et « × » quand il y a du texte.
+    const searchRow = document.createElement('label');
+
+    searchRow.className = 'build-search';
+    this.search = document.createElement('input');
+    this.search.type = 'search';
+    this.search.className = 'build-search-input';
+    this.search.autocomplete = 'off';
+    this.search.spellcheck = false;
+    this.search.enterKeyHint = 'go';
+    this.search.addEventListener('input', () => this.filter());
+    this.search.addEventListener('keydown', (event) => this.searchKeyDown(event));
+    // « × » vide le champ et lui rend le focus : on retape aussitôt.
+    this.searchClear = button('', () => {
+      this.clearSearch();
+      this.search.focus();
+    });
+    this.searchClear.className = 'build-search-clear';
+    this.searchClear.append(uiIcon('close', 18));
+    this.searchClear.hidden = true;
+    searchRow.append(uiIcon('search', 22), this.search, this.searchClear);
+
     this.list = document.createElement('div');
     this.list.className = 'build-drawer-list';
 
@@ -177,12 +216,17 @@ export class BuildMenu {
     this.roadCard = this.road();
     this.list.append(this.roadCard);
 
+    this.searchEmpty = document.createElement('div');
+    this.searchEmpty.className = 'build-search-empty';
+    this.searchEmpty.setAttribute('role', 'status');
+    this.searchEmpty.hidden = true;
+
     // Masquée sur grand écran, où chaque carte porte son effet.
     this.effectLine = document.createElement('div');
     this.effectLine.className = 'build-drawer-effect';
     this.effectLine.setAttribute('role', 'status');
 
-    this.drawer.append(header, this.list, this.effectLine);
+    this.drawer.append(header, searchRow, this.list, this.searchEmpty, this.effectLine);
 
     this.armedBar = document.createElement('div');
     this.armedBar.className = 'panel build-armed';
@@ -227,6 +271,10 @@ export class BuildMenu {
       toggleLabel.data = text.menu.build;
       spaceKey.textContent = text.menu.keys.space;
       title.textContent = text.menu.drawerTitle;
+      this.search.placeholder = text.menu.searchPlaceholder;
+      this.search.setAttribute('aria-label', text.menu.searchPlaceholder);
+      this.searchClear.setAttribute('aria-label', text.menu.searchClear);
+      this.searchEmpty.textContent = text.menu.searchEmpty;
       close.setAttribute('aria-label', text.common.close);
       arrowsKey.textContent = text.menu.keys.arrows;
       enterKey.textContent = text.menu.keys.enter;
@@ -235,6 +283,8 @@ export class BuildMenu {
       this.repeatButton.textContent = text.menu.placeAgain;
       this.cancelButton.textContent = text.common.cancel;
       for (const relabel of this.relabels) relabel();
+      // Les noms ont changé de langue : la recherche se relit dans la nouvelle.
+      this.filter();
       // Les icônes des coûts portent le nom de l'objet (`itemIcon`), posé à leur création.
       for (const { item, element } of this.costs) {
         const image = element.querySelector('img');
@@ -482,25 +532,23 @@ export class BuildMenu {
     else this.open();
   }
 
-  /** `focusCard` : ouvert au clavier, le tiroir met tout de suite une carte sous le focus. */
-  public open(focusCard = false): void {
+  /** Le tiroir s'ouvre sur un champ de recherche vide, sous le focus : on tape tout de suite. */
+  public open(): void {
     this.opened = true;
+    this.clearSearch();
     this.sortCards();
     setText(this.effectLine, t().menu.effectPrompt);
     this.drawer.hidden = false;
+    this.followKeyboard(true);
     this.onOpen();
     this.refresh();
-
-    if (focusCard) {
-      const armed = this.placement.armedBuilding();
-      const road = this.placement.roadTool() !== null ? this.roadCard : undefined;
-
-      this.focus((armed && this.cards.get(armed)) || road || this.firstCard());
-    }
+    // Sans défilement : le clavier du téléphone soulève le tiroir (`followKeyboard`), la page ne bouge pas.
+    this.search.focus({ preventScroll: true });
   }
 
   public close(): void {
     this.opened = false;
+    this.followKeyboard(false);
     // Une carte cachée qui garde le focus avalerait les touches suivantes :
     // on le rend à la page, et les flèches refont marcher Adam.
     if (document.activeElement instanceof HTMLElement && this.drawer.contains(document.activeElement)) {
@@ -525,7 +573,7 @@ export class BuildMenu {
         return true;
       }
       if (code !== 'Space' || !canOpen || this.placement.mode !== 'idle' || !this.unlocked()) return false;
-      if (!repeat) this.open(true);
+      if (!repeat) this.open();
       return true;
     }
 
@@ -534,8 +582,11 @@ export class BuildMenu {
     if (move) {
       const cards = this.visibleCards();
       const index = cards.indexOf(document.activeElement as HTMLButtonElement);
+      const next = gridStep(index, cards.length, this.columns(cards), move);
 
-      this.focus(cards[gridStep(index, cards.length, this.columns(cards), move)]);
+      // Monter depuis la première ligne ramène au champ de recherche.
+      if (move === 'up' && index >= 0 && next === index && index < this.columns(cards)) this.search.focus();
+      else this.focus(cards[next]);
       return true;
     }
 
@@ -556,6 +607,80 @@ export class BuildMenu {
 
     return false;
   }
+
+  /**
+   * Une touche dans le champ. Elle ne va pas plus loin que lui : ni la pause
+   * (P), ni le sac (I), ni Échap de `main.ts`, ni la marche d'Adam ne la voient.
+   */
+  private searchKeyDown(event: KeyboardEvent): void {
+    event.stopPropagation();
+
+    const action = searchKey(event.code, this.search.value);
+
+    if (!action) return;
+    event.preventDefault();
+    if (event.repeat) return;
+    if (action === 'pick') this.firstCard()?.click();
+    else if (action === 'clear') this.clearSearch();
+    else if (action === 'close') this.close();
+    else this.focus(this.firstCard());
+  }
+
+  private clearSearch(): void {
+    this.search.value = '';
+    this.filter();
+  }
+
+  /** Relit le champ : les cartes qu'il garde, le « × », la ligne « aucun ». */
+  private filter(): void {
+    const query = this.search.value;
+
+    this.searchClear.hidden = query === '';
+    if (query.trim() === '') {
+      this.matches = null;
+    } else {
+      const text = t();
+
+      this.matches = new Set<BuildingId | 'road'>(
+        [...this.cards.keys()].filter((id) => matchesSearch(query, buildingTerms(id, text))),
+      );
+      if (matchesSearch(query, [text.menu.road])) this.matches.add('road');
+    }
+    this.refresh();
+    this.list.scrollTop = 0;
+  }
+
+  /** La recherche garde-t-elle cette carte ? */
+  private matched(id: BuildingId | 'road'): boolean {
+    return this.matches === null || this.matches.has(id);
+  }
+
+  /**
+   * Le clavier d'un téléphone recouvre le bas de l'écran sans rétrécir la
+   * page (iOS, et Android par défaut) : on lit ce qu'il cache dans
+   * `visualViewport` et le tiroir monte d'autant (`--keyboard-inset`).
+   */
+  private followKeyboard(on: boolean): void {
+    const viewport = window.visualViewport;
+
+    if (!viewport) return;
+    if (on) {
+      viewport.addEventListener('resize', this.keyboardInset);
+      viewport.addEventListener('scroll', this.keyboardInset);
+      this.keyboardInset();
+    } else {
+      viewport.removeEventListener('resize', this.keyboardInset);
+      viewport.removeEventListener('scroll', this.keyboardInset);
+      this.root.style.removeProperty('--keyboard-inset');
+    }
+  }
+
+  private readonly keyboardInset = (): void => {
+    const viewport = window.visualViewport;
+    const hidden = viewport ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop) : 0;
+
+    this.root.style.setProperty('--keyboard-inset', `${Math.round(hidden)}px`);
+  };
 
   private firstCard(): HTMLButtonElement | undefined {
     return this.visibleCards()[0];
@@ -598,8 +723,10 @@ export class BuildMenu {
     let fresh = false;
 
     for (const [id, card] of this.cards) {
-      const shown = this.shown(id);
-      const isNew = shown && this.world.isNewInMenu(id);
+      const listed = this.shown(id);
+      const shown = listed && this.matched(id);
+      // La pastille du bouton « Bâtir » ne dépend pas de la recherche.
+      const isNew = listed && this.world.isNewInMenu(id);
       const badge = this.badges.get(id);
 
       card.dataset['active'] = String(armed === id);
@@ -610,8 +737,14 @@ export class BuildMenu {
 
     const roadTool = this.placement.roadTool();
 
+    const roadShown = this.unlocked() && this.matched('road');
+
     this.roadCard.dataset['active'] = String(roadTool !== null);
-    if (this.roadCard.hidden === this.unlocked()) this.roadCard.hidden = !this.unlocked();
+    if (this.roadCard.hidden === roadShown) this.roadCard.hidden = !roadShown;
+
+    const empty = this.opened && this.matches !== null && !this.firstCard();
+
+    if (this.searchEmpty.hidden === empty) this.searchEmpty.hidden = !empty;
     this.toggleButton.dataset['new'] = String(fresh);
 
     // Le sac et la ville ne comptent que tiroir ouvert : fermé, personne ne voit les coûts.
