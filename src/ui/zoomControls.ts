@@ -1,7 +1,7 @@
 /**
  * Les boutons de zoom : une colonne de trois petits disques blancs sur le
  * bord droit, à mi-hauteur — loin du joystick (bas gauche), du bouton
- * « Bâtir » (bas droite) et de la colonne du sac (haut droite). Avancer,
+ * « Construire » (bas droite) et de la barre du haut. Avancer,
  * revenir sur Adam au zoom par défaut, reculer.
  *
  * Ils ne touchent pas à la caméra : chacun appelle son rappel, et `update`

@@ -283,7 +283,14 @@ export interface RoadStep extends TileCoord {
 
 export interface PlacementBlock {
   reason: PlacementRejection;
+  /** Les cases fautives pour ce motif-là. */
   tiles: TileCoord[];
+  /**
+   * Toutes les cases de l'emprise qu'un motif de case refuse — eau, bâti,
+   * route, arbre, Adam, zone mutante —, pas seulement celles du premier :
+   * le fantôme les peint en corail, les autres en menthe. Absent : `tiles`.
+   */
+  blocked?: TileCoord[];
   /** Refus `footing` : le filon que la foreuse couvre le plus, `null` sans filon. */
   ore?: ItemId | null;
 }
@@ -2440,7 +2447,7 @@ export class World {
     for (const [reason, blocks] of checks) {
       const found = tiles(blocks);
 
-      if (found.length > 0) return { reason, tiles: found };
+      if (found.length > 0) return { reason, tiles: found, blocked: tiles((x, y) => checks.some(([, any]) => any(x, y))) };
     }
 
     // L'antenne se dresse loin de la mairie : il faudra la défendre.

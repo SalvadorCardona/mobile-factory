@@ -6,7 +6,7 @@ import { COLONY } from '../data/inhabitants.ts';
 import { RECIPES } from '../data/recipes.ts';
 import { RESOURCES } from '../data/resources.ts';
 import type { PlacementRejection } from './commands.ts';
-import { BUILD_REACH_TILES, INVENTORY_CAPACITY, PLAYER_SPEED_TILES, SPARE_CARRY } from './player.ts';
+import { BUILD_REACH_TILES, INVENTORY_CAPACITY, PLAYER_SPEED_TILES, SPARE_CARRY, playerOverlaps } from './player.ts';
 import { oreAt, terrainAt } from './terrain.ts';
 import type { Entity, EntityId } from './types.ts';
 import { HARVEST_MAX_NODES, HARVEST_PASS_TICKS, TICKS_PER_SECOND, World, siteMissing } from './world.ts';
@@ -311,6 +311,28 @@ describe('World', () => {
     expect(block?.reason).toBe('resource');
     expect(block?.tiles).toEqual(solid);
     expect(block?.tiles).toContainEqual({ tx, ty });
+  });
+
+  it('peint toutes les cases fautives, quel que soit leur motif : sous Adam et sur un arbre', () => {
+    const { world, tx, ty } = worldWithHarvestable();
+
+    // Adam se poste sur la case voisine de l'arbre, dans l'emprise : deux motifs à la fois.
+    world.player.x = (tx + 1.5) * TILE_SIZE;
+    world.player.y = (ty + 0.5) * TILE_SIZE;
+
+    const block = world.placementBlock('nursery', tx, ty);
+    const wrong = (x: number, y: number): boolean =>
+      world.resources.isTaken(x, y) || !world.chunks.isFree(x, y, 1, 1) || playerOverlaps(world.player, x, y, 1, 1);
+    const expected: { tx: number; ty: number }[] = [];
+
+    for (let y = ty; y < ty + NURSERY.height; y += 1) {
+      for (let x = tx; x < tx + NURSERY.width; x += 1) if (wrong(x, y)) expected.push({ tx: x, ty: y });
+    }
+
+    expect(block?.reason).toBe('resource');
+    expect(block?.blocked).toEqual(expected);
+    expect(block?.blocked).toContainEqual({ tx: tx + 1, ty });
+    for (const tile of block!.tiles) expect(block?.blocked).toContainEqual(tile);
   });
 
   it('sous Adam : seules les cases qu’il touche', () => {

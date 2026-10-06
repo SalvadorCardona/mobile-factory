@@ -1,4 +1,4 @@
-/** Section `menu` du dictionnaire français : le tiroir « Bâtir », la carte Route, la barre de placement. */
+/** Section `menu` du dictionnaire français : le tiroir « Construire », la carte Route, la barre de placement. */
 
 /** « 1 pierre », « 3 pierres ». */
 const count = (n: number, word: string): string => `${n} ${word}${n > 1 ? 's' : ''}`;
@@ -9,7 +9,10 @@ const or = (words: readonly string[]): string =>
 
 export const menu = {
   /** Le bouton du tiroir : aucun autre bouton ne porte ce libellé. */
-  build: 'Bâtir',
+  build: 'Construire',
+  /** L'étiquette en haut de l'écran tant qu'un bâtiment ou la route est armé, et son « × » qui en sort. */
+  buildMode: 'Mode construction',
+  leaveBuildMode: 'Quitter le mode construction',
   /** Les touches, en petites capsules (masquées sans clavier). */
   keys: {
     space: 'Espace',

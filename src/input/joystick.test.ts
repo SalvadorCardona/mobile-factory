@@ -119,7 +119,7 @@ describe('doigt sur le joystick', () => {
   });
 });
 
-/** Un écran de téléphone, 390 × 844, l'anneau au repos au milieu, au-dessus du bouton « Bâtir », en (195, 684). */
+/** Un écran de téléphone, 390 × 844, l'anneau au repos au milieu, au-dessus du bouton « Construire », en (195, 684). */
 const PHONE = { width: 390, height: 844, centerX: 195, centerY: 684 };
 
 describe('pouce posé à côté de l’anneau', () => {

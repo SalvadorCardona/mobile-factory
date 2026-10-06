@@ -82,15 +82,20 @@ Valeurs relevées sur la maquette validée ; elles vivent dans `PALETTE`.
 | `cyan` | `#45d6ff` | `#2fb8ea` | `#b8f1ff` | l'eau ; les rochers de fer ; drapeaux en accent |
 | `toxic` — vert fluo | `#7df25f` | `#3fcf6a` | `#d2ffb8` | **réservé** aux mutants et à leurs flaques (et à la touffe de l'ex-mutant) |
 | `skin` — peau | `#ffc9a3` | `#f29a8c` | `#ffe2cf` | visages et mains |
-| `paper` — blanc | `#ffffff` | `#dcdcff` | `#ffffff` | HUD, yeux, os ; son ombre est lavande |
+| `paper` — blanc | `#ffffff` | `#dcdcff` | `#ffffff` | HUD, yeux, os ; son ombre est lavande ; `cream` (`#fff6e0`) : fond des cartes du HUD de jeu |
 
 Sur la maquette, l'ombre du jaune et de l'orange glisse vers l'ambre et le
 rouge plutôt que vers le bleu : c'est validé tel quel. La règle qui tient
 pour toutes les teintes : l'ombre reste **saturée**, jamais grise (un test le
 vérifie).
 
-Les sols (`GROUND`) ont leur propre jeu : `base` et `alt` pour le damier doux,
-`shade` pour les ombres portées, `light` pour le liseré côté lumière.
+Les sols (`GROUND`) ont leur propre jeu : `base`, `alt` pour la variation
+d'un sol, `shade` pour les ombres portées, `light` pour le liseré côté
+lumière. L'herbe n'a **plus de damier** : c'est une prairie continue, dont
+les grandes taches aux bords ronds sont `meadow` (`#a8eebf`, plus claire) et
+`thicket` (`#82d89c`, plus dense), et les chemins de terre battue `trail`
+(`#ebd39a`) avec leur trace claire `trailLight` (`#f6e6bf`). La grille ne se
+montre qu'en mode construction, en pointillés autour du fantôme.
 
 | Sol | `base` | `alt` | `shade` (ombre portée) | `light` |
 | --- | --- | --- | --- | --- |

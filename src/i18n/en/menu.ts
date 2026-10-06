@@ -11,6 +11,8 @@ const or = (words: readonly string[]): string =>
 
 export const menu: Messages['menu'] = {
   build: 'Build',
+  buildMode: 'Build mode',
+  leaveBuildMode: 'Leave build mode',
   keys: {
     space: 'Space',
     arrows: 'Arrows',

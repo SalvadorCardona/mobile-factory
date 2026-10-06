@@ -69,7 +69,7 @@ import { WorldMap } from './ui/worldMap.ts';
  */
 const MAX_FRAME_MS = 250;
 
-/** Hauteur du bouton « Bâtir » et de sa marge, en pixels écran : le minimum réservé en bas. */
+/** Hauteur du bouton « Construire » et de sa marge, en pixels écran : le minimum réservé en bas. */
 const HUD_BOTTOM_INSET = 84;
 
 /** Seuil sous lequel un mouvement d'axe ne vaut pas une commande. */
@@ -288,9 +288,10 @@ async function main(): Promise<void> {
 
   zoom.root.prepend(worldMap.button);
   hud.root.append(worldMap.root, zoom.root, stick.root, buildMenu.root, panel.root, inventory.root, trade.root);
-  stick.avoid([...buildMenu.root.children], hud.root);
+  stick.avoid([...buildMenu.bottomParts, hud.bag], hud.root);
   hud.bag.addEventListener('click', () => inventory.toggle());
   hud.setProjector((x, y) => renderer.worldToScreen(x, y));
+  buildMenu.setProjector((x, y) => renderer.worldToScreen(x, y));
   hud.setFocus((x, y) => renderer.peek(x, y));
 
   /*
@@ -576,14 +577,14 @@ async function main(): Promise<void> {
   });
 
   /**
-   * Ce que le bas de l'écran occupe : le bouton « Bâtir », ou plus quand
+   * Ce que le bas de l'écran occupe : le sac et le bouton « Construire », ou plus quand
    * le tiroir, la barre de placement ou la fenêtre d'un bâtiment sont ouverts.
    */
   function bottomInset(): number {
     const height = renderer.app.screen.height;
     let top = height - HUD_BOTTOM_INSET;
 
-    for (const node of [...buildMenu.root.children, panel.root, inventory.root, trade.root]) {
+    for (const node of [...buildMenu.bottomParts, hud.bag, panel.root, inventory.root, trade.root]) {
       const rect = node.getBoundingClientRect();
 
       if (rect.height > 0) top = Math.min(top, rect.top);

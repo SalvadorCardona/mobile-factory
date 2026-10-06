@@ -65,8 +65,13 @@ prend que ce qui rentre, le réservé reste au coffre, un coffre filtré grise
 le reste. Les chantiers
 puisent dans les deux, la ville seulement dans son rayon (`logisticRadius`,
 `sim/warehouse.ts`, le cercle jaune du mode construction). Le HUD
-les montre en deux cartes compactes (sur un écran large, la ville en bandeau
-d'une ligne en haut à gauche, qui défile de côté) ; le sac (tap, ou touche I) ouvre
+(piste A) a **une seule barre en haut** : le Prestige, un séparateur, puis
+la ville objet par objet, qui défile de côté ; pause et réglages ronds à
+droite. Dessous, à gauche, des puces : population (au travail, inactifs,
+enfants, logés / habitants, en corail ceux qui dorment dehors, Bonheur),
+alerte de nourriture, météo ; la quête vient sous elles. En bas, la jauge
+du sac et le gros bouton corail « Construire ». Fond crème, contour marine
+épais, ombre plate (`--cream`, `--hud-line`, `--hud-drop`) ; le sac (tap, ou touche I) ouvre
 `ui/inventoryPanel.ts`, sans pause, comme la fenêtre d'un bâtiment. Sa
 section Ville est un tableau de bord (`sim/flows.ts`, `World.flows`) : débit
 net par objet sur deux minutes (anneau d'échantillons, pas sauvegardé) et
@@ -411,7 +416,7 @@ sauvegarde : 0), ni porté ni stocké. Chaque bâtiment achevé rapporte
 `BUILD_PRESTIGE` une seule fois par emplacement (`prestigeSites` : une
 ruine rebâtie ne paie pas), chaque ennemi vaincu `KILL_PRESTIGE` ;
 événement `prestigeGained`, « +N Prestige » flottant, médaille et nombre
-en haut à gauche du HUD, le bandeau de la ville sur sa ligne (sous la quête sur un téléphone). Rien ne le dépense encore.
+au début de la barre du haut, la ville à sa suite. Rien ne le dépense encore.
 
 **Bases mutantes** (`src/data/enemyBases.ts`, `src/sim/enemyBases.ts`) —
 à la création de la partie, des anneaux de campements (`ENEMY_BASE_RINGS` :
@@ -503,14 +508,19 @@ Les règles, en résumé :
   Fredoka, embarquée via `@fontsource` (ses chiffres ne se confondent pas).
   L'interface suit les règles des sprites : cartes blanches et capsules,
   trois tons (couleur, « face avant » pleine plus sombre, reflet en capsule),
-  aucun contour ; couleurs de `PALETTE` recopiées en variables dans
+  aucun contour — sauf le HUD de jeu (barre, puces, sac, « Construire »,
+  mode construction), crème cerclé de marine sur une ombre plate, comme la
+  maquette A ; couleurs de `PALETTE` recopiées en variables dans
   `style.css` (`--accent`, `--good`, `--danger`…). Pas d'emoji : les
   pictogrammes sont des SVG de `src/art/ui.ts`. Le panneau de debug ne
   s'affiche qu'avec `?debug` en dev.
 - `src/ui/icons.ts` sert icônes d'objets, vignettes de bâtiments et
   pictogrammes (`src/art/ui.ts`) en `data:` URL SVG pour le DOM. Le menu de construction est un tiroir derrière un
-  seul bouton, « Bâtir » — aucun autre bouton ne porte ce libellé ; armer un bâtiment passe la carte en mode construction
-  (grille + emprises, `render/ghostLayer.ts`). Le bouton n'apparaît qu'une fois la mairie
+  seul bouton, « Construire » — aucun autre bouton ne porte ce libellé ; armer un bâtiment passe la carte en mode construction
+  (piste C, `render/ghostLayer.ts`) : la grille n'existe que là, en pointillés qui s'estompent en
+  cercle autour du fantôme ; son emprise se colore case par case (menthe, corail :
+  `PlacementBlock.blocked`) dans un contour pointillé ; une bulle sous lui dit le blocage en une
+  ligne ; en haut, « Mode construction » et un « × » qui en sort, le HUD du haut effacé. Le bouton n'apparaît qu'une fois la mairie
   debout, et le tiroir ne montre que ce qui se bâtit (`World.inMenu`) : ni carte grisée ni
   cadenas. Un champ de recherche (loupe) en tête du tiroir prend le focus à chaque
   ouverture, vidé, et filtre à la frappe sur le nom, le métier et ce que produit le bâtiment,
@@ -574,11 +584,17 @@ Les règles, en résumé :
   de leur tuile, Adam passe derrière. Une ressource peut avoir plusieurs
   sprites (`RESOURCES[id].sprites` : feuillu, sapin, arbre mort), tirés par
   tuile depuis la seed.
-- Le sol (`src/art/terrain.ts` : damier d'herbe, sable, eau, roche,
-  transitions, coins arrondis) et le décor (`src/data/decor.ts`, sprite
-  `decor`, tiré par `decorAt()`) sont bakés par blocs de 16 × 16 tuiles
-  (`render/chunkLayer.ts`, résolution plafonnée à 2) et jamais rebakés : ils
-  ne changent pas. Le décor ne se heurte pas et n'est jamais de l'état.
+- Le sol (`src/art/terrain.ts` : herbe, sable, eau, roche, transitions,
+  coins arrondis d'une demi-tuile — une rive en biais fait une vague, pas un
+  escalier) et le décor (`src/data/decor.ts`, sprite `decor`, tiré par
+  `decorAt()`) sont bakés par blocs de 16 × 16 tuiles (`render/chunkLayer.ts`,
+  résolution plafonnée à 2). L'herbe est une **prairie sans damier** (piste A,
+  `render/meadow.ts`) : grandes taches claires ou denses aux bords ronds
+  (jamais au contact d'un autre sol), brins et fleurettes semés hors de la
+  grille, tirés de la seed ; et des chemins de terre battue de la mairie
+  bâtie à chaque bâtiment fini, lus dans la ville — le bloc qu'un chemin
+  traverse se rebake quand il apparaît ou disparaît, comme sous une route.
+  Le décor ne se heurte pas et n'est jamais de l'état.
   L'eau a trois profondeurs bakées, sans reflet baké ; son écume en bulles
   (le ressac) et ses vaguelettes (des croissants qui naissent, dérivent et se
   résorbent, par la taille) sont des sprites par-dessus (`render/waterLayer.ts`), par blocs, cachés et

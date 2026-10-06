@@ -1,7 +1,8 @@
 /**
  * Menu de construction.
  *
- * Un seul bouton à l'écran — « Bâtir » — qui ouvre un tiroir. Le tiroir
+ * Un seul bouton à l'écran — « Construire », gros, corail, à portée de
+ * pouce en bas à droite — qui ouvre un tiroir. Le tiroir
  * liste les bâtiments débloqués en cartes : vignette, nom, ce que fait le
  * bâtiment en une ligne (`effect`), coût et ouvriers en icônes — et, pour
  * une foreuse, son assise : moitié filon, moitié herbe. Choisir une carte ferme le tiroir et arme le placement
@@ -15,8 +16,13 @@
  *
  * Les boutons de pose n'apparaissent qu'une fois le fantôme posé et reste grisé
  * tant que l'emplacement est refusé : le joueur voit pourquoi ça ne marche
- * pas avant d'appuyer, pas après. Le motif s'écrit sous le nom
- * (`placementReason.ts`), avec le remède quand Adam peut dégager la place.
+ * pas avant d'appuyer, pas après. Le motif s'écrit en une ligne dans une
+ * bulle sous le fantôme (`placementReason.ts`), qui le suit sur la carte ;
+ * la barre garde le remède quand Adam peut dégager la place.
+ *
+ * Tant qu'un bâtiment ou la route est armé, une étiquette « Mode
+ * construction » tient le haut de l'écran, avec un « × » qui en sort
+ * (`Placement.cancel`) ; le HUD du haut s'efface derrière elle (`style.css`).
  *
  * Une carte ne se grise pas quand le sac est vide : poser un chantier ne
  * coûte rien, c'est le remplir qui coûte. Le coût se colore d'après ce qui
@@ -24,7 +30,7 @@
  * déjà, orange ce qui manque.
  *
  * Le menu ne montre que ce qui se bâtit : ni carte grisée, ni cadenas
- * (`World.inMenu`). Tant que la mairie est en chantier, le bouton « Bâtir »
+ * (`World.inMenu`). Tant que la mairie est en chantier, le bouton « Construire »
  * lui-même reste caché : un débutant ne dépense pas son premier bois
  * ailleurs. Ensuite, un bâtiment n'y entre qu'une fois débloqué — sa
  * recherche finie au labo (forge, four, clinique), son plan donné par Ève,
@@ -32,7 +38,7 @@
  * Ce qui reste à découvrir se lit au labo, pas ici.
  *
  * Un bâtiment qui vient d'entrer porte « Nouveau » jusqu'à ce qu'on choisisse
- * sa carte (commande `seeBuilding`) ou qu'on le pose ; le bouton « Bâtir »
+ * sa carte (commande `seeBuilding`) ou qu'on le pose ; le bouton « Construire »
  * a une pastille tant qu'il en reste un. L'annonce, elle, est un toast du HUD
  * (`buildingsUnlocked`).
  *
@@ -78,6 +84,7 @@
  * fermé, Échap annule un placement armé au lieu de mettre en pause.
  */
 
+import { TILE_SIZE } from '../core/grid.ts';
 import { gridStep, type GridMove } from '../core/gridNav.ts';
 import { BUILDING_CATEGORIES, BUILDINGS, type BuildingId, type BuildingProto } from '../data/buildings.ts';
 import type { CategoryFilter } from '../data/categoryIcons.ts';
@@ -137,6 +144,11 @@ export class BuildMenu {
   private readonly confirmButton: HTMLButtonElement;
   private readonly repeatButton: HTMLButtonElement;
   private readonly cancelButton: HTMLButtonElement;
+  /** « Mode construction » et son « × », en haut de l'écran tant qu'un placement est armé. */
+  private readonly modeTag: HTMLElement;
+  /** Pourquoi le fantôme ne se pose pas, en une ligne, dans une bulle sous lui. */
+  private readonly ghostBubble: HTMLElement;
+  private project: (x: number, y: number) => { x: number; y: number } = (x, y) => ({ x, y });
   /** Paver ou retirer : l'outil de la route, en mode route seulement. */
   private readonly toolButton: HTMLButtonElement;
   private readonly cards = new Map<BuildingId, HTMLButtonElement>();
@@ -301,7 +313,26 @@ export class BuildMenu {
       this.confirmButton,
     );
 
-    this.root.append(this.drawer, this.armedBar, this.toggleButton);
+    this.modeTag = document.createElement('div');
+    this.modeTag.className = 'build-mode';
+    this.modeTag.hidden = true;
+
+    const modeLabel = document.createElement('span');
+
+    modeLabel.className = 'build-mode-label';
+
+    const leave = button('', () => this.placement.cancel());
+
+    leave.className = 'build-mode-close';
+    leave.append(uiIcon('close'));
+    this.modeTag.append(modeLabel, leave);
+
+    this.ghostBubble = document.createElement('div');
+    this.ghostBubble.className = 'build-ghost-bubble';
+    this.ghostBubble.setAttribute('role', 'status');
+    this.ghostBubble.hidden = true;
+
+    this.root.append(this.modeTag, this.ghostBubble, this.drawer, this.armedBar, this.toggleButton);
 
     // Le menu vit toute la partie : ses libellés fixes suivent la langue.
     // Ceux qui changent avec l'état (barre de pose, verrous) se relisent à chaque `refresh()`.
@@ -309,6 +340,9 @@ export class BuildMenu {
       const text = t();
 
       toggleLabel.data = text.menu.build;
+      modeLabel.textContent = text.menu.buildMode;
+      leave.setAttribute('aria-label', text.menu.leaveBuildMode);
+      leave.title = text.menu.leaveBuildMode;
       spaceKey.textContent = text.menu.keys.space;
       title.textContent = text.menu.drawerTitle;
       this.search.placeholder = text.menu.searchPlaceholder;
@@ -815,7 +849,7 @@ export class BuildMenu {
     let fresh = false;
 
     for (const [id, card] of this.cards) {
-      // La pastille du bouton « Bâtir » ne dépend ni de la recherche ni de la famille.
+      // La pastille du bouton « Construire » ne dépend ni de la recherche ni de la famille.
       const isNew = this.shown(id) && this.world.isNewInMenu(id);
       const badge = this.badges.get(id);
 
@@ -847,6 +881,7 @@ export class BuildMenu {
 
     this.toggleButton.hidden = !idle || this.opened || !this.unlocked();
     this.armedBar.hidden = idle;
+    if (this.modeTag.hidden !== idle) this.modeTag.hidden = idle;
     this.armedBar.dataset['placing'] = String(placing);
 
     if (armed) {
@@ -857,6 +892,7 @@ export class BuildMenu {
     }
     this.toolButton.hidden = roadTool === null;
     if (roadTool) {
+      this.ghostBubble.hidden = true;
       this.refreshRoad(roadTool, placing);
       return;
     }
@@ -869,10 +905,15 @@ export class BuildMenu {
     const output = confirmable && ghost ? placementOutput(ghost.building, ghost.tx, ghost.ty, this.world) : null;
     const reason = block ? placementReason(block, this.world) : output ? { text: output, remedy: null } : null;
 
-    this.reason.hidden = !reason;
+    // Refusé, le motif va dans la bulle sous le fantôme ; la barre ne garde que le remède.
+    const bubble = block && ghost && reason ? reason.text : null;
+
+    this.placeBubble(bubble, ghost);
+    this.reason.hidden = !reason || (bubble !== null && !reason.remedy);
     this.reason.dataset['ok'] = String(!block);
     if (reason) {
-      setText(this.reasonText, reason.text);
+      setText(this.reasonText, bubble === null ? reason.text : '');
+      this.reasonText.hidden = bubble !== null;
       setText(this.reasonRemedy, reason.remedy ?? '');
       this.reasonRemedy.hidden = !reason.remedy;
     }
@@ -881,6 +922,31 @@ export class BuildMenu {
     this.confirmButton.disabled = !confirmable;
     this.repeatButton.hidden = !placing;
     this.repeatButton.disabled = !confirmable;
+  }
+
+  /** Ce que le menu pose en bas de l'écran — tiroir, barre de pose, bouton — : le joystick et la caméra s'en écartent. */
+  public get bottomParts(): HTMLElement[] {
+    return [this.drawer, this.armedBar, this.toggleButton];
+  }
+
+  /** `main.ts` y branche le renderer : la bulle se pose sous le fantôme, à l'écran. */
+  public setProjector(project: (x: number, y: number) => { x: number; y: number }): void {
+    this.project = project;
+  }
+
+  /** La bulle du motif, centrée sous l'emprise du fantôme ; cachée sans motif. */
+  private placeBubble(text: string | null, ghost: { building: BuildingId; tx: number; ty: number } | null): void {
+    if (text === null || !ghost) {
+      if (!this.ghostBubble.hidden) this.ghostBubble.hidden = true;
+      return;
+    }
+
+    const proto = BUILDINGS[ghost.building];
+    const point = this.project((ghost.tx + proto.width / 2) * TILE_SIZE, (ghost.ty + proto.height) * TILE_SIZE);
+
+    setText(this.ghostBubble, text);
+    this.ghostBubble.hidden = false;
+    this.ghostBubble.style.transform = `translate(${Math.round(point.x)}px, ${Math.round(point.y)}px) translate(-50%, 10px)`;
   }
 
   /** La barre du tracé : combien de tuiles, combien de pierres, et ce qui ne sera pas pavé. */
@@ -911,6 +977,7 @@ export class BuildMenu {
     this.reason.hidden = !placing || !reason;
     this.reason.dataset['ok'] = 'false';
     if (reason) {
+      this.reasonText.hidden = false;
       setText(this.reasonText, reason.text);
       setText(this.reasonRemedy, reason.remedy ?? '');
       this.reasonRemedy.hidden = !reason.remedy;

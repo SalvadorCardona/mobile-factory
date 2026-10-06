@@ -23,8 +23,9 @@ jouable dans le navigateur, sur téléphone :
   (formes pures, trois tons, palette courte, aucun contour), rastérisé une
   fois à la résolution de l'écran dans un atlas, et animé par morceaux —
   cf. [`docs/art-direction.md`](docs/art-direction.md) ;
-- carte chunkée générée depuis une seed, sol baké en RenderTexture : damier
-  d'herbe, sable, étangs et plateaux de roche aux coins arrondis, décor de
+- carte chunkée générée depuis une seed, sol baké en RenderTexture : prairie
+  sans damier (taches, brins, fleurettes, chemins de terre battue), sable,
+  étangs et plateaux de roche aux coins arrondis, décor de
   ruines fleuries ; arbres et rochers triés en profondeur, ombres portées
   pleines ;
 - caméra amortie qui anticipe la marche et **tremble** aux impacts, culling

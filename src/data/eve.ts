@@ -63,7 +63,7 @@ export const EVE_LINES = {
      * `labForge` sans labo, `foundry` une fois qu'il y en a un.
      */
     labForge: 'Pour renforcer nos tours, il faudra des plaques de fer. Bâtis un labo : c’est là qu’on trouvera comment forger.',
-    foundry: 'Au labo, lance la Fonderie : la forge et le four à charbon arriveront dans « Bâtir ».',
+    foundry: 'Au labo, lance la Fonderie : la forge et le four à charbon arriveront dans « Construire ».',
     /** Une fois la forge débloquée au labo, tant qu'elle n'est pas bâtie : le charbon sert enfin. */
     forge: 'La forge est débloquée ! Fer et charbon dedans, plaques de fer dehors.',
     /** La forge bâtie, plus de charbon en ville et pas de four à charbon : le bois en trop s'y change en charbon. */
