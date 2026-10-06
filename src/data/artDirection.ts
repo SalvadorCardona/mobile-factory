@@ -48,21 +48,37 @@ export const PALETTE = {
   /** Vert fluo radioactif : **réservé** aux mutants et à leurs flaques. */
   toxic: { base: '#7df25f', shade: '#3fcf6a', light: '#d2ffb8' },
   skin: { base: '#ffc9a3', shade: '#f29a8c', light: '#ffe2cf' },
-  /** Blanc du HUD, des yeux, des os. Son ombre est lavande, pas grise. */
-  paper: { base: '#ffffff', shade: '#dcdcff', light: '#ffffff' },
+  /**
+   * Blanc du HUD, des yeux, des os. Son ombre est lavande, pas grise.
+   * `cream` est le fond des cartes du HUD de jeu (barre du haut, puces, sac).
+   */
+  paper: { base: '#ffffff', shade: '#dcdcff', light: '#ffffff', cream: '#fff6e0' },
 } as const;
 
 /**
- * Les sols. `alt` est le second ton du damier doux de l'herbe (et la
- * variation des autres sols) ; `shade` est l'ombre portée **pleine** des
- * objets posés dessus — une teinte plus foncée du sol, jamais une transparence.
- * `light` borde le sol côté lumière (le liseré du sable).
+ * Les sols. `alt` est la variation d'un sol (l'herbe du jeu n'en use plus :
+ * c'est une prairie continue, sans damier) ; `shade` est l'ombre portée
+ * **pleine** des objets posés dessus — une teinte plus foncée du sol, jamais
+ * une transparence. `light` borde le sol côté lumière (le liseré du sable).
+ *
+ * L'herbe a ses taches de prairie, aux bords ronds : `meadow`, plus claire,
+ * et `thicket`, plus dense ; et la terre battue de ses chemins, `trail`,
+ * avec la trace plus claire du milieu, `trailLight`.
  *
  * L'eau a trois profondeurs : `base` au bord, `alt` au large, `deep` au
  * milieu des grands lacs — la même teinte, qui glisse doucement vers le bleu.
  */
 export const GROUND = {
-  grass: { base: '#93e8ae', alt: '#8ae0a6', shade: '#62c894', light: '#b3f2c6' },
+  grass: {
+    base: '#93e8ae',
+    alt: '#8ae0a6',
+    shade: '#62c894',
+    light: '#b3f2c6',
+    meadow: '#a8eebf',
+    thicket: '#82d89c',
+    trail: '#ebd39a',
+    trailLight: '#f6e6bf',
+  },
   sand: { base: '#ffd98a', alt: '#ffd382', shade: '#f2b766', light: '#ffe9b8' },
   water: { base: '#45d6ff', alt: '#3ccaf8', deep: '#35bdf4', shade: '#2fb8ea', light: '#b8f1ff' },
   rock: { base: '#b8c3ff', alt: '#afbaf9', shade: '#8a97e6', light: '#d3daff' },

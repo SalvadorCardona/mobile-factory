@@ -2,10 +2,13 @@
  * Aperçu fantôme du placement, et grille du mode construction.
  *
  * Dès qu'un bâtiment est armé, la carte passe en **mode construction** : une
- * grille de tuiles se dessine autour du joueur, et l'emprise de chaque
- * bâtiment ou chantier existant est soulignée. Sans elle, un fantôme de 2×2
- * posé « à peu près là » finit une tuile trop à gauche une fois sur deux ; la
- * grille rend la case lisible, et les emprises disent où on ne pourra pas poser.
+ * grille de tuiles se dessine — et seulement là : en jeu, le sol n'a pas de
+ * cases —, et l'emprise de chaque bâtiment ou chantier existant est
+ * soulignée. Sans elle, un fantôme de 2×2 posé « à peu près là » finit une
+ * tuile trop à gauche une fois sur deux ; la grille rend la case lisible, et
+ * les emprises disent où on ne pourra pas poser. Elle est en **pointillés
+ * discrets** qui s'estompent en cercle autour du fantôme (autour d'Adam tant
+ * qu'il n'est pas posé) : la case se lit là où l'on pose, pas sur tout l'écran.
  *
  * Une foreuse armée montre les **filons** autour d'Adam : chaque case de
  * gisement teintée de la famille de son minerai, avec l'icône de ce qu'elle
@@ -23,9 +26,11 @@
  * Le fantôme dit trois choses en même temps : où le bâtiment ira, s'il est
  * posable, et jusqu'où le joueur peut construire. La couleur vient de
  * `world.placementBlock()` — le même juge que le tick, jamais une seconde
- * règle écrite en parallèle. Refusé, le fantôme ne rougit pas en entier :
- * seules les **cases fautives** de l'emprise passent au rouge, et le sprite
- * pâlit pour laisser voir l'arbre ou l'eau qu'il recouvrait.
+ * règle écrite en parallèle. L'emprise se colore **case par case** : menthe
+ * la case bonne, corail la fautive (`PlacementBlock.blocked`) — refusé, le
+ * sprite pâlit pour laisser voir l'arbre ou l'eau qu'il recouvrait —, et un
+ * contour en pointillés l'entoure. La bulle qui dit pourquoi, en une ligne
+ * sous le fantôme, est du DOM (`ui/buildMenu.ts`).
  *
  * À la souris, le fantôme suit le curseur (`GhostState.follow`) : il
  * **respire** — son opacité et son liseré battent doucement — pour qu'on ne
@@ -59,6 +64,8 @@ const VALID = hex(PALETTE.mint.base);
 const INVALID = hex(PALETTE.coral.base);
 const WHITE = hex(PALETTE.paper.base);
 const SITE = hex(PALETTE.yellow.base);
+/** Les pointillés de la grille : l'indigo, qui se lit sur l'herbe comme sur la roche claire. */
+const GRID_COLOR = hex(PALETTE.ink.base);
 
 /** Opacité du sprite fantôme : posable, il se montre ; refusé, il s'efface devant les cases rouges. */
 const PREVIEW_ALPHA = 0.7;
@@ -74,8 +81,21 @@ const REFUSE_MS = 320;
 const REFUSE_PX = 5;
 const REFUSE_SWINGS = 3;
 
-/** Rayon de la grille autour du joueur, en tuiles : un peu plus que la portée. */
+/** Rayon des emprises soulignées et des filons autour du joueur, en tuiles : un peu plus que la portée. */
 const GRID_RADIUS = BUILD_REACH_TILES + 3;
+
+/** Rayon du cercle de grille autour du fantôme, en tuiles : au-delà, elle s'est estompée. */
+const GRID_FADE_TILES = 5.5;
+/** Opacité des pointillés au cœur du cercle. */
+const GRID_ALPHA = 0.32;
+/** Crans d'opacité du fondu : un trait par cran, pas un par tiret. */
+const GRID_STEPS = 5;
+/** Un tiret de grille et son pas, en pixels monde : deux par côté de case, les croisements restent ouverts. */
+const GRID_DASH = 6;
+const GRID_PERIOD = 16;
+/** Tiret et pas du contour de l'emprise. */
+const OUTLINE_DASH = 7;
+const OUTLINE_PERIOD = 11;
 
 /** Icône d'une case de filon, en pixels monde : lisible sans cacher le rocher dessous. */
 const ORE_ICON_PX = 16;
@@ -166,7 +186,7 @@ export class GhostLayer {
     }
 
     this.container.visible = true;
-    this.updateGrid();
+    this.updateGrid(ghost ? { x: ghost.tx + BUILDINGS[ghost.building].width / 2, y: ghost.ty + BUILDINGS[ghost.building].height / 2 } : null);
     this.updateOres(BUILDINGS[armed].kind === 'drill');
     this.updateWarehouseReach();
     this.updateKeepOut(armed);
@@ -188,7 +208,7 @@ export class GhostLayer {
 
     // Adam qui marche dans l'emprise change les cases sans changer le motif : elles sont dans la clé.
     // L'assise ne dépend que de la case et de la seed : la case est déjà dans la clé.
-    const tiles = block?.tiles.map(({ tx, ty }) => `${tx},${ty}`).join(';') ?? '';
+    const tiles = (block?.blocked ?? block?.tiles)?.map(({ tx, ty }) => `${tx},${ty}`).join(';') ?? '';
     const key = `${ghost.building}:${ghost.tx}:${ghost.ty}:${block?.reason ?? 'ok'}:${tiles}`;
 
     this.animate(ghost.follow, deltaMs);
@@ -206,32 +226,49 @@ export class GhostLayer {
     this.animate(ghost.follow, 0);
 
     this.cells.clear();
-    this.drawFooting(this.world.footing(ghost.building, ghost.tx, ghost.ty));
-    for (const tile of block?.tiles ?? []) {
-      this.cells
-        .roundRect(
-          tile.tx * TILE_SIZE + CELL_INSET,
-          tile.ty * TILE_SIZE + CELL_INSET,
-          TILE_SIZE - CELL_INSET * 2,
-          TILE_SIZE - CELL_INSET * 2,
-          RADIUS.block,
-        )
-        .fill({ color: INVALID, alpha: 0.7 })
-        .stroke({ width: STROKE.width, color: INVALID, alignment: 1 });
-    }
 
-    this.outline
-      .clear()
-      .roundRect(
-        ghost.tx * TILE_SIZE,
-        ghost.ty * TILE_SIZE,
-        proto.width * TILE_SIZE,
-        proto.height * TILE_SIZE,
-        RADIUS.block,
-      )
-      .stroke({ width: STROKE.width * 1.5, color, alignment: 1 });
+    const footing = this.world.footing(ghost.building, ghost.tx, ghost.ty);
+    const wrong = block?.blocked ?? block?.tiles ?? [];
+    const isWrong = (x: number, y: number): boolean => wrong.some((tile) => tile.tx === x && tile.ty === y);
+
+    if (footing) this.drawFooting(footing);
+    else {
+      // Les cases bonnes de l'emprise, en menthe : la fautive se lit à côté d'elles.
+      for (let y = ghost.ty; y < ghost.ty + proto.height; y += 1) {
+        for (let x = ghost.tx; x < ghost.tx + proto.width; x += 1) {
+          if (!isWrong(x, y)) this.cell(x, y, VALID, 0.4);
+        }
+      }
+    }
+    for (const tile of wrong) this.cell(tile.tx, tile.ty, INVALID, 0.7);
+
+    this.outline.clear();
+    dashedRect(
+      this.outline,
+      ghost.tx * TILE_SIZE,
+      ghost.ty * TILE_SIZE,
+      proto.width * TILE_SIZE,
+      proto.height * TILE_SIZE,
+      OUTLINE_DASH,
+      OUTLINE_PERIOD,
+    );
+    this.outline.stroke({ width: STROKE.width * 1.5, color, cap: 'round' });
 
     this.drawReach();
+  }
+
+  /** Une case de l'emprise, teintée et liserée. */
+  private cell(tx: number, ty: number, color: number, alpha: number): void {
+    this.cells
+      .roundRect(
+        tx * TILE_SIZE + CELL_INSET,
+        ty * TILE_SIZE + CELL_INSET,
+        TILE_SIZE - CELL_INSET * 2,
+        TILE_SIZE - CELL_INSET * 2,
+        RADIUS.block,
+      )
+      .fill({ color, alpha })
+      .stroke({ width: STROKE.width, color, alignment: 1 });
   }
 
   /**
@@ -239,11 +276,11 @@ export class GhostLayer {
    * minerai, l'herbe en menthe. Les fautives sont celles du refus, que
    * `update` peint en corail par-dessus.
    */
-  private drawFooting(footing: Footing | null): void {
-    for (const tile of footing?.tiles ?? []) {
+  private drawFooting(footing: Footing): void {
+    for (const tile of footing.tiles) {
       if (tile.state === 'wrong') continue;
 
-      const tone = tile.state === 'ore' && footing?.ore ? PALETTE[ITEM_TONES[footing.ore]] : PALETTE.mint;
+      const tone = tile.state === 'ore' && footing.ore ? PALETTE[ITEM_TONES[footing.ore]] : PALETTE.mint;
 
       this.cells
         .roundRect(
@@ -270,7 +307,9 @@ export class GhostLayer {
     this.trail.visible = true;
     this.lastKey = '';
     this.lastOreKey = '';
-    this.updateGrid();
+    const last = trail?.tiles.at(-1);
+
+    this.updateGrid(last ? { x: last.tx + 0.5, y: last.ty + 0.5 } : null);
     this.updateOres(false);
     this.updateWarehouseReach();
     this.animate(false, deltaMs);
@@ -374,29 +413,58 @@ export class GhostLayer {
   }
 
   /**
-   * La grille et les emprises ne se redessinent que si le joueur change de
-   * tuile ou si le nombre d'entités change : un `Graphics` de quelques
+   * La grille et les emprises ne se redessinent que si leur centre change de
+   * case ou si le nombre d'entités change : un `Graphics` de quelques
    * centaines de segments retesselé à chaque frame ferait chauffer le téléphone.
+   *
+   * `centre` : le milieu du fantôme, en tuiles ; `null` sans fantôme, et la
+   * grille se centre sur Adam. Chaque côté de case est fait de deux tirets,
+   * d'autant plus pâles qu'il est loin du centre ; au-delà de
+   * `GRID_FADE_TILES`, rien. Un trait par cran d'opacité.
    */
-  private updateGrid(): void {
+  private updateGrid(centre: { x: number; y: number } | null): void {
     const { tx, ty } = worldToTile(this.world.player.x, this.world.player.y);
-    const key = `${tx}:${ty}:${this.world.entities.size}`;
+    const cx = centre?.x ?? tx + 0.5;
+    const cy = centre?.y ?? ty + 0.5;
+    const key = `${tx}:${ty}:${cx}:${cy}:${this.world.entities.size}`;
 
     if (key === this.lastGridKey) return;
     this.lastGridKey = key;
 
-    const left = (tx - GRID_RADIUS) * TILE_SIZE;
-    const top = (ty - GRID_RADIUS) * TILE_SIZE;
-    const span = (GRID_RADIUS * 2 + 1) * TILE_SIZE;
+    const steps: [number, number, number, number][][] = Array.from({ length: GRID_STEPS }, () => []);
+    const reach = Math.ceil(GRID_FADE_TILES);
+    const fade = (x: number, y: number): number => 1 - Math.hypot(x - cx, y - cy) / GRID_FADE_TILES;
+
+    for (let y = Math.floor(cy) - reach; y <= Math.floor(cy) + reach; y += 1) {
+      for (let x = Math.floor(cx) - reach; x <= Math.floor(cx) + reach; x += 1) {
+        // Le côté haut et le côté gauche de la case (x, y), chacun à l'opacité de son milieu.
+        for (const [mx, my, horizontal] of [
+          [x + 0.5, y, true],
+          [x, y + 0.5, false],
+        ] as const) {
+          const strength = fade(mx, my);
+
+          if (strength <= 0) continue;
+
+          const step = Math.min(GRID_STEPS - 1, Math.floor(strength * GRID_STEPS));
+
+          for (let offset = (GRID_PERIOD - GRID_DASH) / 2; offset < TILE_SIZE; offset += GRID_PERIOD) {
+            steps[step]!.push(
+              horizontal
+                ? [x * TILE_SIZE + offset, y * TILE_SIZE, x * TILE_SIZE + offset + GRID_DASH, y * TILE_SIZE]
+                : [x * TILE_SIZE, y * TILE_SIZE + offset, x * TILE_SIZE, y * TILE_SIZE + offset + GRID_DASH],
+            );
+          }
+        }
+      }
+    }
 
     this.grid.clear();
-    for (let i = 0; i <= GRID_RADIUS * 2 + 1; i += 1) {
-      const offset = i * TILE_SIZE;
-
-      this.grid.moveTo(left + offset, top).lineTo(left + offset, top + span);
-      this.grid.moveTo(left, top + offset).lineTo(left + span, top + offset);
+    for (const [step, dashes] of steps.entries()) {
+      if (dashes.length === 0) continue;
+      for (const [x1, y1, x2, y2] of dashes) this.grid.moveTo(x1, y1).lineTo(x2, y2);
+      this.grid.stroke({ width: STROKE.width, color: GRID_COLOR, alpha: (GRID_ALPHA * (step + 1)) / GRID_STEPS, cap: 'round' });
     }
-    this.grid.stroke({ width: 1, color: WHITE, alpha: 0.35 });
 
     this.footprints.clear();
     for (const entity of this.world.entities.values()) {
@@ -474,4 +542,27 @@ export class GhostLayer {
   public destroy(): void {
     this.container.destroy({ children: true });
   }
+}
+
+/** Le contour d'un rectangle en tirets, côté par côté, à tracer ensuite d'un seul `stroke`. */
+function dashedRect(graphics: Graphics, x: number, y: number, width: number, height: number, dash: number, period: number): void {
+  const side = (x1: number, y1: number, x2: number, y2: number): void => {
+    const length = Math.hypot(x2 - x1, y2 - y1);
+    // Autant de tirets que le côté en tient, centrés : les coins restent symétriques.
+    const count = Math.max(1, Math.floor((length + period - dash) / period));
+    const start = (length - (count - 1) * period - dash) / 2;
+    const ux = (x2 - x1) / length;
+    const uy = (y2 - y1) / length;
+
+    for (let i = 0; i < count; i += 1) {
+      const from = start + i * period;
+
+      graphics.moveTo(x1 + ux * from, y1 + uy * from).lineTo(x1 + ux * (from + dash), y1 + uy * (from + dash));
+    }
+  };
+
+  side(x, y, x + width, y);
+  side(x + width, y, x + width, y + height);
+  side(x + width, y + height, x, y + height);
+  side(x, y + height, x, y);
 }

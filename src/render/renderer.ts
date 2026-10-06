@@ -29,6 +29,7 @@ import type { Selection } from '../ui/creatureView.ts';
 import { STEP_MS, type World } from '../sim/world.ts';
 import { Camera, ZOOM, stepZoom } from './camera.ts';
 import { ChunkLayer } from './chunkLayer.ts';
+import { trailsOf } from './meadow.ts';
 import { EnemyBaseLayer } from './enemyBaseLayer.ts';
 import { EntityLayer } from './entityLayer.ts';
 import { GhostLayer } from './ghostLayer.ts';
@@ -48,12 +49,18 @@ import { WeatherLayer } from './weatherLayer.ts';
 /** Le recul de la caméra quand l'antenne s'allume : de quoi voir le pylône entier et ses premières ondes. */
 const SIGNAL_ZOOM = 0.75;
 
+/** Tous les combien de frames les chemins de terre battue se relisent dans la ville. */
+const TRAIL_CHECK_FRAMES = 30;
+
 export class GameRenderer {
   public readonly camera = new Camera();
 
   private readonly worldContainer = new Container();
   private readonly hudContainer = new Container();
   private readonly chunkLayer: ChunkLayer;
+  /** Les chemins de terre battue se relisent toutes les `TRAIL_CHECK_FRAMES` frames : la ville change rarement. */
+  private trailClock = 0;
+  private trailKey: string | null = null;
   private readonly waterLayer: WaterLayer;
   private readonly shadows = new Container();
   private readonly entityLayer: EntityLayer;
@@ -317,6 +324,7 @@ export class GameRenderer {
     );
     this.worldContainer.scale.set(this.camera.zoom);
 
+    this.updateTrails();
     this.chunkLayer.update(this.camera);
     this.waterLayer.update(this.camera, this.app.ticker.deltaMS);
     // Un seul appel au juge par frame : le fantôme colore les cases, l'arbre qui gêne clignote.
@@ -334,6 +342,26 @@ export class GameRenderer {
     this.weather.update(this.camera, this.app.ticker.deltaMS, alpha);
     this.signal.update(this.camera, this.app.ticker.deltaMS);
     this.indicators.update(this.camera, this.app.ticker.deltaMS, alpha);
+  }
+
+  /**
+   * Les chemins entre la mairie et ses bâtiments : relus de temps en temps,
+   * passés au sol seulement s'ils ont changé — un bâtiment achevé, tombé ou
+   * annulé. Le sol rebake alors les blocs qu'ils traversent.
+   */
+  private updateTrails(): void {
+    if (this.trailClock > 0) {
+      this.trailClock -= 1;
+      return;
+    }
+    this.trailClock = TRAIL_CHECK_FRAMES;
+
+    const trails = trailsOf(this.world.seed, this.world.entities.get(this.world.townHallId), this.world.entities.values());
+    const key = trails.map((trail) => trail.key).join(';');
+
+    if (key === this.trailKey) return;
+    this.trailKey = key;
+    this.chunkLayer.setTrails(trails);
   }
 
   /** Nombre de blocs de sol bakés — le HUD de debug l'affiche. */

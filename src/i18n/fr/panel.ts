@@ -349,7 +349,7 @@ export const panel = {
     },
     /** Le nom court d'un filon, au milieu d'une phrase : « 2 cases de fer ». */
     veins: { ironOre: 'fer', coal: 'charbon', stone: 'pierre' } satisfies Record<DrillDeposit, string>,
-    road: { text: 'Une route passe ici', remedy: 'Retirez-la d’abord : Bâtir › Route › Retirer' },
+    road: { text: 'Une route passe ici', remedy: 'Retirez-la d’abord : Construire › Route › Retirer' },
     nearHall: { text: 'Trop près de la mairie', remedy: 'Éloignez-vous, hors du cercle autour d’elle' },
     treesAndRocks: { text: 'Des arbres et des rochers gênent', remedy: 'Adam peut les récolter' },
     rocks: { text: 'Des rochers gênent', remedy: 'Adam peut les casser' },

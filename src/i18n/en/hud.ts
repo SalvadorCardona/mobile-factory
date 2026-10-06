@@ -190,6 +190,8 @@ export const hud: Messages['hud'] = {
     housing: (housed: number, population: number): string =>
       `Housing — ${housed} housed out of ${population} inhabitant${population === 1 ? '' : 's'}` +
       (population > housed ? `: ${population - housed} sleep${population - housed === 1 ? 's' : ''} outside, build a House` : ''),
+    outside: (n: number): string => `${n} outside`,
+    outsideTip: (n: number): string => `${n} inhabitant${n === 1 ? '' : 's'} sleep${n === 1 ? 's' : ''} outside — build a House`,
     happinessName: 'Town happiness',
     happiness: (total: number, average: number, unhappy: number): string =>
       `Town happiness: ${total} (average ${average} per inhabitant, ${unhappy} unhappy)`,
@@ -203,7 +205,6 @@ export const hud: Messages['hud'] = {
     toBuild: 'to build',
     townTitle: 'Town — the town hall stock, which pays for construction',
     bagTip: (total: number, capacity: number): string => `Bag — ${total} item${total === 1 ? '' : 's'} out of ${capacity}`,
-    townTotal: (total: number): string => `Town — ${total} item${total === 1 ? '' : 's'} in stock`,
     inBag: (item: string, amount: number): string => `${item} — ${amount} in the bag`,
     inTown: (item: string, amount: number): string => `${item} — ${amount} in town`,
     wanted: (item: string, amount: number): string => `${item} — Eve needs it, ${amount} in the bag`,

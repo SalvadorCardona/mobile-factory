@@ -241,6 +241,9 @@ export const hud = {
     housing: (housed: number, population: number): string =>
       `Habitation — ${housed} logé${s(housed)} sur ${population} habitant${s(population)}` +
       (population > housed ? ` : ${population - housed} dor${population - housed > 1 ? 'ment' : 't'} dehors, bâtissez une Maison` : ''),
+    /** La puce corail de ceux qui dorment dehors, et son libellé. */
+    outside: (n: number): string => `${n} dehors`,
+    outsideTip: (n: number): string => `${n} habitant${s(n)} dor${n > 1 ? 'ment' : 't'} dehors — bâtissez une Maison`,
     /** Le Bonheur de la ville : la somme des bonheurs de ses habitants. */
     happinessName: 'Bonheur de la ville',
     happiness: (total: number, average: number, unhappy: number): string =>
@@ -257,7 +260,6 @@ export const hud = {
     townTitle: 'Ville — le stock de la mairie, qui paie les constructions',
     /** Les libellés des icônes, au survol ou à l'appui long ; `item` : le nom de l'objet, avec sa majuscule. */
     bagTip: (total: number, capacity: number): string => `Sac — ${total} objet${s(total)} sur ${capacity}`,
-    townTotal: (total: number): string => `Ville — ${total} objet${s(total)} en stock`,
     inBag: (item: string, amount: number): string => `${item} — ${amount} dans le sac`,
     inTown: (item: string, amount: number): string => `${item} — ${amount} en ville`,
     wanted: (item: string, amount: number): string => `${item} — Ève en demande, ${amount} dans le sac`,
