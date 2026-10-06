@@ -18,6 +18,11 @@ export const menu = {
     escape: 'Échap',
   },
   drawerTitle: 'Bâtiments',
+  /** Le champ de recherche en haut du tiroir, et son bouton qui le vide. */
+  searchPlaceholder: 'Rechercher un bâtiment…',
+  searchClear: 'Effacer la recherche',
+  /** La recherche n'a rien trouvé parmi les cartes du menu. */
+  searchEmpty: 'Aucun bâtiment ne correspond',
   /** La ligne d'effet au pied du tiroir, tant qu'aucune carte n'a été lue. */
   effectPrompt: 'Appui long sur une carte : à quoi sert le bâtiment',
   /** La ligne d'effet d'une carte lue : « Forge : … ». */

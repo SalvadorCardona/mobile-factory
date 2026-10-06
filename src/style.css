@@ -1628,7 +1628,6 @@ button.hud-stock:active {
   border-radius: 50%;
   pointer-events: auto;
   touch-action: none;
-  opacity: 0.8;
   transition: opacity 160ms ease-out;
 }
 
@@ -2164,7 +2163,8 @@ button.hud-stock:active {
 .build-menu {
   position: absolute;
   right: calc(var(--safe-right) + 10px);
-  bottom: calc(var(--safe-bottom) + 14px);
+  /* `--keyboard-inset` : le clavier du téléphone, levé par le champ de recherche (`buildMenu.ts`). */
+  bottom: calc(var(--safe-bottom) + 14px + var(--keyboard-inset, 0px));
   left: calc(var(--safe-left) + 10px);
   display: flex;
   flex-direction: column;
@@ -2192,7 +2192,8 @@ button.hud-stock:active {
 .build-drawer {
   pointer-events: auto;
   width: 100%;
-  max-height: 60dvh;
+  /* Clavier levé, le tiroir tient dans ce qui reste au-dessus de lui ; la liste défile. */
+  max-height: min(60dvh, calc(100dvh - var(--keyboard-inset, 0px) - var(--safe-top) - 72px));
   padding: 12px 14px 14px;
   display: flex;
   flex-direction: column;
@@ -2229,6 +2230,79 @@ button.hud-stock:active {
   border: none;
   border-radius: 50%;
   background: var(--paper-shade);
+}
+
+/*
+ * La recherche : une capsule papier ombrée, la loupe à gauche, « × » à
+ * droite quand il y a du texte. Aucun contour ; sous le focus, la capsule
+ * passe en cyan clair comme une carte. 16 px au moins : en dessous, iOS
+ * zoome sur le champ qui prend le focus.
+ */
+.build-search {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 0 6px 0 12px;
+  border-radius: 999px;
+  background: var(--paper-shade);
+  box-shadow: 0 3px 0 var(--violet-light) inset;
+  cursor: text;
+}
+
+.build-search:focus-within {
+  background: var(--cyan-light);
+  box-shadow: 0 3px 0 var(--cyan-shade) inset;
+}
+
+.build-search .icon {
+  flex: none;
+}
+
+.build-search-input {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  padding: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 17px;
+  font-weight: 600;
+  appearance: none;
+}
+
+.build-search-input::placeholder {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+/* Le « × » natif d'un champ `search` ferait doublon avec le nôtre. */
+.build-search-input::-webkit-search-cancel-button {
+  appearance: none;
+}
+
+.build-search-clear {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 50%;
+  background: var(--paper);
+  box-shadow: 0 2px 0 var(--paper-shade);
+}
+
+.build-search-empty {
+  padding: 18px 8px;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--muted);
 }
 
 .build-drawer-list {

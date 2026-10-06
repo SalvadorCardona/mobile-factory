@@ -481,7 +481,10 @@ Les règles, en résumé :
   seul bouton, « Bâtir » — aucun autre bouton ne porte ce libellé ; armer un bâtiment passe la carte en mode construction
   (grille + emprises, `render/ghostLayer.ts`). Le bouton n'apparaît qu'une fois la mairie
   debout, et le tiroir ne montre que ce qui se bâtit (`World.inMenu`) : ni carte grisée ni
-  cadenas. Ce qui vient d'y entrer (labo, plan, objectif) porte « Nouveau » jusqu'à ce qu'on
+  cadenas. Un champ de recherche (loupe) en tête du tiroir prend le focus à chaque
+  ouverture, vidé, et filtre à la frappe sur le nom, le métier et ce que produit le bâtiment,
+  sans casse ni accents (`ui/buildSearch.ts`) ; il ne révèle rien de verrouillé. Entrée choisit
+  la première carte, Échap vide puis ferme ; ses touches n'atteignent pas le jeu. Ce qui vient d'y entrer (labo, plan, objectif) porte « Nouveau » jusqu'à ce qu'on
   le choisisse ou le pose (`seeBuilding`, `World.seenBuildings`, sauvegardé) et s'annonce en
   toast (`buildingsUnlocked`).
 - La fenêtre d'un bâtiment (`ui/buildingPanel.ts`) laisse voir le jeu : vignette
