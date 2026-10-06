@@ -225,6 +225,12 @@ export const panel: Messages['panel'] = {
     none: 'No workers: the building is stopped.',
     assigned: (filled: number, returned: number): string =>
       `${filled} worker${s(filled)} assigned` + (returned > 0 ? `, ${returned} sent back to town.` : '.'),
+    priority: {
+      label: 'Priority',
+      low: 'Low',
+      normal: 'Medium',
+      high: 'High',
+    },
   },
 
   upgrade: {

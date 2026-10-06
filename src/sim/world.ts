@@ -91,7 +91,7 @@ import { RESEARCH, type ResearchId, type ResearchStat } from '../data/research.t
 import { RESOURCES, SAPLING, type ResourceId } from '../data/resources.ts';
 import { ROADS } from '../data/roads.ts';
 import { WEAPONS } from '../data/weapons.ts';
-import { BUILDERS, FORESTERS, IDLE, JOB_PRIORITY, LUMBERJACKS, PORTERS } from '../data/workers.ts';
+import { BUILDERS, FORESTERS, IDLE, JOB_PRIORITY, LUMBERJACKS, PORTERS, WORK_PRIORITY, type WorkPriority } from '../data/workers.ts';
 import { WEATHER, WEATHER_CALENDAR, type WeatherId } from '../data/weather.ts';
 import { ChunkIndex } from './chunk.ts';
 import { floorCost, floorMissing, floorNeeds, floorWants } from './antenna.ts';
@@ -177,7 +177,7 @@ import { inLogisticRange, pointInLogisticRange } from './warehouse.ts';
 import { chopSpot, isTree, pickTree, treesInRange } from './lumberjacks.ts';
 import { plantSpot, plotTiles, type PlotTile } from './forester.ts';
 import { labLedger, siteLedger, type SiteLine } from './siteLedger.ts';
-import { allocateStaff, canPause, clampStaff, employs, type Staffing } from './staffing.ts';
+import { allocateStaff, canPause, clampStaff, employs, isWorkPriority, type StaffDemand, type StaffPost, type Staffing } from './staffing.ts';
 import { carryOf, clearLine, standStill, walkToward, wander, wanderFrom } from './workers.ts';
 import { nextWeather, spoilsNight, weatherAt, type WeatherSpell } from './weather.ts';
 import type {
@@ -544,6 +544,8 @@ export type WorldEvents = {
   buildingPaused: { id: EntityId; paused: boolean };
   /** L'effectif voulu d'un bâtiment a changé. */
   workersChanged: { id: EntityId; staff: number };
+  /** La priorité de travail d'un bâtiment a changé. */
+  priorityChanged: { id: EntityId; priority: WorkPriority };
   /** Un forestier a planté une pousse en (tx, ty). */
   treePlanted: { foresterId: MobileId; tx: number; ty: number };
   /** Un bûcheron a rangé `amount` bois dans le coffre de sa cabane. */
@@ -787,6 +789,12 @@ export class World {
    */
   private duty: { tick: number; filled: Map<EntityId, number>; onDuty: Set<MobileId> } | null = null;
 
+  /**
+   * La dernière répartition, d'où part la suivante (`allocateStaff`) : qui
+   * garde ses ouvriers, qui vient d'en gagner. Sauvegardée sous `staffPosts`.
+   */
+  private posts: Map<EntityId, StaffPost> | null = null;
+
   /** La répartition a changé : maisons, postes et cabanes logent leurs nouveaux ouvriers au prochain tick (`lodgeCrews`). */
   private lodging = false;
 
@@ -897,6 +905,7 @@ export class World {
       signalNights: this.signalNights,
       lureNight: this.lureNight,
       colonists: this.colonists,
+      staffPosts: [...(this.posts ?? [])].map(([id, { filled, since }]) => ({ id, filled, since })),
       enemyBases: this.enemyBases.map((base) => ({ ...base })),
       stats: copyStats(this.stats),
       objectiveBase: copyStats(this.objectiveBase),
@@ -978,7 +987,7 @@ export class World {
       const entity: Entity =
         saved.kind === 'site'
           ? { ...saved, delivered: { ...saved.delivered }, work: saved.work }
-          : { ...saved, store: Store.fromJSON(BUILDINGS[saved.proto].storage, saved.store) };
+          : { ...saved, priority: saved.priority ?? WORK_PRIORITY.initial, store: Store.fromJSON(BUILDINGS[saved.proto].storage, saved.store) };
 
       this.entities.set(entity.id, entity);
       this.chunks.occupy(entity.id, entity.tx, entity.ty, entity.width, entity.height);
@@ -1030,6 +1039,7 @@ export class World {
     // Une maison d'une sauvegarde d'avant les porteurs : ses ouvriers s'y installent. Les lits se
     // revoient avec : une sauvegarde d'avant eux attribue les siens.
     this.duty = null;
+    this.posts = state.staffPosts ? new Map(state.staffPosts.map(({ id, filled, since }) => [id, { filled, since }])) : null;
     this.hostStaff(true);
     this.lodgeCrews();
   }
@@ -1177,6 +1187,10 @@ export class World {
 
       case 'setWorkers':
         this.setStaff(command.id, command.count);
+        break;
+
+      case 'setPriority':
+        this.setPriority(command.id, command.priority);
         break;
 
       case 'cancelSite':
@@ -2673,6 +2687,7 @@ export class World {
       level: 1,
       paused: false,
       staff: proto.workers,
+      priority: WORK_PRIORITY.initial,
     };
     let building: Building;
 
@@ -6393,6 +6408,21 @@ export class World {
   }
 
   /**
+   * La commande `setPriority` : la priorité de travail d'un bâtiment qui
+   * emploie. La répartition la lit au prochain coup d'œil ; un ouvrier repris
+   * à un bâtiment plus bas finit son geste avant de partir.
+   */
+  private setPriority(id: EntityId, priority: WorkPriority): void {
+    const entity = this.entities.get(id);
+
+    if (!entity || entity.kind === 'site' || !employs(entity.proto) || !isWorkPriority(priority) || entity.priority === priority) return;
+
+    entity.priority = priority;
+    this.rosterChanged();
+    this.events.emit('priorityChanged', { id, priority });
+  }
+
+  /**
    * Les postes d'un bâtiment qui emploie : bornes, effectif voulu, postes
    * occupés. `null` pour un bâtiment sans ouvriers.
    */
@@ -6466,21 +6496,30 @@ export class World {
 
   /**
    * Qui travaille : les ouvriers de la colonie (`colonists`) répartis entre les bâtiments qui emploient
-   * (`allocateStaff`, par id). Dans chaque bâtiment, ce sont ses premiers
+   * (`allocateStaff` : priorité, ancienneté, et la répartition d'avant). Dans chaque bâtiment, ce sont ses premiers
    * logés, par id, qui prennent les postes ; les autres finissent leur geste
    * et sont libres. Un ex-mutant n'occupe pas de poste : il porte toujours.
    */
   private roster(): { filled: Map<EntityId, number>; onDuty: Set<MobileId> } {
     if (this.duty?.tick === this.tickCount) return this.duty;
 
-    const demands: { id: EntityId; wanted: number }[] = [];
+    const demands: StaffDemand[] = [];
 
     for (const entity of this.entities.values()) {
       if (entity.kind === 'site' || !employs(entity.proto)) continue;
-      demands.push({ id: entity.id, wanted: entity.staff });
+      demands.push({ id: entity.id, wanted: entity.staff, priority: entity.priority, paused: entity.paused });
     }
 
-    const filled = allocateStaff(demands, this.colonists);
+    const before = this.posts;
+    const posts = allocateStaff(demands, this.colonists, before, this.tickCount);
+    const filled = new Map<EntityId, number>();
+
+    for (const [id, post] of posts) {
+      filled.set(id, post.filled);
+      // Un poste gagné ou repris : maisons, cabanes et bâtiments logent leurs nouveaux ouvriers au prochain tick.
+      if (before && post.filled !== (before.get(id)?.filled ?? 0)) this.lodging = true;
+    }
+    this.posts = posts;
     const crews = new Map<EntityId, MobileId[]>();
 
     for (const mobile of this.mobiles.values()) {

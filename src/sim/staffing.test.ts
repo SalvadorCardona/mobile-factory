@@ -72,8 +72,8 @@ describe('répartition des ouvriers', () => {
       5,
     );
 
-    expect(filled.get(3)).toBe(4);
-    expect(filled.get(7)).toBe(1);
+    expect(filled.get(3)?.filled).toBe(4);
+    expect(filled.get(7)?.filled).toBe(1);
   });
 
   it('un poste vide se remplit dès qu’un ouvrier est rendu ailleurs', () => {
@@ -81,10 +81,11 @@ describe('répartition des ouvriers', () => {
       { id: 3, wanted: 4 },
       { id: 7, wanted: 2 },
     ];
+    const before = allocateStaff(demands, 4);
 
-    expect(allocateStaff(demands, 4).get(7)).toBe(0);
+    expect(before.get(7)?.filled).toBe(0);
     demands[0]!.wanted = 2;
-    expect(allocateStaff(demands, 4).get(7)).toBe(2);
+    expect(allocateStaff(demands, 4, before, 1).get(7)?.filled).toBe(2);
   });
 
   it('l’effectif reste dans les bornes du bâtiment', () => {

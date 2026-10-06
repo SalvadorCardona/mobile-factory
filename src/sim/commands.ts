@@ -13,6 +13,7 @@ import type { BuildingId } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
 import type { PerkId } from '../data/perks.ts';
 import type { ResearchId } from '../data/research.ts';
+import type { WorkPriority } from '../data/workers.ts';
 import type { TransferDirection, TransferQuantity } from './transfer.ts';
 import type { EntityId, MobileId } from './types.ts';
 
@@ -119,6 +120,13 @@ export type Command =
    * sélecteur − / + de sa fenêtre.
    */
   | { type: 'setWorkers'; id: EntityId; count: number }
+  /**
+   * La priorité de travail d'un bâtiment qui emploie : Basse, Moyenne ou
+   * Haute. Quand les ouvriers manquent, Haute se pourvoit d'abord et reprend
+   * ceux de Basse, qui finissent leur geste avant de partir. Le sélecteur à
+   * trois positions de sa fenêtre.
+   */
+  | { type: 'setPriority'; id: EntityId; priority: WorkPriority }
   /**
    * Annule un chantier : l'emprise se libère, et ce qui y avait été livré
    * retourne au stock de la ville — en tas au sol s'il n'y a plus de mairie.

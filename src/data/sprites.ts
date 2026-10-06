@@ -56,6 +56,7 @@ import { NURSERY } from '../art/nursery.ts';
 import { PATIENT } from '../art/patient.ts';
 import { DUST_RING, PARTICLE_FX } from '../art/particles.ts';
 import { PAUSED } from '../art/paused.ts';
+import { PRIORITY } from '../art/priority.ts';
 import { QUARRY } from '../art/quarry.ts';
 import { WELL } from '../art/well.ts';
 import { QUEEN_SPRITE } from '../art/queen.ts';
@@ -120,6 +121,8 @@ export const SPRITES = {
   alert: ALERT,
   /** Bulle « en pause » au-dessus d'un producteur que le joueur a arrêté. */
   paused: PAUSED,
+  /** Pastille de priorité de travail au coin d'un bâtiment sorti de Moyenne : flèche haute ou basse. */
+  priority: PRIORITY,
   /** Bulle « affamé » au-dessus d'un habitant à court de nourriture. */
   hungry: HUNGRY,
   /** Bulle « assoiffé » au-dessus d'un habitant à court d'eau. */

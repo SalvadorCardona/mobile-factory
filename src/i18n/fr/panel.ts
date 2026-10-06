@@ -260,6 +260,13 @@ export const panel = {
     /** `returned` : les postes fermés, rendus à la ville (0 : on n'en parle pas). */
     assigned: (filled: number, returned: number): string =>
       `${filled} ouvrier${s(filled)} affecté${s(filled)}` + (returned > 0 ? `, ${returned} rendu${s(returned)} à la ville.` : '.'),
+    /** Le sélecteur de priorité de travail : qui se pourvoit d'abord quand les ouvriers manquent. */
+    priority: {
+      label: 'Priorité',
+      low: 'Basse',
+      normal: 'Moyenne',
+      high: 'Haute',
+    },
   },
 
   upgrade: {
