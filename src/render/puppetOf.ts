@@ -10,7 +10,7 @@ import type { PuppetId } from './puppet.ts';
 
 /** Le pantin de chaque marcheur : sprite, ombre, écart des pieds, allure. */
 export function puppetOf(
-  mobile: Exclude<Mobile, { kind: 'arrow' | 'pickup' | 'caravan' }>,
+  mobile: Exclude<Mobile, { kind: 'arrow' | 'spit' | 'pickup' | 'caravan' }>,
 ): { id: PuppetId; shadowWidth: number; stride: number; gait?: 'scuttle' | 'limp' | 'hop' } {
   switch (mobile.kind) {
     case 'mutant':
@@ -37,6 +37,8 @@ export function puppetOf(
       return { id: 'farmer', shadowWidth: 16, stride: 3 };
     case 'beast':
       if (mobile.proto === 'guardian') return { id: WILDLIFE.guardian.sprite, shadowWidth: 24, stride: 4 };
+      if (mobile.proto === 'spitter') return { id: WILDLIFE.spitter.sprite, shadowWidth: 18, stride: 3 };
+      if (mobile.proto === 'chief') return { id: WILDLIFE.chief.sprite, shadowWidth: 38, stride: 7 };
       return mobile.proto === 'crab'
         ? { id: WILDLIFE.crab.sprite, shadowWidth: 22, stride: 8, gait: 'scuttle' }
         : { id: WILDLIFE.wolf.sprite, shadowWidth: 26, stride: 3 };

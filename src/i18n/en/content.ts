@@ -242,6 +242,8 @@ export const content: Content = {
     crab: 'Ruin crab',
     wolf: 'Indigo wolf',
     guardian: 'Base guardian',
+    spitter: 'Base spitter',
+    chief: 'Base chief',
   },
   enemyBase: {
     label: 'Mutant base',
@@ -478,5 +480,6 @@ export const content: Content = {
     farm: 'Farm',
     housing: 'Houses',
     nursery: 'Nursery',
+    raid: 'Mutant base',
   },
 };

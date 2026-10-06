@@ -124,12 +124,16 @@ function mutants(world: World): Mutant[] {
 }
 
 /**
- * Retire les gardiens des bases, sortis ou non : Adam qui va au-devant d'un
- * mutant à la porte de sa base se ferait charger, et son arc les viserait.
- * La nuit, les bases ne les refont pas.
+ * Retire les gardiens des bases — cracheurs et chefs compris —, sortis ou
+ * non : Adam qui va au-devant d'un mutant à la porte de sa base se ferait
+ * charger, et son arc les viserait. La nuit, les bases ne les refont pas.
  */
 function withoutGuards(world: World): void {
-  for (const base of world.enemyBases) base.guards = 0;
+  for (const base of world.enemyBases) {
+    base.guards = 0;
+    base.spitters = 0;
+    base.chief = 0;
+  }
   for (const mobile of [...world.mobiles.values()]) if (mobile.kind === 'beast' && mobile.guardOf !== undefined) world.mobiles.delete(mobile.id);
 }
 

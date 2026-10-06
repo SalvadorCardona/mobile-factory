@@ -211,6 +211,10 @@ export const panel = {
     prestige: (amount: number): string => `Abattue, elle rapporte ${amount} Prestige et libère sa zone.`,
     raiders: (count: number, capacity: number): string => `Assaillants en réserve : ${count} sur ${capacity}`,
     guards: (count: number, max: number): string => `Gardiens : ${count} sur ${max}`,
+    spitters: (count: number, max: number): string => `Cracheurs : ${count} sur ${max}`,
+    chief: (hp: number, max: number): string => `Chef : ${hp} sur ${max} points de vie`,
+    shielded: 'Sous le bouclier de son chef : aucune flèche ne l’entame tant qu’il vit. Abattez-le d’abord — il ne revient pas.',
+    chiefReward: (prestige: number): string => `Son chef abattu rapporte ${prestige} Prestige et un butin rare.`,
     raid: 'Le jour, elle produit des assaillants ; à la nuit tombée, ils sortent tous attaquer la ville.',
     asleep: (night: number): string => `Elle n’enverra ses premiers assaillants qu’à la nuit ${night}.`,
   },
@@ -262,6 +266,10 @@ export const panel = {
       chase: 'Charge Adam !',
       return: 'Rentre à sa tanière',
     },
+    /** Ce que fait un gardien de base à part. */
+    spitter: 'Crache de loin, et recule si on l’approche',
+    chief: 'Chef de sa base : tant qu’il vit, elle est sous bouclier',
+    slamming: 'Lève sa massue — sortez du cercle !',
   },
 
   crew: {

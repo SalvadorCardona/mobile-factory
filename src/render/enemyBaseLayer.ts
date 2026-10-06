@@ -4,7 +4,8 @@
  * Le campement est un sprite trié en profondeur avec les bâtiments, les
  * arbres et les personnages (`EntityLayer.container`) : Adam passe derrière
  * le drapeau. Le badge de ses assaillants en réserve (`sign0` à `sign9`) se
- * pose dessus dans le même cadre : il monte le jour et retombe la nuit. Entamée, la base montre sa barre de vie au-dessus du
+ * pose dessus dans le même cadre : il monte le jour et retombe la nuit. Le
+ * bouclier de son chef (`shield`) aussi, tant que le chef vit. Entamée, la base montre sa barre de vie au-dessus du
  * drapeau ; sous la moitié, sa version `damaged`. Frappée, elle tremble — un
  * minuteur de vue, la simulation n'en sait rien. Abattue, elle disparaît.
  *
@@ -18,7 +19,7 @@ import { TILE_SIZE, floorDiv } from '../core/grid.ts';
 import { LIGHT, PALETTE, STROKE, hex } from '../data/artDirection.ts';
 import { ENEMY_BASE, enemyBaseLevel } from '../data/enemyBases.ts';
 import { SPRITES } from '../data/sprites.ts';
-import { baseCenter, isStanding } from '../sim/enemyBases.ts';
+import { baseCenter, isShielded, isStanding } from '../sim/enemyBases.ts';
 import { terrainAt } from '../sim/terrain.ts';
 import type { EnemyBase } from '../sim/types.ts';
 import type { World } from '../sim/world.ts';
@@ -38,6 +39,8 @@ interface BaseView {
   root: Container;
   main: Sprite;
   sign: Sprite;
+  /** Le bouclier de son chef, planté tant qu'il vit. */
+  shield: Sprite;
   /** Le nombre que montre le badge : sa texture n'est changée que s'il change. */
   raiders: number;
   shadow: Sprite;
@@ -118,8 +121,9 @@ export class EnemyBaseLayer {
     const height = ENEMY_BASE.height * TILE_SIZE;
     const main = new Sprite(this.library.texture('enemyBase.built'));
     const sign = new Sprite(this.library.texture(signPart(base.raiders)));
+    const shield = new Sprite(this.library.texture('enemyBase.shield'));
 
-    for (const sprite of [main, sign]) {
+    for (const sprite of [main, sign, shield]) {
       sprite.anchor.set(0, 1);
       sprite.y = height;
     }
@@ -127,7 +131,7 @@ export class EnemyBaseLayer {
     const bar = new Graphics();
 
     bar.visible = false;
-    root.addChild(main, sign, bar);
+    root.addChild(main, sign, shield, bar);
     root.position.set(base.tx * TILE_SIZE, base.ty * TILE_SIZE);
     root.zIndex = (base.ty + ENEMY_BASE.height) * TILE_SIZE;
 
@@ -146,7 +150,7 @@ export class EnemyBaseLayer {
     this.sorted.addChild(root);
     this.shadows.addChild(shadow);
 
-    const view: BaseView = { root, main, sign, raiders: base.raiders, shadow, bar, part: 'built', barKey: '', wobble: 0 };
+    const view: BaseView = { root, main, sign, shield, raiders: base.raiders, shadow, bar, part: 'built', barKey: '', wobble: 0 };
 
     this.views.set(base.id, view);
     return view;
@@ -161,6 +165,8 @@ export class EnemyBaseLayer {
       view.part = part;
       view.main.texture = this.library.texture(`enemyBase.${part}`);
     }
+    // Le bouclier tombe avec le chef.
+    view.shield.visible = isShielded(base);
     if (base.raiders !== view.raiders) {
       view.raiders = base.raiders;
       view.sign.texture = this.library.texture(signPart(base.raiders));

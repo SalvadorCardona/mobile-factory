@@ -10,6 +10,9 @@
  * Pas de ligne de vue : la simulation n'en a pas, une flèche passe
  * au-dessus des arbres, des rochers et des murs.
  *
+ * Les cracheurs des bases tirent dans l'autre sens : un crachat (`spit`)
+ * vise Adam, lentement, et s'écrase sur les bâtiments — pas sur les arbres.
+ *
  * Une flèche est une ligne droite tirée vers la position du mutant au
  * moment du tir : pas d'anticipation. Par coup de vent, elle part en arc —
  * le vent la pousse à chaque tick — et le tireur vise d'autant contre le
@@ -20,9 +23,10 @@
  */
 
 import { TILE_SIZE, distanceSq } from '../core/grid.ts';
-import { ENEMIES, WILDLIFE } from '../data/enemies.ts';
+import { ENEMIES, SPITTER, WILDLIFE } from '../data/enemies.ts';
 import { WEAPONS, type WeaponId } from '../data/weapons.ts';
-import type { Arrow, Foe } from './types.ts';
+import { PLAYER_HALF_H, PLAYER_HALF_W } from './player.ts';
+import type { Arrow, Foe, MobileId, Spit } from './types.ts';
 
 /**
  * L'ennemi le plus proche de (x, y) à moins de `range` tuiles, ou `null`.
@@ -163,4 +167,60 @@ function touches(foe: Foe, x: number, y: number): boolean {
   const box = foeBox(foe);
 
   return Math.abs(x - foe.x) <= box.halfW + 2 && y >= foe.y - box.halfH * 3 && y <= foe.y + box.halfH;
+}
+
+/**
+ * Un crachat de cracheur partant de (x, y) vers la cible, à `SPITTER.speed`
+ * : il vole un peu plus loin que sa portée, puis tombe. L'id est donné par
+ * le monde. Pas de vent : une boule de bave est lourde.
+ */
+export function spit(id: number, from: MobileId, x: number, y: number, target: { x: number; y: number }, damage: number): Spit {
+  const pixelsPerTick = (SPITTER.speed * TILE_SIZE) / 20;
+  const dx = target.x - x;
+  const dy = target.y - y;
+  const distance = Math.hypot(dx, dy) || 1;
+
+  return {
+    kind: 'spit',
+    id,
+    x,
+    y,
+    prevX: x,
+    prevY: y,
+    facing: 'down',
+    moving: true,
+    vx: (dx / distance) * pixelsPerTick,
+    vy: (dy / distance) * pixelsPerTick,
+    ttl: Math.ceil(((SPITTER.range + 1) * TILE_SIZE) / pixelsPerTick),
+    damage,
+    from,
+  };
+}
+
+/** Ce qu'un crachat a rencontré ce tick : Adam, un mur, ou rien (`null`) ; `ttl` à zéro, il est tombé. */
+export type SpitHit = 'player' | 'wall' | null;
+
+/**
+ * Un tick de crachat : il avance et touche Adam s'il traverse son corps —
+ * balayé, comme une flèche —, ou s'écrase sur ce que `wall(x, y)` déclare
+ * plein (un bâtiment, une base). Arbres et rochers, il passe par-dessus.
+ */
+export function stepSpit(spit: Spit, player: { x: number; y: number }, wall: (x: number, y: number) => boolean): SpitHit {
+  spit.prevX = spit.x;
+  spit.prevY = spit.y;
+  spit.ttl -= 1;
+
+  const samples = Math.max(1, Math.ceil(Math.hypot(spit.vx, spit.vy) / SWEEP_STEP));
+
+  for (let i = 1; i <= samples; i += 1) {
+    const x = spit.prevX + (spit.vx * i) / samples;
+    const y = spit.prevY + (spit.vy * i) / samples;
+
+    spit.x = x;
+    spit.y = y;
+    // Le corps d'Adam : sa boîte de pieds, et deux fois plus haut — comme un ennemi pour une flèche.
+    if (Math.abs(x - player.x) <= PLAYER_HALF_W && y >= player.y - PLAYER_HALF_H * 3 && y <= player.y + PLAYER_HALF_H) return 'player';
+    if (wall(x, y)) return 'wall';
+  }
+  return null;
 }

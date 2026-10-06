@@ -83,7 +83,8 @@ import { WEAPONS } from '../data/weapons.ts';
 import { BUILDERS, FARMERS, FORESTERS, LOGISTICIANS, LUMBERJACKS, WORK_PRIORITIES, type WorkPriority } from '../data/workers.ts';
 import { floorCost } from '../sim/antenna.ts';
 import { consumerTarget, forgeRecipe } from '../sim/consumers.ts';
-import { canDamage, isStanding, raidCapacity } from '../sim/enemyBases.ts';
+import { canDamage, isShielded, isStanding, raidCapacity } from '../sim/enemyBases.ts';
+import { KILL_PRESTIGE } from '../data/prestige.ts';
 import { countField, type FieldCount } from '../sim/farmer.ts';
 import { countPlot, type PlotCount } from '../sim/forester.ts';
 import { canPause } from '../sim/staffing.ts';
@@ -1016,8 +1017,17 @@ export class BuildingPanel {
       { icon: 'range', value: String(level.zoneRadius), label: text.zone(level.zoneRadius) },
       { icon: 'moon', value: `${base.raiders}/${capacity}`, label: text.raiders(base.raiders, capacity) },
       { icon: 'mutant', value: `${base.guards}/${level.guards.count}`, label: text.guards(base.guards, level.guards.count) },
+      { icon: 'mutant', value: `${base.spitters}/${level.guards.spitters}`, label: text.spitters(base.spitters, level.guards.spitters) },
     ];
+    const shielded = isShielded(base);
+
+    // Le chef en tête : c'est lui qu'il faut abattre d'abord.
+    if (shielded) {
+      stats.unshift({ icon: 'shield', value: `${Math.ceil(base.chief)}/${level.chief.hp}`, label: text.chief(Math.ceil(base.chief), level.chief.hp) });
+    }
+
     const lines = [
+      ...(shielded ? [text.shielded, text.chiefReward(level.chief.prestige + KILL_PRESTIGE.chief)] : []),
       capacity > 0 ? text.raid : text.asleep(level.raid.from),
       text.required(gear, base.level),
       canDamage(base, this.world.player.gear) ? text.ready : text.weak,

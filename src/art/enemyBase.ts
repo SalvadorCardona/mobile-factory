@@ -13,8 +13,11 @@
  * que la base tient en réserve tracé au trait indigo — pas de texte dans un
  * sprite. Il monte le jour, retombe à zéro quand elle les lâche, la nuit.
  *
+ * Le bouclier (`shield`), lui aussi posé par-dessus, dit que son chef vit :
+ * tant qu'il est planté, aucune flèche n'entame la base.
+ *
  * Morceaux : `built`, `damaged` (sous la moitié de ses points de vie : la
- * hutte trouée, des planches clouées dessus), `sign0` à `sign9`.
+ * hutte trouée, des planches clouées dessus), `shield`, `sign0` à `sign9`.
  */
 
 import {
@@ -30,6 +33,7 @@ import {
   polyline,
   rect,
   shadedBlock,
+  shape,
   svg,
   vine,
 } from '../data/artDirection.ts';
@@ -39,7 +43,7 @@ import { damageMarks } from './building.ts';
 const W = 96;
 const H = 128;
 
-const { ink, toxic, paper, violet } = PALETTE;
+const { ink, toxic, paper, violet, coral } = PALETTE;
 
 /** La mare fluo sous le campement, bordée de terre retournée indigo, comme la flaque d'une vague. */
 function pool(): string {
@@ -178,6 +182,31 @@ function sign(count: number): string {
   );
 }
 
+/**
+ * Le bouclier du chef, planté en haut à gauche du campement : un écu blanc
+ * cerclé de violet, le cône corail du chef dessiné dessus. Tant qu'il est
+ * là, la base ne s'entame pas.
+ */
+function shield(): string {
+  const escutcheon = (x: number, y: number, w: number, h: number): string =>
+    `M${x} ${y + 4}Q${x} ${y} ${x + 4} ${y}H${x + w - 4}Q${x + w} ${y} ${x + w} ${y + 4}V${y + h * 0.5}` +
+    `Q${x + w} ${y + h * 0.82} ${x + w / 2} ${y + h}Q${x} ${y + h * 0.82} ${x} ${y + h * 0.5}Z`;
+
+  return svg(
+    W,
+    H,
+    line(20, 40, 20, 56, ink.base),
+    shape(escutcheon(7, 10, 26, 32), violet.shade),
+    shape(escutcheon(9, 11.5, 22, 27.5), paper.base),
+    pill(12, 14, 7, 2.5, paper.shade),
+    // Le cône du chef : trois étages corail et sa bande blanche.
+    rect(13, 30, 14, 3.5, coral.shade, RADIUS.small),
+    rect(15, 23, 10, 8, coral.base, RADIUS.small),
+    pill(15, 26, 10, 2.4, paper.base),
+    pill(18, 17, 4, 7, coral.base),
+  );
+}
+
 /** Les badges de 0 à 9 assaillants (`RAIDS.capacityMax`) : `sign0` à `sign9`. */
 const SIGNS = Object.fromEntries(Array.from({ length: 10 }, (_, count) => [`sign${count}`, sign(count)]));
 
@@ -189,6 +218,7 @@ export const ENEMY_BASE_SPRITE = {
   parts: {
     built: svg(W, H, camp()),
     damaged: svg(W, H, camp(), damageMarks(20, 54, 56, 50)),
+    shield: shield(),
     ...SIGNS,
   },
 } satisfies SpriteProto;

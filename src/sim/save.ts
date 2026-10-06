@@ -38,6 +38,7 @@ import { canPause, clampStaff, isWorkPriority, type StaffPost } from './staffing
 import type { Store, StoreSnapshot } from './store.ts';
 import type {
   BeastState,
+  SlamState,
   EnemyBase,
   CaravanState,
   Entity,
@@ -646,6 +647,17 @@ function parseQueen(raw: unknown): QueenState {
   return { phase, layTicks: int(queen['layTicks']), prey: queen['prey'] === null ? null : int(queen['prey']) };
 }
 
+function parseSlam(raw: unknown): SlamState {
+  const slam = record(raw);
+
+  return { x: finite(slam['x']), y: finite(slam['y']), ticks: int(slam['ticks']) };
+}
+
+function nonNegative(value: number): number {
+  if (value < 0) throw new SaveError('valeur négative');
+  return value;
+}
+
 function parseMobile(raw: unknown): Mobile {
   const mobile = record(raw);
   const base = { id: int(mobile['id']), ...moving(mobile) };
@@ -692,8 +704,20 @@ function parseMobile(raw: unknown): Mobile {
         dirY: finite(mobile['dirY']),
         wanderTicks: int(mobile['wanderTicks']),
         attackCooldown: int(mobile['attackCooldown']),
+        ...(mobile['slam'] !== undefined && { slam: parseSlam(mobile['slam']) }),
+        ...(mobile['slamCooldown'] !== undefined && { slamCooldown: int(mobile['slamCooldown']) }),
       };
     }
+    case 'spit':
+      return {
+        ...base,
+        kind: 'spit',
+        vx: finite(mobile['vx']),
+        vy: finite(mobile['vy']),
+        ttl: int(mobile['ttl']),
+        damage: finite(mobile['damage']),
+        from: int(mobile['from']),
+      };
     case 'arrow':
       return {
         ...base,
@@ -945,7 +969,8 @@ function parseEnemyBase(raw: unknown): EnemyBase {
 
   const id = int(base['id']);
 
-  // Une sauvegarde d'avant les vagues des bases : réserve vide, gardiens au complet.
+  // Une sauvegarde d'avant les vagues des bases : réserve vide, gardiens au complet. D'avant les chefs : une
+  // base debout reçoit son chef et ses cracheurs.
   return {
     id,
     tx: int(base['tx']),
@@ -955,7 +980,9 @@ function parseEnemyBase(raw: unknown): EnemyBase {
     raiders: base['raiders'] === undefined ? 0 : Math.max(0, Math.min(RAIDS.capacityMax, int(base['raiders']))),
     brood: base['brood'] === undefined ? 0 : int(base['brood']),
     guards: base['guards'] === undefined ? (hp > 0 ? enemyBaseLevel(level).guards.count : 0) : int(base['guards']),
+    spitters: base['spitters'] === undefined ? (hp > 0 ? enemyBaseLevel(level).guards.spitters : 0) : int(base['spitters']),
     mend: base['mend'] === undefined ? 0 : int(base['mend']),
+    chief: base['chief'] === undefined ? (hp > 0 ? enemyBaseLevel(level).chief.hp : 0) : nonNegative(finite(base['chief'])),
   };
 }
 

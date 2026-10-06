@@ -444,9 +444,25 @@ par la base (`Beast.guardOf`, `guards` comptés et refaits le jour,
 `mend`), qui ne sortent flâner devant que quand Adam passe à
 `GUARD_RANGE.showTiles` et rentrent au-delà de `hideTiles`
 (`World.stepGuards`, comme une tanière) ; ils chargent Adam qui entre dans
-la zone et ne quittent jamais leur laisse (`stepBeast`). Abattue, une base
-ne produit ni n'envoie plus rien. Réserve, comptes et gardiens sont
-sauvegardés ; une sauvegarde d'avant charge ses bases à réserve vide.
+la zone et ne quittent jamais leur laisse (`stepBeast`). Parmi eux, les
+**cracheurs** (`WILDLIFE.spitter`, jabot de gelée, `art/spitter.ts` ;
+`guards.spitters`, comptés dans `spitters`) tirent de loin des crachats
+(mobile `spit`, `SPITTER`, `combat.ts` : lents, sans anticipation, ils
+s'esquivent et s'écrasent sur le bâti), gonflent leur jabot avant chaque
+tir et reculent si Adam approche. Chaque base a un **chef**
+(`WILDLIFE.chief`, cône de chantier et massue, `art/chief.ts`) : ses PV,
+coups, Prestige et butin sont ceux de son niveau (`chief` de
+`ENEMY_BASE_LEVELS`), sa barre de vie est toujours visible ; il lève sa
+massue et un cercle corail se remplit au sol une seconde (`CHIEF.slam`,
+`Beast.slam`) avant le coup de zone. Tant qu'il vit (`EnemyBase.chief`,
+PV gardés rentré), la base est sous **bouclier** (`isShielded`, morceau
+`shield` du sprite, refus `enemyBaseShielded`) ; hors combat il se refait
+d'un point toutes les `CHIEF.regenTicks` ; abattu (`enemyChiefDefeated`),
+il ne revient jamais. Abattue, une base
+ne produit ni n'envoie plus rien. Réserve, comptes, gardiens, chef et
+cracheurs sont sauvegardés ; une sauvegarde d'avant charge ses bases à
+réserve vide, chef et cracheurs au complet. Partie de test `/test/raid` :
+Adam devant la base la plus proche, l'arc cerclé de fer au poing.
 
 **Faune** — en plus des mutants, des **crabes** vivent sur le sable et des
 **loups** au cœur des forêts (les gardiens des bases sont de la même famille, sans tanière) (`WILDLIFE`, `src/data/enemies.ts` ;

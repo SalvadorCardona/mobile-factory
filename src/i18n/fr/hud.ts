@@ -135,6 +135,8 @@ export const hud = {
     betterGear: (gear: string, level: number): string => `Il vous faut un meilleur équipement : ${gear} (niveau ${level}) — forgez-le à la forge`,
     enemyZone: (level: number): string => `Zone d’une base mutante (niveau ${level}) : ni récolte ni construction tant qu’elle tient`,
     baseDestroyed: (prestige: number): string => `Base mutante détruite ! +${prestige} Prestige, sa zone est libre`,
+    baseShielded: 'Son chef la protège : abattez-le d’abord, le bouclier tombera avec lui',
+    chiefDefeated: (prestige: number): string => `Chef de base abattu ! +${prestige} Prestige — la base n’a plus de bouclier`,
     /** `gear` : l'arc forgé, avec sa majuscule. */
     gearCrafted: (gear: string, level: number): string => `${gear} forgé : vous entamez les bases de niveau ${level}`,
     survivors: (count: number): string =>

@@ -107,14 +107,17 @@ function foeView(world: World, foe: Extract<Creature, { kind: 'mutant' | 'beast'
     if (foe.emerge > 0) lines.push(text.emerging);
     else if (goal) lines.push(text.marchesOn(t().buildings[goal].label));
   } else {
-    lines.push(t().wildlife[foe.proto], text.beast[foe.state]);
+    lines.push(t().wildlife[foe.proto]);
+    if (foe.proto === 'chief') lines.push(text.chief);
+    if (foe.proto === 'spitter') lines.push(text.spitter);
+    lines.push(foe.slam ? text.slamming : text.beast[foe.state]);
   }
 
   return {
     name: foeName(world.seed, foe.id),
     portrait: portraitOf(foe),
     age: foe.age,
-    hp: { value: Math.max(0, Math.ceil(foe.hp)), max: foe.kind === 'mutant' ? ENEMIES[foe.proto].hp : WILDLIFE[foe.proto].hp },
+    hp: { value: Math.max(0, Math.ceil(foe.hp)), max: foe.kind === 'mutant' ? ENEMIES[foe.proto].hp : world.beastMaxHp(foe) },
     lines,
     carry: null,
     needs: [],

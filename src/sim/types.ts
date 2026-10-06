@@ -272,6 +272,13 @@ export interface EnemyBase {
   brood: number;
   /** Gardiens vivants, sortis devant la base ou rentrés. */
   guards: number;
+  /** Cracheurs vivants, sortis ou rentrés. */
+  spitters: number;
+  /**
+   * Points de vie de son chef, qu'il soit sorti ou rentré ; 0 : abattu, pour
+   * de bon. Tant qu'il vit, la base est sous bouclier.
+   */
+  chief: number;
   /** Ticks de jour accumulés vers le prochain gardien, s'il en manque. */
   mend: number;
 }
@@ -393,8 +400,19 @@ export interface Beast extends Moving {
   dirY: number;
   /** Ticks avant de changer d'idée. */
   wanderTicks: number;
-  /** Ticks avant le prochain coup sur Adam. */
+  /** Ticks avant le prochain coup sur Adam — ou, pour un cracheur, avant le prochain crachat. */
   attackCooldown: number;
+  /** Le coup de zone que le chef d'une base annonce (`CHIEF`) ; absent sinon. */
+  slam?: SlamState;
+  /** Ticks avant que le chef puisse en annoncer un autre ; absent pour toute autre bête. */
+  slamCooldown?: number;
+}
+
+/** Un coup de zone annoncé : son centre, au sol, et les ticks avant que la massue tombe. */
+export interface SlamState {
+  x: number;
+  y: number;
+  ticks: number;
 }
 
 /** Ce que les arcs peuvent viser : un mutant ou une bête. */
@@ -411,6 +429,21 @@ export interface Arrow extends Moving {
   damage: number;
   /** La base mutante visée : la flèche la frappe en traversant son emprise. Absent : elle ne vise que les ennemis. */
   baseId?: number;
+}
+
+/**
+ * Un crachat de cracheur (`SPITTER`) : une ligne droite vers où était Adam,
+ * qui s'écrase sur lui, sur un bâtiment ou sur une base.
+ */
+export interface Spit extends Moving {
+  kind: 'spit';
+  /** Vitesse en pixels par tick. */
+  vx: number;
+  vy: number;
+  ttl: number;
+  damage: number;
+  /** Le cracheur : c'est lui qui a blessé Adam. */
+  from: MobileId;
 }
 
 /**
@@ -748,7 +781,7 @@ export interface Caravan extends Moving {
   met: boolean;
 }
 
-export type Mobile = Mutant | Beast | Arrow | Kid | Eve | Worker | Lumberjack | Forester | Farmer | Pickup | Patient | Caravan;
+export type Mobile = Mutant | Beast | Arrow | Spit | Kid | Eve | Worker | Lumberjack | Forester | Farmer | Pickup | Patient | Caravan;
 
 /**
  * Les compteurs de la partie, que les objectifs lisent. Ils ne font que
