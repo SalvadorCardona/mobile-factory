@@ -82,7 +82,9 @@ export class FogOfWar {
   private readonly chunks = new Map<string, FogChunk>();
   private readonly sources = new Map<number, Stamp>();
   /** Le dernier chunk lu par `sight` : les lectures voisines n'ont pas de clé à fabriquer. */
-  private last: { cx: number; cy: number; chunk: FogChunk | undefined } = { cx: NaN, cy: NaN, chunk: undefined };
+  private lastCx = NaN;
+  private lastCy = NaN;
+  private lastChunk: FogChunk | undefined;
   private pass = 0;
 
   /** Prévenu quand une case revue oublie sa capture : le rendu de ses ressources est à refaire. */
@@ -101,9 +103,13 @@ export class FogOfWar {
   public sight(tx: number, ty: number): Sight {
     const cx = floorDiv(tx, CHUNK_TILES);
     const cy = floorDiv(ty, CHUNK_TILES);
-    if (cx !== this.last.cx || cy !== this.last.cy) this.last = { cx, cy, chunk: this.chunks.get(coordKey(cx, cy)) };
+    if (cx !== this.lastCx || cy !== this.lastCy) {
+      this.lastCx = cx;
+      this.lastCy = cy;
+      this.lastChunk = this.chunks.get(coordKey(cx, cy));
+    }
 
-    const chunk = this.last.chunk;
+    const chunk = this.lastChunk;
 
     if (!chunk) return 'unexplored';
 
@@ -229,7 +235,7 @@ export class FogOfWar {
     if (!chunk) {
       chunk = { explored: new Uint8Array(AREA), seen: new Uint16Array(AREA) };
       this.chunks.set(key, chunk);
-      this.last = { cx: NaN, cy: NaN, chunk: undefined };
+      this.lastCx = NaN;
     }
     return chunk;
   }
@@ -272,7 +278,7 @@ export class FogOfWar {
       this.sources.delete(id);
     }
     this.chunks.clear();
-    this.last = { cx: NaN, cy: NaN, chunk: undefined };
+    this.lastCx = NaN;
     for (const [key, runs] of Object.entries(saved.explored)) {
       const [cx, cy] = key.split(',').map(Number) as [number, number];
       const chunk = this.ensure(cx, cy);

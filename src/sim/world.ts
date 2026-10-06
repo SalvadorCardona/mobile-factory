@@ -666,6 +666,8 @@ export class World {
    * oublie sa capture : ses ressources sont à redessiner.
    */
   public readonly fog = new FogOfWar((tx, ty) => this.dirtyTile(tx, ty));
+  /** La `revision` du brouillard à la dernière revue des bases : sans case changée, leur vue non plus. */
+  private basesSightRevision = -1;
   public readonly entities = new Map<EntityId, Entity>();
   public readonly mobiles = new Map<MobileId, Mobile>();
   public readonly events = new Emitter<WorldEvents>();
@@ -7404,7 +7406,7 @@ export class World {
    * (chantier compris), les habitants dehors. Une source qui n'a pas changé
    * de tuile ne coûte rien (`FogOfWar.source`). Puis les bases mutantes :
    * revue, une base oublie sa capture ; sortie de la vue, elle est copiée
-   * telle qu'on l'a vue.
+   * telle qu'on l'a vue — revues seulement quand une case a changé d'état.
    */
   private watchSight(): void {
     const fog = this.fog;
@@ -7424,6 +7426,8 @@ export class World {
     }
     fog.end();
 
+    if (fog.revision === this.basesSightRevision) return;
+    this.basesSightRevision = fog.revision;
     for (const base of this.enemyBases) {
       const sight = this.baseSight(base, false);
 
