@@ -136,7 +136,8 @@ export class NightLayer {
     let halos = 0;
 
     for (const mobile of this.world.mobiles.values()) {
-      if (mobile.kind !== 'mutant') continue;
+      // Le brouillard de guerre : un halo trahirait un mutant qu'on ne voit pas.
+      if (mobile.kind !== 'mutant' || !this.world.sees(mobile.x, mobile.y)) continue;
 
       place(
         this.halos,

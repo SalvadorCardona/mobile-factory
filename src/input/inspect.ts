@@ -159,7 +159,8 @@ export class Inspect implements PointerConsumer {
 
     if (eve && isOnEve(eve, position.x, position.y)) return { kind: 'eve' };
 
-    const creature = creatureAt(this.world.mobiles.values(), position.x, position.y);
+    // Hors de vue, rien ne bouge ni ne se tape : le brouillard cache les créatures qui y passent.
+    const creature = creatureAt(this.world.mobiles.values(), position.x, position.y, (x, y) => this.world.sees(x, y));
 
     if (creature !== undefined) return { kind: 'creature', id: creature };
 
@@ -167,7 +168,8 @@ export class Inspect implements PointerConsumer {
 
     if (building !== undefined) return { kind: 'building', id: building };
 
-    const base = enemyBaseAt(this.world.enemyBases, position.x, position.y);
+    // Une base explorée se tape même hors de vue : sa fenêtre dit ce qu'on en sait.
+    const base = enemyBaseAt(this.world.knownEnemyBases(), position.x, position.y);
 
     return base === undefined ? undefined : { kind: 'enemyBase', id: base };
   }
@@ -186,13 +188,19 @@ export function isOnEve(eve: Eve, x: number, y: number): boolean {
  * La créature dessinée sous un point monde — un enfant, un ouvrier, un
  * bûcheron ou un forestier dehors, un mutant sorti de sa flaque, une bête —, la plus basse
  * à l'écran si elles se recouvrent, comme le tri en profondeur du rendu.
+ * `seen` : la case de la créature est-elle vue — le brouillard cache le reste.
  */
-export function creatureAt(mobiles: Iterable<Mobile>, x: number, y: number): MobileId | undefined {
+export function creatureAt(
+  mobiles: Iterable<Mobile>,
+  x: number,
+  y: number,
+  seen: (x: number, y: number) => boolean = () => true,
+): MobileId | undefined {
   let found: MobileId | undefined;
   let foundY = -Infinity;
 
   for (const mobile of mobiles) {
-    if (!isUnder(mobile, x, y) || mobile.y <= foundY) continue;
+    if (!isUnder(mobile, x, y) || mobile.y <= foundY || !seen(mobile.x, mobile.y)) continue;
 
     found = mobile.id;
     foundY = mobile.y;

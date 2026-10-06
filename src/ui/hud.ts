@@ -1021,6 +1021,11 @@ export class Hud {
     return this.wanted;
   }
 
+  /** Le panneau de debug est-il ouvert ? Ses raccourcis (brouillard) n'agissent qu'alors. */
+  public get debugOn(): boolean {
+    return this.debug;
+  }
+
   public toggleDebug(): void {
     this.debug = !this.debug;
     this.stats.hidden = !this.debug;
@@ -1799,6 +1804,7 @@ export class Hud {
       `atlas ${atlas.images} images → ${atlas.pages} texture(s), ${atlas.megapixels.toFixed(1)} Mpx @${atlas.resolution}x, ${atlas.ms} ms`,
       `${this.world.entities.size} bâtiment(s)   ${this.world.mobiles.size} mobile(s)   ${this.world.pendingWakes()} réveil(s)`,
       `météo ${this.world.weather()?.id ?? 'calme'}   ${weatherParticles} particule(s)`,
+      `brouillard ${this.world.fog.enabled ? 'oui' : 'levé'} (F)   ${this.world.fog.exploredCount()} case(s) explorée(s), ${this.world.fog.sourceCount} source(s)`,
     ];
 
     for (const entity of this.world.entities.values()) {

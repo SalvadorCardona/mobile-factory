@@ -349,6 +349,8 @@ describe('World', () => {
     const world = new World(1);
     const origin = worldToTile(world.player.x, world.player.y);
 
+    // Les alentours sont explorés : seul l'éloignement d'Adam gêne.
+    world.revealAround(origin.tx, origin.ty, BUILD_REACH_TILES + 44);
     for (let d = BUILD_REACH_TILES + 2; d < BUILD_REACH_TILES + 40; d += 1) {
       const block = world.placementBlock('nursery', origin.tx + d, origin.ty);
 
@@ -1171,6 +1173,7 @@ describe('géométrie de placement', () => {
       const world = new World(seed);
       const origin = worldToTile(world.player.x, world.player.y);
 
+      world.revealAround(origin.tx, origin.ty, BUILD_REACH_TILES + 44);
       for (let dx = BUILD_REACH_TILES + 4; dx < BUILD_REACH_TILES + 40; dx += 1) {
         const rejection = world.canPlace(building, origin.tx + dx, origin.ty);
 

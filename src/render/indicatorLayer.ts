@@ -9,8 +9,9 @@
  * Trois sortes de repères, en pixels écran, plaqués contre le bord : une
  * pastille ronde en trois tons, sans contour, qui pointe vers sa cible —
  * - vert fluo, avec un gros œil, par mutant hors champ (la teinte des
- *   mutants), plus opaque quand il approche — et, dans le brouillard, par
- *   mutant avalé par la brume même s'il est à l'écran ;
+ *   mutants), plus opaque quand il approche — et, dans la météo de brouillard, par
+ *   mutant avalé par la brume même s'il est à l'écran. Le brouillard de
+ *   guerre, lui, les tait : seul un mutant sur une case vue a son repère ;
  * - vert fluo, plus gros et qui bat, vers le point d'où surgira la
  *   prochaine vague, pendant les trois secondes de son annonce ;
  * - jaune, avec un petit toit, vers la mairie (ou son chantier) quand elle
@@ -242,7 +243,8 @@ export class IndicatorLayer {
     this.discover(camera);
 
     for (const mobile of this.world.mobiles.values()) {
-      if (mobile.kind !== 'mutant') continue;
+      // Le brouillard de guerre : seul un mutant vu a son repère — la tour de guet sert à les voir venir.
+      if (mobile.kind !== 'mutant' || !this.world.sees(mobile.x, mobile.y)) continue;
 
       const x = mobile.prevX + (mobile.x - mobile.prevX) * alpha;
       const y = mobile.prevY + (mobile.y - mobile.prevY) * alpha;

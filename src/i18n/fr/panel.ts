@@ -365,6 +365,7 @@ export const panel = {
     trees: { text: 'Des arbres gênent', remedy: 'Adam peut les couper' },
     tree: { text: 'Un arbre gêne', remedy: 'Adam peut le couper' },
     enemyZone: { text: 'Une base mutante tient cette zone', remedy: 'Abattez-la avec un arc de son niveau' },
+    unexplored: 'Zone inexplorée — allez-y d’abord',
     /** Ce qu'une foreuse posée là extraira. */
     extracts: (item: string): string => `Extraira : ${item}`,
     /** Pourquoi une partie d'un tracé de route ne sera pas pavée. */
@@ -374,6 +375,7 @@ export const panel = {
       occupied: { text: 'Un bâtiment est sur le tracé', remedy: '' },
       resource: { text: 'Un arbre ou un rocher gêne', remedy: 'Adam peut le récolter' },
       enemyZone: { text: 'Une base mutante tient la zone', remedy: 'Abattez-la avec un arc de son niveau' },
+      unexplored: { text: 'Le tracé entre dans l’inconnu', remedy: 'Explorez d’abord la zone' },
     },
   },
 };

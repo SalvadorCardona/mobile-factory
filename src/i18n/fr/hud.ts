@@ -34,6 +34,7 @@ export const hud = {
     unique: 'Un seul par colonie — il y en a déjà un',
     nearHall: `Trop près de la mairie — l’antenne se dresse à ${BUILDINGS.antenna.hallDistance} cases au moins`,
     enemyZone: 'Une base mutante tient cette zone — abattez-la d’abord',
+    unexplored: 'Zone inexplorée — allez-y d’abord',
   },
   /** Ce que dit la bulle quand un tracé de route n'a pas été pavé en entier. */
   road: {
@@ -44,6 +45,7 @@ export const hud = {
     occupied: 'Une route ne passe pas sous un bâtiment',
     resource: 'Arbres et rochers sautés : dégagez-les pour paver',
     enemyZone: 'Pas de route dans la zone d’une base mutante',
+    unexplored: 'Pas de route dans l’inconnu : explorez d’abord',
   },
   /** Pourquoi un arc n'a pas été forgé (`GearRejection`, hors `missing`). */
   gear: {

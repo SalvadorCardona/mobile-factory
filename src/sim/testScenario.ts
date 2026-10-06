@@ -7,8 +7,8 @@
  * attend et pousse `transferToSite`, un tick à chaque fois. Le chantier
  * s'achève, ses ouvriers s'installent, le jour se lève à la mairie — par les
  * mêmes chemins qu'en jeu. Rien n'est écrit à la main dans l'état, sauf la
- * position d'Adam, son sac et le coffre de la ville — et l'horloge, avancée
- * au crépuscule pour un scénario du soir.
+ * position d'Adam, son sac et le coffre de la ville, les abords explorés de la
+ * mairie — et l'horloge, avancée au crépuscule pour un scénario du soir.
  *
  * Un scénario qui ne se pose plus (règle de placement, coût, terrain) lève
  * une erreur qui dit lequel et pourquoi : `testScenario.test.ts` la verrait
@@ -19,7 +19,7 @@ import { TILE_SIZE } from '../core/grid.ts';
 import { BUILDINGS } from '../data/buildings.ts';
 import { DAY_CYCLE } from '../data/dayNight.ts';
 import type { ItemId } from '../data/items.ts';
-import type { TestScenarioProto } from '../data/testScenario.ts';
+import { SCENARIO_REVEAL, type TestScenarioProto } from '../data/testScenario.ts';
 import { baseCenter } from './enemyBases.ts';
 import type { Store } from './store.ts';
 import type { EntityId } from './types.ts';
@@ -36,6 +36,8 @@ export function stageScenario(scenario: TestScenarioProto): World {
 
   const { tx: hx, ty: hy } = hall;
 
+  // La base et ses abords sont connus : le brouillard de guerre commence au-delà.
+  world.revealAround(hx + 1, hy + 1, scenario.reveal ?? SCENARIO_REVEAL);
   deliver(world, world.townHallId, BUILDINGS.townHall.cost);
 
   for (const { building, dx, dy, delivered } of scenario.buildings) {

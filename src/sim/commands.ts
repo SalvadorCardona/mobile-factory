@@ -158,7 +158,12 @@ export type Command =
    * Les bonus plantés au jardin des souvenirs, au départ d'une nouvelle
    * colonie. Poussée avant le premier tick ; ignorée ensuite.
    */
-  | { type: 'applyPerks'; perks: readonly PerkId[] };
+  | { type: 'applyPerks'; perks: readonly PerkId[] }
+  /**
+   * Réglage de débogage : faux, le brouillard de guerre se lève — toute la
+   * carte se voit et se bâtit. Les cases explorées continuent de se compter.
+   */
+  | { type: 'setFog'; enabled: boolean };
 
 /** Motif de refus d'une commande sur un chantier — remonté à l'UI par un événement. */
 export type SiteRejection =
@@ -282,6 +287,8 @@ export type RoadRejection =
   | 'resource'
   /** Une base mutante tient la zone : on n'y pave pas tant qu'elle est debout. */
   | 'enemyZone'
+  /** Personne n'y est encore allé : on ne pave pas l'inconnu. */
+  | 'unexplored'
   /** Plus de pierre, ni dans le sac, ni en ville à portée. */
   | 'noStone';
 
@@ -311,6 +318,8 @@ export type PlacementRejection =
   | 'locked'
   /** Une base mutante tient la zone : on n'y bâtit pas tant qu'elle est debout. */
   | 'enemyZone'
+  /** Le brouillard couvre une case de l'emprise : personne n'y est encore allé. */
+  | 'unexplored'
   /** Un seul par colonie, et il y en a déjà un — chantier compris. */
   | 'unique';
 

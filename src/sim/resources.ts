@@ -73,6 +73,22 @@ export interface SurfaceResource {
   stage: ResourceStage;
 }
 
+/**
+ * Ce qu'une tuile montre de ses ressources : la capture qu'en garde le
+ * brouillard (`sim/fog.ts`) quand elle change hors de vue. Une tuile nue
+ * n'a ni ressource ni pousse.
+ */
+export interface TileLook {
+  /** La ressource debout, ou `null`. */
+  resource: ResourceId | null;
+  /** Entamée ou intacte ; sans ressource, `'gone'`. */
+  stage: ResourceStage;
+  /** Un arbre planté par le forestier, pousse ou adulte : il n'a pas l'essence de la carte. */
+  planted: boolean;
+  /** La pousse ou le jeune arbre, ou `null`. */
+  sapling: Exclude<GrowthStage, 'tree'> | null;
+}
+
 export function stageOf(id: ResourceId, remaining: number): ResourceStage {
   if (remaining <= 0) return 'gone';
   return remaining * 2 <= RESOURCES[id].amount ? 'damaged' : 'full';
@@ -87,8 +103,28 @@ export class ResourceIndex {
 
   private readonly seed: number;
 
+  /** Prévenu juste avant qu'une tuile change : le brouillard y fige ce qu'on en a vu. */
+  private watcher: ((tx: number, ty: number) => void) | null = null;
+
   public constructor(seed: number) {
     this.seed = seed;
+  }
+
+  /** `watcher` est appelé avant chaque changement d'une tuile — coupe, plantation, croissance. */
+  public watch(watcher: (tx: number, ty: number) => void): void {
+    this.watcher = watcher;
+  }
+
+  /** Ce que la tuile montre en ce moment. */
+  public look(tx: number, ty: number): TileLook {
+    const resource = this.at(tx, ty);
+
+    return {
+      resource: resource?.id ?? null,
+      stage: resource?.stage ?? 'gone',
+      planted: this.isPlanted(tx, ty),
+      sapling: this.sapling(tx, ty),
+    };
   }
 
   /** La ressource présente sur la tuile, ou `null` si elle est nue ou vidée. */
@@ -130,6 +166,8 @@ export class ResourceIndex {
 
     if (!before) return null;
 
+    this.watcher?.(tx, ty);
+
     const key = coordKey(tx, ty);
     const planted = this.planted.get(key);
 
@@ -156,6 +194,7 @@ export class ResourceIndex {
 
     if (!id) return false;
 
+    this.watcher?.(tx, ty);
     this.taken.set(coordKey(tx, ty), RESOURCES[id].amount);
     return true;
   }
@@ -169,6 +208,7 @@ export class ResourceIndex {
     const key = coordKey(tx, ty);
 
     if (this.planted.has(key) || this.crops.has(key) || this.at(tx, ty) !== null) return false;
+    this.watcher?.(tx, ty);
     this.planted.set(key, { tick, taken: 0, stage: 'sprout' });
     return true;
   }
@@ -259,9 +299,11 @@ export class ResourceIndex {
       const stage = growthStage(now - planted.tick);
 
       if (stage === planted.stage) continue;
-      planted.stage = stage;
 
       const [tx, ty] = key.split(',').map(Number) as [number, number];
+
+      this.watcher?.(tx, ty);
+      planted.stage = stage;
 
       changed.push({ tx, ty });
     }

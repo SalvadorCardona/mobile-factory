@@ -29,7 +29,9 @@ import { OBJECTIVES } from '../data/objectives.ts';
 import { JOB_PRIORITY, WORK_PRIORITY, type JobPriority, type WorkPriority } from '../data/workers.ts';
 import { PERKS, type PerkId } from '../data/perks.ts';
 import { RESEARCH, type ResearchId } from '../data/research.ts';
-import type { PlantedTree } from './resources.ts';
+import { RESOURCES, type ResourceId } from '../data/resources.ts';
+import type { SavedFog } from './fog.ts';
+import type { PlantedTree, ResourceStage, TileLook } from './resources.ts';
 import type { SchedulerSnapshot } from './scheduler.ts';
 import { ADAM_SALT, adultAge } from './inhabitants.ts';
 import { freshHousing, type Housing } from './housing.ts';
@@ -164,6 +166,11 @@ export interface WorldState {
   crops?: Record<string, number>;
   /** Tuiles pavées : `"cx,cy"` → index des tuiles dans le chunk. */
   roads: Record<string, number[]>;
+  /**
+   * Le brouillard de guerre : cases explorées et captures de ce qu'on y a vu.
+   * Absent d'avant lui : les alentours du bâti et d'Adam sont explorés au chargement.
+   */
+  fog?: SavedFog;
   entities: SavedEntity[];
   mobiles: Mobile[];
   /** Tanières habitées ou vidées ; les autres se relisent dans la seed. */
@@ -433,6 +440,7 @@ function parseState(raw: unknown): WorldState {
     crops: parseCrops(state['crops'] ?? {}),
     // Absentes d'une sauvegarde d'avant les routes : rien n'était pavé.
     roads: parseRoads(state['roads'] ?? {}),
+    ...(state['fog'] !== undefined && { fog: parseFog(state['fog']) }),
     entities: unique(array(state['entities']).map(parseEntity)),
     mobiles: unique(array(state['mobiles']).map(parseMobile)),
     dens: unique(array(state['dens']).map(parseDen)),
@@ -553,6 +561,42 @@ function parseStaffPost(raw: unknown): SavedStaffPost {
 
   if (filled < 0) throw new SaveError(`poste ${String(post['id'])} aux ouvriers négatifs`);
   return { id: int(post['id']), filled, since: post['since'] === null ? null : int(post['since']) };
+}
+
+const RESOURCE_STAGES: readonly ResourceStage[] = ['full', 'damaged', 'gone'];
+
+const SAPLING_STAGES: readonly NonNullable<TileLook['sapling']>[] = ['sprout', 'young'];
+
+function parseFog(raw: unknown): SavedFog {
+  const fog = record(raw);
+  const explored: Record<string, number[]> = {};
+  const looks: Record<string, TileLook> = {};
+
+  for (const [key, runs] of Object.entries(record(fog['explored']))) {
+    if (!/^-?\d+,-?\d+$/.test(key)) throw new SaveError(`chunk illisible : ${key}`);
+
+    const lengths = array(runs).map(int);
+
+    if (lengths.some((length) => length < 0)) throw new SaveError(`plage négative dans le brouillard : ${key}`);
+    if (lengths.reduce((total, length) => total + length, 0) > CHUNK_TILES * CHUNK_TILES) {
+      throw new SaveError(`brouillard plus grand que son chunk : ${key}`);
+    }
+    explored[key] = lengths;
+  }
+  for (const [key, value] of Object.entries(record(fog['looks'] ?? {}))) {
+    if (!/^-?\d+,-?\d+$/.test(key)) throw new SaveError(`tuile illisible : ${key}`);
+
+    const look = record(value);
+    const sapling = look['sapling'];
+
+    looks[key] = {
+      resource: look['resource'] === null ? null : (oneOf(look['resource'], RESOURCES) as ResourceId),
+      stage: oneOfList(look['stage'], RESOURCE_STAGES),
+      planted: bool(look['planted']),
+      sapling: sapling === null ? null : oneOfList(sapling, SAPLING_STAGES),
+    };
+  }
+  return { explored, looks, bases: unique(array(fog['bases'] ?? []).map(parseEnemyBase)) };
 }
 
 function parseEntity(raw: unknown): SavedEntity {
@@ -1104,4 +1148,9 @@ function string(value: unknown): string {
 function oneOf(value: unknown, table: object): string {
   if (typeof value !== 'string' || !Object.hasOwn(table, value)) throw new SaveError(`id inconnu : ${String(value)}`);
   return value;
+}
+
+function oneOfList<T extends string>(value: unknown, list: readonly T[]): T {
+  if (!list.includes(value as T)) throw new SaveError(`valeur inconnue : ${String(value)}`);
+  return value as T;
 }

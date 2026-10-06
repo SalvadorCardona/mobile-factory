@@ -8,6 +8,8 @@
  * bouclier de son chef (`shield`) aussi, tant que le chef vit. Entamée, la base montre sa barre de vie au-dessus du
  * drapeau ; sous la moitié, sa version `damaged`. Frappée, elle tremble — un
  * minuteur de vue, la simulation n'en sait rien. Abattue, elle disparaît.
+ * Sous le brouillard de guerre, seules les bases explorées se montrent, et
+ * hors de vue telles qu'on les a vues la dernière fois (`World.knownEnemyBases`).
  *
  * La zone tenue est un disque vert fluo très pâle au sol, sous les ombres :
  * on voit où l'on ne bâtira pas sans que la carte en soit voilée. Le
@@ -79,7 +81,8 @@ export class EnemyBaseLayer {
   }
 
   public update(deltaMs: number): void {
-    const standing = this.world.enemyBases.filter(isStanding);
+    // Le brouillard : une base jamais vue ne se montre pas ; vue de loin, elle est telle qu'on l'a laissée.
+    const standing = this.world.knownEnemyBases().filter(isStanding);
 
     this.drawZones(standing);
 

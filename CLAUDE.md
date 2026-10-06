@@ -464,6 +464,27 @@ cracheurs sont sauvegardés ; une sauvegarde d'avant charge ses bases à
 réserve vide, chef et cracheurs au complet. Partie de test `/test/raid` :
 Adam devant la base la plus proche, l'arc cerclé de fer au poing.
 
+**Brouillard de guerre** (`data/fog.ts`, `sim/fog.ts`, `render/fogLayer.ts`)
+— trois états par case, comme Age of Empires : inexplorée (indigo plein),
+explorée hors de vue (voile indigo, capture figée), visible. Sources de
+vision, en disques qui s'additionnent (`FOG_VISION`) : Adam (7), les
+habitants dehors (3), chaque bâtiment, chantier compris (3 depuis le bord de
+son emprise), la tour de guet finie (13). Calcul incrémental : un compteur
+par case, une source ne repeint que si elle change de tuile
+(`World.watchSight`, en fin de tick) ; le rendu est une texture d'un texel
+par tuile, adoucie et agrandie, refaite à chaque `FogOfWar.revision`. La
+capture est en copie sur écriture : une ressource qui change hors de vue
+range son état d'avant (`ResourceIndex.watch`, `World.lookAt`) ; une base
+mutante sortie de la vue est copiée (`World.knownEnemyBases`) — jamais vue,
+elle ne se montre ni ne se tape. Ennemis, bêtes, flèches, butin, caravane ne
+se montrent ni ne se tapent hors des cases vues (`World.sees`), leurs repères
+de bord et halos non plus. On ne bâtit ni ne pave sur l'inexploré (refus
+`unexplored`). Sauvegardés : cases explorées (plages par chunk) et captures,
+sous `fog` ; une sauvegarde d'avant explore `FOG_VISION.legacy` autour du
+bâti et d'Adam. Débogage : `?nofog` en dev, ou F panneau `?debug` ouvert
+(commande `setFog`). Une partie de test explore `SCENARIO_REVEAL` autour de
+la mairie.
+
 **Faune** — en plus des mutants, des **crabes** vivent sur le sable et des
 **loups** au cœur des forêts (les gardiens des bases sont de la même famille, sans tanière) (`WILDLIFE`, `src/data/enemies.ts` ;
 `src/sim/wildlife.ts`). Leurs tanières se tirent de la seed par chunk ; une

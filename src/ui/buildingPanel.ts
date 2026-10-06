@@ -46,7 +46,8 @@
  *
  * Une base mutante se tape aussi (`showBase`) : la même fenêtre, sans bouton,
  * dit son niveau, sa zone, ses points de vie et l'équipement qu'il faut pour
- * l'entamer. Elle se ferme quand la base tombe.
+ * l'entamer. Elle se ferme quand la base tombe. Hors de vue, elle dit ce
+ * qu'on en a vu la dernière fois (`World.knownEnemyBase`).
  *
  * Sur un téléphone, elle doit laisser voir le jeu autour : ce qui se compte
  * se dit en puces « pictogramme + nombre » (habitants, nuits, rayon,
@@ -498,7 +499,8 @@ export class BuildingPanel {
 
   /** La fenêtre d'une base mutante : son niveau, sa zone, sa vie, l'équipement qu'il faut. */
   public showBase(id: number): void {
-    const base = this.world.enemyBase(id);
+    // Ce qu'on sait d'elle : en direct sous les yeux, sa dernière capture hors de vue.
+    const base = this.world.knownEnemyBase(id);
 
     if (!base || !isStanding(base)) return;
 
@@ -554,7 +556,7 @@ export class BuildingPanel {
   /** À chaque frame : le contenu suit l'état, la fenêtre se ferme si l'entité a disparu. */
   public update(): void {
     if (this.baseId !== null) {
-      const base = this.world.enemyBase(this.baseId);
+      const base = this.world.knownEnemyBase(this.baseId);
 
       // Abattue : sa fenêtre n'a plus rien à dire.
       if (!base || !isStanding(base)) this.close();

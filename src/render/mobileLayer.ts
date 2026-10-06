@@ -42,6 +42,11 @@
  * Le marqueur de cible — un anneau jaune au sol et une pointe au-dessus de
  * la tête — suit ce que l'arc d'Adam vise (`player.target`).
  *
+ * Le brouillard de guerre cache ce qui n'est pas de la colonie — ennemis,
+ * bêtes, flèches, butin, flaques, caravane — hors des cases vues
+ * (`World.sees`) : un mutant n'apparaît qu'en y entrant. Les habitants sont
+ * eux-mêmes des sources de vision : on les voit toujours.
+ *
  * Un ouvrier chez lui n'est pas dessiné ; dehors, il porte sa charge sur la
  * tête tant que son job est ramassé. Un ex-mutant a son propre pantin, un
  * logisticien aussi : sa charge dépasse de la caisse qu'il a au dos. Un
@@ -75,6 +80,9 @@ import { Puppet, type Lounge } from './puppet.ts';
 import { puppetOf } from './puppetOf.ts';
 import type { SpriteLibrary } from './spriteLibrary.ts';
 import type { TerrainTiles } from './terrainTiles.ts';
+
+/** Ce que le brouillard de guerre cache hors des cases vues : tout ce qui n'est pas de la colonie. */
+const FOGGED: ReadonlySet<Mobile['kind']> = new Set(['mutant', 'beast', 'arrow', 'pickup', 'patient', 'caravan']);
 
 const HP_TRACK = hex(PALETTE.paper.base);
 const HP_FG = hex(PALETTE.coral.base);
@@ -469,6 +477,11 @@ export class MobileLayer {
           break;
         }
       }
+
+      // Le brouillard de guerre : ce qui n'est pas de la colonie ne se montre que là où l'on voit.
+      if (FOGGED.has(mobile.kind)) {
+        view.root.visible = (mobile.kind !== 'patient' || mobile.state !== 'care') && this.world.sees(mobile.x, mobile.y);
+      }
     }
 
     for (const [id, view] of this.views) {
@@ -664,6 +677,7 @@ export class MobileLayer {
       const mutant = this.world.mobiles.get(puddle.mutant);
 
       puddle.age += deltaMs;
+      puddle.root.visible = this.world.sees(puddle.root.x, puddle.root.y);
 
       if (puddle.fading === null && puddle.age >= puddle.hold && (mutant?.kind !== 'mutant' || mutant.emerge <= 0)) {
         puddle.fading = PUDDLE_FADE_MS;
@@ -743,7 +757,8 @@ export class MobileLayer {
   private mark(alpha: number, deltaMs: number): void {
     const id = this.world.player.target;
     const target = id === null ? undefined : this.world.mobiles.get(id);
-    const visible = target !== undefined && (target.kind === 'mutant' || target.kind === 'beast');
+    const visible =
+      target !== undefined && (target.kind === 'mutant' || target.kind === 'beast') && this.world.sees(target.x, target.y);
 
     this.ring.visible = visible;
     this.pointer.visible = visible;
