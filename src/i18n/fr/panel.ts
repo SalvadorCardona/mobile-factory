@@ -13,9 +13,11 @@ const s = (count: number): string => (count > 1 ? 's' : '');
 export const panel = {
   /** Le bouton (i) qui déplie la phrase d'ambiance. */
   about: 'À propos',
-  /** Une foreuse, une ferme ou une forge qui attend qu'on la vide. */
+  /** Une forge qui attend qu'on la vide. */
   blocked: 'Bloquée : coffre plein — heurtez-la ou appuyez sur Tout prendre.',
   paused: 'En pause : plus rien ne sort ni n’entre en production — appuyez sur Reprendre.',
+  /** Un producteur arrêté coffre plein : la bulle d’alerte de la carte, expliquée. */
+  storeFull: 'Entrepôt plein : la production est à l’arrêt. Videz-le ou construisez un poste de logistique à proximité.',
   /** Le bouton qui verse dans un chantier ou un consommateur : le sac, puis la ville. */
   transferButton: 'Transférer',
   /** Le même, hors du rayon de la ville. */
@@ -144,7 +146,6 @@ export const panel = {
     paused: 'En pause : les bûcherons rapportent leur bois, puis flânent.',
     noOne: 'À l’arrêt : aucun bûcheron — ajoutez un ouvrier.',
     noTrees: 'Plus d’arbres à portée.',
-    full: 'Coffre plein : les bûcherons attendent qu’on le vide.',
     working: 'Les haches résonnent.',
   },
 

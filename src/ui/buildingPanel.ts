@@ -542,6 +542,8 @@ export class BuildingPanel {
     const text = t().panel;
     const paused = text.paused;
     const blocked = text.blocked;
+    // Le problème que la bulle d'alerte montre sur la carte, expliqué en une ligne.
+    const full = entity.kind !== 'site' && this.world.problem(entity) === 'storeFull';
     const lines: string[] = [];
     const stats: Stat[] = [];
     let ratio: number;
@@ -695,7 +697,7 @@ export class BuildingPanel {
 
         case 'drill':
           lines.push(entity.output ? text.drill.extracts(t().items[entity.output]) : text.drill.dry);
-          lines.push(entity.paused ? paused : entity.blocked && entity.output ? blocked : entity.output ? text.drill.running : '');
+          lines.push(entity.paused ? paused : full ? text.storeFull : entity.output ? text.drill.running : '');
           break;
 
         case 'nursery': {
@@ -758,10 +760,10 @@ export class BuildingPanel {
           lines.push(
             entity.paused
               ? paused
-              : stopped
-                ? text.farm.noOne
-                : entity.blocked
-                  ? blocked
+              : full
+                ? text.storeFull
+                : stopped
+                  ? text.farm.noOne
                   : text.farm.growing,
           );
           break;
@@ -770,7 +772,7 @@ export class BuildingPanel {
           // Le puits est une carrière sur sa propre recette : ses mots à lui.
           const words = entity.proto === 'well' ? text.well : text.quarry;
 
-          lines.push(entity.paused ? paused : stopped ? words.noOne : entity.blocked ? blocked : words.working);
+          lines.push(entity.paused ? paused : full ? text.storeFull : stopped ? words.noOne : words.working);
           break;
         }
 
@@ -792,12 +794,12 @@ export class BuildingPanel {
           lines.push(
             entity.paused
               ? text.lumberCamp.paused
-              : stopped
-                ? text.lumberCamp.noOne
-                : this.world.treesLeft(entity) === 0
-                  ? text.lumberCamp.noTrees
-                  : entity.store.total() > entity.store.capacity - LUMBERJACKS.carry
-                    ? text.lumberCamp.full
+              : full
+                ? text.storeFull
+                : stopped
+                  ? text.lumberCamp.noOne
+                  : this.world.treesLeft(entity) === 0
+                    ? text.lumberCamp.noTrees
                     : text.lumberCamp.working,
           );
           break;

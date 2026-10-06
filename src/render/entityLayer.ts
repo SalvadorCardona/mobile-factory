@@ -12,11 +12,12 @@
  * le bâtiment fini, et le bâtiment cabossé, affiché dès que les mutants lui
  * ont pris la moitié de ses points de vie. Certains ont en plus un morceau
  * animé : la roue de la foreuse tourne quand elle travaille, les cultures de
- * la ferme ondulent, la cheminée du labo fume quand une recherche tourne. Une foreuse ou une ferme bloquée, coffre plein, porte
- * au-dessus du toit une bulle qui flotte : il faut venir la vider. Une
- * cabane de bûcheron aussi, quand son coffre n'a plus la place d'un voyage.
- * Un producteur à l'arrêt — mis en pause, ou sans un ouvrier — porte à la
- * place la bulle « pause », son sprite pâlit, sa roue et ses cultures se figent.
+ * la ferme ondulent, la cheminée du labo fume quand une recherche tourne. Un producteur
+ * arrêté par un problème (`World.problem` : coffre plein, ouvrier manquant)
+ * porte au-dessus du toit une bulle d'alerte qui bat doucement : il faut
+ * venir le vider, ou lui trouver des bras. Mis en pause par le joueur, il
+ * porte à la place la bulle « pause ». À l'arrêt, son sprite pâlit, sa roue
+ * et ses cultures se figent.
  *
  * Tri en profondeur : les enfants sont ordonnés par le bas de leur emprise,
  * pour qu'Adam passe derrière la mairie quand il est au-dessus d'elle et
@@ -46,10 +47,10 @@ import { Container, Graphics, Sprite, type Ticker } from 'pixi.js';
 import { TILE_SIZE, floorDiv } from '../core/grid.ts';
 import { LIGHT, PALETTE, hex } from '../data/artDirection.ts';
 import { BUILDINGS, buildingLevel } from '../data/buildings.ts';
+import type { ProblemId } from '../data/problems.ts';
 import { RESEARCH } from '../data/research.ts';
 import { SPRITES, type SpriteId, type SpriteProto } from '../data/sprites.ts';
 import { locale, t } from '../i18n/locale.ts';
-import { LUMBERJACKS } from '../data/workers.ts';
 import type { Entity, EntityId } from '../sim/types.ts';
 import { terrainAt } from '../sim/terrain.ts';
 import { floorCost, floorMissing } from '../sim/antenna.ts';
@@ -108,9 +109,12 @@ const CRACK_RISE = 12;
 /** Un producteur à l'arrêt pâlit, comme délavé : lavande, la couleur des faces de l'interface. */
 const PAUSED_TINT = hex(PALETTE.paper.shade);
 
-/** La pointe de la bulle « coffre plein » descend d'autant sous le haut du cadre, et monte d'autant sur une barre de vie. */
+/** La pointe d'une bulle (alerte, pause) descend d'autant sous le haut du cadre, et monte d'autant sur une barre de vie. */
 const FULL_DIP = 6;
 const FULL_ABOVE_BAR = 16;
+/** La bulle d'alerte bat : ± `ALERT_PULSE` d'échelle, une fois par `ALERT_BEAT_MS` — doucement, sans clignoter. */
+const ALERT_PULSE = 0.08;
+const ALERT_BEAT_MS = 1100;
 
 /** Le pied des piquets de la pancarte, autant de px au-dessus du pied de l'emprise ; et sa marge de chaque côté. */
 const SIGN_RISE = 1;
@@ -133,8 +137,9 @@ interface EntityView {
   main: Sprite;
   /** Morceau animé : roue de foreuse, cultures, fumée du labo. */
   moving: Sprite | null;
-  /** Bulle « coffre plein » d'une foreuse ou d'une ferme, visible quand elle est bloquée. */
-  full: Sprite | null;
+  /** Bulle d'alerte d'un producteur, visible tant qu'un problème l'arrête ; et le problème qu'elle montre. */
+  alert: Sprite | null;
+  alertShown: ProblemId | null;
   /** Bulle « pause » d'un producteur, visible quand il est à l'arrêt. */
   pause: Sprite | null;
   /** La fissure d'un bâtiment sous la moitié de ses points de vie. */
@@ -321,19 +326,16 @@ export class EntityLayer {
       root.addChild(needs.root);
     }
 
-    let full: Sprite | null = null;
-
-    if (entity.kind === 'drill' || entity.kind === 'farm' || entity.kind === 'quarry' || entity.kind === 'lumberCamp') {
-      full = new Sprite(this.library.part('storeFull', 'bubble'));
-      full.anchor.set(SPRITES.storeFull.anchorX, SPRITES.storeFull.anchorY);
-      full.x = (entity.width * TILE_SIZE) / 2;
-      full.visible = false;
-      root.addChild(full);
-    }
-
+    let alert: Sprite | null = null;
     let pause: Sprite | null = null;
 
     if (entity.kind !== 'site' && canPause(entity.proto)) {
+      alert = new Sprite(this.library.part('alert', 'storeFull'));
+      alert.anchor.set(SPRITES.alert.anchorX, SPRITES.alert.anchorY);
+      alert.x = (entity.width * TILE_SIZE) / 2;
+      alert.visible = false;
+      root.addChild(alert);
+
       pause = new Sprite(this.library.part('paused', 'bubble'));
       pause.anchor.set(SPRITES.paused.anchorX, SPRITES.paused.anchorY);
       pause.x = (entity.width * TILE_SIZE) / 2;
@@ -367,7 +369,8 @@ export class EntityLayer {
       root,
       main,
       moving: movingSprite,
-      full,
+      alert,
+      alertShown: null,
       pause,
       crack,
       tint: 0xffffff,
@@ -536,45 +539,47 @@ export class EntityLayer {
       this.drawBar(view, entity);
       this.showNeeds(view, entity, zoom, ticker.deltaMS);
       this.showSign(view, entity, zoom);
-      this.showFull(view, entity, ticker.lastTime);
+      this.showAlert(view, entity, ticker.lastTime);
       this.showPause(view, entity, ticker.lastTime);
       this.feel(view, ticker.deltaMS);
       this.animate(view, entity, ticker.lastTime);
     }
   }
 
-  /** La bulle « coffre plein » flotte au-dessus du toit tant que la machine attend. */
-  private showFull(view: EntityView, entity: Entity, now: number): void {
-    if (!view.full) return;
+  /** La bulle d'alerte flotte et bat au-dessus du toit tant qu'un problème arrête le producteur. */
+  private showAlert(view: EntityView, entity: Entity, now: number): void {
+    if (!view.alert || entity.kind === 'site') return;
 
-    // À l'arrêt, c'est la bulle « pause » qui parle.
-    const stopped = entity.kind !== 'site' && canPause(entity.proto) && this.world.stopped(entity);
-    const blocked =
-      !stopped &&
-      ((entity.kind === 'drill' && entity.output !== null && entity.blocked) ||
-      ((entity.kind === 'farm' || entity.kind === 'quarry') && entity.blocked) ||
-      // Plus la place d'un voyage au coffre : les bûcherons attendent un porteur.
-      (entity.kind === 'lumberCamp' && entity.store.total() > entity.store.capacity - LUMBERJACKS.carry));
+    const problem = this.world.problem(entity);
 
-    view.full.visible = blocked;
-    if (!blocked) return;
+    view.alert.visible = problem !== null;
+    if (problem === null) return;
+
+    if (problem !== view.alertShown) {
+      view.alertShown = problem;
+      view.alert.texture = this.library.part('alert', problem);
+    }
 
     // La pointe touche le haut du toit ; au-dessus de la barre de vie quand elle est là.
     const top = entity.height * TILE_SIZE - SPRITES[spriteOf(entity)].height;
+    const beat = Math.sin((now / ALERT_BEAT_MS) * Math.PI * 2);
 
-    view.full.y = top + FULL_DIP - (view.bar.visible ? FULL_ABOVE_BAR : 0) + Math.sin(now * 0.004) * 2;
+    view.alert.y = top + FULL_DIP - (view.bar.visible ? FULL_ABOVE_BAR : 0) + Math.sin(now * 0.004) * 2;
+    view.alert.scale.set(1 + beat * ALERT_PULSE);
   }
 
-  /** La bulle « pause » flotte au-dessus d'un producteur à l'arrêt, et le sprite pâlit. */
+  /** La bulle « pause » flotte au-dessus d'un producteur que le joueur a arrêté ; à l'arrêt, le sprite pâlit. */
   private showPause(view: EntityView, entity: Entity, now: number): void {
     if (!view.pause || entity.kind === 'site') return;
 
     const stopped = this.world.stopped(entity);
+    // Sans ouvrier alors qu'on en demande, c'est la bulle d'alerte qui parle.
+    const chosen = stopped && this.world.problem(entity) === null;
 
-    view.pause.visible = stopped;
+    view.pause.visible = chosen;
     view.tint = stopped ? PAUSED_TINT : 0xffffff;
     if (view.hit <= 0) view.main.tint = view.tint;
-    if (!stopped) return;
+    if (!chosen) return;
 
     const top = entity.height * TILE_SIZE - SPRITES[spriteOf(entity)].height;
 

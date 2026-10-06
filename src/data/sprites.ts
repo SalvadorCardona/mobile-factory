@@ -17,6 +17,7 @@
  */
 
 import { ADAM } from '../art/adam.ts';
+import { ALERT } from '../art/alert.ts';
 import { ANTENNA, ANTENNA_2, ANTENNA_3 } from '../art/antenna.ts';
 import { ARROW } from '../art/arrow.ts';
 import { BUILDER } from '../art/builder.ts';
@@ -60,7 +61,6 @@ import { QUEEN_SPRITE } from '../art/queen.ts';
 import { PUDDLE } from '../art/puddle.ts';
 import { ROCK_COAL, ROCK_IRON, ROCK_STONE } from '../art/rocks.ts';
 import { SAPLING_SPRITE } from '../art/sapling.ts';
-import { STORE_FULL } from '../art/storeFull.ts';
 import { TARGET } from '../art/target.ts';
 import { TOWN_HALL } from '../art/townHall.ts';
 import { TREE, TREE_DEAD, TREE_PINE } from '../art/trees.ts';
@@ -115,8 +115,8 @@ export const SPRITES = {
   guardian: GUARDIAN,
   arrow: ARROW,
   target: TARGET,
-  /** Bulle « coffre plein » au-dessus d'une foreuse ou d'une ferme arrêtée. */
-  storeFull: STORE_FULL,
+  /** Bulles d'alerte au-dessus d'un producteur arrêté par un problème : coffre plein, ouvrier manquant. */
+  alert: ALERT,
   /** Bulle « en pause » au-dessus d'un producteur que le joueur a arrêté. */
   paused: PAUSED,
   /** Bulle « affamé » au-dessus d'un habitant à court de nourriture. */
