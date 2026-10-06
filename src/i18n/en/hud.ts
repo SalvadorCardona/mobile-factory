@@ -206,7 +206,7 @@ export const hud: Messages['hud'] = {
     inTown: (item: string, amount: number): string => `${item} — ${amount} in town`,
     wanted: (item: string, amount: number): string => `${item} — Eve needs it, ${amount} in the bag`,
     prestige: 'Prestige',
-    prestigeLabel: (amount: number): string => `Colony prestige: ${amount}`,
+    prestigeLabel: (amount: number): string => `Prestige: ${amount}`,
   },
   hintBulb: 'Show the tip',
   pause: 'Pause',

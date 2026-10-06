@@ -259,7 +259,7 @@ export const hud = {
     inTown: (item: string, amount: number): string => `${item} — ${amount} en ville`,
     wanted: (item: string, amount: number): string => `${item} — Ève en demande, ${amount} dans le sac`,
     prestige: 'Prestige',
-    prestigeLabel: (amount: number): string => `Prestige de la colonie : ${amount}`,
+    prestigeLabel: (amount: number): string => `Prestige : ${amount}`,
   },
   hintBulb: 'Afficher le conseil',
   pause: 'Pause',

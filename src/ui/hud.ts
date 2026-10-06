@@ -187,8 +187,10 @@ export class Hud {
   public readonly bag: HTMLButtonElement;
   /** Le stock de la ville, compact. */
   private readonly town: HTMLElement;
-  /** Le Prestige de la colonie : son icône et son compte. */
+  /** Le Prestige de la colonie : son icône et son compte, en haut à gauche. */
   private readonly prestige: HTMLElement;
+  /** Le Prestige et la capsule météo : sous la quête sur un téléphone (cf. `.hud-corner`). */
+  private readonly corner: HTMLElement;
   private lastPrestige = '';
   /** La population de la ville : au travail, inactifs, enfants. */
   private readonly people: HTMLElement;
@@ -377,6 +379,8 @@ export class Hud {
     this.speech.setAttribute('aria-live', 'polite');
     this.weather = element('div', 'hud-weather');
     this.weather.hidden = true;
+    this.corner = element('div', 'hud-corner');
+    this.corner.append(this.prestige, this.weather);
 
     this.banner = element('div', 'hud-banner');
     this.banner.hidden = true;
@@ -455,8 +459,8 @@ export class Hud {
     const side = element('div', 'hud-side');
 
     this.quest.append(fold);
-    side.append(buttons, this.town, this.prestige, this.people, this.hunger, this.bag);
-    this.top.append(this.quest, side, this.weather);
+    side.append(buttons, this.town, this.people, this.hunger, this.bag);
+    this.top.append(this.quest, side, this.corner);
 
     this.root.append(
       // Les confettis d'abord : ils tombent derrière les cartes du HUD et les fenêtres.
@@ -1600,7 +1604,7 @@ export class Hud {
     items.dataset['more'] = String(items.scrollLeft + items.clientWidth < items.scrollWidth - 1);
   }
 
-  /** Le Prestige : caché tant que la colonie n'en a pas, puis toujours là, à côté de la ville. */
+  /** Le Prestige : caché tant que la colonie n'en a pas, puis toujours là, en haut à gauche. */
   private updatePrestige(): void {
     const { prestige } = this.world;
     const key = String(prestige);
@@ -1611,9 +1615,8 @@ export class Hud {
     const label = t().hud.stock;
 
     this.prestige.hidden = prestige <= 0;
-    this.prestige.title = label.prestige;
-    this.prestige.setAttribute('aria-label', label.prestigeLabel(prestige));
-    this.prestige.replaceChildren(prestigeIcon(20), text('hud-prestige-name', label.prestige), text('hud-prestige-count', key));
+    this.prestige.replaceChildren(prestigeIcon(18), text('hud-prestige-count', key));
+    setTip(this.prestige, label.prestigeLabel(prestige));
   }
 
   /* ------------------------------------------------------------ célébration */
@@ -1664,7 +1667,9 @@ export class Hud {
     }
 
     const quest = this.quest.getBoundingClientRect();
-    const above = this.weather.hidden ? quest.bottom : Math.max(quest.bottom, this.weather.getBoundingClientRect().bottom);
+    // Sur un téléphone, le Prestige et la météo sont sous la quête ; ailleurs, le Prestige est plus haut.
+    const under = [this.prestige, this.weather].filter((node) => !node.hidden);
+    const above = Math.max(quest.bottom, ...under.map((node) => node.getBoundingClientRect().bottom));
 
     this.root.dataset['celebration'] = 'docked';
     this.celebration.style.top = `${Math.round(above + CELEBRATION_GAP)}px`;

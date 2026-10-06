@@ -906,18 +906,27 @@ button.hud-stock:active {
   display: none;
 }
 
-/* Le Prestige de la colonie : sa médaille, son nom et son compte, sous la ville. */
+/*
+ * Le Prestige de la colonie : sa médaille et son compte, comme les compteurs
+ * de la population, dans la colonne de gauche, en haut. Le survol et l'appui
+ * long lisent son libellé.
+ */
+.hud-corner {
+  display: contents;
+}
+
 .hud .hud-prestige {
-  width: 124px;
-  display: flex;
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: start;
+  margin-right: 10px;
+  display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 10px;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--yellow-shade);
+  gap: 3px;
+  height: 32px;
+  padding: 0 10px 0 7px;
+  border-radius: 999px;
+  font-size: 15px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -925,14 +934,44 @@ button.hud-stock:active {
   display: none;
 }
 
-.hud-prestige-name {
-  flex: 1;
+.hud-prestige .icon {
+  width: 18px;
+  height: 18px;
 }
 
-.hud-prestige-count {
-  font-size: 16px;
-  letter-spacing: 0;
-  color: var(--ink);
+/*
+ * Sur un téléphone, la quête prend toute la largeur à gauche des boutons :
+ * le Prestige se range sous elle, au bord gauche, sur la ligne de la capsule
+ * météo, qui se centre dans ce qui reste.
+ */
+@media (max-width: 599px) {
+  .hud-corner {
+    grid-column: 2;
+    grid-row: 2;
+    min-width: 0;
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .hud .hud-prestige {
+    flex: none;
+    margin-right: 0;
+    height: 28px;
+    padding: 0 8px 0 6px;
+    font-size: 14px;
+  }
+
+  .hud-prestige .icon {
+    width: 15px;
+    height: 15px;
+  }
+
+  .hud-corner .hud-weather {
+    min-width: 0;
+    margin: 0 auto;
+  }
 }
 
 /*
@@ -953,6 +992,11 @@ button.hud-stock:active {
     gap: 10px;
     padding: 6px 14px;
     pointer-events: auto;
+  }
+
+  /* Le Prestige tient le coin : le bandeau se range dessous. */
+  .hud-top:has(.hud-prestige:not([hidden])) .hud-town {
+    top: 42px;
   }
 
   .hud-town .hud-bag-title {
@@ -1199,16 +1243,6 @@ button.hud-stock:active {
  */
 @media (max-width: 599px), (max-height: 499px) {
   .hud-town {
-    display: none;
-  }
-
-  .hud .hud-prestige {
-    width: 104px;
-    padding: 4px 8px;
-    border-radius: 18px;
-  }
-
-  .hud-prestige-name {
     display: none;
   }
 
