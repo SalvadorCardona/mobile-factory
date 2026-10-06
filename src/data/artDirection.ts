@@ -48,11 +48,8 @@ export const PALETTE = {
   /** Vert fluo radioactif : **réservé** aux mutants et à leurs flaques. */
   toxic: { base: '#7df25f', shade: '#3fcf6a', light: '#d2ffb8' },
   skin: { base: '#ffc9a3', shade: '#f29a8c', light: '#ffe2cf' },
-  /**
-   * Blanc du HUD, des yeux, des os. Son ombre est lavande, pas grise.
-   * `cream` est le fond des cartes du HUD de jeu (barre du haut, puces, sac).
-   */
-  paper: { base: '#ffffff', shade: '#dcdcff', light: '#ffffff', cream: '#fff6e0' },
+  /** Blanc du HUD, des yeux, des os. Son ombre est lavande, pas grise. */
+  paper: { base: '#ffffff', shade: '#dcdcff', light: '#ffffff' },
 } as const;
 
 /**

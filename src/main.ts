@@ -28,6 +28,7 @@ import { seedsFor, type PerkId } from './data/perks.ts';
 import { Inspect } from './input/inspect.ts';
 import { Joystick } from './input/joystick.ts';
 import { Keyboard, isTyping, type KeyboardState } from './input/keyboard.ts';
+import { shortcutOf } from './input/shortcuts.ts';
 import { Placement } from './input/placement.ts';
 import { PointerRouter } from './input/pointer.ts';
 import { Pinch, bindWheelZoom } from './input/zoom.ts';
@@ -69,7 +70,7 @@ import { WorldMap } from './ui/worldMap.ts';
  */
 const MAX_FRAME_MS = 250;
 
-/** Hauteur du bouton « Construire » et de sa marge, en pixels écran : le minimum réservé en bas. */
+/** Hauteur du bouton « Bâtir » et de sa marge, en pixels écran : le minimum réservé en bas. */
 const HUD_BOTTOM_INSET = 84;
 
 /** Seuil sous lequel un mouvement d'axe ne vaut pas une commande. */
@@ -295,7 +296,7 @@ async function main(): Promise<void> {
 
   zoom.root.prepend(worldMap.button);
   hud.root.append(worldMap.root, zoom.root, stick.root, buildMenu.root, panel.root, inventory.root, trade.root);
-  stick.avoid([...buildMenu.bottomParts, hud.bag], hud.root);
+  stick.avoid(buildMenu.bottomParts, hud.root);
   hud.bag.addEventListener('click', () => inventory.toggle());
   hud.setProjector((x, y) => renderer.worldToScreen(x, y));
   buildMenu.setProjector((x, y) => renderer.worldToScreen(x, y));
@@ -403,7 +404,8 @@ async function main(): Promise<void> {
   window.addEventListener(
     'keydown',
     (event) => {
-      if (isTyping(event.target)) return;
+      // Ctrl, Alt ou Cmd : un raccourci du navigateur ou du système, pas du menu.
+      if (isTyping(event.target) || event.ctrlKey || event.metaKey || event.altKey) return;
 
       const canOpen = started && !paused && !settings.open && !world.defeated && !worldMap.open;
 
@@ -423,10 +425,18 @@ async function main(): Promise<void> {
     autosave.now();
   });
   window.addEventListener('pagehide', () => autosave.now());
+  // Les raccourcis du jeu (`input/shortcuts.ts`) : P, Échap, I, M, ². Le menu de construction a pris les siens avant.
   window.addEventListener('keydown', (event) => {
-    if (event.code === 'KeyP' && !settings.open) setPaused(!paused);
+    const typing = isTyping(event.target);
+    const { code, key, repeat, ctrlKey, metaKey, altKey } = event;
+    const shortcut = shortcutOf({ code, key, repeat, ctrlKey, metaKey, altKey, typing });
+
+    if (shortcut === 'pause' && !settings.open) setPaused(!paused);
     // Échap ferme d'abord ce qui est au premier plan ; la pause, si rien ne l'est.
-    if (event.code === 'Escape') {
+    if (shortcut === 'escape') {
+      // Le champ qui avait le clavier le rend : les touches suivantes reviennent au jeu.
+      if (typing && event.target instanceof HTMLElement) event.target.blur();
+
       const action = escapeAction({
         settingsOpen: settings.open,
         paused,
@@ -446,19 +456,12 @@ async function main(): Promise<void> {
       else if (action === 'closeInventory') inventory.close();
       else setPaused(action === 'pause');
     }
-    // Le sac, comme dans la plupart des jeux sur PC : I, lu par position comme ZQSD.
-    if (event.code === 'KeyI' && !isTyping(event.target) && started && !paused && !settings.open && !worldMap.open) {
-      inventory.toggle();
-    }
-    // La carte du monde : M, lu par caractère et non par position comme ZQSD — c'est une initiale, et
-    // le M d'un clavier AZERTY n'est pas à la place de celui d'un QWERTY.
-    const mapKey = event.key.toLowerCase() === 'm' && !event.ctrlKey && !event.metaKey && !event.altKey;
-
-    if (mapKey && !isTyping(event.target) && !event.repeat) {
+    if (shortcut === 'inventory' && started && !paused && !settings.open && !worldMap.open) inventory.toggle();
+    if (shortcut === 'map') {
       if (worldMap.open) worldMap.close();
       else if (started && !paused && !settings.open && !world.defeated) worldMap.show();
     }
-    if (event.code === 'Backquote' && import.meta.env.DEV) hud.toggleDebug();
+    if (shortcut === 'debug' && import.meta.env.DEV) hud.toggleDebug();
     // Débogage : F lève ou rabat le brouillard de guerre — en dev, panneau de debug ouvert.
     if (event.code === 'KeyF' && import.meta.env.DEV && hud.debugOn && !isTyping(event.target)) {
       world.push({ type: 'setFog', enabled: !world.fog.enabled });
@@ -588,14 +591,14 @@ async function main(): Promise<void> {
   });
 
   /**
-   * Ce que le bas de l'écran occupe : le sac et le bouton « Construire », ou plus quand
+   * Ce que le bas de l'écran occupe : le bouton « Bâtir », ou plus quand
    * le tiroir, la barre de placement ou la fenêtre d'un bâtiment sont ouverts.
    */
   function bottomInset(): number {
     const height = renderer.app.screen.height;
     let top = height - HUD_BOTTOM_INSET;
 
-    for (const node of [...buildMenu.bottomParts, hud.bag, panel.root, inventory.root, trade.root]) {
+    for (const node of [...buildMenu.bottomParts, panel.root, inventory.root, trade.root]) {
       const rect = node.getBoundingClientRect();
 
       if (rect.height > 0) top = Math.min(top, rect.top);

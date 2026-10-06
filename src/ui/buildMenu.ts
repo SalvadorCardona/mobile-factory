@@ -1,8 +1,7 @@
 /**
  * Menu de construction.
  *
- * Un seul bouton à l'écran — « Construire », gros, corail, à portée de
- * pouce en bas à droite — qui ouvre un tiroir. Le tiroir
+ * Un seul bouton à l'écran — « Bâtir » — qui ouvre un tiroir. Le tiroir
  * liste les bâtiments débloqués en cartes : vignette, nom, ce que fait le
  * bâtiment en une ligne (`effect`), coût et ouvriers en icônes — et, pour
  * une foreuse, son assise : moitié filon, moitié herbe. Choisir une carte ferme le tiroir et arme le placement
@@ -20,17 +19,13 @@
  * bulle sous le fantôme (`placementReason.ts`), qui le suit sur la carte ;
  * la barre garde le remède quand Adam peut dégager la place.
  *
- * Tant qu'un bâtiment ou la route est armé, une étiquette « Mode
- * construction » tient le haut de l'écran, avec un « × » qui en sort
- * (`Placement.cancel`) ; le HUD du haut s'efface derrière elle (`style.css`).
- *
  * Une carte ne se grise pas quand le sac est vide : poser un chantier ne
  * coûte rien, c'est le remplir qui coûte. Le coût se colore d'après ce qui
  * peut le payer — le sac d'Adam et le stock de la ville : vert ce qu'il y a
  * déjà, orange ce qui manque.
  *
  * Le menu ne montre que ce qui se bâtit : ni carte grisée, ni cadenas
- * (`World.inMenu`). Tant que la mairie est en chantier, le bouton « Construire »
+ * (`World.inMenu`). Tant que la mairie est en chantier, le bouton « Bâtir »
  * lui-même reste caché : un débutant ne dépense pas son premier bois
  * ailleurs. Ensuite, un bâtiment n'y entre qu'une fois débloqué — sa
  * recherche finie au labo (forge, four, clinique), son plan donné par Ève,
@@ -38,7 +33,7 @@
  * Ce qui reste à découvrir se lit au labo, pas ici.
  *
  * Un bâtiment qui vient d'entrer porte « Nouveau » jusqu'à ce qu'on choisisse
- * sa carte (commande `seeBuilding`) ou qu'on le pose ; le bouton « Construire »
+ * sa carte (commande `seeBuilding`) ou qu'on le pose ; le bouton « Bâtir »
  * a une pastille tant qu'il en reste un. L'annonce, elle, est un toast du HUD
  * (`buildingsUnlocked`).
  *
@@ -144,8 +139,6 @@ export class BuildMenu {
   private readonly confirmButton: HTMLButtonElement;
   private readonly repeatButton: HTMLButtonElement;
   private readonly cancelButton: HTMLButtonElement;
-  /** « Mode construction » et son « × », en haut de l'écran tant qu'un placement est armé. */
-  private readonly modeTag: HTMLElement;
   /** Pourquoi le fantôme ne se pose pas, en une ligne, dans une bulle sous lui. */
   private readonly ghostBubble: HTMLElement;
   private project: (x: number, y: number) => { x: number; y: number } = (x, y) => ({ x, y });
@@ -313,26 +306,12 @@ export class BuildMenu {
       this.confirmButton,
     );
 
-    this.modeTag = document.createElement('div');
-    this.modeTag.className = 'build-mode';
-    this.modeTag.hidden = true;
-
-    const modeLabel = document.createElement('span');
-
-    modeLabel.className = 'build-mode-label';
-
-    const leave = button('', () => this.placement.cancel());
-
-    leave.className = 'build-mode-close';
-    leave.append(uiIcon('close'));
-    this.modeTag.append(modeLabel, leave);
-
     this.ghostBubble = document.createElement('div');
     this.ghostBubble.className = 'build-ghost-bubble';
     this.ghostBubble.setAttribute('role', 'status');
     this.ghostBubble.hidden = true;
 
-    this.root.append(this.modeTag, this.ghostBubble, this.drawer, this.armedBar, this.toggleButton);
+    this.root.append(this.ghostBubble, this.drawer, this.armedBar, this.toggleButton);
 
     // Le menu vit toute la partie : ses libellés fixes suivent la langue.
     // Ceux qui changent avec l'état (barre de pose, verrous) se relisent à chaque `refresh()`.
@@ -340,9 +319,6 @@ export class BuildMenu {
       const text = t();
 
       toggleLabel.data = text.menu.build;
-      modeLabel.textContent = text.menu.buildMode;
-      leave.setAttribute('aria-label', text.menu.leaveBuildMode);
-      leave.title = text.menu.leaveBuildMode;
       spaceKey.textContent = text.menu.keys.space;
       title.textContent = text.menu.drawerTitle;
       this.search.placeholder = text.menu.searchPlaceholder;
@@ -849,7 +825,7 @@ export class BuildMenu {
     let fresh = false;
 
     for (const [id, card] of this.cards) {
-      // La pastille du bouton « Construire » ne dépend ni de la recherche ni de la famille.
+      // La pastille du bouton « Bâtir » ne dépend ni de la recherche ni de la famille.
       const isNew = this.shown(id) && this.world.isNewInMenu(id);
       const badge = this.badges.get(id);
 
@@ -881,7 +857,6 @@ export class BuildMenu {
 
     this.toggleButton.hidden = !idle || this.opened || !this.unlocked();
     this.armedBar.hidden = idle;
-    if (this.modeTag.hidden !== idle) this.modeTag.hidden = idle;
     this.armedBar.dataset['placing'] = String(placing);
 
     if (armed) {

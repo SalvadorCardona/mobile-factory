@@ -65,13 +65,8 @@ prend que ce qui rentre, le réservé reste au coffre, un coffre filtré grise
 le reste. Les chantiers
 puisent dans les deux, la ville seulement dans son rayon (`logisticRadius`,
 `sim/warehouse.ts`, le cercle jaune du mode construction). Le HUD
-(piste A) a **une seule barre en haut** : le Prestige, un séparateur, puis
-la ville objet par objet, qui défile de côté ; pause et réglages ronds à
-droite. Dessous, à gauche, des puces : population (au travail, inactifs,
-enfants, logés / habitants, en corail ceux qui dorment dehors, Bonheur),
-alerte de nourriture, météo ; la quête vient sous elles. En bas, la jauge
-du sac et le gros bouton corail « Construire ». Fond crème, contour marine
-épais, ombre plate (`--cream`, `--hud-line`, `--hud-drop`) ; le sac (tap, ou touche I) ouvre
+les montre en deux cartes compactes (sur un écran large, la ville en bandeau
+d'une ligne en haut à gauche, qui défile de côté) ; le sac (tap, ou touche I) ouvre
 `ui/inventoryPanel.ts`, sans pause, comme la fenêtre d'un bâtiment. Sa
 section Ville est un tableau de bord (`sim/flows.ts`, `World.flows`) : débit
 net par objet sur deux minutes (anneau d'échantillons, pas sauvegardé) et
@@ -416,7 +411,7 @@ sauvegarde : 0), ni porté ni stocké. Chaque bâtiment achevé rapporte
 `BUILD_PRESTIGE` une seule fois par emplacement (`prestigeSites` : une
 ruine rebâtie ne paie pas), chaque ennemi vaincu `KILL_PRESTIGE` ;
 événement `prestigeGained`, « +N Prestige » flottant, médaille et nombre
-au début de la barre du haut, la ville à sa suite. Rien ne le dépense encore.
+en haut à gauche du HUD, le bandeau de la ville sur sa ligne (sous la quête sur un téléphone). Rien ne le dépense encore.
 
 **Bases mutantes** (`src/data/enemyBases.ts`, `src/sim/enemyBases.ts`) —
 à la création de la partie, des anneaux de campements (`ENEMY_BASE_RINGS` :
@@ -545,19 +540,23 @@ Les règles, en résumé :
   Fredoka, embarquée via `@fontsource` (ses chiffres ne se confondent pas).
   L'interface suit les règles des sprites : cartes blanches et capsules,
   trois tons (couleur, « face avant » pleine plus sombre, reflet en capsule),
-  aucun contour — sauf le HUD de jeu (barre, puces, sac, « Construire »,
-  mode construction), crème cerclé de marine sur une ombre plate, comme la
-  maquette A ; couleurs de `PALETTE` recopiées en variables dans
+  aucun contour ; couleurs de `PALETTE` recopiées en variables dans
   `style.css` (`--accent`, `--good`, `--danger`…). Pas d'emoji : les
   pictogrammes sont des SVG de `src/art/ui.ts`. Le panneau de debug ne
   s'affiche qu'avec `?debug` en dev.
+- Clavier : ZQSD / WASD (par position) et flèches font marcher Adam
+  (`input/keyboard.ts`) ; Espace, flèches, Entrée et Échap tiennent le menu
+  de construction (`BuildMenu.handleKey`) ; P, Échap, I, M et ² sont une
+  table pure (`input/shortcuts.ts`, testée) que `main.ts` applique. Une
+  touche tapée dans un champ (`isTyping`) ou avec Ctrl, Alt, Cmd n'est
+  jamais un raccourci — sauf Échap, qui rend la main au jeu.
 - `src/ui/icons.ts` sert icônes d'objets, vignettes de bâtiments et
   pictogrammes (`src/art/ui.ts`) en `data:` URL SVG pour le DOM. Le menu de construction est un tiroir derrière un
-  seul bouton, « Construire » — aucun autre bouton ne porte ce libellé ; armer un bâtiment passe la carte en mode construction
+  seul bouton, « Bâtir » — aucun autre bouton ne porte ce libellé ; armer un bâtiment passe la carte en mode construction
   (piste C, `render/ghostLayer.ts`) : la grille n'existe que là, en pointillés qui s'estompent en
   cercle autour du fantôme ; son emprise se colore case par case (menthe, corail :
   `PlacementBlock.blocked`) dans un contour pointillé ; une bulle sous lui dit le blocage en une
-  ligne ; en haut, « Mode construction » et un « × » qui en sort, le HUD du haut effacé. Le bouton n'apparaît qu'une fois la mairie
+  ligne ; on en sort par « Annuler » ou Échap. Le bouton n'apparaît qu'une fois la mairie
   debout, et le tiroir ne montre que ce qui se bâtit (`World.inMenu`) : ni carte grisée ni
   cadenas. Un champ de recherche (loupe) en tête du tiroir prend le focus à chaque
   ouverture, vidé, et filtre à la frappe sur le nom, le métier et ce que produit le bâtiment,

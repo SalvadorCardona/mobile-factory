@@ -1,0 +1,42 @@
+import { describe, expect, it } from 'vitest';
+import { shortcutOf } from './shortcuts.ts';
+
+describe('shortcutOf', () => {
+  it('P met en pause, Échap ferme ou met en pause, I ouvre le sac', () => {
+    expect(shortcutOf({ code: 'KeyP', key: 'p' })).toBe('pause');
+    expect(shortcutOf({ code: 'Escape', key: 'Escape' })).toBe('escape');
+    expect(shortcutOf({ code: 'KeyI', key: 'i' })).toBe('inventory');
+    expect(shortcutOf({ code: 'Backquote', key: '²' })).toBe('debug');
+  });
+
+  it('M ouvre la carte, lu par caractère : le M d’un AZERTY comme celui d’un QWERTY', () => {
+    expect(shortcutOf({ code: 'KeyM', key: 'm' })).toBe('map');
+    expect(shortcutOf({ code: 'Semicolon', key: 'm' })).toBe('map');
+    expect(shortcutOf({ code: 'KeyM', key: ',' })).toBeNull();
+    expect(shortcutOf({ code: 'KeyM', key: 'M' })).toBe('map');
+  });
+
+  it('une touche tapée dans un champ n’est jamais un raccourci, sauf Échap qui rend la main au jeu', () => {
+    for (const [code, key] of [['KeyP', 'p'], ['KeyI', 'i'], ['KeyM', 'm'], ['Backquote', '`']] as const) {
+      expect(shortcutOf({ code, key, typing: true })).toBeNull();
+    }
+    expect(shortcutOf({ code: 'Escape', key: 'Escape', typing: true })).toBe('escape');
+  });
+
+  it('Ctrl, Alt ou Cmd : la touche est au navigateur', () => {
+    expect(shortcutOf({ code: 'KeyP', key: 'p', ctrlKey: true })).toBeNull();
+    expect(shortcutOf({ code: 'KeyM', key: 'm', metaKey: true })).toBeNull();
+    expect(shortcutOf({ code: 'KeyI', key: 'i', altKey: true })).toBeNull();
+  });
+
+  it('une touche tenue ne bascule pas en boucle', () => {
+    expect(shortcutOf({ code: 'KeyP', key: 'p', repeat: true })).toBeNull();
+    expect(shortcutOf({ code: 'Escape', key: 'Escape', repeat: true })).toBeNull();
+  });
+
+  it('les touches de marche et les autres ne sont pas des raccourcis', () => {
+    for (const code of ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'Space', 'Enter']) {
+      expect(shortcutOf({ code, key: '' })).toBeNull();
+    }
+  });
+});
