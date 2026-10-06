@@ -129,6 +129,13 @@ pâli sur la carte), et un bâtiment qui emploie règle ses ouvriers entre
 `minWorkers` et `workers` (`setWorkers`, sélecteur − / + ; zéro vaut pause) :
 `sim/staffing.ts` répartit la population de la ville par id, un poste sans
 ouvrier libre reste vide, « ouvrier manquant ».
+Arrêté sans l'avoir voulu, un producteur porte une **bulle d'alerte**
+(`World.problem`, `sim/problems.ts`, liste ordonnée `PROBLEM_ORDER` de
+`data/problems.ts` : entrepôt plein, puis ouvrier manquant ; sprite `alert`,
+un morceau par problème), qui bat doucement et que sa fenêtre explique en
+une ligne. Elle paraît aussitôt et ne s'efface qu'après `holdTicks` sans
+problème (tout de suite si le coffre est vidé à moitié) : pas de
+clignotement. La pause voulue garde ⏸.
 La **carrière** (`quarry`, trois ouvriers, coût tout en bois) taille la
 pierre dans les ruines, sans rocher, comme une ferme sa nourriture (recette
 `cutStone`) ; porteurs et logisticiens la vident.

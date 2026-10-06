@@ -9,6 +9,8 @@ export const panel: Messages['panel'] = {
   about: 'About',
   blocked: 'Stuck: chest full. Bump into it or tap Take all.',
   paused: 'Paused: nothing goes in or out. Tap Resume.',
+  /** A producer stopped by a full chest: the map's alert bubble, explained. */
+  storeFull: 'Storage full: production has stopped. Empty it or build a logistics post nearby.',
   transferButton: 'Transfer',
   transferBag: 'Transfer bag',
   cancelSite: 'Cancel site',
@@ -122,7 +124,6 @@ export const panel: Messages['panel'] = {
     paused: 'Paused: the lumberjacks bring back their wood, then loaf around.',
     noOne: 'Stopped: no lumberjack. Add a worker.',
     noTrees: 'No trees left in range.',
-    full: 'Chest full: the lumberjacks are waiting for it to be emptied.',
     working: 'Axes ringing out.',
   },
 

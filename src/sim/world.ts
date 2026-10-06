@@ -74,6 +74,7 @@ import { AGES, COLONY, NURSERY_CARE } from '../data/inhabitants.ts';
 import { TOWN_PLENTY, type ItemId } from '../data/items.ts';
 import { NEED_ALERT, NEED_IDS, NEEDS, type NeedId } from '../data/needs.ts';
 import { BUILD_PRESTIGE, KILL_PRESTIGE } from '../data/prestige.ts';
+import { PROBLEMS, type ProblemId } from '../data/problems.ts';
 import {
   PERKS,
   bagBonus,
@@ -168,6 +169,7 @@ import { RoadNetwork } from './roads.ts';
 import type { SavedEntity, WorldState } from './save.ts';
 import { Scheduler } from './scheduler.ts';
 import { Store } from './store.ts';
+import { ProblemWatch, type ProblemFacts } from './problems.ts';
 import { transferAllPlan, transferAmount, type TransferDirection, type TransferQuantity, type TransferRules } from './transfer.ts';
 import { findSpawn, habitatAt, isBuildable, isWalkable, oreAt, terrainAt } from './terrain.ts';
 import { inLogisticRange, pointInLogisticRange } from './warehouse.ts';
@@ -791,6 +793,9 @@ export class World {
   /** Depuis quel tick chaque ouvrier dehors est sans travail, cf. `isIdle()`. Jamais sauvegardé. */
   private readonly idleSince = new Map<MobileId, number>();
 
+  /** Le problème que montre chaque producteur — coffre plein, ouvrier manquant —, cf. `problem()`. Jamais sauvegardé. */
+  private readonly problems = new ProblemWatch();
+
   public constructor(seed: number) {
     this.seed = seed >>> 0;
     this.resources = new ResourceIndex(this.seed);
@@ -1050,6 +1055,7 @@ export class World {
       if (entity) this.wake(entity);
     }
 
+    this.watchProblems();
     this.checkObjectives();
     this.watchUnlocks();
     this.flows.observe(this.tickCount, this.townStock());
@@ -6209,6 +6215,52 @@ export class World {
       wanted: building.staff,
       filled: this.roster().filled.get(building.id) ?? 0,
     };
+  }
+
+  /**
+   * Ce qui arrête un producteur sans que le joueur l'ait voulu, le plus
+   * important d'abord : `null` s'il tourne, ou s'il est en pause (la bulle ⏸).
+   * Relevé tous les quelques ticks avec son hystérésis (`sim/problems.ts`) : il ne
+   * clignote pas quand un coffre se vide et se remplit aussitôt.
+   */
+  public problem(building: Building): ProblemId | null {
+    return this.problems.of(building.id);
+  }
+
+  /** Relève les problèmes des producteurs, tous les `PROBLEMS.everyTicks`, et oublie ceux qui ne sont plus des producteurs debout. */
+  private watchProblems(): void {
+    if (this.tickCount % PROBLEMS.everyTicks !== 0) return;
+    for (const entity of this.entities.values()) {
+      if (entity.kind !== 'site' && canPause(entity.proto)) this.problems.step(entity.id, this.problemFacts(entity), this.tickCount);
+    }
+    for (const id of this.problems.ids()) {
+      if (this.entities.get(id)?.kind === 'site' || !this.entities.has(id)) this.problems.forget(id);
+    }
+  }
+
+  private problemFacts(building: Building): ProblemFacts {
+    const staffed = employs(building.proto);
+    const stoppedByPlayer = building.paused || (staffed && building.staff === 0);
+    const noWorker = staffed && !stoppedByPlayer && this.stopped(building);
+    const { store } = building;
+    let storeFull = false;
+
+    // Le coffre n'a plus la place de la production suivante — une foreuse ou une ferme s'y est endormie.
+    if (building.kind === 'drill') {
+      const amount = Object.values(RECIPES[DRILL_RECIPE].outputs)[0] ?? 1;
+
+      storeFull = building.blocked && building.output !== null && store.total() + amount > store.capacity;
+    } else if (building.kind === 'farm' || building.kind === 'quarry') {
+      const base = Object.values(quarryRecipe(building).outputs)[0] ?? 1;
+      const amount = building.kind === 'farm' ? base + this.bonus('farmYield') : base;
+
+      storeFull = building.blocked && store.total() + amount > store.capacity;
+    } else if (building.kind === 'lumberCamp') {
+      // Plus la place d'un voyage au coffre : les bûcherons attendent un porteur.
+      storeFull = store.total() + LUMBERJACKS.carry > store.capacity;
+    }
+
+    return { stoppedByPlayer, storeFull, noWorker, drained: store.total() <= store.capacity * PROBLEMS.releaseRatio };
   }
 
   /** Un producteur à l'arrêt : en pause, ou sans un seul ouvrier en poste. */
