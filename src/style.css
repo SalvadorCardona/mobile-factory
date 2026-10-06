@@ -2238,6 +2238,20 @@ button.hud-stock:active {
   }
 }
 
+/* La vignette et, épinglé à son coin bas droit, le médaillon du métier : ce que fait le bâtiment. */
+.build-card-thumb {
+  position: relative;
+  display: flex;
+  flex: none;
+}
+
+.build-card-thumb .icon-job {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  pointer-events: none;
+}
+
 .build-card .icon-building {
   /* Les bâtiments sont plus hauts que larges : la vignette les loge sans les écraser. */
   object-fit: contain;
@@ -2367,6 +2381,13 @@ button.hud-stock:active {
     height: 34px;
     flex: none;
     border-radius: 10px;
+  }
+
+  .build-card-thumb .icon-job {
+    width: 18px;
+    height: 18px;
+    right: -5px;
+    bottom: -5px;
   }
 
   .build-card-name {
@@ -2547,6 +2568,15 @@ button.hud-stock:active {
 /* La vignette du bâtiment, celle du menu de construction. */
 .building-window header .icon-building {
   border-radius: 10px;
+}
+
+/* Le médaillon du métier, collé au nom : le titre se lit « hache · Cabane de bûcheron ». */
+.building-window header .icon-job {
+  margin-right: -2px;
+}
+
+.building-window header .icon-job[hidden] {
+  display: none;
 }
 
 .building-window h2 {

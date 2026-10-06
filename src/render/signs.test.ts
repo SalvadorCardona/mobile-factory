@@ -1,40 +1,42 @@
 import { describe, expect, it } from 'vitest';
 import { BUILDINGS, BUILDING_IDS } from '../data/buildings.ts';
+import { JOB_ICONS } from '../data/jobIcons.ts';
+import { SPRITES } from '../data/sprites.ts';
 import { FR } from '../i18n/fr/index.ts';
 import { EN } from '../i18n/en/index.ts';
 import { ZOOM } from './camera.ts';
 import { SIGN_ZOOM, signItem, signMode } from './signs.ts';
 
 describe('signItem', () => {
-  it('dit ce que produit le bâtiment, sinon ce qu’il consomme', () => {
-    expect(signItem('farm', 'farm', null)).toBe('food');
-    expect(signItem('quarry', 'quarry', null)).toBe('stone');
-    expect(signItem('forge', 'forge', null)).toBe('ironPlate');
-    expect(signItem('charcoalKiln', 'forge', null)).toBe('coal');
-    expect(signItem('nursery', 'nursery', null)).toBe('food');
-    expect(signItem('lumberCamp', 'lumberCamp', null)).toBe('wood');
-  });
-
   it('montre le filon d’une foreuse, et rien posée à sec', () => {
-    expect(signItem('drill', 'drill', 'coal')).toBe('coal');
-    expect(signItem('drill', 'drill', null)).toBeNull();
+    expect(signItem('drill', 'coal')).toBe('coal');
+    expect(signItem('drill', null)).toBeNull();
   });
 
-  it('laisse sans icône un bâtiment qui ne produit rien', () => {
-    expect(signItem('townHall', 'townHall', null)).toBeNull();
-    expect(signItem('watchtower', 'tower', null)).toBeNull();
-    expect(signItem('lab', 'lab', null)).toBeNull();
+  it('laisse le métier parler seul pour les autres bâtiments', () => {
+    expect(signItem('farm', null)).toBeNull();
+    expect(signItem('lumberCamp', null)).toBeNull();
+    expect(signItem('townHall', null)).toBeNull();
   });
 });
 
 describe('signMode', () => {
-  it('lit le nom au zoom par défaut, l’icône seule en reculant, puis plus rien', () => {
-    expect(signMode(ZOOM.default, 'wood')).toBe('full');
-    expect(signMode(ZOOM.default, null)).toBe('full');
-    expect(signMode(0.8, 'wood')).toBe('icon');
-    expect(signMode(0.8, null)).toBe('none');
-    expect(signMode(ZOOM.min, 'wood')).toBe('none');
+  it('lit le nom au zoom par défaut, le médaillon seul en reculant, puis plus rien', () => {
+    expect(signMode(ZOOM.default)).toBe('full');
+    expect(signMode(0.8)).toBe('icon');
+    expect(signMode(ZOOM.min)).toBe('none');
     expect(SIGN_ZOOM.icon).toBeGreaterThan(ZOOM.min);
+  });
+});
+
+describe('médaillons de métier', () => {
+  it('chaque bâtiment a le sien, et deux bâtiments ne partagent jamais le même', () => {
+    for (const id of BUILDING_IDS) expect(JOB_ICONS[id]).toContain('<svg');
+    expect(new Set(BUILDING_IDS.map((id) => JOB_ICONS[id])).size).toBe(BUILDING_IDS.length);
+  });
+
+  it('a un morceau par bâtiment dans l’atlas, pour la pancarte', () => {
+    expect(Object.keys(SPRITES.jobs.parts).sort()).toEqual([...BUILDING_IDS].sort());
   });
 });
 

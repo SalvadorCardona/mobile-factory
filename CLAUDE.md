@@ -487,12 +487,20 @@ Les règles, en résumé :
   rebond puis respiration) — ou, le même, la silhouette de l'habitant ou de
   l'ennemi ouvert, qu'il suit pas à pas (`render/selectionFrame.ts`), effacé
   s'il rentre chez lui ou meurt ; un tap dans le vide ferme la fenêtre.
-- Chaque bâtiment fini porte au pied de sa façade une **pancarte** : son nom
-  court (`sign` de `data/buildings.ts`, `t().buildings[id].sign`) et l'icône
-  de ce qu'il produit ou consomme (`render/signs.ts` décide, `signboard.ts`
-  dessine une texture partagée par type). Icône seule en reculant, rien sous
-  `SIGN_ZOOM.icon` ; un enfant du sprite du bâtiment, dans son emprise (le tap
-  l'ouvre). Réglage « Pancartes » (`mobile-factory:signs`, `storage/localSigns.ts`).
+- Un bâtiment = une **icône de métier** (`src/data/jobIcons.ts`,
+  `Record<BuildingId, string>` : un bâtiment sans icône ne compile pas) — ce
+  qu'il fait, pas à quoi il ressemble : hache, pousse, éprouvette… — dans un
+  médaillon jaune de la colonie ; `validatePrototypes()` refuse deux icônes
+  identiques. Elle est sur la pancarte, épinglée au coin de la vignette du
+  menu de construction, et à côté du nom dans la fenêtre du bâtiment.
+- Chaque bâtiment fini porte au pied de sa façade une **pancarte** : le
+  médaillon de son métier, son nom court (`sign` de `data/buildings.ts`,
+  `t().buildings[id].sign`) et, pour une foreuse, son filon (`render/signs.ts`
+  décide, `signboard.ts` dessine une texture partagée par type). Les bulles
+  d'état (⏸, coffre plein) flottent au-dessus du toit : rien ne se recouvre.
+  Médaillon seul et agrandi en reculant, rien sous `SIGN_ZOOM.icon` ; un
+  enfant du sprite du bâtiment, dans son emprise (le tap l'ouvre). Réglage
+  « Pancartes » (`mobile-factory:signs`, `storage/localSigns.ts`).
 
 ## Système de sprites
 

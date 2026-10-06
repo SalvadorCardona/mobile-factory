@@ -38,6 +38,7 @@ import { FORESTER } from '../art/forester.ts';
 import { FORESTER_HOUSE } from '../art/foresterHouse.ts';
 import { CHARCOAL_KILN } from '../art/charcoalKiln.ts';
 import { FORGE } from '../art/forge.ts';
+import { JOBS } from '../art/jobs.ts';
 import { KID } from '../art/kid.ts';
 import { LAB } from '../art/lab.ts';
 import { LOGISTICIAN } from '../art/logistician.ts';
@@ -133,6 +134,8 @@ export const SPRITES = {
   puddle: PUDDLE,
   /** Le butin qu'ils lâchent : un morceau par objet. */
   loot: LOOT,
+  /** Le médaillon du métier de chaque bâtiment, sur sa pancarte : un morceau par bâtiment. */
+  jobs: JOBS,
   /** La base mutante, et le badge de ses assaillants en réserve (`sign0` à `sign9`). */
   enemyBase: ENEMY_BASE_SPRITE,
 

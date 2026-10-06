@@ -21,6 +21,7 @@ import { ENEMY_BASE_LEVELS, GUARD_RANGE, RAIDS, type EnemyBaseLevel } from './en
 import { ENEMIES, LOOT_DROPS, NIGHT_BOSSES, WAVES, WILDLIFE, WILDLIFE_SPAWN, type LootTable, type WaveSpec, type WildlifeProto } from './enemies.ts';
 import { EVE } from './eve.ts';
 import { ICON_SIZE, ITEM_ICONS, PRESTIGE_ICON } from './icons.ts';
+import { JOB_ICONS } from './jobIcons.ts';
 import { ITEMS } from './items.ts';
 import { NEEDS, type NeedProto } from './needs.ts';
 import { OBJECTIVES, type ObjectiveProto } from './objectives.ts';
@@ -55,6 +56,21 @@ export function validatePrototypes(): string[] {
     errors.push(`PRESTIGE_ICON : l'icône doit faire ${ICON_SIZE} × ${ICON_SIZE}`);
   }
   for (const problem of auditSvg(PRESTIGE_ICON)) errors.push(`PRESTIGE_ICON : ${problem}`);
+
+  // Le type garantit une icône de métier par bâtiment ; ici, son cadre, la DA, et que deux bâtiments ne la partagent pas.
+  const jobOwners = new Map<string, string>();
+
+  for (const [id, icon] of Object.entries(JOB_ICONS)) {
+    if (!icon.includes(`width="${ICON_SIZE}" height="${ICON_SIZE}"`)) {
+      errors.push(`JOB_ICONS.${id} : l'icône doit faire ${ICON_SIZE} × ${ICON_SIZE}`);
+    }
+    for (const problem of auditSvg(icon)) errors.push(`JOB_ICONS.${id} : ${problem}`);
+
+    const owner = jobOwners.get(icon);
+
+    if (owner) errors.push(`JOB_ICONS.${id} : même icône que ${owner}`);
+    jobOwners.set(icon, id);
+  }
 
   for (const [id, building] of Object.entries(BUILDINGS)) {
     if (building.width <= 0 || building.height <= 0) {

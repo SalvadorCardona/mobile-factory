@@ -25,6 +25,7 @@ import { DIAL_ARCS } from '../sim/dayNight.ts';
 import { GROUND, PALETTE, rect, svg, type Ground } from '../data/artDirection.ts';
 import { BUILDINGS, BUILDING_IDS } from '../data/buildings.ts';
 import { ITEM_ICONS } from '../data/icons.ts';
+import { JOB_ICONS } from '../data/jobIcons.ts';
 import { ROAD_LINK } from '../data/roads.ts';
 import { BUILDING_PARTS, SPRITES, SPRITE_IDS, type SpriteProto } from '../data/sprites.ts';
 
@@ -111,6 +112,8 @@ const allSections: [string, Cell[][]][] = [
     'Routes',
     rows(ROAD_TILES.map((tile, links) => cell(`road.${links}`, tile))).concat([[cell('road.réseau', roadSample())]]),
   ],
+  // Le métier de chaque bâtiment, sous son nom : on vérifie d'un coup d'œil qu'aucun n'en double un autre.
+  ['Métiers', rows(BUILDING_IDS.map((id) => cell(BUILDINGS[id].label, JOB_ICONS[id])))],
   [
     'Icônes',
     rows([
