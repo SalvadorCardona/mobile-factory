@@ -59,15 +59,14 @@ import {
   WAVES,
   WILDLIFE,
   WILDLIFE_SPAWN,
-  isBossWave,
-  isQueenWave,
+  isBossNight,
+  isQueenNight,
+  nightBosses,
   queenWave,
-  waveSize,
-  waveSpec,
   type EnemyId,
   type LootTable,
 } from '../data/enemies.ts';
-import { ENEMY_BASE, enemyBaseLevel } from '../data/enemyBases.ts';
+import { ENEMY_BASE, GUARD_RANGE, RAIDS, enemyBaseLevel } from '../data/enemyBases.ts';
 import { EVE } from '../data/eve.ts';
 import { GEAR_WORKSHOP, MAX_GEAR, gearOf } from '../data/gear.ts';
 import { HOUSING } from '../data/housing.ts';
@@ -116,8 +115,8 @@ import type {
 } from './commands.ts';
 import { caravanBagBonus, caravanRoute, createCaravan, drawOffers, isCaravanDay, rideTo, tradeCost } from './caravan.ts';
 import type { WildlifeId } from '../data/enemies.ts';
-import { baseCenter, canDamage, hitsBase, inBaseZone, isStanding, onBase, placeEnemyBases } from './enemyBases.ts';
-import { compassOf, spawnPoint, stepMutant, stepQueen, surfacePoint, type Compass, type MutantStep } from './enemies.ts';
+import { baseCenter, baseDoor, breed, canDamage, hitsBase, inBaseZone, isStanding, onBase, placeEnemyBases } from './enemyBases.ts';
+import { compassOf, stepMutant, stepQueen, surfacePoint, type Compass, type MutantStep } from './enemies.ts';
 import { createEve, currentQuest, harvestYieldWithTools, isUnlocked, mostDamaged, questProgress, rideHome, walkTo } from './eve.ts';
 import { ADAM_SALT, adultAge, canWork, foeAge, nameOf, yearsToWork } from './inhabitants.ts';
 import { KID_SPRINT, stepKid } from './kids.ts';
@@ -264,6 +263,8 @@ const LOOT_FULL_TICKS = TICKS_PER_SECOND;
 /** Où tombe ce qu'Adam jette, en pixels : un peu devant ses pieds, un tas par objet côte à côte. */
 const DROP_AHEAD = 12;
 const DROP_SPACING = 14;
+/** Distance, en tuiles, du centre d'une base mutante au poste de ses gardiens : devant la palissade. */
+const GUARD_POST = 2.6;
 
 /** Le bâtiment que la partie ouvre en chantier au démarrage. */
 export const STARTING_BUILDING: BuildingId = 'townHall';
@@ -408,15 +409,17 @@ export type WorldEvents = {
   harvestRefused: { tx: number; ty: number; item: ItemId; wanted: number; plenty: boolean };
   /**
    * Plus que `seconds` secondes avant la prochaine vague (3, 2, puis 1) : sa
-   * nuit, son rang dans la nuit, son effectif, si un gros mutant ou la Reine
-   * la mène (`boss`), si c'est la Reine (`queen`), d'où elle vient et le
-   * point, en pixels monde, où elle va surgir.
+   * nuit, son rang dans la nuit, son effectif — les assaillants en réserve
+   * dans `bases` bases, et ses chefs —, si un gros mutant ou la Reine la mène
+   * (`boss`), si c'est la Reine (`queen`), d'où elle vient et le point, en
+   * pixels monde, d'où elle va sortir : la base la plus proche de la mairie.
    */
   waveCountdown: {
     seconds: number;
     night: number;
     wave: number;
     count: number;
+    bases: number;
     boss: boolean;
     queen: boolean;
     from: Compass;
@@ -428,11 +431,25 @@ export type WorldEvents = {
   /** Le crépuscule commence : la nuit `night` tombe dans `DAY_CYCLE.dusk` ticks. */
   duskFell: { night: number };
   /**
-   * Une vague de mutants vient d'apparaître autour de la mairie, du côté
-   * `from`, et marche sur `targetProto` ; `wave` compte à partir de 1 dans la
-   * nuit ; `queen` : la Reine des flaques la mène.
+   * Les bases viennent de lâcher leurs `count` assaillants (et les chefs de la
+   * nuit) : la plus proche de la mairie est du côté `from`, en (x, y), et les
+   * siens marchent sur `targetProto` ; `bases` : combien de bases envoient ;
+   * `wave` compte à partir de 1 dans la nuit ; `queen` : la Reine des flaques en est.
    */
-  waveStarted: { night: number; wave: number; count: number; boss: boolean; queen: boolean; from: Compass; targetProto: BuildingId; x: number; y: number };
+  waveStarted: {
+    night: number;
+    wave: number;
+    count: number;
+    bases: number;
+    boss: boolean;
+    queen: boolean;
+    from: Compass;
+    targetProto: BuildingId;
+    x: number;
+    y: number;
+  };
+  /** Une base, le jour, a produit un assaillant : elle en a `raiders` en réserve. */
+  raiderBred: { id: number; raiders: number };
   /** Au crépuscule, la veille : la Reine des flaques sortira la nuit `night`. */
   queenAnnounced: { night: number };
   /** La Reine pond : `count` larves sortent de terre autour de (x, y). */
@@ -618,9 +635,6 @@ export class World {
 
   /** Tick où le toit de la mairie a été posé : le lever du premier jour. 0 tant qu'elle est en chantier. */
   public cycleStartTick = 0;
-
-  /** Direction, en radians depuis la mairie, d'où viendra la prochaine vague : tirée dès qu'elle est planifiée. */
-  public nextWaveHeading = 0;
 
   /**
    * Le bâtiment que vise la prochaine vague : tiré à son annonce, pour que
@@ -843,7 +857,6 @@ export class World {
       contactTicks: this.contactTicks,
       night: this.night,
       cycleStartTick: this.cycleStartTick,
-      nextWaveHeading: this.nextWaveHeading,
       ...(this.nextWaveTarget !== null && { nextWaveTarget: this.nextWaveTarget }),
       kills: this.kills,
       prestige: this.prestige,
@@ -905,7 +918,6 @@ export class World {
     this.contactTicks = state.contactTicks;
     this.night = state.night;
     this.cycleStartTick = state.cycleStartTick;
-    this.nextWaveHeading = state.nextWaveHeading;
     this.nextWaveTarget = state.nextWaveTarget ?? null;
     this.kills = state.kills;
     this.prestige = state.prestige;
@@ -1028,6 +1040,7 @@ export class World {
     this.stepMobiles();
     this.recover();
     this.stepWildlife();
+    this.stepGuards();
     this.watchOverColony();
     this.shootPlayerBow();
 
@@ -2773,7 +2786,6 @@ export class World {
           // De quoi nourrir et abreuver les premiers ouvriers le temps de lancer un puits et une ferme.
           for (const [item, amount] of amountsOf(COLONY.startingStock)) building.store.add(item, amount);
           this.cycleStartTick = this.tickCount;
-          this.nextWaveHeading = this.rng() * Math.PI * 2;
           // Le menu s'ouvre : ce qu'il propose d'emblée est le départ, pas une découverte — ni badge ni annonce.
           for (const id of MENU_BUILDING_IDS) if (this.inMenu(id)) this.seenBuildings.add(id);
         }
@@ -3580,6 +3592,9 @@ export class World {
 
     const level = enemyBaseLevel(base.level);
 
+    // Abattue, elle ne produit plus et n'envoie plus personne : sa réserve meurt avec elle.
+    base.raiders = 0;
+    base.brood = 0;
     this.gainPrestige(level.prestige, x, y);
     if (this.zoneBase === base.id) this.zoneBase = null;
     this.events.emit('enemyBaseDestroyed', { id: base.id, level: base.level, prestige: level.prestige, x, y });
@@ -4087,9 +4102,13 @@ export class World {
     }
 
     const proto = WILDLIFE[beast.proto];
-    const den = this.dens.get(beast.denId);
+    const den = beast.guardOf === undefined ? this.dens.get(beast.denId) : undefined;
+    const base = beast.guardOf === undefined ? undefined : this.enemyBase(beast.guardOf);
 
     this.mobiles.delete(beast.id);
+
+    // Un gardien de moins : sa base le refera, le jour.
+    if (base) base.guards = Math.max(0, base.guards - 1);
 
     // Tanière vidée par l'arc : elle attend avant de se repeupler.
     if (den) {
@@ -4147,6 +4166,8 @@ export class World {
     let alive = 0;
 
     for (const beast of this.beasts()) {
+      // Les gardiens sont l'affaire de leur base (`stepGuards`) : ni rangés ici, ni sous le plafond de la faune.
+      if (beast.guardOf !== undefined) continue;
       if (beast.state !== 'chase' && distanceSq(player.x, player.y, beast.x, beast.y) > despawn * despawn) {
         // Rangée, pas tuée : la tanière se repeuplera sans attendre au retour d'Adam.
         this.mobiles.delete(beast.id);
@@ -4182,6 +4203,86 @@ export class World {
           alive += size;
         }
       }
+    }
+  }
+
+  /**
+   * Les gardiens des bases, une fois par seconde, comme les tanières : ceux
+   * d'une base debout sortent flâner devant quand Adam passe à
+   * `GUARD_RANGE.showTiles` tuiles, et rentrent — comptés, pas tués — quand
+   * il s'éloigne au-delà de `hideTiles`, sauf s'ils le chargent. On ne fait
+   * marcher que ceux qu'Adam peut croiser.
+   */
+  private stepGuards(): void {
+    if (this.tickCount % WILDLIFE_SPAWN.checkTicks !== 0) return;
+
+    const { player } = this;
+    const show = GUARD_RANGE.showTiles * TILE_SIZE;
+    const hide = GUARD_RANGE.hideTiles * TILE_SIZE;
+    const out = new Map<number, number>();
+
+    for (const beast of [...this.beasts()]) {
+      if (beast.guardOf === undefined) continue;
+
+      const base = this.enemyBase(beast.guardOf);
+      const away = !base || distanceSq(player.x, player.y, beast.homeX, beast.homeY) > hide * hide;
+
+      // Rentré : il compte toujours parmi les gardiens de sa base, qui le ressortira. Une base abattue n'en loge plus.
+      if (beast.state !== 'chase' && (away || !base || !isStanding(base))) {
+        this.mobiles.delete(beast.id);
+        continue;
+      }
+      out.set(beast.guardOf, (out.get(beast.guardOf) ?? 0) + 1);
+    }
+
+    for (const base of this.enemyBases) {
+      if (!isStanding(base)) continue;
+
+      const missing = base.guards - (out.get(base.id) ?? 0);
+      const { x, y } = baseCenter(base);
+
+      if (missing > 0 && distanceSq(player.x, player.y, x, y) <= show * show) this.postGuards(base, missing);
+    }
+  }
+
+  /** `count` gardiens sortent de la base et se postent en rond autour d'elle, sur une tuile libre. */
+  private postGuards(base: EnemyBase, count: number): void {
+    const proto = WILDLIFE.guardian;
+    const home = baseCenter(base);
+
+    for (let i = 0; i < count; i += 1) {
+      // Chacun à son poste, tiré de son rang : la ronde ne dépend pas du PRNG.
+      const angle = ((base.id * 7 + i) / Math.max(3, base.guards)) * Math.PI * 2;
+      let x = home.x + Math.cos(angle) * GUARD_POST * TILE_SIZE;
+      let y = home.y + Math.sin(angle) * GUARD_POST * TILE_SIZE;
+
+      if (this.isOpenGroundSolid(floorDiv(x, TILE_SIZE), floorDiv(y, TILE_SIZE))) ({ x, y } = baseDoor(base, i));
+
+      const id = this.nextMobileId++;
+      const guard: Beast = {
+        kind: 'beast',
+        id,
+        proto: 'guardian',
+        x,
+        y,
+        prevX: x,
+        prevY: y,
+        facing: 'down',
+        moving: false,
+        hp: proto.hp,
+        age: foeAge(this.seed, id, proto.age),
+        denId: 0,
+        guardOf: base.id,
+        homeX: home.x,
+        homeY: home.y,
+        state: 'roam',
+        dirX: 0,
+        dirY: 0,
+        wanderTicks: 0,
+        attackCooldown: 0,
+      };
+
+      this.mobiles.set(guard.id, guard);
     }
   }
 
@@ -4289,20 +4390,30 @@ export class World {
     // Un jour sur deux, une caravane de troc, une fois le matin bien levé.
     if (clock.phase === 'day' && clock.elapsed === CARAVAN.arriveAfter && isCaravanDay(clock.cycle)) this.sendCaravan(clock.cycle);
 
-    const { wave, ticks: left } = nextWave(clock);
+    // Le jour, les bases produisent pour la nuit qui vient.
+    if (clock.phase === 'day') this.breedBases(clock.cycle);
 
-    if (left > 0 && left <= WAVE_COUNTDOWN_SECONDS * TICKS_PER_SECOND && left % TICKS_PER_SECOND === 0) {
-      this.events.emit('waveCountdown', {
-        seconds: left / TICKS_PER_SECOND,
-        night: clock.cycle,
-        wave,
-        count: waveSize(clock.cycle, wave),
-        boss: isBossWave(clock.cycle, wave),
-        queen: isQueenWave(clock.cycle, wave),
-        from: compassOf(this.nextWaveHeading),
-        targetProto: this.waveTarget().proto,
-        ...this.waveOrigin(),
-      });
+    const { wave, ticks: left } = nextWave(clock);
+    const lead = left > 0 && left <= WAVE_COUNTDOWN_SECONDS * TICKS_PER_SECOND && left % TICKS_PER_SECOND === 0 ? this.leadBase() : null;
+
+    if (lead) {
+      const night = clock.cycle;
+      const raid = this.raidSize(night);
+
+      // Rien en réserve, pas de chef : la nuit sera calme, rien à annoncer.
+      if (raid.count > 0) {
+        this.events.emit('waveCountdown', {
+          seconds: left / TICKS_PER_SECOND,
+          night,
+          wave,
+          ...raid,
+          boss: isBossNight(night),
+          queen: isQueenNight(night),
+          from: this.compassFromHall(lead),
+          targetProto: this.waveTarget().proto,
+          ...baseCenter(lead),
+        });
+      }
     }
 
     const starting = waveAt(clock);
@@ -4311,24 +4422,27 @@ export class World {
   }
 
   /**
-   * La cible de la prochaine vague, tirée la première fois qu'on la demande :
-   * avec `WAVES.targetChance`, le bâtiment de l'usine fini le plus proche de
-   * son point d'apparition, sinon la mairie. Tombée avant le départ de la
-   * vague, c'est la mairie.
+   * La cible de la prochaine vague, pour la base `from` (la plus proche de la
+   * mairie par défaut), tirée la première fois qu'on la demande : avec
+   * `WAVES.targetChance`, la vague vise l'usine — chaque base, le bâtiment
+   * de l'usine fini le plus proche d'elle —, sinon la mairie. Tombée avant
+   * le départ de la vague, c'est la mairie.
    */
-  private waveTarget(): Building {
+  private waveTarget(from: EnemyBase | null = this.leadBase()): Building {
     const antenna = this.antenna();
 
     // La nuit qui suit un étage fini, toutes les vagues marchent sur l'antenne.
     if (antenna && this.night === this.lureNight) return antenna;
 
     if (this.nextWaveTarget === null) {
-      const aimed = this.rng() < WAVES.targetChance ? this.nearestWaveTarget(this.waveOrigin()) : null;
+      const aimed = from && this.rng() < WAVES.targetChance ? this.nearestWaveTarget(baseCenter(from)) : null;
 
       this.nextWaveTarget = aimed?.id ?? this.townHallId;
     }
 
-    const target = this.entities.get(this.nextWaveTarget);
+    // Annoncée sur l'usine : chaque base vise le bâtiment de l'usine le plus proche d'elle.
+    const aimed = this.nextWaveTarget === this.townHallId || !from ? undefined : this.nearestWaveTarget(baseCenter(from));
+    const target = aimed ?? this.entities.get(this.nextWaveTarget);
 
     return target && target.kind !== 'site' ? target : this.hallBuilding();
   }
@@ -4368,44 +4482,124 @@ export class World {
   }
 
   /**
-   * Une vague : les mutants de `waveSpec(nuit, vague)` du côté annoncé, qui
-   * sortent de leur flaque l'un après l'autre, et les tours s'éveillent. Le
-   * côté de la vague suivante est tiré aussitôt, pour que son annonce
-   * puisse le donner.
+   * La vague de la nuit : chaque base debout lâche ses assaillants en
+   * réserve, qui passent sa porte l'un après l'autre et marchent sur la
+   * cible de la vague ; les chefs de la nuit (`nightBosses`) sortent de la
+   * plus proche de la mairie. Le badge retombe à zéro. Sans base debout,
+   * personne ne sort : la nuit est calme. Les tours s'éveillent.
    */
   private spawnWave(wave: number): void {
-    const spec = waveSpec(this.night, wave);
-    const origin = this.waveOrigin();
-    const from = compassOf(this.nextWaveHeading);
-    const target = this.waveTarget();
-    let count = 0;
+    const lead = this.leadBase();
 
-    // Dans l'ordre des espèces : le tirage des points d'apparition reste rejouable.
-    for (const proto of ENEMY_IDS) {
-      for (let i = 0; i < (spec[proto] ?? 0); i += 1) {
-        // La Reine marche sur la mairie, quoi que vise sa vague.
-        this.spawnMutant(proto, WAVES.emergeTicks + count * WAVES.emergeStagger, proto === 'queen' ? this.townHallId : target.id);
-        count += 1;
+    if (!lead) return;
+
+    const leadTarget = this.waveTarget(lead);
+    const bosses = nightBosses(this.night);
+    let count = 0;
+    let bases = 0;
+
+    // Dans l'ordre des bases : la sortie reste rejouable.
+    for (const base of this.enemyBases) {
+      if (!isStanding(base)) continue;
+
+      let slot = 0;
+      const target = this.waveTarget(base).id;
+
+      if (base.id === lead.id) {
+        // Les chefs d'abord, devant leurs troupes ; la Reine marche sur la mairie, quoi que vise sa vague.
+        for (const proto of ENEMY_IDS) {
+          for (let i = 0; i < (bosses[proto] ?? 0); i += 1) {
+            this.spawnMutant(proto, WAVES.emergeTicks + slot * RAIDS.exitStagger, proto === 'queen' ? this.townHallId : target, baseDoor(base, slot));
+            slot += 1;
+          }
+        }
       }
+      for (let i = 0; i < base.raiders; i += 1) {
+        this.spawnMutant(RAIDS.proto, WAVES.emergeTicks + slot * RAIDS.exitStagger, target, baseDoor(base, slot));
+        slot += 1;
+      }
+      base.raiders = 0;
+      if (slot === 0) continue;
+      count += slot;
+      bases += 1;
     }
+
+    this.nextWaveTarget = null;
+    if (count === 0) return;
 
     this.events.emit('waveStarted', {
       night: this.night,
       wave,
       count,
-      boss: isBossWave(this.night, wave),
-      queen: isQueenWave(this.night, wave),
-      from,
-      targetProto: target.proto,
-      ...origin,
+      bases,
+      boss: isBossNight(this.night),
+      queen: isQueenNight(this.night),
+      from: this.compassFromHall(lead),
+      targetProto: leadTarget.proto,
+      ...baseCenter(lead),
     });
 
     for (const entity of this.entities.values()) {
       if (entity.kind === 'tower') this.armTower(entity, 1);
     }
+  }
 
-    this.nextWaveHeading = this.rng() * Math.PI * 2;
-    this.nextWaveTarget = null;
+  /**
+   * La base debout la plus proche de la mairie : d'elle sortent les chefs de
+   * la nuit, c'est elle que montrent l'annonce et le repère de bord. `null`
+   * s'il n'en reste aucune.
+   */
+  public leadBase(): EnemyBase | null {
+    let best: EnemyBase | null = null;
+    let bestD = Infinity;
+
+    for (const base of this.enemyBases) {
+      if (!isStanding(base)) continue;
+
+      const { x, y } = baseCenter(base);
+      const d = distanceSq(x, y, this.target.x, this.target.y);
+
+      if (d < bestD) {
+        best = base;
+        bestD = d;
+      }
+    }
+    return best;
+  }
+
+  /** Ce que lâcheront les bases la nuit `night` s'il la faisait maintenant : assaillants en réserve et chefs, et combien de bases envoient. */
+  public raidSize(night: number): { count: number; bases: number } {
+    let count = 0;
+    let bases = 0;
+
+    for (const base of this.enemyBases) {
+      if (!isStanding(base) || base.raiders === 0) continue;
+      count += base.raiders;
+      bases += 1;
+    }
+
+    const lead = this.leadBase();
+    const bosses = Object.values(nightBosses(night)).reduce((sum, n) => sum + n, 0);
+
+    if (lead && bosses > 0) {
+      count += bosses;
+      if (lead.raiders === 0) bases += 1;
+    }
+    return { count, bases };
+  }
+
+  /** La direction, vue de la mairie, d'une base. */
+  private compassFromHall(base: EnemyBase): Compass {
+    const { x, y } = baseCenter(base);
+
+    return compassOf(Math.atan2(y - this.target.y, x - this.target.x));
+  }
+
+  /** Un tick de jour pour chaque base : elle avance vers son prochain assaillant et son prochain gardien. */
+  private breedBases(night: number): void {
+    for (const base of this.enemyBases) {
+      if (breed(base, night).raider) this.events.emit('raiderBred', { id: base.id, raiders: base.raiders });
+    }
   }
 
   /**
@@ -4615,26 +4809,15 @@ export class World {
     if (announce) this.events.emit('kidGrewUp', { id: kid.id, name: nameOf(this.seed, kid.id), x: kid.x, y: kid.y });
   }
 
-  /** Le point, en pixels monde, d'où surgira la prochaine vague : ce que l'annonce montre du doigt. */
+  /** Le point, en pixels monde, d'où sortira la prochaine vague : la base la plus proche de la mairie, ou la mairie s'il n'en reste pas. */
   public waveOrigin(): { x: number; y: number } {
-    const distance = ((WAVES.minDistance + WAVES.maxDistance) / 2) * TILE_SIZE;
+    const lead = this.leadBase();
 
-    return {
-      x: this.target.x + Math.cos(this.nextWaveHeading) * distance,
-      y: this.target.y + Math.sin(this.nextWaveHeading) * distance,
-    };
+    return lead ? baseCenter(lead) : { ...this.target };
   }
 
-  /** Un mutant de la vague, autour de la mairie ; une larve, à `at`, aux pieds de sa mère. */
-  private spawnMutant(proto: EnemyId, emerge: number, target: EntityId, at: { x: number; y: number } | null = null): void {
-    let point = at ?? spawnPoint(this.rng, this.target, this.nextWaveHeading);
-
-    // Pas dans un bâtiment : il y resterait coincé à le ronger de l'intérieur.
-    for (let attempt = 0; attempt < 8 && !at; attempt += 1) {
-      if (this.occupantAt(floorDiv(point.x, TILE_SIZE), floorDiv(point.y, TILE_SIZE)) === undefined) break;
-      point = spawnPoint(this.rng, this.target, this.nextWaveHeading);
-    }
-
+  /** Un mutant qui sort de terre en `point` : à la porte de sa base, ou aux pieds de sa mère pour une larve. */
+  private spawnMutant(proto: EnemyId, emerge: number, target: EntityId, point: { x: number; y: number }): void {
     const id = this.nextMobileId++;
     const mutant: Mutant = {
       kind: 'mutant',

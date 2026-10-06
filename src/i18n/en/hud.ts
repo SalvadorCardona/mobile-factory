@@ -127,10 +127,12 @@ export const hud: Messages['hud'] = {
     reinforcements: 'Reinforcements',
     queen: (from: string): string => `The Puddle Queen rises ${from}!`,
     boss: (from: string, target: string): string => `A big mutant leads the charge ${from}: it’s after the ${lower(target)}!`,
-    mutants: (count: number, from: string, target: string): string =>
-      count > 1
-        ? `${count} mutants coming ${from}: they’re after the ${lower(target)}!`
-        : `${count} mutant coming ${from}: it’s after the ${lower(target)}!`,
+    mutants: (count: number, bases: number, from: string, target: string): string =>
+      bases > 1
+        ? `${count} mutants leave ${bases} bases, the closest ${from}: they’re after the ${lower(target)}!`
+        : count > 1
+          ? `${count} mutants coming ${from}: they’re after the ${lower(target)}!`
+          : `${count} mutant coming ${from}: it’s after the ${lower(target)}!`,
     cleared: (night: number): string => `Night ${night} — wave repelled!`,
     clearedText: 'Pick up what the mutants dropped',
     queenSlain: 'The Puddle Queen has fallen!',

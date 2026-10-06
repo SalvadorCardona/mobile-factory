@@ -13,8 +13,7 @@
  */
 
 import { TILE_SIZE } from '../core/grid.ts';
-import { ENEMIES, QUEEN, WAVES } from '../data/enemies.ts';
-import type { Rng } from '../core/rng.ts';
+import { ENEMIES, QUEEN } from '../data/enemies.ts';
 import { facingOf, moveBox } from './motion.ts';
 import type { EntityId, Mutant } from './types.ts';
 
@@ -167,19 +166,6 @@ export function surfacePoint(
     if (isFree(x, y)) return { x, y };
   }
   return null;
-}
-
-/**
- * Un point d'apparition autour de la mairie : dans la direction `heading` de
- * la vague, à `spread` radians près, et entre `minDistance` et `maxDistance`
- * tuiles. Le tirage vient du PRNG du monde, donc d'une seed — une vague est
- * rejouable comme le reste.
- */
-export function spawnPoint(rng: Rng, center: { x: number; y: number }, heading: number): { x: number; y: number } {
-  const angle = heading + (rng() * 2 - 1) * WAVES.spread;
-  const distance = (WAVES.minDistance + rng() * (WAVES.maxDistance - WAVES.minDistance)) * TILE_SIZE;
-
-  return { x: center.x + Math.cos(angle) * distance, y: center.y + Math.sin(angle) * distance };
 }
 
 /** Les huit directions d'où une vague peut venir, dans le repère de l'écran (y vers le bas = sud). */

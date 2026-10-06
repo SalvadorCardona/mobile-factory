@@ -161,10 +161,13 @@ export const hud = {
     queen: (from: string): string => `La Reine des flaques sort ${from} !`,
     /** `target` : le nom du bâtiment visé, avec sa majuscule — tous ceux que vise une vague sont féminins. */
     boss: (from: string, target: string): string => `Un gros mutant mène la charge ${from} : il vise la ${lower(target)} !`,
-    mutants: (count: number, from: string, target: string): string =>
-      count > 1
-        ? `${count} mutants arrivent ${from} : ils visent la ${lower(target)} !`
-        : `${count} mutant arrive ${from} : il vise la ${lower(target)} !`,
+    /** `bases` : combien de bases lâchent les leurs ; `from` dit où est la plus proche. */
+    mutants: (count: number, bases: number, from: string, target: string): string =>
+      bases > 1
+        ? `${count} mutants sortent de ${bases} bases, la plus proche ${from} : ils visent la ${lower(target)} !`
+        : count > 1
+          ? `${count} mutants arrivent ${from} : ils visent la ${lower(target)} !`
+          : `${count} mutant arrive ${from} : il vise la ${lower(target)} !`,
     cleared: (night: number): string => `Nuit ${night} — vague repoussée !`,
     clearedText: 'Ramassez ce que les mutants ont lâché',
     queenSlain: 'La Reine des flaques est tombée !',

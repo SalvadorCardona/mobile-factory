@@ -63,6 +63,7 @@ describe('sprites', () => {
     // détail (test suivant).
     const mutants = (name: string): boolean =>
       name.startsWith('mutant.') ||
+      name.startsWith('guardian.') ||
       name.startsWith('queen.') ||
       name.startsWith('patient.') ||
       name.startsWith('exMutant.') ||

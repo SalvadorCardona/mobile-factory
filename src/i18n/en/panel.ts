@@ -170,6 +170,10 @@ export const panel: Messages['panel'] = {
     weak: 'You need better gear: your arrows do nothing to it. Forge a better bow at the forge.',
     ready: 'Your bow can damage it: get closer, it shoots on its own.',
     prestige: (amount: number): string => `Destroyed, it gives ${amount} Prestige and frees its zone.`,
+    raiders: (count: number, capacity: number): string => `Raiders in reserve: ${count} of ${capacity}`,
+    guards: (count: number, max: number): string => `Guards: ${count} of ${max}`,
+    raid: 'By day it breeds raiders; at nightfall they all march on the town.',
+    asleep: (night: number): string => `It sends its first raiders only on night ${night}.`,
   },
 
   gear: {

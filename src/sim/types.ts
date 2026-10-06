@@ -258,6 +258,14 @@ export interface EnemyBase {
   level: number;
   /** Points de vie restants ; 0 : détruite. */
   hp: number;
+  /** Assaillants en réserve, produits le jour, qui sortiront tous à la nuit : le chiffre du badge. */
+  raiders: number;
+  /** Ticks de jour accumulés vers le prochain assaillant (`raidTicks`) : sa cadence en cours. */
+  brood: number;
+  /** Gardiens vivants, sortis devant la base ou rentrés. */
+  guards: number;
+  /** Ticks de jour accumulés vers le prochain gardien, s'il en manque. */
+  mend: number;
 }
 
 export type Facing = 'down' | 'up' | 'left' | 'right';
@@ -365,8 +373,10 @@ export interface Beast extends Moving {
   hp: number;
   /** En années, comme un mutant. */
   age: number;
-  /** La tanière d'où elle vient, et où elle rentre. */
+  /** La tanière d'où elle vient, et où elle rentre ; 0 pour un gardien. */
   denId: number;
+  /** Le gardien d'une base mutante (`WILDLIFE.guardian`) : l'id de sa base, qui le loge et le refait. */
+  guardOf?: number;
   homeX: number;
   homeY: number;
   state: BeastState;

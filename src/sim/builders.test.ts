@@ -85,6 +85,8 @@ function colony(hall: Stock, placements: Placement[]): World {
   state.entities = entities;
   state.nextId = nextId;
   state.mobiles = [];
+  // Ni bases ni gardiens : Adam, à l'écart, pourrait en croiser, et son arc mêlerait leur butin au compte.
+  state.enemyBases = [];
   return World.restore(state);
 }
 

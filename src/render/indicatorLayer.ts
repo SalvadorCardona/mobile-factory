@@ -283,7 +283,8 @@ export class IndicatorLayer {
     const clock = world.clock();
     const left = clock ? ticksToNextWave(clock) : 0;
 
-    if (!world.defeated && left > 0 && left <= ANNOUNCE_SECONDS * TICKS_PER_SECOND) {
+    // Une nuit calme — aucune base debout, rien en réserve — n'a rien à montrer du doigt.
+    if (clock && !world.defeated && left > 0 && left <= ANNOUNCE_SECONDS * TICKS_PER_SECOND && world.raidSize(clock.cycle).count > 0) {
       const origin = world.waveOrigin();
 
       this.arrow(camera, zone, origin.x, origin.y, 'toxic', 1, 1.25 + Math.sin(this.elapsed / 120) * 0.15, 'eye');

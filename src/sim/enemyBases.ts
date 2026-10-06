@@ -11,15 +11,22 @@
  * au plus près de sa place idéale, sur une emprise libre (`free` : terrain
  * constructible, ni arbre ni rocher) ; sans place à `ENEMY_BASE.search`
  * tuiles, elle n'est pas posée — l'anneau a un trou, au bord d'un lac.
+ *
+ * Le jour, une base debout produit (`breed`) : ses assaillants, à la cadence
+ * de son niveau et de la nuit qui vient, jusqu'à sa capacité ; ses gardiens
+ * tombés, plus lentement. Son compte de départ est tiré de la seed, pour que
+ * les bases d'un anneau ne remplissent pas leur badge au même instant.
  */
 
 import { TILE_SIZE, distanceSq } from '../core/grid.ts';
 import { hash3 } from '../core/rng.ts';
-import { ENEMY_BASE, ENEMY_BASE_RINGS, enemyBaseLevel } from '../data/enemyBases.ts';
+import { ENEMY_BASE, ENEMY_BASE_RINGS, RAIDS, enemyBaseLevel } from '../data/enemyBases.ts';
 import type { EnemyBase } from './types.ts';
 
 /** Sel du décalage angulaire des anneaux. */
 const RING_SALT = 0x6b43a9b5;
+/** Sel du compte de départ d'une base. */
+const BROOD_SALT = 0x2c1b3c6d;
 
 /**
  * Les bases de tous les anneaux, autour de `hall` (centre de la mairie, en
@@ -36,7 +43,20 @@ export function placeEnemyBases(seed: number, hall: { x: number; y: number }, fr
       const spot = nearestSpot(hall.x + Math.cos(angle) * ring.radius, hall.y + Math.sin(angle) * ring.radius, free);
 
       if (!spot) continue;
-      bases.push({ id: bases.length + 1, ...spot, level: ring.level, hp: enemyBaseLevel(ring.level).hp });
+
+      const id = bases.length + 1;
+      const level = enemyBaseLevel(ring.level);
+
+      bases.push({
+        id,
+        ...spot,
+        level: ring.level,
+        hp: level.hp,
+        raiders: 0,
+        brood: firstBrood(seed, id, ring.level),
+        guards: level.guards.count,
+        mend: 0,
+      });
     }
   });
   return bases;
@@ -109,4 +129,84 @@ export function hitsBase(base: EnemyBase, x: number, y: number): boolean {
 /** L'arc entame-t-il cette base ? Il faut un équipement de son niveau, au moins. */
 export function canDamage(base: EnemyBase, gear: number): boolean {
   return gear >= base.level;
+}
+
+/**
+ * Le compte de départ d'une base, tiré de la seed et de son id : déjà
+ * entamé, pour que les bases d'un anneau ne produisent pas toutes au même
+ * tick. Une ancienne sauvegarde qui découvre ses bases au chargement les
+ * reçoit pareil.
+ */
+export function firstBrood(seed: number, id: number, level: number): number {
+  return hash3(seed ^ BROOD_SALT, id, 0) % enemyBaseLevel(level).raid.ticksPerRaider;
+}
+
+/** Ticks de jour qu'il faut à une base de ce niveau pour produire un assaillant, la veille de la nuit `night`. */
+export function raidTicks(level: number, night: number): number {
+  const { raid } = enemyBaseLevel(level);
+
+  return Math.max(1, Math.round(raid.ticksPerRaider / (1 + RAIDS.paceGrowth * Math.max(0, night - raid.from))));
+}
+
+/** Assaillants qu'une base de ce niveau garde au plus, la veille de la nuit `night` ; 0 avant sa première nuit. */
+export function raidCapacity(level: number, night: number): number {
+  const { raid } = enemyBaseLevel(level);
+
+  if (night < raid.from) return 0;
+  return Math.min(RAIDS.capacityMax, raid.capacity + Math.floor((night - raid.from) / RAIDS.capacityEvery));
+}
+
+/** Ce qu'une base a produit ce tick. */
+export interface Brood {
+  raider: boolean;
+  guard: boolean;
+}
+
+/**
+ * Un tick de jour d'une base, la veille de la nuit `night` : son compte
+ * avance vers le prochain assaillant tant qu'elle n'est pas pleine, et vers
+ * le prochain gardien tant qu'il lui en manque. Abattue, elle ne fait rien.
+ */
+export function breed(base: EnemyBase, night: number): Brood {
+  const brood = { raider: false, guard: false };
+
+  if (!isStanding(base)) return brood;
+
+  if (base.raiders < raidCapacity(base.level, night)) {
+    base.brood += 1;
+
+    const ticks = raidTicks(base.level, night);
+
+    if (base.brood >= ticks) {
+      base.brood -= ticks;
+      base.raiders += 1;
+      brood.raider = true;
+    }
+  }
+
+  const { guards } = enemyBaseLevel(base.level);
+
+  if (base.guards < guards.count) {
+    base.mend += 1;
+    if (base.mend >= guards.respawnTicks) {
+      base.mend = 0;
+      base.guards += 1;
+      brood.guard = true;
+    }
+  }
+  return brood;
+}
+
+/**
+ * La porte de la base, en pixels monde : le milieu du bas de son emprise,
+ * une demi-tuile devant. C'est là qu'apparaissent ses assaillants, le
+ * `slot`-ième un peu à côté des autres pour qu'ils ne sortent pas empilés.
+ */
+export function baseDoor(base: EnemyBase, slot = 0): { x: number; y: number } {
+  const shift = slot === 0 ? 0 : (slot % 2 === 1 ? 1 : -1) * Math.ceil(slot / 2) * 0.35;
+
+  return {
+    x: (base.tx + ENEMY_BASE.width / 2 + Math.max(-1.2, Math.min(1.2, shift))) * TILE_SIZE,
+    y: (base.ty + ENEMY_BASE.height + 0.5) * TILE_SIZE,
+  };
 }

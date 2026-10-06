@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_SIZE } from '../core/grid.ts';
 import { BUILDINGS, type BuildingId, type BuildingProto } from '../data/buildings.ts';
-import { ENEMY_BASE, ENEMY_BASE_RINGS, enemyBaseLevel } from '../data/enemyBases.ts';
+import { DAY_CYCLE } from '../data/dayNight.ts';
+import { WILDLIFE } from '../data/enemies.ts';
+import { ENEMY_BASE, ENEMY_BASE_LEVELS, ENEMY_BASE_RINGS, GUARD_RANGE, RAIDS, enemyBaseLevel } from '../data/enemyBases.ts';
 import { MAX_GEAR, gearOf } from '../data/gear.ts';
 import type { ItemId } from '../data/items.ts';
-import { baseCenter, inBaseZone, isStanding } from './enemyBases.ts';
+import { CYCLE_TICKS } from './dayNight.ts';
+import { baseCenter, baseDoor, breed, inBaseZone, isStanding, raidCapacity, raidTicks } from './enemyBases.ts';
 import { deserialize, serialize } from './save.ts';
-import type { EnemyBase, EntityId } from './types.ts';
+import type { Beast, EnemyBase, EntityId, Mutant } from './types.ts';
 import { World } from './world.ts';
 
 /** Un chantier livré d'office sauf un objet, que le sac apporte : le dernier objet l'achève. */
@@ -74,6 +77,35 @@ function standNear(world: World, spot: { building: BuildingId; tx: number; ty: n
 function standBelow(world: World, base: EnemyBase): void {
   world.player.x = (base.tx + ENEMY_BASE.width / 2) * TILE_SIZE;
   world.player.y = (base.ty + ENEMY_BASE.height + 1.5) * TILE_SIZE;
+}
+
+/** Les bases sans gardiens : ni l'arc ni le Prestige ne s'y mêlent. */
+function unguarded(world: World): void {
+  for (const base of world.enemyBases) base.guards = 0;
+  for (const beast of guardians(world)) world.mobiles.delete(beast.id);
+}
+
+function guardians(world: World, base?: EnemyBase): Beast[] {
+  return [...world.mobiles.values()].filter(
+    (mobile): mobile is Beast => mobile.kind === 'beast' && mobile.guardOf !== undefined && (!base || mobile.guardOf === base.id),
+  );
+}
+
+function mutants(world: World): Mutant[] {
+  return [...world.mobiles.values()].filter((mobile): mobile is Mutant => mobile.kind === 'mutant');
+}
+
+/** Ticks entre le lever du premier jour et la tombée de la première nuit. */
+const NIGHTFALL = DAY_CYCLE.day + DAY_CYCLE.dusk;
+
+/** Joue jusqu'au tick qui précède la tombée de la nuit `night`, la mairie increvable et Adam chez lui. */
+function untilNightfall(world: World, night: number): void {
+  const hall = world.entities.get(world.townHallId)!;
+
+  while (world.tickCount < world.cycleStartTick + (night - 1) * CYCLE_TICKS + NIGHTFALL - 1) {
+    if (hall.kind !== 'site') hall.hp = 1_000_000;
+    world.tick();
+  }
 }
 
 /** La base de l'anneau 1 la plus proche d'Adam. */
@@ -177,6 +209,8 @@ describe('bases mutantes', () => {
     let resisted = 0;
 
     world.events.on('enemyBaseResisted', () => (resisted += 1));
+    // Sans gardiens : l'arc les abattrait, et leur Prestige se mêlerait à celui de la base.
+    unguarded(world);
     expect(world.player.gear).toBeLessThan(base.level);
     standBelow(world, base);
     for (let i = 0; i < 400; i += 1) world.tick();
@@ -197,6 +231,7 @@ describe('bases mutantes', () => {
 
     world.events.on('enemyBaseDestroyed', ({ id }) => destroyed.push(id));
     world.events.on('lootDropped', () => (loot += 1));
+    unguarded(world);
     world.player.gear = base.level;
     standBelow(world, base);
     for (let i = 0; i < 4000 && isStanding(base); i += 1) world.tick();
@@ -253,4 +288,222 @@ describe('bases mutantes', () => {
     }
     for (let i = 0; i < 100; i += 1) copy.tick();
   });
+});
+
+describe('bases mutantes — production et sorties', () => {
+  it('produit des assaillants le jour, jusqu’à sa capacité, puis attend la nuit', () => {
+    const base: EnemyBase = { id: 1, tx: 0, ty: 0, level: 1, hp: ENEMY_BASE_LEVELS[0].hp, raiders: 0, brood: 0, guards: 2, mend: 0 };
+    const capacity = raidCapacity(1, 1);
+    const ticks = raidTicks(1, 1);
+    const counts: number[] = [];
+
+    for (let i = 0; i < ticks * (capacity + 2); i += 1) {
+      const { raider } = breed(base, 1);
+
+      if (raider) counts.push(base.raiders);
+      expect(base.raiders).toBeLessThanOrEqual(capacity);
+    }
+    expect(counts).toEqual(Array.from({ length: capacity }, (_, k) => k + 1));
+    // Pleine, son compte ne court plus : elle n'en refera un que la réserve partie.
+    expect(base.brood).toBe(0);
+  });
+
+  it('produit plus vite et en garde plus à mesure que les nuits passent ; les anneaux lointains s’éveillent plus tard', () => {
+    for (let night = 1; night < 30; night += 1) {
+      expect(raidTicks(1, night + 1)).toBeLessThanOrEqual(raidTicks(1, night));
+      expect(raidCapacity(1, night + 1)).toBeGreaterThanOrEqual(raidCapacity(1, night));
+      expect(raidCapacity(1, night)).toBeLessThanOrEqual(RAIDS.capacityMax);
+    }
+    expect(raidTicks(1, 9)).toBeLessThan(raidTicks(1, 1) / 2);
+    for (const level of ENEMY_BASE_LEVELS.slice(1)) expect(raidCapacity(ENEMY_BASE_LEVELS.indexOf(level) + 1, level.raid.from - 1)).toBe(0);
+  });
+
+  it('remplit les badges le jour seulement, puis les vide à la nuit tombée', () => {
+    const world = withTownHall();
+    const reserve = (): number => world.enemyBases.reduce((sum, base) => sum + base.raiders, 0);
+    const dusk = world.cycleStartTick + DAY_CYCLE.day;
+
+    for (let i = 0; i < 20 * 60; i += 1) world.tick();
+    const morning = world.enemyBases.map((base) => base.brood);
+
+    while (world.tickCount < dusk) world.tick();
+    expect(world.enemyBases.map((base) => base.brood)).not.toEqual(morning);
+
+    // Le crépuscule : plus rien ne se produit.
+    const evening = JSON.stringify(world.enemyBases);
+
+    untilNightfall(world, 1);
+    expect(JSON.stringify(world.enemyBases)).toBe(evening);
+
+    const stocked = reserve();
+    const doors = world.enemyBases.filter((base) => base.raiders > 0).map((base) => ({ door: baseDoor(base), raiders: base.raiders }));
+
+    expect(stocked).toBeGreaterThan(0);
+    world.tick();
+    expect(reserve()).toBe(0);
+    expect(mutants(world)).toHaveLength(stocked);
+    // Chaque base a fait sortir les siens à sa porte.
+    for (const { door, raiders } of doors) {
+      expect(mutants(world).filter((mutant) => Math.hypot(mutant.x - door.x, mutant.y - door.y) < 1.5 * TILE_SIZE)).toHaveLength(raiders);
+    }
+
+    // La nuit, rien ne se refait.
+    const night = JSON.stringify(world.enemyBases);
+
+    for (let i = 0; i < 200; i += 1) world.tick();
+    expect(JSON.stringify(world.enemyBases)).toBe(night);
+  });
+
+  it('une base abattue ne produit plus rien et n’envoie plus personne', () => {
+    const world = withTownHall();
+    const base = firstRingBase(world);
+
+    base.raiders = 2;
+    base.hp = 0;
+    expect(breed(base, 1)).toEqual({ raider: false, guard: false });
+
+    untilNightfall(world, 1);
+    expect(base.raiders).toBe(2);
+    world.tick();
+
+    const door = baseDoor(base);
+
+    expect(mutants(world).filter((mutant) => Math.hypot(mutant.x - door.x, mutant.y - door.y) < 3 * TILE_SIZE)).toHaveLength(0);
+  });
+
+  it('ses gardiens sortent quand Adam approche, chargent Adam dans la zone sans jamais en sortir, et ne partent pas en vague', () => {
+    const world = withTownHall();
+    const base = firstRingBase(world);
+    const center = baseCenter(base);
+    const leash = WILDLIFE.guardian.leashRadius * TILE_SIZE;
+    const hits = new Set<number>();
+
+    world.events.on('playerHurt', ({ by }) => hits.add(by));
+    expect(guardians(world, base)).toHaveLength(0);
+
+    // Adam à la limite où ils se montrent, puis dans la zone.
+    world.player.x = center.x;
+    world.player.y = center.y + (GUARD_RANGE.showTiles - 1) * TILE_SIZE;
+    for (let i = 0; i < 21; i += 1) world.tick();
+    expect(guardians(world, base)).toHaveLength(enemyBaseLevel(base.level).guards.count);
+
+    for (let i = 0; i < 20 * 20; i += 1) {
+      // Adam dans la zone, l'arc au repos, et il reste debout : on regarde les gardiens.
+      world.player.x = center.x + 3 * TILE_SIZE;
+      world.player.y = center.y + 3 * TILE_SIZE;
+      world.player.bowCooldown = 100;
+      world.player.hp = 100;
+      world.tick();
+      for (const guard of guardians(world, base)) {
+        expect(Math.hypot(guard.x - center.x, guard.y - center.y)).toBeLessThanOrEqual(leash + TILE_SIZE);
+      }
+    }
+    expect(guardians(world, base).some((guard) => hits.has(guard.id))).toBe(true);
+
+    // Adam file hors de la zone, loin : ils le lâchent sans sortir, puis rentrent.
+    for (let i = 0; i < 20 * 10; i += 1) {
+      world.player.x = center.x + 12 * TILE_SIZE;
+      world.player.y = center.y;
+      world.tick();
+      for (const guard of guardians(world, base)) {
+        expect(Math.hypot(guard.x - center.x, guard.y - center.y)).toBeLessThanOrEqual(leash + TILE_SIZE);
+      }
+    }
+    expect(guardians(world, base).every((guard) => guard.state !== 'chase')).toBe(true);
+
+    world.player.x = center.x + (GUARD_RANGE.hideTiles + 2) * TILE_SIZE;
+    for (let i = 0; i < 21; i += 1) world.tick();
+    expect(guardians(world, base)).toHaveLength(0);
+    // Rentrés, pas tués.
+    expect(base.guards).toBe(enemyBaseLevel(base.level).guards.count);
+  });
+
+  it('refait le jour, lentement, un gardien tombé', () => {
+    const base: EnemyBase = { id: 1, tx: 0, ty: 0, level: 1, hp: ENEMY_BASE_LEVELS[0].hp, raiders: 0, brood: 0, guards: 1, mend: 0 };
+    const { guards } = ENEMY_BASE_LEVELS[0];
+
+    for (let i = 0; i < guards.respawnTicks - 1; i += 1) expect(breed(base, 1).guard).toBe(false);
+    expect(breed(base, 1).guard).toBe(true);
+    expect(base.guards).toBe(guards.count);
+    for (let i = 0; i < guards.respawnTicks * 2; i += 1) breed(base, 1);
+    expect(base.guards).toBe(guards.count);
+  });
+
+  it('un gardien abattu manque à sa base jusqu’à ce qu’elle le refasse', () => {
+    const world = withTownHall();
+    const base = firstRingBase(world);
+    const center = baseCenter(base);
+
+    world.player.x = center.x;
+    world.player.y = center.y + 6 * TILE_SIZE;
+    for (let i = 0; i < 21; i += 1) world.tick();
+
+    const posted = guardians(world, base);
+    let died = 0;
+
+    world.events.on('beastDied', ({ proto }) => {
+      if (proto === 'guardian') died += 1;
+    });
+    for (const guard of posted) guard.hp = 0.5;
+    for (let i = 0; i < 400 && died === 0; i += 1) world.tick();
+    expect(died).toBeGreaterThan(0);
+    expect(base.guards).toBe(enemyBaseLevel(base.level).guards.count - died);
+  });
+
+  it('sauvegarde réserve, compte, gardiens et gardiens sortis ; une ancienne sauvegarde charge ses bases à réserve vide', () => {
+    const world = withTownHall();
+    const base = firstRingBase(world);
+    const center = baseCenter(base);
+
+    for (let i = 0; i < 20 * 120; i += 1) world.tick();
+    base.raiders = 2;
+    base.guards = 1;
+    base.mend = 33;
+    world.player.x = center.x;
+    world.player.y = center.y + 20 * TILE_SIZE;
+    for (let i = 0; i < 21; i += 1) world.tick();
+    expect(guardians(world, base)).toHaveLength(1);
+
+    const copy = deserialize(JSON.parse(JSON.stringify(serialize(world))));
+
+    expect(copy.enemyBases).toEqual(world.enemyBases);
+    expect(guardians(copy, base)).toEqual(guardians(world, base));
+    for (let i = 0; i < 400; i += 1) {
+      world.tick();
+      copy.tick();
+    }
+    expect(copy.enemyBases).toEqual(world.enemyBases);
+    expect(guardians(copy)).toEqual(guardians(world));
+
+    // Une sauvegarde d'avant les sorties : ni réserve, ni compte, ni gardiens notés.
+    const state = JSON.parse(JSON.stringify(serialize(world))) as Record<string, unknown>;
+
+    for (const raw of state['enemyBases'] as Record<string, unknown>[]) {
+      delete raw['raiders'];
+      delete raw['brood'];
+      delete raw['guards'];
+      delete raw['mend'];
+    }
+    state['nextWaveHeading'] = 1.5;
+
+    const old = deserialize(state);
+
+    for (const loaded of old.enemyBases) {
+      expect(loaded.raiders).toBe(0);
+      expect(loaded.guards).toBe(isStanding(loaded) ? enemyBaseLevel(loaded.level).guards.count : 0);
+    }
+    for (let i = 0; i < 100; i += 1) old.tick();
+  });
+
+  it('deux parties de même seed produisent et lâchent les mêmes assaillants', () => {
+    const run = (): string => {
+      const world = withTownHall(42);
+
+      untilNightfall(world, 2);
+      for (let i = 0; i < 20 * 20; i += 1) world.tick();
+      return JSON.stringify({ bases: world.enemyBases, mutants: mutants(world) });
+    };
+
+    expect(run()).toBe(run());
+  }, 30_000);
 });

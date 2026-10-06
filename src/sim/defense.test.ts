@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { TILE_SIZE } from '../core/grid.ts';
 import { BUILDINGS, REPAIR, buildingLevel, type BuildingId } from '../data/buildings.ts';
 import { DAY_CYCLE } from '../data/dayNight.ts';
-import { ENEMIES, QUEEN, queenWave, waveSpec } from '../data/enemies.ts';
+import { ENEMIES, QUEEN, nightBosses, queenWave } from '../data/enemies.ts';
 import type { ItemId } from '../data/items.ts';
 import { isTargetable } from './combat.ts';
 import { CYCLE_TICKS } from './dayNight.ts';
@@ -356,14 +356,15 @@ function jumpToNight(world: World, night: number, before: number): void {
 }
 
 describe('Reine des flaques — calendrier', () => {
-  it('mène la dernière vague des nuits 10, 15, 20 ; la nuit 5 garde son gros mutant', () => {
-    expect(waveSpec(10, 3).queen).toBe(1);
+  it('sort aux nuits 10, 15, 20 ; la nuit 5 garde son gros mutant', () => {
+    expect(nightBosses(10).queen).toBe(1);
     expect(queenWave(10)).not.toBeNull();
     expect(queenWave(15)).not.toBeNull();
     expect(queenWave(20)).not.toBeNull();
 
     for (const night of [1, 4, 5, 6, 9, 11, 14, 16]) expect(queenWave(night), `nuit ${night}`).toBeNull();
-    expect(waveSpec(5, 3).brute).toBe(1);
+    expect(nightBosses(5).brute).toBe(1);
+    expect(nightBosses(9).queen ?? 0).toBe(0);
   });
 
   it('s’annonce la veille au crépuscule, puis le bandeau compte jusqu’à sa sortie', () => {

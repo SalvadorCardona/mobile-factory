@@ -67,6 +67,7 @@ import { TREE, TREE_DEAD, TREE_PINE } from '../art/trees.ts';
 import { REINFORCED_TOWER, WATCHTOWER } from '../art/watchtower.ts';
 import { RAINBOW, WEATHER_FX } from '../art/weather.ts';
 import { WOLF } from '../art/wolf.ts';
+import { GUARDIAN } from '../art/guardian.ts';
 import { WORKER } from '../art/worker.ts';
 
 export interface SpriteProto {
@@ -110,6 +111,8 @@ export const SPRITES = {
   exMutant: EX_MUTANT_SPRITE,
   crab: CRAB,
   wolf: WOLF,
+  /** Le gardien d'une base mutante : seau de ruine sur la tête, couvercle pour bouclier. */
+  guardian: GUARDIAN,
   arrow: ARROW,
   target: TARGET,
   /** Bulle « coffre plein » au-dessus d'une foreuse ou d'une ferme arrêtée. */
@@ -130,7 +133,7 @@ export const SPRITES = {
   puddle: PUDDLE,
   /** Le butin qu'ils lâchent : un morceau par objet. */
   loot: LOOT,
-  /** La base mutante, et la pancarte de son niveau (`sign1` à `sign3`). */
+  /** La base mutante, et le badge de ses assaillants en réserve (`sign0` à `sign9`). */
   enemyBase: ENEMY_BASE_SPRITE,
 
   tree: TREE,

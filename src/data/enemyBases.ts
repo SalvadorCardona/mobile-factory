@@ -15,9 +15,19 @@
  *
  * Plus on s'éloigne, plus l'anneau est coriace : le niveau de la base est
  * celui de son anneau.
+ *
+ * Une base abrite deux sortes de mutants :
+ * - ses **gardiens** (`WILDLIFE.guardian`) ne la quittent jamais : ils
+ *   flânent dans sa zone et chargent Adam dès qu'il y entre. Morts, la base
+ *   les refait le jour, lentement (`guards`) ;
+ * - ses **assaillants** (`RAIDS.proto`) sont produits le jour, à la cadence
+ *   de son niveau (`raid`), jusqu'à sa capacité : ils attendent dans la
+ *   base — le badge en dit le nombre — et sortent tous à la tombée de la
+ *   nuit pour marcher sur la ville. Ce sont les seuls ennemis de la nuit :
+ *   sans base debout, la nuit est calme.
  */
 
-import type { LootTable } from './enemies.ts';
+import type { EnemyId, LootTable } from './enemies.ts';
 import type { SpriteId } from './sprites.ts';
 
 /** Ce qu'une base est à son niveau. Le niveau est aussi celui de l'équipement qu'il faut pour l'entamer. */
@@ -30,6 +40,35 @@ export interface EnemyBaseLevel {
   prestige: number;
   /** Ce qu'elle lâche au sol en tombant (`LOOT_DROPS`). */
   loot: LootTable;
+  /** Ses assaillants : quand elle commence à en produire, à quelle cadence, combien elle en garde. */
+  raid: RaidSpec;
+  /** Ses gardiens : combien, et le temps de jour qu'il lui faut pour en refaire un. */
+  guards: GuardSpec;
+}
+
+/**
+ * La production d'assaillants d'une base, le jour seulement.
+ *
+ * La cadence est en ticks de **jour** par assaillant, à la première nuit où
+ * la base attaque ; elle s'accélère ensuite de `RAIDS.paceGrowth` par nuit
+ * (`raidTicks`). La production est fractionnaire : une base lente met
+ * plusieurs jours à en faire un, et le compte qu'elle a commencé tient d'un
+ * jour à l'autre. Pleine, elle attend la nuit.
+ */
+export interface RaidSpec {
+  /** Première nuit où elle produit des assaillants (la première vaut 1). */
+  from: number;
+  /** Ticks de jour par assaillant, la nuit `from`. */
+  ticksPerRaider: number;
+  /** Assaillants en réserve, au plus, la nuit `from` ; `RAIDS` la fait grandir. */
+  capacity: number;
+}
+
+/** Les gardiens d'une base. */
+export interface GuardSpec {
+  count: number;
+  /** Ticks de jour pour refaire un gardien tombé. */
+  respawnTicks: number;
 }
 
 /** Un anneau : sa distance à la mairie, combien de bases s'y répartissent, et leur niveau. */
@@ -69,6 +108,9 @@ export const ENEMY_BASE_LEVELS = [
       { item: 'ironPlate', min: 2, max: 4, chance: 1 },
       { item: 'mutantGoo', min: 1, max: 3, chance: 1 },
     ],
+    // Onze bases au premier anneau, un assaillant tous les deux jours et demi chacune : quatre la première nuit.
+    raid: { from: 1, ticksPerRaider: 20 * 450, capacity: 2 },
+    guards: { count: 2, respawnTicks: 20 * 120 },
   },
   {
     hp: 120,
@@ -79,6 +121,9 @@ export const ENEMY_BASE_LEVELS = [
       { item: 'mutantGoo', min: 2, max: 4, chance: 1 },
       { item: 'wolfFang', min: 1, max: 2, chance: 0.5 },
     ],
+    // Le deuxième anneau se réveille à la nuit 8, plus lent : il épaule le premier.
+    raid: { from: 8, ticksPerRaider: 20 * 1200, capacity: 2 },
+    guards: { count: 3, respawnTicks: 20 * 150 },
   },
   {
     hp: 200,
@@ -89,6 +134,8 @@ export const ENEMY_BASE_LEVELS = [
       { item: 'mutantGoo', min: 3, max: 5, chance: 1 },
       { item: 'radCore', min: 1, max: 1, chance: 0.5 },
     ],
+    raid: { from: 12, ticksPerRaider: 20 * 1800, capacity: 2 },
+    guards: { count: 4, respawnTicks: 20 * 180 },
   },
 ] as const satisfies readonly EnemyBaseLevel[];
 
@@ -103,6 +150,36 @@ export const ENEMY_BASE_RINGS = [
   { radius: 54, count: 14, level: 2 },
   { radius: 76, count: 18, level: 3 },
 ] as const satisfies readonly EnemyBaseRing[];
+
+/**
+ * Les assaillants, toutes bases confondues.
+ *
+ * La difficulté monte d'elle-même : chaque nuit, une base produit
+ * `paceGrowth` fois plus vite qu'à sa première (nuit 9 : trois fois plus
+ * vite qu'à la nuit 1, pour un niveau 1), et sa capacité gagne une place
+ * toutes les `capacityEvery` nuits, jusqu'à `capacityMax` — le badge n'a
+ * qu'un chiffre.
+ */
+export const RAIDS = {
+  /** L'espèce que produisent les bases : le mutant des vagues. */
+  proto: 'mutant' satisfies EnemyId,
+  paceGrowth: 0.25,
+  capacityEvery: 4,
+  capacityMax: 9,
+  /** Ticks entre la sortie de deux assaillants de la même base : ils passent la porte l'un après l'autre. */
+  exitStagger: 10,
+} as const;
+
+/**
+ * Où les gardiens se montrent : quand Adam passe à `showTiles` tuiles du
+ * centre d'une base, ses gardiens sortent flâner devant ; au-delà de
+ * `hideTiles`, ils rentrent — comptés, pas tués. Comme une tanière : on ne
+ * fait marcher que ce qu'Adam peut croiser.
+ */
+export const GUARD_RANGE = {
+  showTiles: 26,
+  hideTiles: 34,
+} as const;
 
 /** Le niveau d'une base, borné à la table : une sauvegarde retouchée ne casse rien. */
 export function enemyBaseLevel(level: number): EnemyBaseLevel {
