@@ -87,7 +87,7 @@ function colony(hall: Stock, placements: Placement[]): World {
         entities.push({ ...placed, kind: 'lumberCamp' });
         break;
       case 'farm':
-        entities.push({ ...placed, kind: 'farm', blocked: true });
+        entities.push({ ...placed, kind: 'farm' });
         break;
       case 'nursery':
         // L'heure de la naissance est passée : elle attend sa nourriture.
