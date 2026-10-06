@@ -316,6 +316,30 @@ export const UI_ICONS = {
     polyline([13, 4, 19, 4, 13, 10, 19, 10], ink.light),
     polyline([4, 11, 12, 11, 4, 19, 12, 19], ink.base),
   ),
+  /**
+   * L'Habitation : une maison — les murs jaunes de la colonie sous le toit
+   * d'ardoise indigo de la Maison, sa porte.
+   */
+  home: svg(
+    S,
+    S,
+    shadedBlock(5, 10, 14, 12, 3, 'yellow', 3),
+    polygon([2.5, 11.5, 12, 3, 21.5, 11.5], ink.base),
+    polygon([12, 3, 21.5, 11.5, 15.5, 11.5], ink.shade),
+    pill(6, 8.5, 5, 1.6, ink.light),
+    rect(10, 15, 4.5, 7, violet.shade, 2.2),
+  ),
+  /** Le bonheur d'un habitant : un visage rond qui sourit. */
+  mood: svg(
+    S,
+    S,
+    circle(12.5, 12.6, 9, PALETTE.skin.shade),
+    circle(12, 12, 8.6, PALETTE.skin.base),
+    pill(6.5, 6.5, 4, 1.8, PALETTE.skin.light),
+    circle(9, 10.5, 1.2, ink.base),
+    circle(15, 10.5, 1.2, ink.base),
+    curve('M8.4 14.4 Q12 17.8 15.6 14.4', ink.base),
+  ),
   /** Un enfant : la tête, la casquette jaune des enfants de la colonie, la tunique orange. */
   child: svg(
     S,

@@ -27,13 +27,13 @@ describe('parties de test', () => {
     expect(encodeSave(a, 0)).toBe(encodeSave(b, 0));
   });
 
-  it.each(IDS)('%s pose chaque bâtiment du scénario, au matin, sans mutant', (id) => {
+  it.each(IDS)('%s pose chaque bâtiment du scénario, au matin — ou au soir —, sans mutant', (id) => {
     const scenario = TEST_SCENARIOS[id];
     const world = stageScenario(scenario);
     const hall = world.entities.get(world.townHallId)!;
 
     expect(hall.kind).toBe('townHall');
-    expect(world.clock()?.phase).toBe('day');
+    expect(world.clock()?.phase).toBe('dusk' in scenario && scenario.dusk ? 'dusk' : 'day');
     expect([...world.mobiles.values()].some((mobile) => mobile.kind === 'mutant')).toBe(false);
 
     for (const { building, dx, dy } of scenario.buildings) {

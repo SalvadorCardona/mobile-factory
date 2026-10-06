@@ -44,6 +44,8 @@ export interface TestScenarioProto {
   bag: Partial<Record<ItemId, number>>;
   /** Où se tient Adam, en tuiles du coin de la mairie. */
   adam: { dx: number; dy: number };
+  /** Vrai : la partie s'ouvre au crépuscule du premier jour, plutôt qu'au matin — le moment où l'on va dormir. */
+  dusk?: boolean;
 }
 
 export const TEST_SCENARIOS = {
@@ -90,6 +92,26 @@ export const TEST_SCENARIOS = {
     town: { wood: 40, stone: 30, food: 12, water: 12 },
     bag: {},
     adam: { dx: 4, dy: 8 },
+  },
+  /**
+   * Le soir tombe sur une base de dix ouvriers — bûcherons, bâtisseurs,
+   * logisticiens — et une seule Maison de quatre lits : quatre vont s'y
+   * coucher, les six autres dorment dehors devant leur travail. On pose une
+   * Maison de plus, et le compte des logés monte.
+   */
+  housing: {
+    label: 'Maisons',
+    seed: 100,
+    buildings: [
+      { building: 'lumberCamp', dx: -6, dy: 0 },
+      { building: 'constructionPost', dx: -5, dy: 5 },
+      { building: 'logisticsPost', dx: 6, dy: 0 },
+      { building: 'home', dx: 6, dy: 2 },
+    ],
+    town: { wood: 40, stone: 30, food: 40, water: 40 },
+    bag: { wood: 12, stone: 6 },
+    adam: { dx: 1, dy: 4 },
+    dusk: true,
   },
 } as const satisfies Record<string, TestScenarioProto>;
 

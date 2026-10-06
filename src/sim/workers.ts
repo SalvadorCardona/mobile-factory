@@ -22,6 +22,7 @@ import { NEEDS } from '../data/needs.ts';
 import { BUILDERS, EX_MUTANT, FORESTERS, LOGISTICIANS, LUMBERJACKS, PORTERS, WANDER } from '../data/workers.ts';
 import { KID_SPEED_TILES } from './kids.ts';
 import { facingOf } from './motion.ts';
+import { moodPace } from './housing.ts';
 import { needsPace } from './needs.ts';
 import type { RoadTest } from './roads.ts';
 import { isWalkable, terrainAt } from './terrain.ts';
@@ -33,10 +34,15 @@ type Walker = Worker | Lumberjack | Forester | Patient | Kid;
 /** Pas d'échantillonnage d'une ligne droite, en pixels : moins d'un quart de tuile, aucun coin d'eau n'échappe. */
 const LINE_STEP = TILE_SIZE / 4;
 
-/** Vitesse de marche, en tuiles par seconde : un porteur, un ex-mutant, un bûcheron, un enfant, un patient qui boitille. */
+/**
+ * Vitesse de marche, en tuiles par seconde : un porteur, un ex-mutant, un
+ * bûcheron, un enfant, un patient qui boitille. Un ouvrier malheureux — il a
+ * trop dormi dehors — traîne les pieds (`moodPace`) ; un enfant, qui dort à
+ * sa nurserie, jamais.
+ */
 function speedOf(walker: Walker): number {
   if (walker.kind === 'patient') return CLINIC.limpSpeed;
-  return baseSpeed(walker) * paceOf(walker);
+  return baseSpeed(walker) * paceOf(walker) * (walker.kind === 'kid' ? 1 : moodPace(walker.happiness));
 }
 
 function baseSpeed(walker: Exclude<Walker, Patient>): number {

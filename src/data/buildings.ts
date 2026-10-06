@@ -72,6 +72,12 @@ export interface BuildingProto {
    * − / + de `sim/staffing.ts`). Zéro : c'est une pause de fait.
    */
   minWorkers: number;
+  /**
+   * Lits du bâtiment fini : ses places à dormir, qui font l'Habitation de la
+   * ville (`data/housing.ts`). Un lit n'est à personne en propre — la
+   * simulation les attribue (`sim/housing.ts`). Absent : aucun.
+   */
+  beds?: number;
   /** Proposé dans le menu de construction ? La mairie, unique, ne l'est pas. */
   menu: boolean;
   /** Un seul par colonie, chantier compris : le labo de recherche, l'antenne. */
@@ -185,6 +191,8 @@ export const BUILDINGS = {
     hp: 40,
     workers: 1,
     minWorkers: 0,
+    // Une maisonnette : le lit de son forestier.
+    beds: 1,
     menu: true,
     unique: false,
     plan: false,
@@ -343,10 +351,37 @@ export const BUILDINGS = {
     hp: 70,
     workers: 4,
     minWorkers: 0,
+    // Le dortoir de ses quatre porteurs.
+    beds: 4,
     menu: true,
     unique: false,
     plan: true,
     sprite: 'builderHouse',
+    weapon: null,
+    upgrades: [],
+  },
+  home: {
+    label: LORE.buildings.home.name,
+    sign: LORE.buildings.home.sign,
+    siteDescription: LORE.buildings.home.site,
+    description: LORE.buildings.home.description,
+    effect: LORE.buildings.home.effect,
+    // Une maison sans ouvriers : rien que des lits (`beds`).
+    kind: 'house',
+    width: 2,
+    height: 2,
+    // Du bois pour les murs et les lits, un peu de pierre pour la cheminée : à la portée d'une colonie qui démarre.
+    cost: { wood: 12, stone: 6 },
+    storage: 0,
+    logisticRadius: 0,
+    hp: 60,
+    workers: 0,
+    minWorkers: 0,
+    beds: 4,
+    menu: true,
+    unique: false,
+    plan: false,
+    sprite: 'home',
     weapon: null,
     upgrades: [],
   },
@@ -550,6 +585,13 @@ export const BUILDING_IDS = Object.keys(BUILDINGS) as BuildingId[];
 
 /** Bâtiments proposés dans le menu, dans l'ordre de déclaration. */
 export const MENU_BUILDING_IDS = BUILDING_IDS.filter((id) => BUILDINGS[id].menu);
+
+/** Les lits du bâtiment fini : sa part de l'Habitation de la ville. */
+export function bedsOf(id: BuildingId): number {
+  const proto: BuildingProto = BUILDINGS[id];
+
+  return proto.beds ?? 0;
+}
 
 /** Le niveau le plus haut qu'atteint le bâtiment : 1 s'il ne s'améliore pas. */
 export function maxLevel(id: BuildingId): number {

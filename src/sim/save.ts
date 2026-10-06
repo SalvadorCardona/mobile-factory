@@ -21,6 +21,7 @@ import { RARE_OFFERS, type RareOfferId } from '../data/caravan.ts';
 import { ENEMY_BASE_LEVELS } from '../data/enemyBases.ts';
 import { ENEMIES, WILDLIFE, type EnemyId, type WildlifeId } from '../data/enemies.ts';
 import { MAX_GEAR } from '../data/gear.ts';
+import { HAPPINESS } from '../data/housing.ts';
 import { COLONY } from '../data/inhabitants.ts';
 import { ITEMS, type ItemId } from '../data/items.ts';
 import { NEED_IDS, NEEDS, type NeedId } from '../data/needs.ts';
@@ -31,6 +32,7 @@ import { RESEARCH, type ResearchId } from '../data/research.ts';
 import type { PlantedTree } from './resources.ts';
 import type { SchedulerSnapshot } from './scheduler.ts';
 import { ADAM_SALT, adultAge } from './inhabitants.ts';
+import { freshHousing, type Housing } from './housing.ts';
 import { freshNeeds, fullNeeds } from './needs.ts';
 import { canPause, clampStaff } from './staffing.ts';
 import type { Store, StoreSnapshot } from './store.ts';
@@ -696,6 +698,7 @@ function parseMobile(raw: unknown): Mobile {
         kind: 'worker',
         age: age(mobile['age']),
         ...needful(mobile),
+        ...housed(mobile),
         homeId: int(mobile['homeId']),
         // Absent des sauvegardes d'avant la clinique : aucun ex-mutant.
         exMutant: mobile['exMutant'] === undefined ? false : bool(mobile['exMutant']),
@@ -722,6 +725,7 @@ function parseMobile(raw: unknown): Mobile {
         kind: 'lumberjack',
         age: age(mobile['age']),
         ...needful(mobile),
+        ...housed(mobile),
         homeId: int(mobile['homeId']),
         inside: bool(mobile['inside']),
         state: state as LumberjackState,
@@ -742,6 +746,7 @@ function parseMobile(raw: unknown): Mobile {
         kind: 'forester',
         age: age(mobile['age']),
         ...needful(mobile),
+        ...housed(mobile),
         homeId: int(mobile['homeId']),
         inside: bool(mobile['inside']),
         state: state as ForesterState,
@@ -808,6 +813,21 @@ function needful(raw: Json): Needful {
   const meal = raw['meal'] === undefined || raw['meal'] === null ? null : (oneOf(raw['meal'], NEEDS) as NeedId);
 
   return { needs, meal };
+}
+
+/**
+ * Le bonheur d'un ouvrier et son lit. Absents des sauvegardes d'avant les
+ * maisons : il arrive neutre (`HAPPINESS.start`), et son lit lui est
+ * attribué au chargement (`World.settleBeds`), comme un lit dans une maison
+ * tombée se revoit.
+ */
+function housed(raw: Json): Housing {
+  const housing = freshHousing();
+
+  if (raw['happiness'] !== undefined) housing.happiness = Math.min(HAPPINESS.max, Math.max(0, finite(raw['happiness'])));
+  if (raw['bed'] !== undefined && raw['bed'] !== null) housing.bed = int(raw['bed']);
+  if (raw['sleepingOut'] !== undefined) housing.sleepingOut = bool(raw['sleepingOut']);
+  return housing;
 }
 
 /** La flânerie d'un ouvrier. Absente des sauvegardes d'avant elle : il repart de là où il est. */

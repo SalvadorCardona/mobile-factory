@@ -78,6 +78,7 @@ import { locale, onLocale, t } from '../i18n/locale.ts';
 import { carriesWanted, harvestRefusedText, tutorialAdvice, type Advice } from './hint.ts';
 import { buildingIcon, dayDialUrl, itemAmount, itemIcon, prestigeIcon, uiIcon } from './icons.ts';
 import { effectLine } from './researchText.ts';
+import { moodMeter } from './moodMeter.ts';
 import { needMeter } from './needMeter.ts';
 import { personText } from './personText.ts';
 import { mapUrl, seedLine } from './seed.ts';
@@ -833,11 +834,16 @@ export class Hud {
     const line = personText(nameOf(this.world.seed, mobile.id), mobile.age, this.world.occupation(mobile));
     // La jauge avance par centièmes : l'infobulle ne se refait pas à chaque tick.
     const gauges = NEED_IDS.map((need) => Math.round(mobile.needs[need] * 100));
-    const key = `${line}|${gauges.join(':')}`;
+    const happiness = mobile.kind === 'kid' ? null : mobile.happiness;
+    const key = `${line}|${gauges.join(':')}|${happiness === null ? '' : Math.round(happiness)}`;
 
     if (key !== this.personKey) {
       this.personKey = key;
-      this.person.replaceChildren(text('hud-person-line', line), ...NEED_IDS.map((need) => needMeter(need, mobile.needs[need])));
+      this.person.replaceChildren(
+        text('hud-person-line', line),
+        ...NEED_IDS.map((need) => needMeter(need, mobile.needs[need])),
+        ...(happiness === null ? [] : [moodMeter(happiness)]),
+      );
       this.personHeight = this.person.offsetHeight;
     }
 
@@ -855,7 +861,8 @@ export class Hud {
    */
   private updatePeople(): void {
     const { working, idle, children } = this.world.census();
-    const key = `${working}:${idle}:${children}`;
+    const { housed, population } = this.world.housing();
+    const key = `${working}:${idle}:${children}:${housed}/${population}`;
 
     if (key === this.lastPeople) return;
     const label = t().hud.people;
@@ -877,11 +884,19 @@ export class Hud {
     setTip(lazy, label.idle(idle));
     lazy.addEventListener('click', () => this.focusIdle());
 
+    // L'Habitation, logés / habitants : en corail dès que quelqu'un dort dehors.
+    const housing = text('hud-people-count hud-people-housing', `${housed}/${population}`);
+
+    housing.dataset['alert'] = String(housed < population);
+    housing.prepend(uiIcon('home', 18));
+    setTip(housing, label.housing(housed, population));
+
     this.people.hidden = working + idle + children === 0;
     this.people.replaceChildren(
       count('toil', working, label.working(working)),
       lazy,
       count('child', children, label.children(children)),
+      housing,
     );
   }
 

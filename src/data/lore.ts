@@ -172,6 +172,16 @@ export const LORE = {
         'qui, bientôt, porteront les ressources à la place d’Adam.',
       effect: 'Loge 4 ouvriers. Pas encore d’autre effet.',
     },
+    home: {
+      name: 'Maison',
+      sign: 'Maison',
+      site: 'Un plancher, des montants et quatre sommiers qui attendent leurs murs.',
+      description:
+        'Une maison à étage, sa cheminée qui fume et un édredon qui prend l’air à la fenêtre. ' +
+        'Quatre habitants y dorment au chaud : sans lit, on dort dehors, on se lève malheureux ' +
+        'et on traîne les pieds.',
+      effect: '4 lits : 4 habitants dorment au chaud.',
+    },
     quarry: {
       name: 'Carrière',
       sign: 'Carrière',

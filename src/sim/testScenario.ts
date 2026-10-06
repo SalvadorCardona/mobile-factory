@@ -7,7 +7,8 @@
  * attend et pousse `transferToSite`, un tick à chaque fois. Le chantier
  * s'achève, ses ouvriers s'installent, le jour se lève à la mairie — par les
  * mêmes chemins qu'en jeu. Rien n'est écrit à la main dans l'état, sauf la
- * position d'Adam, son sac et le coffre de la ville.
+ * position d'Adam, son sac et le coffre de la ville — et l'horloge, avancée
+ * au crépuscule pour un scénario du soir.
  *
  * Un scénario qui ne se pose plus (règle de placement, coût, terrain) lève
  * une erreur qui dit lequel et pourquoi : `testScenario.test.ts` la verrait
@@ -16,6 +17,7 @@
 
 import { TILE_SIZE } from '../core/grid.ts';
 import { BUILDINGS } from '../data/buildings.ts';
+import { DAY_CYCLE } from '../data/dayNight.ts';
 import type { ItemId } from '../data/items.ts';
 import type { TestScenarioProto } from '../data/testScenario.ts';
 import type { Store } from './store.ts';
@@ -61,6 +63,13 @@ export function stageScenario(scenario: TestScenarioProto): World {
   fill(town, scenario.town);
   fill(world.player.inventory, scenario.bag);
   teleport(world, (hx + scenario.adam.dx + 0.5) * TILE_SIZE, (hy + scenario.adam.dy + 0.5) * TILE_SIZE);
+
+  // Le soir tombe : l'horloge avance jusqu'au crépuscule, sans rien sauter d'autre — ni nuit, ni aube.
+  if (scenario.dusk) {
+    const clock = world.clock();
+
+    if (clock) world.cycleStartTick -= DAY_CYCLE.day - clock.offset;
+  }
 
   return world;
 }

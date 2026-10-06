@@ -5,6 +5,7 @@ import { CLINIC } from '../data/clinic.ts';
 import type { ItemId } from '../data/items.ts';
 import { EX_MUTANT } from '../data/workers.ts';
 import { doorOf } from './jobs.ts';
+import { freshHousing } from './housing.ts';
 import { freshNeeds } from './needs.ts';
 import { decodeSave, encodeSave, type SavedEntity } from './save.ts';
 import { isWalkable, terrainAt } from './terrain.ts';
@@ -80,7 +81,7 @@ function patient(x: number, y: number, clinicId: number, state: Patient['state']
 }
 
 function exMutant(id: number, clinicId: number, x: number, y: number): Worker {
-  return { kind: 'worker', id, x, y, prevX: x, prevY: y, facing: 'down', moving: false, homeId: clinicId, exMutant: true, grown: false, age: 30, logistician: false, builder: false, survivor: false, build: null, inside: true, job: null, searchTicks: 1, wanderX: x, wanderY: y, wanderTicks: 0, ...freshNeeds() };
+  return { kind: 'worker', id, x, y, prevX: x, prevY: y, facing: 'down', moving: false, homeId: clinicId, exMutant: true, grown: false, age: 30, logistician: false, builder: false, survivor: false, build: null, inside: true, job: null, searchTicks: 1, wanderX: x, wanderY: y, wanderTicks: 0, ...freshNeeds(), ...freshHousing() };
 }
 
 function mobilesOf<K extends Mobile['kind']>(world: World, kind: K): Extract<Mobile, { kind: K }>[] {

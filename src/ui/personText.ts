@@ -33,5 +33,7 @@ export function occupationText(occupation: Occupation): string {
       return text.idle;
     case 'home':
       return text.home;
+    case 'outside':
+      return text.outside;
   }
 }

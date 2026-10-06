@@ -134,6 +134,9 @@ export const panel = {
 
   house: {
     sleeping: 'Les ouvriers dorment ici entre deux journées.',
+    beds: 'Ceux qui n’ont pas de lit y trouvent le leur, le plus près de leur travail.',
+    /** La puce des lits, sur tout bâtiment qui en a. */
+    bedsTaken: (used: number, beds: number): string => `Lits occupés : ${used}/${beds}`,
   },
 
   lumberCamp: {
@@ -223,8 +226,11 @@ export const panel = {
       exMutant: 'Ex-mutant, porteur',
       survivor: 'Survivant, porteur',
     },
-    home: (building: string): string => `Logé : ${building}`,
-    homeless: 'Sans logis',
+    home: (building: string): string => `Travaille pour : ${building}`,
+    homeless: 'Sans travail',
+    /** Où il dort : son lit, ou dehors faute de lit. */
+    sleepsIn: (building: string): string => `Dort à : ${building}`,
+    sleepsOutside: 'Dort à : dehors, faute de lit',
     carrying: (load: string): string => `Porte : ${load}`,
     /** Un mutant : sa cible, ou la flaque dont il sort. */
     emerging: 'Sort de sa flaque',

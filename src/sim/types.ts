@@ -19,6 +19,7 @@ import type { ItemId } from '../data/items.ts';
 import type { ResearchId } from '../data/research.ts';
 import type { NeedId } from '../data/needs.ts';
 import type { JobPriority } from '../data/workers.ts';
+import type { Housing } from './housing.ts';
 import type { Needs } from './needs.ts';
 import type { Store } from './store.ts';
 
@@ -410,6 +411,14 @@ export interface Needful {
 }
 
 /**
+ * Ce que tout ouvrier adulte — porteur, bûcheron, forestier — retient de ses
+ * nuits (`data/housing.ts`) : son bonheur, son lit, et s'il dort dehors.
+ * Le lit attribué n'est qu'une préférence stable : il se revoit au
+ * chargement et à chaque attribution (`sim/housing.ts`).
+ */
+export type Housed = Housing;
+
+/**
  * Un enfant : il joue autour de sa nurserie et n'en va jamais loin. Il en
  * sort à `AGES.nursery` ans ; à `AGES.work`, il devient ouvrier — un
  * porteur logé à sa nurserie, sous le même id.
@@ -503,7 +512,7 @@ export interface Wandering {
  * Un bâtisseur est un ouvrier logé au poste de construction : il livre les
  * chantiers du rayon de son poste depuis la mairie, puis les bâtit (`build`).
  */
-export interface Worker extends Moving, Wandering, Needful {
+export interface Worker extends Moving, Wandering, Needful, Housed {
   kind: 'worker';
   /** Son âge, en années : une de plus à chaque aube. */
   age: number;
@@ -550,7 +559,7 @@ export type LumberjackState = 'idle' | 'toTree' | 'chop' | 'toCamp' | 'wait';
  * `tree` est réservé dès qu'il est choisi, et la réservation, qui n'est pas
  * sauvegardée, se rejoue depuis les bûcherons au chargement — comme les jobs.
  */
-export interface Lumberjack extends Moving, Wandering, Needful {
+export interface Lumberjack extends Moving, Wandering, Needful, Housed {
   kind: 'lumberjack';
   /** Son âge, en années : une de plus à chaque aube. */
   age: number;
@@ -582,7 +591,7 @@ export type ForesterState = 'idle' | 'toPlot' | 'plant';
  * carré l'une après l'autre, dans l'ordre (`plotTiles`), sans repasser chez
  * lui entre deux : rien à rapporter.
  */
-export interface Forester extends Moving, Wandering, Needful {
+export interface Forester extends Moving, Wandering, Needful, Housed {
   kind: 'forester';
   /** Son âge, en années : une de plus à chaque aube. */
   age: number;

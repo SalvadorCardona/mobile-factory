@@ -69,7 +69,7 @@
  * seule si l'entité disparaît — rasée par un mutant, ennemi abattu.
  */
 
-import { BUILDINGS, REPAIR, buildingLevel, maxLevel, nextUpgrade, type BuildingId, type BuildingLevel } from '../data/buildings.ts';
+import { BUILDINGS, REPAIR, bedsOf, buildingLevel, maxLevel, nextUpgrade, type BuildingId, type BuildingLevel } from '../data/buildings.ts';
 import { CLINIC } from '../data/clinic.ts';
 import { enemyBaseLevel } from '../data/enemyBases.ts';
 import { GEAR_WORKSHOP, gearOf } from '../data/gear.ts';
@@ -90,6 +90,7 @@ import type { UiIcon } from '../art/ui.ts';
 import { onLocale, t } from '../i18n/locale.ts';
 import { creatureView, isCreature, type CreatureView, type Selection } from './creatureView.ts';
 import { buildingIcon, buildingIconUrl, creatureIconUrl, enemyBaseIconUrl, itemAmount, uiIcon } from './icons.ts';
+import { moodMeter } from './moodMeter.ts';
 import { needMeter } from './needMeter.ts';
 import { PanelTabs } from './panelTabs.ts';
 import { ResearchPanel } from './researchPanel.ts';
@@ -774,7 +775,8 @@ export class BuildingPanel {
         }
 
         case 'house':
-          lines.push(text.house.sleeping);
+          // La Maison n'emploie personne : ses lits sont à qui n'en a pas.
+          lines.push(proto.workers > 0 ? text.house.sleeping : text.house.beds);
           break;
 
         case 'lab':
@@ -865,6 +867,15 @@ export class BuildingPanel {
           lines.push(used >= CLINIC.beds ? text.clinic.full : text.clinic.open);
           break;
         }
+      }
+
+      // Ses lits : combien sont pris, sur combien — sa part de l'Habitation.
+      const beds = bedsOf(entity.proto);
+
+      if (beds > 0) {
+        const used = this.world.sleepersIn(entity.id).length;
+
+        stats.push({ icon: 'home', value: `${used}/${beds}`, label: text.house.bedsTaken(used, beds) });
       }
 
       // Le coffre de la mairie est le stock de la ville. Un coffre où échanger se lit dans la zone d'échange,
@@ -977,7 +988,7 @@ export class BuildingPanel {
 
     this.setStats([{ icon: 'moon', value: String(view.age), label: text.creature.age(view.age) }]);
     this.setItems([], 'creature');
-    this.setNeeds(view.needs);
+    this.setNeeds(view.needs, view.happiness);
 
     const { hp } = view;
 
@@ -992,14 +1003,14 @@ export class BuildingPanel {
     }
   }
 
-  /** Les jauges d'un habitant, une par besoin ; reconstruites quand l'une bouge d'un centième. */
-  private setNeeds(needs: CreatureView['needs']): void {
-    const key = needs.map(({ need, value }) => `${need}:${Math.round(value * 100)}`).join('|');
+  /** Les jauges d'un habitant, une par besoin, puis son bonheur ; reconstruites quand l'une bouge d'un centième. */
+  private setNeeds(needs: CreatureView['needs'], happiness: number | null): void {
+    const key = `${needs.map(({ need, value }) => `${need}:${Math.round(value * 100)}`).join('|')}|mood:${happiness === null ? '' : Math.round(happiness)}`;
 
-    this.needs.hidden = needs.length === 0;
+    this.needs.hidden = needs.length === 0 && happiness === null;
     if (key === this.lastNeeds) return;
     this.lastNeeds = key;
-    this.needs.replaceChildren(...needs.map(({ need, value }) => needMeter(need, value)));
+    this.needs.replaceChildren(...needs.map(({ need, value }) => needMeter(need, value)), ...(happiness === null ? [] : [moodMeter(happiness)]));
   }
 
   /** Les lignes, puis la jauge : cœur (ou rien pour un chantier), barre, nombre. */

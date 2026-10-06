@@ -234,6 +234,10 @@ export const hud = {
     working: (n: number): string => `${n} ouvrier${s(n)} au travail`,
     idle: (n: number): string => `${n} ouvrier${s(n)} inactif${s(n)}${n > 0 ? ' — taper pour en voir un' : ''}`,
     children: (n: number): string => `${n} enfant${s(n)}`,
+    /** L'Habitation : logés / ouvriers adultes. */
+    housing: (housed: number, population: number): string =>
+      `Habitation — ${housed} logé${s(housed)} sur ${population} habitant${s(population)}` +
+      (population > housed ? ` : ${population - housed} dor${population - housed > 1 ? 'ment' : 't'} dehors, bâtissez une Maison` : ''),
   },
   /** Le sac et la ville, en version compacte. */
   stock: {
@@ -297,6 +301,10 @@ export const hud = {
     workingAt: (building: string): string => `au travail : ${building}`,
     idle: 'sans travail',
     home: 'à la maison',
+    outside: 'endormi',
+    /** Son moral, sous ses jauges : « content », « neutre », « malheureux ». */
+    mood: { content: 'content', neutral: 'neutre', unhappy: 'malheureux' },
+    moodLabel: (value: number): string => `Bonheur : ${value}/100 — une nuit dans un lit le fait monter, une nuit dehors baisser`,
     /** L'état d'un besoin, sous la ligne : « rassasié », « a faim », « affamé » ; « désaltéré », « a soif », « assoiffé ». */
     needs: {
       hunger: { sated: 'rassasié', wanting: 'a faim', deprived: 'affamé' },

@@ -5,7 +5,8 @@
  * Son nom — le prénom d'un habitant (`nameOf`), le surnom d'un ennemi
  * (`foeName`) —, son âge, son portrait (le sprite de son pantin), ses points
  * de vie s'il en a, et ce que le jeu sait de lui : son métier ou son
- * espèce, ce qu'il fait, où il loge, ce qu'il porte, sa faim et sa soif.
+ * espèce, ce qu'il fait, pour qui il travaille, où il dort, ce qu'il porte,
+ * sa faim, sa soif et son bonheur.
  * Rien d'inventé : tout
  * se lit dans le monde. Pur : testé sans DOM.
  */
@@ -43,6 +44,8 @@ export interface CreatureView {
   carry: { item: ItemId; amount: number } | null;
   /** Ses jauges, une par besoin — la faim, la soif — de 0 à 1 ; aucune pour un ennemi. */
   needs: { need: NeedId; value: number }[];
+  /** Son bonheur, de 0 à `HAPPINESS.max` ; `null` pour un enfant ou un ennemi. */
+  happiness: number | null;
 }
 
 export function isCreature(mobile: Mobile): mobile is Creature {
@@ -72,6 +75,13 @@ function inhabitantView(world: World, person: Inhabitant): CreatureView {
     home ? text.home(t().buildings[home.proto].label) : text.homeless,
   ];
 
+  // Où il dort : son lit, ou dehors. Un enfant dort à sa nurserie, sans lit à lui.
+  if (person.kind !== 'kid') {
+    const bed = person.bed === null ? undefined : world.entities.get(person.bed);
+
+    lines.push(bed ? text.sleepsIn(t().buildings[bed.proto].label) : text.sleepsOutside);
+  }
+
   if (carry) lines.push(text.carrying(t().panel.recipeAmount(carry.amount, t().items[carry.item])));
   return {
     name: nameOf(world.seed, person.id),
@@ -81,6 +91,7 @@ function inhabitantView(world: World, person: Inhabitant): CreatureView {
     lines,
     carry,
     needs: NEED_IDS.map((need) => ({ need, value: person.needs[need] })),
+    happiness: person.kind === 'kid' ? null : person.happiness,
   };
 }
 
@@ -107,6 +118,7 @@ function foeView(world: World, foe: Extract<Creature, { kind: 'mutant' | 'beast'
     lines,
     carry: null,
     needs: [],
+    happiness: null,
   };
 }
 
