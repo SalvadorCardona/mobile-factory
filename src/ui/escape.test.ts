@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { escapeAction, type EscapeState } from './escape.ts';
 
-const NOTHING: EscapeState = { settingsOpen: false, paused: false, menuOpen: false, panelOpen: false, inventoryOpen: false };
+const NOTHING: EscapeState = { settingsOpen: false, paused: false, mapOpen: false, menuOpen: false, panelOpen: false, inventoryOpen: false };
 
 describe('escapeAction', () => {
   it('rien d’ouvert : pause', () => {
@@ -16,6 +16,11 @@ describe('escapeAction', () => {
   it('les réglages se ferment d’abord, même en pause', () => {
     expect(escapeAction({ ...NOTHING, settingsOpen: true })).toBe('closeSettings');
     expect(escapeAction({ ...NOTHING, settingsOpen: true, paused: true, panelOpen: true })).toBe('closeSettings');
+  });
+
+  it('la carte du monde se ferme avant le reste, sans pause', () => {
+    expect(escapeAction({ ...NOTHING, mapOpen: true, menuOpen: true, panelOpen: true })).toBe('closeMap');
+    expect(escapeAction({ ...NOTHING, mapOpen: true, paused: true })).toBe('resume');
   });
 
   it('le menu de construction ouvert se ferme', () => {

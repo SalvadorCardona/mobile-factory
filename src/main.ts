@@ -56,6 +56,8 @@ import { SettingsPanel } from './ui/settingsPanel.ts';
 import { formatSeed, parseSeed } from './ui/seed.ts';
 import { testBanner, testScenarioOf } from './ui/testRoute.ts';
 import { ZoomControls } from './ui/zoomControls.ts';
+import { SeenArea } from './ui/mapSight.ts';
+import { WorldMap } from './ui/worldMap.ts';
 
 /**
  * Clamp anti-spirale de la mort.
@@ -75,6 +77,13 @@ const AXIS_EPSILON = 0.01;
 
 /** L'axe d'un clavier au repos : ce que lit le déplacement quand le menu de construction a le clavier. */
 const STILL: KeyboardState = { active: false, axisX: 0, axisY: 0 };
+
+/**
+ * Ce que la carte du monde montre déjà au chargement, en tuiles autour
+ * d'Adam et de chaque bâtiment : la colonie se voit avant d'avoir bougé.
+ */
+const KNOWN_AROUND_PLAYER = 20;
+const KNOWN_AROUND_BUILDING = 8;
 
 /** Distance, en tuiles, à laquelle Adam entend la hache d'un bûcheron. */
 const CHOP_HEARING_TILES = 9;
@@ -245,14 +254,40 @@ async function main(): Promise<void> {
 
   if (savedZoom !== null) renderer.restoreZoom(savedZoom);
 
-  let shownZoom = renderer.zoomLevel;
-  const zoom = new ZoomControls({
-    zoomIn: () => renderer.stepZoom(1),
-    zoomOut: () => renderer.stepZoom(-1),
-    recenter: () => renderer.resetZoom(),
+  /*
+   * La carte du monde. En attendant le brouillard de guerre, elle montre ce
+   * que la caméra a montré depuis le chargement (`SeenArea`), plus les
+   * abords d'Adam et du bâti.
+   */
+  const seen = new SeenArea();
+
+  seen.seeAround(Math.floor(world.player.x / TILE_SIZE), Math.floor(world.player.y / TILE_SIZE), KNOWN_AROUND_PLAYER);
+  for (const entity of world.entities.values()) {
+    seen.seeAround(entity.tx + Math.floor(entity.width / 2), entity.ty + Math.floor(entity.height / 2), KNOWN_AROUND_BUILDING);
+  }
+
+  const worldMap = new WorldMap(world, seen, {
+    onOpen: () => {
+      buildMenu.close();
+      panel.close();
+      inventory.close();
+      trade.close();
+      audio.play('open');
+    },
+    goTo: (x, y) => renderer.lookAt(x, y),
+    cameraView: () => renderer.cameraView,
   });
 
-  hud.root.append(zoom.root, stick.root, buildMenu.root, panel.root, inventory.root, trade.root);
+  // Carte du monde ouverte, les boutons du bord zooment la carte, et celui du milieu la ramène sur Adam.
+  let shownZoom = renderer.zoomLevel;
+  const zoom = new ZoomControls({
+    zoomIn: () => (worldMap.open ? worldMap.stepZoom(1) : renderer.stepZoom(1)),
+    zoomOut: () => (worldMap.open ? worldMap.stepZoom(-1) : renderer.stepZoom(-1)),
+    recenter: () => (worldMap.open ? worldMap.recenter() : renderer.resetZoom()),
+  });
+
+  zoom.root.prepend(worldMap.button);
+  hud.root.append(worldMap.root, zoom.root, stick.root, buildMenu.root, panel.root, inventory.root, trade.root);
   stick.avoid([...buildMenu.root.children], hud.root);
   hud.bag.addEventListener('click', () => inventory.toggle());
   hud.setProjector((x, y) => renderer.worldToScreen(x, y));
@@ -362,7 +397,7 @@ async function main(): Promise<void> {
     (event) => {
       if (isTyping(event.target)) return;
 
-      const canOpen = started && !paused && !settings.open && !world.defeated;
+      const canOpen = started && !paused && !settings.open && !world.defeated && !worldMap.open;
 
       if (buildMenu.handleKey(event.code, event.repeat, canOpen)) {
         event.preventDefault();
@@ -387,12 +422,14 @@ async function main(): Promise<void> {
       const action = escapeAction({
         settingsOpen: settings.open,
         paused,
+        mapOpen: worldMap.open,
         menuOpen: buildMenu.isOpen,
         panelOpen: panel.open || trade.open,
         inventoryOpen: inventory.open,
       });
 
       if (action === 'closeSettings') settings.close();
+      else if (action === 'closeMap') worldMap.close();
       else if (action === 'closeMenu') buildMenu.close();
       else if (action === 'closePanel') {
         panel.close();
@@ -402,7 +439,17 @@ async function main(): Promise<void> {
       else setPaused(action === 'pause');
     }
     // Le sac, comme dans la plupart des jeux sur PC : I, lu par position comme ZQSD.
-    if (event.code === 'KeyI' && !isTyping(event.target) && started && !paused && !settings.open) inventory.toggle();
+    if (event.code === 'KeyI' && !isTyping(event.target) && started && !paused && !settings.open && !worldMap.open) {
+      inventory.toggle();
+    }
+    // La carte du monde : M, lu par caractère et non par position comme ZQSD — c'est une initiale, et
+    // le M d'un clavier AZERTY n'est pas à la place de celui d'un QWERTY.
+    const mapKey = event.key.toLowerCase() === 'm' && !event.ctrlKey && !event.metaKey && !event.altKey;
+
+    if (mapKey && !isTyping(event.target) && !event.repeat) {
+      if (worldMap.open) worldMap.close();
+      else if (started && !paused && !settings.open && !world.defeated) worldMap.show();
+    }
     if (event.code === 'Backquote' && import.meta.env.DEV) hud.toggleDebug();
   });
 
@@ -455,7 +502,7 @@ async function main(): Promise<void> {
   wireShake(
     world,
     renderer,
-    () => placement.mode !== 'idle' || buildMenu.isOpen || panel.open || inventory.open || trade.open,
+    () => placement.mode !== 'idle' || buildMenu.isOpen || panel.open || inventory.open || trade.open || worldMap.open,
   );
 
   let accumulator = 0;
@@ -477,6 +524,11 @@ async function main(): Promise<void> {
 
     const roadTool = placement.roadTool();
 
+    // La carte du monde couvre l'écran : la scène du jeu ne se dessine plus, la carte si.
+    renderer.setHidden(worldMap.open);
+    if (hud.root.dataset['map'] !== String(worldMap.open)) hud.root.dataset['map'] = String(worldMap.open);
+    worldMap.update(ticker.deltaMS);
+
     renderer.draw(
       accumulator / STEP_MS,
       placement.armedBuilding(),
@@ -492,12 +544,23 @@ async function main(): Promise<void> {
         stick.root.getBoundingClientRect(),
         zoom.root.getBoundingClientRect(),
       ]);
+      // Ce que la caméra montre entre dans la zone découverte de la carte du monde.
+      if (!worldMap.open) {
+        const view = renderer.cameraView;
+
+        seen.see({
+          minTx: Math.floor((view.x - view.width / 2) / TILE_SIZE),
+          minTy: Math.floor((view.y - view.height / 2) / TILE_SIZE),
+          maxTx: Math.floor((view.x + view.width / 2) / TILE_SIZE),
+          maxTy: Math.floor((view.y + view.height / 2) / TILE_SIZE),
+        });
+      }
       if (renderer.zoomLevel !== shownZoom) {
         shownZoom = renderer.zoomLevel;
         zoomPrefs.save(shownZoom);
       }
     }
-    zoom.update(renderer.zoomLimits);
+    zoom.update(worldMap.open ? worldMap.zoomLimits : renderer.zoomLimits);
     renderer.setObjective(hud.wantedItem());
     renderer.setSelected(panel.selection);
     buildMenu.refresh();
@@ -506,7 +569,9 @@ async function main(): Promise<void> {
     trade.update();
     // Un menu, une fenêtre ou la pause par-dessus : le joystick s'efface et
     // lâche son doigt ; il revient à la fermeture.
-    stick.setEnabled(running && !world.defeated && !buildMenu.isOpen && !panel.open && !inventory.open && !trade.open);
+    stick.setEnabled(
+      running && !world.defeated && !buildMenu.isOpen && !panel.open && !inventory.open && !trade.open && !worldMap.open,
+    );
     if (hud.root.dataset['stick'] !== String(stick.shown)) hud.root.dataset['stick'] = String(stick.shown);
   });
 
@@ -534,10 +599,11 @@ async function main(): Promise<void> {
    * Le pouce a la priorité sur le clavier : sur un PC tactile, un joystick
    * posé pendant qu'une touche est tenue ne doit pas se battre avec elle.
    * Menu de construction ouvert, le clavier sert à choisir un bâtiment :
-   * une flèche tenue au moment de l'ouvrir n'emmène pas Adam avec elle.
+   * une flèche tenue au moment de l'ouvrir n'emmène pas Adam avec elle. La
+   * carte du monde ouverte, Adam ne marche pas à l'aveugle.
    */
   function pushAxisIfChanged(): void {
-    const keys = buildMenu.isOpen ? STILL : keyboard.state;
+    const keys = buildMenu.isOpen || worldMap.open ? STILL : keyboard.state;
     const { axisX, axisY } = joystick.state.active ? joystick.state : keys;
 
     if (

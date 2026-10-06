@@ -1,4 +1,4 @@
-/** Full-screen screens, the map line, the test-game banner, the zoom buttons. */
+/** Full-screen screens, the map line, the test-game banner, the zoom buttons, the world map. */
 
 import type { Messages } from '../messages.ts';
 
@@ -48,6 +48,12 @@ export const screens: Messages['screens'] = {
   },
   test: {
     banner: (scenario) => `Test game · ${scenario}`,
+  },
+  worldMap: {
+    open: 'World map (M)',
+    title: 'World map',
+    close: 'Close the map (Esc)',
+    hint: 'Drag to explore · tap to go there',
   },
   zoom: {
     zoomIn: 'Zoom in',

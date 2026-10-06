@@ -578,6 +578,15 @@ Les règles, en résumé :
   (`input/zoom.ts`, le geste à deux doigts de `PointerDispatch`, qui ne
   prend que des doigts libres ou de tap) ; mémorisé sous
   `mobile-factory:zoom` (`storage/localZoom.ts`), jamais dans la partie.
+  La **carte du monde** (`ui/worldMap.ts`) s'ouvre au bouton en tête de
+  cette colonne ou à la touche M (Échap la ferme) : un canvas 2D plein
+  écran, le fond peint par blocs de 16 × 16 tuiles en basse résolution
+  (refait à l'ouverture et toutes les 4 s), bâti, habitants et ennemis en
+  marqueurs, le cadre de la caméra ; glisser, molette et pinch (`MapView`),
+  un tap y pose la caméra (`Camera.lookAt`, jusqu'au prochain pas d'Adam).
+  Le jeu tourne derrière, scène masquée. Elle ne montre que ce que
+  `MapSight` permet (inexploré / exploré / visible) — pour l'instant la zone
+  que la caméra a montrée (`SeenArea`, pas sauvegardée).
   `render/indicatorLayer.ts` dessine les repères de bord (mutants, mairie,
   gisement que réclame le conseil — `sim/deposits.ts`), jamais sous le HUD ;
   taper celui de la mairie y jette un coup d'œil (`Camera.peek`).

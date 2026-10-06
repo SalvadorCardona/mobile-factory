@@ -819,6 +819,102 @@ button {
   box-shadow: var(--face);
 }
 
+/*
+ * Le bouton de la carte du monde, en tête de la colonne du zoom : plus grand
+ * que ses voisins, il se voit et se prend au pouce. Carte ouverte, il passe
+ * en jaune — la carte est là — et la colonne reste par-dessus elle.
+ */
+.hud[data-map='true'] .hud-zoom {
+  z-index: 10;
+}
+
+.hud-map-button {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 6px;
+}
+
+.hud-map-button.is-active {
+  background: var(--yellow);
+  box-shadow: 0 5px 0 var(--yellow-shade);
+}
+
+/*
+ * La carte du monde : tout l'écran, la nuit indigo de l'inexploré autour du
+ * découvert. Le titre en blanc en haut, sa croix au bout ; le
+ * geste à faire en bas. Le canvas prend tous les doigts.
+ */
+.world-map {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+  background: var(--ink-shade);
+  pointer-events: auto;
+  animation: overlay-in 200ms ease-out both;
+}
+
+.world-map[hidden] {
+  display: none;
+}
+
+.world-map-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: grab;
+}
+
+.world-map-canvas:active {
+  cursor: grabbing;
+}
+
+.world-map-header {
+  position: absolute;
+  top: calc(var(--safe-top) + 10px);
+  left: calc(var(--safe-left) + 10px);
+  right: calc(var(--safe-right) + 10px);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.world-map-title {
+  flex: 1;
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 20px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--paper);
+}
+
+.world-map-close {
+  pointer-events: auto;
+}
+
+.world-map-hint {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--safe-bottom) + 16px);
+  transform: translateX(-50%);
+  max-width: calc(100% - 32px);
+  margin: 0;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow: var(--face);
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--violet-shade);
+  pointer-events: none;
+}
+
 /* ------------------------------------------------------------ ville et sac */
 
 /*

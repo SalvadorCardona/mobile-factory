@@ -1,7 +1,7 @@
 /**
  * Les écrans plein cadre (titre, pause, question avant de recommencer,
  * jardin des souvenirs), la ligne de la carte, le bandeau de la partie de
- * test, les boutons de zoom.
+ * test, les boutons de zoom, la carte du monde.
  */
 
 export const screens = {
@@ -55,6 +55,13 @@ export const screens = {
   },
   test: {
     banner: (scenario: string): string => `Partie de test · ${scenario}`,
+  },
+  /** La carte du monde : son bouton (raccourci M), son titre, sa croix et le geste à faire. */
+  worldMap: {
+    open: 'Carte du monde (M)',
+    title: 'Carte du monde',
+    close: 'Fermer la carte (Échap)',
+    hint: 'Glissez pour parcourir · touchez pour y aller',
   },
   zoom: {
     zoomIn: 'Zoomer',

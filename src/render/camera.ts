@@ -25,6 +25,10 @@
  * un point à montrer — d'où arrive une vague. Court et discret : on peut
  * être en train de récolter.
  *
+ * Elle sait enfin **regarder ailleurs** (`lookAt`) : le tap sur la carte du
+ * monde la pose d'un coup sur un point, et elle y reste tant qu'Adam ne
+ * marche pas — un pas, ou « Revenir sur Adam », et elle revient sur lui.
+ *
  * Tant que l'un ou l'autre fait glisser la carte d'elle-même, elle le dit
  * (`drifting`) : un tap posé à ce moment viserait un point qui bouge.
  *
@@ -54,6 +58,9 @@ const MAX_SHAKE_PX = 10;
 const PEEK_GO_MS = 450;
 const PEEK_HOLD_MS = 550;
 const PEEK_BACK_MS = 450;
+
+/** Constante de temps du retour sur Adam après un regard ailleurs, en ms. */
+const LOOK_BACK_MS = 160;
 
 /** Constante de temps du zoom, en ms : il glisse, il ne saute pas. */
 const ZOOM_MS = 420;
@@ -131,6 +138,13 @@ export class Camera {
   private peekElapsed = Infinity;
   /** Part du coup d'œil dans le centre affiché, dans [0, 1]. */
   private peekWeight = 0;
+
+  /** Le point regardé ailleurs (`lookAt`), et s'il l'est encore. */
+  private lookX = 0;
+  private lookY = 0;
+  private looking = false;
+  /** Part du regard ailleurs dans le centre affiché, dans [0, 1]. */
+  private lookWeight = 0;
 
   /** Zoom visé pendant un recul, et ms pendant lesquelles il est tenu. */
   private zoomTarget = 1;
@@ -225,6 +239,16 @@ export class Camera {
       this.centerOn(targetX, targetY);
     }
 
+    // Adam se remet en marche : la caméra quitte le point regardé et revient sur lui.
+    if (this.looking && Math.hypot(vx, vy) > WALKING) this.looking = false;
+    if (!this.looking && this.lookWeight > 0) {
+      const away = Math.hypot(this.lookX - this.x, this.lookY - this.y);
+
+      // De très loin, elle saute : glisser à travers la carte bakerait tout le sol du trajet.
+      this.lookWeight *= away > 2 * Math.max(this.viewWidth, this.viewHeight) / this.zoom ? 0 : Math.exp(-deltaMs / LOOK_BACK_MS);
+      if (this.lookWeight < 0.002) this.lookWeight = 0;
+    }
+
     this.peekElapsed += deltaMs;
     this.peekWeight = peekWeightAt(this.peekElapsed);
     this.trauma = Math.max(0, this.trauma - deltaMs / TRAUMA_DECAY_MS);
@@ -243,20 +267,39 @@ export class Camera {
   }
 
   /**
+   * Pose la caméra d'un coup sur (x, y) monde, et l'y laisse jusqu'à ce
+   * qu'Adam marche ou qu'on revienne sur lui (`resetZoom`).
+   */
+  public lookAt(x: number, y: number): void {
+    this.lookX = x;
+    this.lookY = y;
+    this.looking = true;
+    this.lookWeight = 1;
+  }
+
+  /**
    * La carte glisse-t-elle d'elle-même — un recul ou un coup d'œil qui part
    * ou revient ? Le suivi du joueur n'en est pas : c'est lui qui bouge.
    */
   public get drifting(): boolean {
-    return this.zoomDrifting || (this.peekWeight > 0 && this.peekWeight < 1);
+    return (
+      this.zoomDrifting ||
+      (this.peekWeight > 0 && this.peekWeight < 1) ||
+      (!this.looking && this.lookWeight > 0)
+    );
   }
 
-  /** Centre affiché : celui du suivi, tiré vers le coup d'œil en cours. */
-  private get centerX(): number {
-    return this.x + (this.peekX - this.x) * this.peekWeight;
+  /** Centre affiché : celui du suivi, ou le point regardé ailleurs, tiré vers le coup d'œil en cours. */
+  public get centerX(): number {
+    const x = this.x + (this.lookX - this.x) * this.lookWeight;
+
+    return x + (this.peekX - x) * this.peekWeight;
   }
 
-  private get centerY(): number {
-    return this.y + (this.peekY - this.y) * this.peekWeight;
+  public get centerY(): number {
+    const y = this.y + (this.lookY - this.y) * this.lookWeight;
+
+    return y + (this.peekY - y) * this.peekWeight;
   }
 
   /**
@@ -277,7 +320,12 @@ export class Camera {
 
   /** La caméra est-elle au zoom par défaut, centrée sur Adam ? */
   public get atHome(): boolean {
-    return Math.abs(this.levelTarget - ZOOM.default) < 1e-3 && Math.hypot(this.panX, this.panY) < 1;
+    return (
+      Math.abs(this.levelTarget - ZOOM.default) < 1e-3 &&
+      Math.hypot(this.panX, this.panY) < 1 &&
+      !this.looking &&
+      this.lookWeight === 0
+    );
   }
 
   /**
@@ -311,6 +359,7 @@ export class Camera {
 
   /** Revient en glissant au zoom par défaut, centré sur Adam. */
   public resetZoom(): void {
+    this.looking = false;
     this.zoomTo(ZOOM.default);
     this.panHome = true;
   }
