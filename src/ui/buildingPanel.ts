@@ -83,7 +83,6 @@ import { forgeRecipe } from '../sim/consumers.ts';
 import { canDamage, isStanding } from '../sim/enemyBases.ts';
 import { countPlot, type PlotCount } from '../sim/forester.ts';
 import { canPause } from '../sim/staffing.ts';
-import type { SiteLine } from '../sim/siteLedger.ts';
 import type { Building, EnemyBase, Entity, EntityId, Forester, Forge, MobileId, Nursery } from '../sim/types.ts';
 import { TICKS_PER_SECOND, repairCost, siteMissing, type SiteCoverage, type World } from '../sim/world.ts';
 import type { UiIcon } from '../art/ui.ts';
@@ -93,6 +92,7 @@ import { buildingIcon, buildingIconUrl, creatureIconUrl, enemyBaseIconUrl, itemA
 import { moodMeter } from './moodMeter.ts';
 import { needMeter } from './needMeter.ts';
 import { PanelTabs } from './panelTabs.ts';
+import { siteNeedRow } from './siteNeedRow.ts';
 import { ResearchPanel } from './researchPanel.ts';
 import { TransferPanel } from './transferPanel.ts';
 
@@ -1237,50 +1237,6 @@ export class BuildingPanel {
   public destroy(): void {
     this.root.remove();
   }
-}
-
-/**
- * La ligne d'un objet du chantier : son icône et « livré/requis », puis, s'il
- * en manque, deux puces — en route (porteurs, bâtisseurs) et en ville. Un
- * objet que la ville n'a plus et que personne n'apporte est marqué à sec.
- */
-function siteNeedRow(line: SiteLine): HTMLElement {
-  const row = document.createElement('div');
-
-  row.className = 'site-need';
-  row.setAttribute('role', 'img');
-  row.setAttribute('aria-label', siteNeedLabel(line));
-  row.title = siteNeedLabel(line);
-  row.dataset['dry'] = String(line.dry);
-  row.append(itemAmount(line.item, line.needed, line.delivered));
-  if (line.done) return row;
-
-  row.append(siteNeedChip('worker', line.incoming, 'coming'));
-  if (line.inTown !== null) row.append(siteNeedChip('town', line.inTown, 'town'));
-  return row;
-}
-
-function siteNeedChip(icon: UiIcon, value: number, kind: string): HTMLElement {
-  const chip = document.createElement('span');
-
-  chip.className = 'site-need-chip';
-  chip.dataset['kind'] = kind;
-  chip.dataset['empty'] = String(value === 0);
-  chip.append(uiIcon(icon, 16), String(value));
-  return chip;
-}
-
-/** « Pierre : 0/8 livrés, 2 en route, aucune en ville » — le libellé d'une ligne. */
-export function siteNeedLabel(line: SiteLine): string {
-  const label = t().items[line.item];
-  const text = t().panel.site;
-
-  if (line.done) return text.needDone(label, line.delivered, line.needed);
-
-  const parts = [text.needDelivered(label, line.delivered, line.needed), text.needIncoming(line.incoming)];
-
-  if (line.inTown !== null) parts.push(line.inTown === 0 ? text.needTownEmpty : text.needInTown(line.inTown));
-  return parts.join(', ');
 }
 
 /**

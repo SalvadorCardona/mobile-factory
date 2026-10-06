@@ -1,8 +1,8 @@
 /**
  * Le panneau Recherche : ce que montre la fenêtre du labo.
  *
- * En haut, la recherche choisie : son coût déposé objet par objet (ce qui
- * manque en rouge), puis, une fois payée, sa barre de progression et le
+ * En haut, la recherche choisie : son coût déposé objet par objet, comme le
+ * relevé d'un chantier (livré / demandé, en route, en ville), puis, une fois payée, sa barre de progression et le
  * temps qui reste. Dessous, toutes les recherches, groupées par thème
  * (Bâtiments, Combat, Récolte, Ville), dans une liste qui défile : leur effet
  * chiffré (« Dégâts de l'arc : 1 → 1,5 ») ou les bâtiments qu'elles font
@@ -26,6 +26,7 @@ import { labNeeds, researchCost, researchStatus, type ResearchStatus } from '../
 import type { Lab } from '../sim/types.ts';
 import type { World } from '../sim/world.ts';
 import { buildingIcon, itemAmount } from './icons.ts';
+import { siteNeedRow } from './siteNeedRow.ts';
 import { effectLine, statusLine } from './researchText.ts';
 
 export class ResearchPanel {
@@ -152,12 +153,10 @@ export class ResearchPanel {
     this.transferButton.disabled = !inReach || !world.canTransferToLab(lab);
     this.cancelButton.hidden = false;
 
-    const delivered = cost.map(([item, amount]): [ItemId, number, number] => [item, amount, amount - labNeeds(lab, item)]);
+    // Objet par objet, comme la fenêtre d'un chantier : livré / demandé, en route, en ville.
+    const ledger = world.labLedger(lab);
 
-    this.setCost(
-      delivered.map(([item, amount, have]) => itemAmount(item, amount, have)),
-      `collecting:${lab.research}:${delivered.map(([item, , have]) => `${item}=${have}`).join(',')}`,
-    );
+    this.setCost(ledger.map(siteNeedRow), `collecting:${lab.research}:${JSON.stringify(ledger)}`);
   }
 
   private setCost(children: HTMLElement[], key: string): void {
@@ -165,6 +164,7 @@ export class ResearchPanel {
     this.lastCurrent = key;
     this.currentCost.replaceChildren(...children);
     this.currentCost.hidden = children.length === 0;
+    this.currentCost.dataset['layout'] = key.startsWith('collecting:') ? 'ledger' : '';
   }
 
   /** Toutes les recherches, par thème. Reconstruite seulement quand un état, un coût ou un stock change. */

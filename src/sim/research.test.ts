@@ -84,6 +84,17 @@ function withLab(seed = drySeed()): { world: World; lab: Lab } {
   return { world, lab };
 }
 
+/** Pose Adam contre le labo et renvoie l'axe qui le pousse dedans. */
+function touch(world: World, lab: Lab): { x: number; y: number } {
+  for (let x = lab.tx; x < lab.tx + lab.width; x += 1) {
+    if (world.isSolid(x, lab.ty + lab.height)) continue;
+    world.player.x = (x + 0.5) * TILE_SIZE;
+    world.player.y = (lab.ty + lab.height + 0.5) * TILE_SIZE;
+    return { x: 0, y: -1 };
+  }
+  throw new Error('labo inaccessible');
+}
+
 function labOf(world: World): Lab {
   const lab = world.lab();
 
@@ -370,7 +381,199 @@ describe('labo de recherche', () => {
   });
 });
 
+/** Le labo d'un monde à porteurs : une maison des constructeurs posée d'un coup, ses porteurs s'y installent au chargement. */
+function withPorters(): { world: World; lab: Lab } {
+  const built = withLab().world;
+  const state = built.snapshot();
+  const { tx, ty } = spot(built, 'nursery');
+
+  state.entities.push({ kind: 'house', id: state.nextId, proto: 'builderHouse', tx, ty, width: 2, height: 2, store: {}, hp: BUILDINGS.builderHouse.hp, level: 1, paused: false, staff: BUILDINGS.builderHouse.workers });
+  state.nextId += 1;
+
+  const world = World.restore(state);
+
+  // Adam s'éloigne : ce sont les porteurs qu'on regarde.
+  world.player.x -= 12 * TILE_SIZE;
+  return { world, lab: labOf(world) };
+}
+
+/** Toute la pierre de la colonie : en ville, au labo, sur la tête des porteurs. Rien ne se perd, rien ne se crée. */
+function stoneEverywhere(world: World, lab: Lab): number {
+  let carried = 0;
+
+  for (const mobile of world.mobiles.values()) {
+    if (mobile.kind === 'worker' && mobile.job?.carried && mobile.job.item === 'stone') carried += mobile.job.amount;
+  }
+  return world.townStock()!.count('stone') + lab.store.count('stone') + carried;
+}
+
+describe('labo — les ingrédients apportés', () => {
+  it('lancer une recherche ne prend rien à la ville : le labo affiche ce qu’il attend', () => {
+    const { world, lab } = withLab();
+    const town = world.townStock()!;
+
+    town.add('stone', 20);
+    const food = town.count('food');
+
+    world.push({ type: 'startResearch', lab: lab.id, research: 'walkingBoots' });
+    world.tick();
+
+    expect(lab.research).toBe('walkingBoots');
+    expect(lab.endTick).toBe(0);
+    expect(town.count('stone')).toBe(20);
+    expect(town.count('food')).toBe(food);
+    expect(world.labLedger(lab).map(({ item, delivered, needed, missing }) => [item, delivered, needed, missing])).toEqual([
+      ['stone', 0, 6, 6],
+      ['food', 0, 6, 6],
+    ]);
+  });
+
+  it('Adam la heurte avec les ingrédients dans le sac : le compteur monte, puis la recherche démarre', () => {
+    const { world, lab } = withLab();
+    const town = world.townStock()!;
+    const before = town.count('stone');
+    const seen: number[] = [];
+
+    world.push({ type: 'startResearch', lab: lab.id, research: 'walkingBoots' });
+    fill(world, RESEARCH.walkingBoots.cost);
+
+    const axis = touch(world, lab);
+
+    world.push({ type: 'setMoveAxis', ...axis });
+    for (let i = 0; i < 20 * 20 && lab.endTick === 0; i += 1) {
+      world.tick();
+
+      const delivered = world.labLedger(lab).reduce((sum, line) => sum + line.delivered, 0);
+
+      if (delivered !== seen.at(-1)) seen.push(delivered);
+    }
+
+    expect(lab.endTick).toBeGreaterThan(0);
+    // Un objet par contact : le compteur monte pas à pas.
+    expect(seen.length).toBeGreaterThan(2);
+    expect(world.player.inventory.count('stone')).toBe(0);
+    expect(world.player.inventory.count('food')).toBe(0);
+    expect(town.count('stone')).toBe(before);
+    // Payée : la rangée au-dessus du labo s'efface, place au compte à rebours.
+    expect(world.labLedger(lab)).toEqual([]);
+  });
+
+  it('les porteurs livrent depuis la mairie, réservé à la création : jamais plus que demandé, rien de perdu', () => {
+    const { world, lab } = withPorters();
+    const town = world.townStock()!;
+
+    town.add('stone', 20);
+    const total = stoneEverywhere(world, lab);
+    let consumed = 0;
+
+    world.events.on('researchStarted', () => (consumed = RESEARCH.walkingBoots.cost.stone));
+    world.push({ type: 'startResearch', lab: lab.id, research: 'walkingBoots' });
+
+    for (let i = 0; i < 20 * 90 && lab.endTick === 0; i += 1) {
+      world.tick();
+
+      // Ce qui est au labo et ce qui est promis ne dépasse jamais le coût : aucune double réservation.
+      if (lab.endTick === 0) expect(lab.store.count('stone') + lab.store.expected('stone')).toBeLessThanOrEqual(RESEARCH.walkingBoots.cost.stone);
+      // La pierre ne se perd ni ne se duplique en route.
+      expect(stoneEverywhere(world, lab) + consumed).toBe(total);
+    }
+
+    expect(lab.endTick).toBeGreaterThan(0);
+    expect(town.count('stone')).toBe(total - RESEARCH.walkingBoots.cost.stone);
+    expect(town.available('stone')).toBe(town.count('stone'));
+  });
+
+  it('sans stock en ville et sans Adam, la recherche attend sans bloquer les porteurs', () => {
+    const { world, lab } = withPorters();
+
+    world.push({ type: 'startResearch', lab: lab.id, research: 'walkingBoots' });
+    for (let i = 0; i < 20 * 60; i += 1) world.tick();
+
+    expect(lab.endTick).toBe(0);
+    const stone = world.labLedger(lab).find((line) => line.item === 'stone')!;
+
+    // Rien en route, rien en ville : à sec.
+    expect(stone).toMatchObject({ delivered: 0, incoming: 0, inTown: 0, dry: true });
+  });
+
+  it('abandonner en cours de livraison : ce qui est livré ou en route revient à la mairie, sans perte', () => {
+    const { world, lab } = withPorters();
+    const town = world.townStock()!;
+
+    town.add('stone', 20);
+    const total = stoneEverywhere(world, lab);
+
+    world.push({ type: 'startResearch', lab: lab.id, research: 'walkingBoots' });
+    for (let i = 0; i < 20 * 90 && lab.store.count('stone') === 0; i += 1) world.tick();
+    expect(lab.store.count('stone')).toBeGreaterThan(0);
+
+    world.push({ type: 'cancelResearch', lab: lab.id });
+    for (let i = 0; i < 20 * 120 && town.count('stone') < total; i += 1) {
+      world.tick();
+      expect(stoneEverywhere(world, lab)).toBe(total);
+    }
+
+    expect(lab.research).toBeNull();
+    expect(town.count('stone')).toBe(total);
+    expect(lab.store.total()).toBe(0);
+  });
+});
+
 describe('recherche — sauvegarde', () => {
+  it('une recherche en attente se recharge avec son coffre et ses porteurs en route, sans doublon', () => {
+    const { world, lab } = withPorters();
+    const town = world.townStock()!;
+
+    town.add('stone', 20);
+    world.push({ type: 'startResearch', lab: lab.id, research: 'walkingBoots' });
+
+    // Une livraison posée, une autre en route.
+    for (let i = 0; i < 20 * 90 && !(lab.store.count('stone') > 0 && lab.store.expected('stone') > 0); i += 1) world.tick();
+    expect(lab.store.count('stone')).toBeGreaterThan(0);
+    expect(lab.store.expected('stone')).toBeGreaterThan(0);
+
+    const total = stoneEverywhere(world, lab);
+    const decoded = decodeSave(encodeSave(world, 0));
+
+    if (!decoded.ok) throw new Error(decoded.reason);
+
+    const restored = decoded.world;
+    const again = labOf(restored);
+
+    expect(again.research).toBe('walkingBoots');
+    expect(again.store.count('stone')).toBe(lab.store.count('stone'));
+    // Les réservations se rejouent depuis les jobs des porteurs.
+    expect(again.store.expected('stone')).toBe(lab.store.expected('stone'));
+    expect(stoneEverywhere(restored, again)).toBe(total);
+
+    for (let i = 0; i < 20 * 90 && again.endTick === 0; i += 1) restored.tick();
+    expect(again.endTick).toBeGreaterThan(0);
+    expect(restored.townStock()!.count('stone')).toBe(total - RESEARCH.walkingBoots.cost.stone);
+  });
+
+  it('une ancienne sauvegarde dont la recherche est déjà payée continue sans redemander ses ingrédients', () => {
+    const { world, lab } = withLab();
+    const file = JSON.parse(encodeSave(world, 0)) as { version: number; state: Record<string, unknown> };
+    const saved = (file.state['entities'] as SavedEntity[]).find((entity) => entity.id === lab.id) as SavedEntity & Record<string, unknown>;
+
+    // Payée sous l'ancien système : le coffre est vide, le compte à rebours tourne.
+    saved['research'] = 'sharpAxes';
+    saved['endTick'] = world.tickCount + 100;
+    saved['store'] = {};
+    // Et son réveil, que le labo avait demandé au scheduler en payant.
+    (file.state['scheduler'] as { near: [number, number[]][] }).near.push([world.tickCount + 100, [lab.id]]);
+
+    const decoded = decodeSave(JSON.stringify(file));
+
+    if (!decoded.ok) throw new Error(decoded.reason);
+
+    const restored = decoded.world;
+
+    expect(restored.labLedger(labOf(restored))).toEqual([]);
+    for (let i = 0; i < 101; i += 1) restored.tick();
+    expect(restored.researchDone).toEqual(['sharpAxes']);
+  });
+
   it('une recherche terminée survit au rechargement, son effet aussi', () => {
     const { world } = withLab();
 

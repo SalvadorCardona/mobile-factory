@@ -174,7 +174,7 @@ import { findSpawn, habitatAt, isBuildable, isWalkable, oreAt, terrainAt } from 
 import { inLogisticRange, pointInLogisticRange } from './warehouse.ts';
 import { chopSpot, isTree, pickTree, treesInRange } from './lumberjacks.ts';
 import { plantSpot, plotTiles, type PlotTile } from './forester.ts';
-import { siteLedger, type SiteLine } from './siteLedger.ts';
+import { labLedger, siteLedger, type SiteLine } from './siteLedger.ts';
 import { allocateStaff, canPause, clampStaff, employs, type Staffing } from './staffing.ts';
 import { carryOf, clearLine, standStill, walkToward, wander, wanderFrom } from './workers.ts';
 import { nextWeather, spoilsNight, weatherAt, type WeatherSpell } from './weather.ts';
@@ -4845,6 +4845,11 @@ export class World {
   /** Le relevé du chantier, objet par objet : livré, manquant, en route, en ville (`sim/siteLedger.ts`). */
   public siteLedger(site: Site): SiteLine[] {
     return siteLedger(site, (item) => this.jobs.siteIncoming(site.id, item), this.townStock());
+  }
+
+  /** Le même relevé pour le labo qui attend le coût de sa recherche ; vide s'il n'attend rien. */
+  public labLedger(lab: Lab): SiteLine[] {
+    return labLedger(lab, this.townStock());
   }
 
   private readonly lineIsClear: LineTest = (x0, y0, x1, y1) => clearLine(this.seed, x0, y0, x1, y1);

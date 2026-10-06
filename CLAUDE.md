@@ -300,7 +300,10 @@ butin → plaque de fer, une offre rare plafonnée sur la partie
 **Labo de recherche** (`src/data/research.ts`, `src/sim/research.ts`, un
 seul par colonie : `unique`) — on y choisit une recherche, on dépose son coût
 (sac, ville dans le rayon, porteurs, ou en le heurtant), puis le compte à
-rebours tourne ; une à la fois. Le coût mêle objets communs et **butin
+rebours tourne ; une à la fois. Lancer ne prend rien à la ville : tant que le
+coût manque, le labo porte au-dessus de lui la rangée d’un chantier
+(`World.labLedger`, même `render/siteNeeds.ts`), et sa fenêtre le même relevé
+(`ui/siteNeedRow.ts`). Le coût mêle objets communs et **butin
 d'ennemis** : gelée de mutant, croc de loup, pince de crabe, objets qu'on ne
 récolte nulle part. Un effet est un modificateur additif sur une
 statistique, lu en un seul point, `World.bonus(stat)` ; les données ne

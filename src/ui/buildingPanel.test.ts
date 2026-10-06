@@ -3,7 +3,8 @@ import { BUILDINGS, buildingLevel, nextUpgrade, type BuildingId } from '../data/
 import type { ItemId } from '../data/items.ts';
 import { setLocale } from '../i18n/locale.ts';
 import { World } from '../sim/world.ts';
-import { panelDescription, siteCoverageText, siteNeedLabel, upgradeEffect } from './buildingPanel.ts';
+import { panelDescription, siteCoverageText, upgradeEffect } from './buildingPanel.ts';
+import { siteNeedLabel } from './siteNeedRow.ts';
 
 describe('panelDescription', () => {
   it('chaque bâtiment a deux textes distincts, chantier et bâtiment fini', () => {
