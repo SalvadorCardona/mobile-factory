@@ -123,6 +123,21 @@ export function validatePrototypes(): string[] {
     for (const item of deposits) {
       if (!(item in ROCK_OF_ORE)) errors.push(`BUILDINGS.${id} : gisement « ${item} » qu'aucun filon ne porte`);
     }
+    // Le stock visé d'un consommateur : des entrées de sa recette, de quoi lancer un cycle, dans son coffre.
+    const demand: Partial<Record<string, number>> = (building as BuildingProto).demand ?? {};
+    const consumes = Object.values(RECIPES as Record<string, RecipeProto>).filter((recipe) => recipe.building === id);
+
+    for (const [item, amount = 0] of Object.entries(demand)) {
+      const needed = consumes.find((recipe) => item in recipe.inputs)?.inputs[item as keyof RecipeProto['inputs']];
+
+      if (building.kind !== 'nursery' && building.kind !== 'forge') {
+        errors.push(`BUILDINGS.${id} : un stock visé (demand) sur un bâtiment qui ne consomme pas`);
+      } else if (needed === undefined) {
+        errors.push(`BUILDINGS.${id} : stock visé en « ${item} », que sa recette ne consomme pas`);
+      } else if (amount < needed || amount > building.storage) {
+        errors.push(`BUILDINGS.${id} : stock visé en « ${item} » hors de [${needed}, ${building.storage}]`);
+      }
+    }
     if (building.kind === 'tower' && building.weapon === null) {
       errors.push(`BUILDINGS.${id} : une tour sans arme ne sert à rien`);
     }

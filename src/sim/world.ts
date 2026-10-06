@@ -95,7 +95,7 @@ import { BUILDERS, FORESTERS, IDLE, JOB_PRIORITY, LUMBERJACKS, PORTERS, WORK_PRI
 import { WEATHER, WEATHER_CALENDAR, type WeatherId } from '../data/weather.ts';
 import { ChunkIndex } from './chunk.ts';
 import { floorCost, floorMissing, floorNeeds, floorWants } from './antenna.ts';
-import { consumerRecipe, consumerRoom, consumerWants, forgeRecipe, isConsumer } from './consumers.ts';
+import { consumerRecipe, consumerRoom, consumerWants, forgeRecipe, isConsumer, isStarving } from './consumers.ts';
 import { NO_WIND, nearestFoe, shoot, stepArrow, type Wind } from './combat.ts';
 import { clockAt, CYCLE_TICKS, dayDial, nextWave, ticksToDawn, ticksToWave, waveAt, type DayClock, type DayDial } from './dayNight.ts';
 import type {
@@ -1984,8 +1984,9 @@ export class World {
   /**
    * Ce qui arrête la nurserie ou la forge, pour sa fenêtre : la première
    * entrée qui manque au prochain cycle, ce que la ville en a de disponible,
-   * et si des porteurs l'apportent déjà — ou sont là pour le faire. `null`
-   * si rien ne manque.
+   * et si des porteurs l'apportent déjà — ou sont là pour le faire : un
+   * porteur en poste, ou un logisticien dont le poste la couvre (les
+   * bâtisseurs ne livrent que les chantiers). `null` si rien ne manque.
    */
   public supplyStatus(consumer: Nursery | Forge): { item: ItemId; inTown: number; coming: boolean; porters: boolean } | null {
     for (const [item, amount] of amountsOf(consumerRecipe(consumer).inputs)) {
@@ -1995,7 +1996,14 @@ export class World {
         item,
         inTown: this.townStock()?.available(item) ?? 0,
         coming: consumer.store.expected(item) > 0,
-        porters: [...this.workers()].some((worker) => !worker.logistician && this.onDuty(worker)),
+        porters: [...this.workers()].some((worker) => {
+          if (worker.builder || !this.onDuty(worker)) return false;
+          if (!worker.logistician) return true;
+
+          const depot = this.entities.get(worker.homeId);
+
+          return depot?.kind === 'depot' && inDepotRange(depot, consumer);
+        }),
       };
     }
     return null;
@@ -6482,7 +6490,13 @@ export class World {
       storeFull = store.total() + LUMBERJACKS.carry > store.capacity;
     }
 
-    return { stoppedByPlayer, storeFull, noWorker, drained: store.total() <= store.capacity * PROBLEMS.releaseRatio };
+    // L'heure de la naissance est passée, ou le four s'est arrêté, faute d'entrée au coffre.
+    const starved =
+      !stoppedByPlayer &&
+      ((building.kind === 'nursery' && building.hungry) ||
+        (building.kind === 'forge' && building.blocked && !noWorker && isStarving(building)));
+
+    return { stoppedByPlayer, storeFull, noWorker, starved, drained: store.total() <= store.capacity * PROBLEMS.releaseRatio };
   }
 
   /** Un producteur à l'arrêt : en pause, ou sans un seul ouvrier en poste. */

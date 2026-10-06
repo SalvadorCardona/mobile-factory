@@ -77,7 +77,9 @@ export const panel: Messages['panel'] = {
 
   nursery: {
     perBirth: (recipe: string): string => `Each birth eats ${recipe}.`,
-    hungry: (why: string): string => `Waiting for a meal. ${why}`,
+    hungry: (why: string): string => `Waiting for food. ${why}`,
+    stock: (item: string, count: number, target: number, coming: number): string =>
+      `${item} in store: ${count} of ${target} wanted${coming > 0 ? ` — ${coming} on the way` : ''}`,
     next: (time: string): string => `Next child in ${time}`,
     full: 'Full: the next child waits for an older one to go to work.',
     nextAdult: (time: string): string => `Next worker in ${time}`,

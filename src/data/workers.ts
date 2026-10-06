@@ -28,21 +28,33 @@ export const EX_MUTANT = {
 } as const;
 
 /**
- * Priorité d'un job. Un chantier qui attend passe avant tout ; vider un
- * coffre qui a de quoi remplir un voyage vient ensuite ; ramasser les restes
- * d'un coffre ne se fait que si personne n'a mieux à faire.
+ * Priorité d'un job. Un job déjà parti n'est jamais repris : le porteur qui
+ * porte au chantier finit sa livraison. Parmi ceux qui attendent, un
+ * chantier ou une machine en famine passe avant tout ; puis un consommateur
+ * sous son stock visé (la nurserie et sa nourriture) ; puis vider un coffre
+ * qui a de quoi remplir un voyage ; ramasser les restes d'un coffre ne se
+ * fait que si personne n'a mieux à faire.
  */
 export const JOB_PRIORITY = {
   /** Livrer un chantier en attente, depuis la mairie. */
-  site: 2,
-  /** Ravitailler depuis la mairie une forge ou une nurserie à qui il manque de quoi tourner. */
-  starving: 2,
+  site: 3,
+  /** Ravitailler une forge ou une nurserie à qui il manque de quoi tourner. */
+  starving: 3,
+  /** Compléter le coffre d'une forge ou d'une nurserie qui tourne encore, jusqu'à son stock visé. */
+  refill: 2,
   /** Vider une foreuse ou une ferme qui a un plein voyage à donner. */
   empty: 1,
-  /** Compléter depuis la mairie le coffre d'une forge ou d'une nurserie qui tourne encore. */
-  refill: 1,
   /** Rapporter un reste — moins d'un voyage — à la mairie. */
   surplus: 0,
+} as const;
+
+/**
+ * Ravitailler un consommateur : depuis la mairie, ou directement depuis le
+ * coffre d'un producteur à `producerReach` tuiles au plus — de centre à
+ * centre —, la ferme voisine d'une nurserie.
+ */
+export const SUPPLY = {
+  producerReach: 8,
 } as const;
 
 export type JobPriority = (typeof JOB_PRIORITY)[keyof typeof JOB_PRIORITY];

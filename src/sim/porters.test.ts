@@ -579,6 +579,38 @@ describe('forge et nurserie ravitaillées par la ville', () => {
     expect(kids()).toBe(1);
   });
 
+  it('une nurserie à nourrir passe avant une foreuse pleine à vider', () => {
+    const world = colony({ hall: { food: 12 }, houses: 1, drills: [{ ironOre: 20 }], nurseries: [{ food: 9 }] });
+
+    run(world, 2);
+
+    const first = workers(world).find((worker) => worker.job !== null);
+    const nursery = [...world.entities.values()].find((entity) => entity.kind === 'nursery')!;
+
+    expect(first?.job?.to).toBe(nursery.id);
+    expect(first?.job?.priority).toBeGreaterThan(JOB_PRIORITY.empty);
+  });
+
+  it('une livraison de chantier déjà en route n’est pas détournée par la nurserie qui a faim', () => {
+    const world = colony({ hall: { wood: 30, stone: 10 }, houses: 1, sites: ['home'], nurseries: [{}] });
+    const site = sites(world)[0]!;
+    const carrying = (): Worker | undefined => workers(world).find((worker) => worker.job?.carried && worker.job.to === site.id);
+
+    for (let i = 0; i < 600 && !carrying(); i += 1) world.tick();
+
+    const porter = carrying()!;
+
+    expect(porter).toBeDefined();
+    hallOf(world).store.add('food', 12);
+    for (let i = 0; i < 600 && porter.job?.carried; i += 1) {
+      world.tick();
+      if (porter.job?.carried) expect(porter.job.to).toBe(site.id);
+    }
+    // Le chantier livré, la nurserie est servie ensuite.
+    run(world, 900);
+    expect([...world.mobiles.values()].filter((mobile) => mobile.kind === 'kid')).toHaveLength(1);
+  });
+
   it('« Transférer » prend le sac, puis la ville, dans la part du coffre', () => {
     const world = colony({ hall: { ironOre: 28, coal: 4 }, houses: 0, forges: [{}] });
     const forge = forgeOf(world);

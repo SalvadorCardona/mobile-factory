@@ -17,13 +17,15 @@
  * des coffres, dont la sauvegarde ne garde que le stock réel.
  *
  * Premier périmètre : livrer les chantiers, l'étage suivant de l'antenne, le labo de recherche, les forges
- * (la forge, le four à charbon) et la nurserie depuis la mairie, et vider
+ * (la forge, le four à charbon) et la nurserie depuis la mairie — un
+ * consommateur aussi depuis une ferme voisine (`demandOffers`) —, et vider
  * dans la mairie les coffres des foreuses, des fermes et des cabanes de
  * bûcheron, et les sorties des forges — plaques, charbon.
  *
  * Trois équipes se partagent le travail (`Crew`). Un producteur dans le rayon
- * d'un poste de logistique fini est à ses logisticiens, qui ne font que ça :
- * le coffre le plus rempli d'abord. Un chantier dans le rayon d'un poste de
+ * d'un poste de logistique fini est à ses logisticiens, qui le vident, le
+ * coffre le plus rempli d'abord — après avoir servi la demande des
+ * consommateurs de leur rayon : nourrir la nurserie passe avant. Un chantier dans le rayon d'un poste de
  * construction qui tourne est à ses bâtisseurs, qui ne font que ça : le plus
  * ancien d'abord. Les porteurs livrent le labo, la forge, la nurserie et les
  * chantiers qu'aucun poste de construction ne couvre, et ne vident que les
@@ -33,13 +35,13 @@
 import { TILE_SIZE, distanceSq } from '../core/grid.ts';
 import { BUILDINGS } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
-import { BUILDERS, JOB_PRIORITY, LOGISTICIANS, PORTERS } from '../data/workers.ts';
+import { BUILDERS, JOB_PRIORITY, LOGISTICIANS, PORTERS, SUPPLY } from '../data/workers.ts';
 import { floorCost, floorWants } from './antenna.ts';
 import { labSurplus, labWants, researchCost } from './research.ts';
-import { consumerRecipe, consumerWants, forgeOutputs, isStarving } from './consumers.ts';
+import { consumerDemands, forgeOutputs, isConsumer } from './consumers.ts';
 import { priorityRank } from './staffing.ts';
 import type { Store } from './store.ts';
-import type { Depot, Drill, Entity, EntityId, Farm, Forge, Job, LumberCamp, Quarry, Site, TownHall, Yard } from './types.ts';
+import type { Depot, Drill, Entity, EntityId, Farm, Forge, Job, LumberCamp, Nursery, Quarry, Site, TownHall, Yard } from './types.ts';
 
 /** Le trajet en ligne droite de (x0, y0) à (x1, y1) est-il praticable ? */
 export type LineTest = (x0: number, y0: number, x1: number, y1: number) => boolean;
@@ -132,10 +134,11 @@ export class JobBoard {
    * destination, puis jusqu'à la maison — n'est pas proposé. `carry` : ce
    * que le porteur prend en un voyage.
    *
-   * Un logisticien ne regarde que les producteurs de son rayon, et va au
-   * coffre le plus rempli — ce qui reste à prendre, rapporté à sa capacité —
-   * avant le plus proche : un coffre plein, qui bloque son producteur, passe
-   * en premier.
+   * Un logisticien ne regarde que les bâtiments de son rayon. Il sert
+   * d'abord la demande des consommateurs — la nurserie à nourrir —, puis va
+   * au coffre le plus rempli — ce qui reste à prendre, rapporté à sa
+   * capacité — avant le plus proche : un coffre plein, qui bloque son
+   * producteur, passe avant les autres.
    *
    * Avant tout cela, la priorité de travail du bâtiment servi — vidé ou
    * livré — : Haute passe devant Moyenne, qui passe devant Basse.
@@ -156,12 +159,13 @@ export class JobBoard {
     const offers = this.offers(entities, hallId, carry, crew).map((offer) => {
       const source = entities.get(offer.from)!;
       const door = doorOf(source);
-      const fill = crew.kind === 'logistician' && source.kind !== 'site' ? fillOf(source.store) : 0;
-      // Le bâtiment servi — celui qui n'est pas la mairie — passe devant selon sa priorité de travail.
-      const served = offer.from === hallId ? entities.get(offer.to)! : source;
+      const feeds = crew.kind === 'logistician' && offer.to !== hallId ? 1 : 0;
+      const fill = crew.kind === 'logistician' && !feeds && source.kind !== 'site' ? fillOf(source.store) : 0;
+      // Le bâtiment servi — celui qui n'est pas la mairie, le consommateur livré par une ferme voisine — passe devant selon sa priorité de travail.
+      const served = offer.to === hallId ? source : entities.get(offer.to)!;
       const rank = priorityRank(served.kind === 'site' ? undefined : served.priority);
 
-      return { offer, door, fill, rank, distance: distanceSq(from.x, from.y, door.x, door.y) };
+      return { offer, door, feeds, fill, rank, distance: distanceSq(from.x, from.y, door.x, door.y) };
     });
 
     const age = (offer: Offer): number => (crew.kind === 'builder' ? offer.to : 0);
@@ -169,6 +173,7 @@ export class JobBoard {
     offers.sort(
       (a, b) =>
         b.rank - a.rank ||
+        b.feeds - a.feeds ||
         b.fill - a.fill ||
         age(a.offer) - age(b.offer) ||
         b.offer.priority - a.offer.priority ||
@@ -202,16 +207,20 @@ export class JobBoard {
     const offers: Offer[] = [];
     const depots: Depot[] = [];
     const yards: Yard[] = [];
+    const producers: (Drill | Farm | Quarry | LumberCamp)[] = [];
 
     for (const entity of entities.values()) {
       if (entity.kind === 'depot') depots.push(entity);
       if (entity.kind === 'yard' && yardWorks(entity)) yards.push(entity);
+      if (isProducer(entity) && (crew.kind !== 'logistician' || inDepotRange(crew.depot, entity))) producers.push(entity);
     }
 
     for (const entity of entities.values()) {
       if (crew.kind === 'logistician') {
-        // Le logisticien ne fait qu'un travail : vider les producteurs de son rayon.
-        if (isProducer(entity) && inDepotRange(crew.depot, entity)) this.emptyOffers(entity, hall, carry, offers);
+        // Le logisticien sert les consommateurs de son rayon, et vide ses producteurs.
+        if (!inDepotRange(crew.depot, entity)) continue;
+        if (isConsumer(entity)) this.demandOffers(entity, hall, producers, carry, offers);
+        if (isProducer(entity)) this.emptyOffers(entity, hall, carry, offers);
         continue;
       }
 
@@ -252,23 +261,11 @@ export class JobBoard {
           break;
 
         case 'forge':
-        case 'nursery': {
+        case 'nursery':
           // Ce que la forge a produit — plaques, charbon du four — part à la mairie, même en pause.
           if (entity.kind === 'forge') this.outputOffers(entity, hall, carry, offers);
-
-          // En pause, elle ne consomme rien : inutile de la remplir.
-          if (entity.paused) break;
-
-          // Une machine en famine passe avant un ravitaillement préventif.
-          const priority = isStarving(entity) ? JOB_PRIORITY.starving : JOB_PRIORITY.refill;
-
-          for (const item of Object.keys(consumerRecipe(entity).inputs) as ItemId[]) {
-            const amount = Math.min(carry, consumerWants(entity, item), hall.store.available(item));
-
-            if (amount > 0) offers.push({ from: hall.id, to: entity.id, item, amount, priority });
-          }
+          this.demandOffers(entity, hall, producers, carry, offers);
           break;
-        }
 
         case 'drill':
         case 'farm':
@@ -292,6 +289,35 @@ export class JobBoard {
       const amount = Math.min(carry, this.siteWants(site, item), hall.store.available(item));
 
       if (amount > 0) offers.push({ from: hall.id, to: site.id, item, amount, priority: JOB_PRIORITY.site });
+    }
+  }
+
+  /**
+   * Servir la demande d'un consommateur (`consumerDemands`) : depuis la
+   * mairie, ou directement depuis le coffre d'un producteur voisin
+   * (`SUPPLY.producerReach`) qui a l'objet. Chaque source propose au plus ce
+   * qui manque ; le tableau n'en ouvre qu'une, et la demande suivante se
+   * recalcule sur ce qui est déjà en route : rien n'est promis deux fois.
+   */
+  private demandOffers(
+    consumer: Nursery | Forge,
+    hall: TownHall,
+    producers: readonly (Drill | Farm | Quarry | LumberCamp)[],
+    carry: number,
+    offers: Offer[],
+  ): void {
+    for (const { item, amount: wanted, priority } of consumerDemands(consumer)) {
+      const fromHall = Math.min(carry, wanted, hall.store.available(item));
+
+      if (fromHall > 0) offers.push({ from: hall.id, to: consumer.id, item, amount: fromHall, priority });
+
+      for (const producer of producers) {
+        if (!inRadius(consumer, producer, SUPPLY.producerReach)) continue;
+
+        const amount = Math.min(carry, wanted, producer.store.available(item));
+
+        if (amount > 0) offers.push({ from: producer.id, to: consumer.id, item, amount, priority });
+      }
     }
   }
 

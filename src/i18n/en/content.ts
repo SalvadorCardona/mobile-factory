@@ -476,5 +476,6 @@ export const content: Content = {
     lab: 'Lab',
     forest: 'Forester',
     housing: 'Houses',
+    nursery: 'Nursery',
   },
 };

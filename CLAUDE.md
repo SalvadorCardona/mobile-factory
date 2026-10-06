@@ -113,7 +113,13 @@ qui manquent devant la mairie (`settleColonists`). Le HUD compte
 `worker`, `src/sim/workers.ts`, `PORTERS` dans `src/data/workers.ts`) : ils
 vident foreuses, fermes et cabanes de bûcheron dans la mairie et livrent les chantiers,
 la forge et la nurserie depuis la mairie (`sim/consumers.ts` ; une machine en
-famine d'abord, `JOB_PRIORITY.starving`). Un job est réservé des deux côtés **à sa création**
+famine d'abord, `JOB_PRIORITY.starving`). Un consommateur **demande** :
+sous son stock visé (`demand` de `data/buildings.ts`, la nurserie : 12
+nourritures ; sinon sa part du coffre), il réclame la différence
+(`consumerDemands`), servie depuis la mairie ou une ferme voisine
+(`SUPPLY.producerReach`). Ordre : un job parti n'est jamais repris ;
+chantier = famine > stock visé (`refill`) > vider un producteur >
+restes. Sans de quoi, il attend (bulle `starved`) sans bloquer personne. Un job est réservé des deux côtés **à sa création**
 (`src/sim/jobs.ts` : `Store.reserveOut`/`reserveIn`, registre des chantiers)
 — décider sur `available()`, jamais sur le stock brut. Ligne droite, jamais
 à travers l'eau ; à l'abri chez eux pendant une vague. Les réservations ne sont pas sauvegardées : elles se
@@ -154,7 +160,7 @@ garde les siens mais n'en reçoit plus. Porteurs et logisticiens servent
 d'abord les bâtiments Haute.
 Arrêté sans l'avoir voulu, un producteur porte une **bulle d'alerte**
 (`World.problem`, `sim/problems.ts`, liste ordonnée `PROBLEM_ORDER` de
-`data/problems.ts` : entrepôt plein, puis ouvrier manquant ; sprite `alert`,
+`data/problems.ts` : entrepôt plein, ouvrier manquant, puis entrée attendue — `starved`, la nurserie sans nourriture ; sprite `alert`,
 un morceau par problème), qui bat doucement et que sa fenêtre explique en
 une ligne. Elle paraît aussitôt et ne s'efface qu'après `holdTicks` sans
 problème (tout de suite si le coffre est vidé à moitié) : pas de
@@ -164,8 +170,9 @@ pierre dans les ruines, sans rocher, comme une ferme sa nourriture (recette
 `cutStone`) ; porteurs et logisticiens la vident.
 Le **poste de logistique** (`logisticsPost`, kind `depot`) loge quatre
 **logisticiens** (des `worker` à `logistician: true`, `LOGISTICIANS` dans
-`src/data/workers.ts`, caisse au dos) : ils ne font que vider les
-producteurs de son rayon (cercle cyan) dans la mairie, le coffre le plus
+`src/data/workers.ts`, caisse au dos) : ils servent d'abord la demande des
+consommateurs de son rayon (cercle cyan) — la nurserie à nourrir —, puis
+vident ses producteurs dans la mairie, le coffre le plus
 rempli d'abord (`Crew` de `JobBoard.assign`). Un producteur couvert par un
 poste n'est plus l'affaire des porteurs, qui livrent les chantiers.
 Le **poste de construction** (`constructionPost`, kind `yard`) loge quatre

@@ -4,11 +4,13 @@ import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
 import { COLONY } from '../data/inhabitants.ts';
 import { ENEMIES } from '../data/enemies.ts';
 import { ITEM_IDS, type ItemId } from '../data/items.ts';
-import { LOGISTICIANS, PORTERS } from '../data/workers.ts';
+import { RECIPES } from '../data/recipes.ts';
+import { JOB_PRIORITY, LOGISTICIANS, PORTERS } from '../data/workers.ts';
+import { consumerDemands, consumerTarget } from './consumers.ts';
 import { JobBoard, doorOf, inDepotRange } from './jobs.ts';
 import { decodeSave, encodeSave, type SavedEntity } from './save.ts';
 import { isWalkable, terrainAt } from './terrain.ts';
-import type { Depot, Entity, TownHall, Worker } from './types.ts';
+import type { Depot, Entity, Nursery, TownHall, Worker } from './types.ts';
 import { World } from './world.ts';
 
 type Stock = Partial<Record<ItemId, number>>;
@@ -22,6 +24,8 @@ interface Placement {
   store?: Stock;
   /** Un chantier, pas encore bâti. */
   site?: boolean;
+  /** Posé en pause : une ferme qui ne produit pas — on compte ce qui circule. */
+  paused?: boolean;
 }
 
 /** Le poste, au sud de la mairie : son rayon couvre `NEAR`, pas `FAR`. */
@@ -60,9 +64,9 @@ function colony(hall: Stock, placements: Placement[]): World {
     { kind: 'townHall', id: world.townHallId, proto: 'townHall', tx: hx, ty: hy, width: 3, height: 3, store: hall, hp: BUILDINGS.townHall.hp, level: 1, paused: false, staff: 0 },
   ];
 
-  for (const { proto, dx, dy, store = {}, site } of placements) {
+  for (const { proto, dx, dy, store = {}, site, paused = false } of placements) {
     const { width, height, hp } = BUILDINGS[proto];
-    const placed = { id: nextId++, proto, tx: hx + dx, ty: hy + dy, width, height, store, hp, level: 1, paused: false, staff: BUILDINGS[proto].workers };
+    const placed = { id: nextId++, proto, tx: hx + dx, ty: hy + dy, width, height, store, hp, level: 1, paused, staff: BUILDINGS[proto].workers };
 
     if (site) {
       entities.push({ id: placed.id, proto, tx: placed.tx, ty: placed.ty, width, height, kind: 'site', delivered: {}, work: 0 });
@@ -81,6 +85,13 @@ function colony(hall: Stock, placements: Placement[]): World {
         break;
       case 'lumberCamp':
         entities.push({ ...placed, kind: 'lumberCamp' });
+        break;
+      case 'farm':
+        entities.push({ ...placed, kind: 'farm', blocked: true });
+        break;
+      case 'nursery':
+        // L'heure de la naissance est passée : elle attend sa nourriture.
+        entities.push({ ...placed, kind: 'nursery', nextBirthTick: state.tick, born: 0, hungry: true });
         break;
       default:
         throw new Error(`${proto} : pas prévu dans cette colonie de test`);
@@ -444,5 +455,176 @@ describe('poste de logistique', () => {
     expect(job).toBeNull();
     // Le porteur, lui, la vide : aucun poste ne la couvre.
     expect(board.assign(world.entities, world.townHallId, door, door, () => true)?.from).toBe(at(world, FAR).id);
+  });
+});
+
+describe('la nurserie, destination de livraison', () => {
+  const NURSERY: Placement = { proto: 'nursery', ...NEAR_A };
+  const BIRTH = RECIPES.raiseChild.inputs.food;
+
+  function nurseryOf(world: World): Nursery {
+    const nursery = [...world.entities.values()].find((entity): entity is Nursery => entity.kind === 'nursery');
+
+    if (!nursery) throw new Error('pas de nurserie');
+    return nursery;
+  }
+
+  /** Les comptes, relevés un tick sur cinq : assez pour voir une fuite, sans tout recompter à chaque pas. */
+  function every5(check: () => void): () => void {
+    let tick = 0;
+
+    return () => {
+      tick += 1;
+      if (tick % 5 === 0) check();
+    };
+  }
+
+  function kids(world: World): number {
+    return [...world.mobiles.values()].filter((mobile) => mobile.kind === 'kid').length;
+  }
+
+  it('demande sous son stock visé : la différence, en famine d’abord ; rien au-dessus, rien en pause', () => {
+    const world = colony({}, [DEPOT, NURSERY]);
+    const nursery = nurseryOf(world);
+    const target = BUILDINGS.nursery.demand.food;
+
+    expect(consumerTarget(nursery, 'food')).toBe(target);
+    expect(consumerDemands(nursery)).toEqual([{ item: 'food', amount: target, priority: JOB_PRIORITY.starving }]);
+
+    nursery.store.add('food', BIRTH + 2);
+    expect(consumerDemands(nursery)).toEqual([{ item: 'food', amount: target - BIRTH - 2, priority: JOB_PRIORITY.refill }]);
+
+    // Ce qui est déjà en route ne se demande pas deux fois.
+    nursery.store.reserveIn('food', 3);
+    expect(consumerDemands(nursery)).toEqual([{ item: 'food', amount: target - BIRTH - 5, priority: JOB_PRIORITY.refill }]);
+    nursery.store.releaseIn('food', 3);
+
+    nursery.store.add('food', target);
+    expect(consumerDemands(nursery)).toEqual([]);
+
+    nursery.store.remove('food', target);
+    nursery.paused = true;
+    expect(consumerDemands(nursery)).toEqual([]);
+  });
+
+  it('les logisticiens la nourrissent depuis la mairie, sans porteur : son stock monte, l’enfant naît — rien de perdu ni de dupliqué', () => {
+    const food = BUILDINGS.nursery.demand.food + BIRTH + 4;
+    const world = colony({ food }, [DEPOT, NURSERY]);
+    const nursery = nurseryOf(world);
+    let seen = false;
+
+    expect(porters(world)).toHaveLength(0);
+    run(world, 1500, every5(() => {
+      seen ||= logisticians(world).some((worker) => worker.job?.carried && worker.job.to === nursery.id && worker.job.item === 'food');
+      expect(census(world).food + BIRTH * kids(world)).toBe(food);
+      expectCoveredPromises(world);
+      // Jamais plus en route que ce qui manque à son stock visé.
+      expect(nursery.store.count('food') + nursery.store.expected('food')).toBeLessThanOrEqual(BUILDINGS.nursery.demand.food + BIRTH);
+    }));
+
+    expect(seen).toBe(true);
+    expect(kids(world)).toBe(1);
+    expect(nursery.born).toBe(1);
+    // Le repas pris, elle refait son stock visé.
+    expect(nursery.store.count('food')).toBe(BUILDINGS.nursery.demand.food);
+    expect(hallOf(world).store.count('food')).toBe(food - BIRTH - BUILDINGS.nursery.demand.food);
+  });
+
+  it('nourrir la nurserie passe avant vider un coffre plein', () => {
+    const world = colony({ food: 12 }, [DEPOT, NURSERY, { proto: 'lumberCamp', ...NEAR_B, store: { wood: 20 } }]);
+
+    for (let i = 0; i < 20 && !logisticians(world).some((worker) => worker.job); i += 1) world.tick();
+
+    const first = logisticians(world).find((worker) => worker.job !== null);
+
+    expect(first?.job?.to).toBe(nurseryOf(world).id);
+    expect(first?.job?.priority).toBe(JOB_PRIORITY.starving);
+    expect(JOB_PRIORITY.site).toBeGreaterThanOrEqual(JOB_PRIORITY.starving);
+    expect(JOB_PRIORITY.refill).toBeGreaterThan(JOB_PRIORITY.empty);
+  });
+
+  it('sans nourriture nulle part, elle attend — bulle d’alerte — et les logisticiens vident le reste', () => {
+    const world = colony({}, [DEPOT, NURSERY, { proto: 'lumberCamp', ...NEAR_B, store: { wood: 20 } }]);
+    const nursery = nurseryOf(world);
+
+    run(world, 600);
+
+    expect(nursery.store.isEmpty()).toBe(true);
+    expect(nursery.hungry).toBe(true);
+    expect(world.problem(nursery)).toBe('starved');
+    expect(world.supplyStatus(nursery)).toMatchObject({ item: 'food', inTown: 0, coming: false });
+    // La logistique ne s'est pas arrêtée pour autant.
+    expect(hallOf(world).store.count('wood')).toBeGreaterThan(0);
+
+    // La nourriture arrive en ville : la livraison part, l'alerte s'efface.
+    hallOf(world).store.add('food', BIRTH);
+    run(world, 900);
+    expect(kids(world)).toBe(1);
+    expect(world.problem(nursery)).toBeNull();
+  });
+
+  it('une ferme voisine la sert directement, sans passer par la mairie', () => {
+    const world = colony({}, [DEPOT, NURSERY, { proto: 'farm', dx: 6, dy: 16, store: { food: 10 }, paused: true }]);
+    const nursery = nurseryOf(world);
+
+    run(world, 1500, every5(() => {
+      expect(census(world).food + BIRTH * kids(world)).toBe(10);
+      expectCoveredPromises(world);
+    }));
+
+    expect(kids(world)).toBe(1);
+    expect(nursery.store.count('food')).toBe(10 - BIRTH);
+  });
+
+  it('deux nurseries, un stock trop court : jamais promis deux fois, rien de perdu', () => {
+    const world = colony({ food: 9 }, [DEPOT, NURSERY, { proto: 'nursery', ...NEAR_B }]);
+
+    run(world, 1500, every5(() => {
+      expect(census(world).food + BIRTH * kids(world)).toBe(9);
+      expect(hallOf(world).store.available('food')).toBeGreaterThanOrEqual(0);
+      expectCoveredPromises(world);
+    }));
+    expect(kids(world)).toBe(1);
+  });
+
+  it('une sauvegarde en pleine livraison — même d’une ancienne priorité — se recharge, et la suite est identique', () => {
+    const world = colony({ food: 12 }, [DEPOT, NURSERY]);
+    const nursery = nurseryOf(world);
+    const carrying = (): boolean => logisticians(world).some((worker) => worker.job?.carried && worker.job.to === nursery.id);
+
+    for (let i = 0; i < 600 && !carrying(); i += 1) world.tick();
+    expect(carrying()).toBe(true);
+
+    const reloaded = decodeSave(encodeSave(world, 1));
+
+    if (!reloaded.ok) throw new Error(`sauvegarde refusée : ${reloaded.reason}`);
+    expect(nurseryOf(reloaded.world).store.expected('food')).toBe(nursery.store.expected('food'));
+    expectCoveredPromises(reloaded.world);
+
+    // Une sauvegarde d'avant : ses jobs portent les anciennes priorités (0 à 2), toutes encore valides.
+    const file = JSON.parse(encodeSave(world, 1)) as { state: { mobiles: { job?: { priority: number } | null }[] } };
+
+    for (const mobile of file.state.mobiles) if (mobile.job) mobile.job.priority = 2;
+
+    const old = decodeSave(JSON.stringify(file));
+
+    if (!old.ok) throw new Error(`vieille sauvegarde refusée : ${old.reason}`);
+
+    run(world, 1200);
+    run(reloaded.world, 1200, every5(() => expectCoveredPromises(reloaded.world)));
+    run(old.world, 1200);
+    expect(reloaded.world.snapshot()).toEqual(world.snapshot());
+    expect(kids(old.world)).toBe(1);
+    expect(kids(world)).toBe(1);
+  });
+
+  it('même seed, même colonie : les mêmes livraisons', () => {
+    const layout: Placement[] = [DEPOT, NURSERY, { proto: 'lumberCamp', ...NEAR_B, store: { wood: 18 } }];
+    const a = colony({ food: 20 }, layout);
+    const b = colony({ food: 20 }, layout);
+
+    run(a, 2000);
+    run(b, 2000);
+    expect(a.snapshot()).toEqual(b.snapshot());
   });
 });

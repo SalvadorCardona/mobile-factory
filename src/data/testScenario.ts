@@ -113,6 +113,22 @@ export const TEST_SCENARIOS = {
     adam: { dx: 1, dy: 4 },
     dusk: true,
   },
+  /**
+   * Une nurserie vide dans le rayon d'un poste de logistique, et de la
+   * nourriture à la mairie : on regarde les logisticiens la lui porter,
+   * son stock monter, puis l'enfant naître.
+   */
+  nursery: {
+    label: 'Nurserie',
+    seed: 100,
+    buildings: [
+      { building: 'logisticsPost', dx: 6, dy: 0 },
+      { building: 'nursery', dx: 5, dy: 5 },
+    ],
+    town: { wood: 40, stone: 30, food: 30, water: 20 },
+    bag: {},
+    adam: { dx: 2, dy: 5 },
+  },
 } as const satisfies Record<string, TestScenarioProto>;
 
 export type TestScenarioId = keyof typeof TEST_SCENARIOS;

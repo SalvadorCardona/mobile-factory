@@ -70,4 +70,17 @@ describe('parties de test', () => {
     expect(lab.delivered).toEqual({ wood: 14, stone: 3 });
     expect(siteMissing(lab)).toBeGreaterThan(0);
   });
+
+  it('la nurserie : les logisticiens lui portent son stock visé depuis la mairie', () => {
+    const world = stageScenario(TEST_SCENARIOS.nursery);
+    const nursery = [...world.entities.values()].find((entity) => entity.kind === 'nursery');
+
+    if (nursery?.kind !== 'nursery') throw new Error('pas de nurserie');
+    expect(nursery.store.isEmpty()).toBe(true);
+    world.tick();
+    expect(world.problem(nursery)).toBeNull();
+    for (let i = 0; i < 1500; i += 1) world.tick();
+    expect(nursery.store.count('food')).toBe(BUILDINGS.nursery.demand.food);
+    expect(world.townStock()?.count('food')).toBe((TEST_SCENARIOS.nursery.town.food ?? 0) - BUILDINGS.nursery.demand.food);
+  });
 });

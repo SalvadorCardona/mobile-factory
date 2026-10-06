@@ -14,6 +14,8 @@ export const PROBLEM_ORDER = [
   'storeFull',
   /** Des postes demandés, aucun ouvrier libre pour les tenir : personne ne travaille. */
   'noWorker',
+  /** Un consommateur — la nurserie, une forge — n'a pas de quoi lancer son prochain cycle : il attend une livraison. */
+  'starved',
 ] as const;
 
 export type ProblemId = (typeof PROBLEM_ORDER)[number];
