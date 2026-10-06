@@ -3223,6 +3223,56 @@ button.hud-stock:active {
   color: var(--danger);
 }
 
+/* La priorité de travail : trois boutons segmentés, gros au pouce ; l'enfoncé prend la couleur de la colonie. */
+.building-panel-priority {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.building-panel-priority-label {
+  flex: none;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.building-panel-priority-segments {
+  display: flex;
+  flex: 1;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--paper-shade);
+}
+
+.building-panel-priority-step {
+  flex: 1;
+  min-height: 44px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.building-panel-priority-step[aria-pressed='true'] {
+  background: var(--paper);
+  box-shadow: 0 3px 0 var(--violet-light);
+}
+
+.building-panel-priority-step[aria-pressed='true'][data-priority='high'] {
+  background: var(--yellow);
+  box-shadow: 0 3px 0 var(--yellow-shade);
+}
+
+.building-panel-priority-step:active {
+  transform: translateY(2px);
+}
+
 .building-panel-lines {
   margin: 8px 0 0;
   font: inherit;

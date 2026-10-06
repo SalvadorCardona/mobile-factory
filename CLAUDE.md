@@ -141,8 +141,17 @@ ferme, forge, nurserie, cabane, maison du forestier) se met **en pause** (`pause
 produit ni ne consomme, ses ouvriers finissent leur geste, bulle ⏸ et sprite
 pâli sur la carte), et un bâtiment qui emploie règle ses ouvriers entre
 `minWorkers` et `workers` (`setWorkers`, sélecteur − / + ; zéro vaut pause) :
-`sim/staffing.ts` répartit la population de la ville par id, un poste sans
-ouvrier libre reste vide, « ouvrier manquant ».
+`sim/staffing.ts` répartit la population de la ville, un poste sans
+ouvrier libre reste vide, « ouvrier manquant ». Chaque bâtiment qui emploie a
+une **priorité de travail** — Basse, Moyenne (`WORK_PRIORITY.initial`), Haute
+(`setPriority`, boutons segmentés sous le sélecteur ; pastille ↑/↓ au coin du
+toit, `art/priority.ts`) : les libres vont d'abord aux postes Haute, et un
+poste Haute vide reprend l'ouvrier d'un bâtiment plus bas — en pause d'abord,
+puis Basse —, qui finit son geste ; jamais à un bâtiment qui en a gagné un
+depuis moins de `holdTicks`, ni à priorité égale (`allocateStaff` part de la
+répartition d'avant, sauvegardée sous `staffPosts`). En pause, un bâtiment
+garde les siens mais n'en reçoit plus. Porteurs et logisticiens servent
+d'abord les bâtiments Haute.
 Arrêté sans l'avoir voulu, un producteur porte une **bulle d'alerte**
 (`World.problem`, `sim/problems.ts`, liste ordonnée `PROBLEM_ORDER` de
 `data/problems.ts` : entrepôt plein, puis ouvrier manquant ; sprite `alert`,

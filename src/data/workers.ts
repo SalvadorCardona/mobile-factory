@@ -152,3 +152,25 @@ export const BUILDERS = {
   /** Bâtisseurs qui travaillent ensemble sur un chantier, au plus : au-delà, ils se gênent. */
   perSite: 3,
 } as const;
+
+/**
+ * Priorité de travail d'un bâtiment qui emploie (`sim/staffing.ts`), de la
+ * plus basse à la plus haute : quand les ouvriers manquent, les postes d'une
+ * priorité plus haute se pourvoient d'abord, et vont chercher ceux d'une plus
+ * basse. Elle fait aussi passer devant les livraisons et enlèvements des
+ * porteurs et logisticiens.
+ */
+export const WORK_PRIORITIES = ['low', 'normal', 'high'] as const;
+
+export type WorkPriority = (typeof WORK_PRIORITIES)[number];
+
+export const WORK_PRIORITY = {
+  /** Celle d'un bâtiment neuf, ou d'une sauvegarde d'avant les priorités. */
+  initial: 'normal',
+  /**
+   * Ticks pendant lesquels un bâtiment qui vient de gagner un ouvrier le
+   * garde : une priorité plus haute ne le lui reprend qu'ensuite. Pas
+   * d'allers-retours d'un bâtiment à l'autre quand on change d'avis.
+   */
+  holdTicks: 200,
+} as const satisfies { initial: WorkPriority; holdTicks: number };

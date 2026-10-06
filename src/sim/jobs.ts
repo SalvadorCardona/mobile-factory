@@ -37,6 +37,7 @@ import { BUILDERS, JOB_PRIORITY, LOGISTICIANS, PORTERS } from '../data/workers.t
 import { floorCost, floorWants } from './antenna.ts';
 import { labSurplus, labWants, researchCost } from './research.ts';
 import { consumerRecipe, consumerWants, forgeOutputs, isStarving } from './consumers.ts';
+import { priorityRank } from './staffing.ts';
 import type { Store } from './store.ts';
 import type { Depot, Drill, Entity, EntityId, Farm, Forge, Job, LumberCamp, Quarry, Site, TownHall, Yard } from './types.ts';
 
@@ -136,6 +137,9 @@ export class JobBoard {
    * avant le plus proche : un coffre plein, qui bloque son producteur, passe
    * en premier.
    *
+   * Avant tout cela, la priorité de travail du bâtiment servi — vidé ou
+   * livré — : Haute passe devant Moyenne, qui passe devant Basse.
+   *
    * Un bâtisseur ne regarde que les chantiers de son rayon, le plus ancien —
    * le plus petit id — d'abord : les chantiers se finissent dans l'ordre où
    * on les a posés. Si la mairie n'a rien de ce qu'il attend, il passe au suivant.
@@ -153,15 +157,22 @@ export class JobBoard {
       const source = entities.get(offer.from)!;
       const door = doorOf(source);
       const fill = crew.kind === 'logistician' && source.kind !== 'site' ? fillOf(source.store) : 0;
+      // Le bâtiment servi — celui qui n'est pas la mairie — passe devant selon sa priorité de travail.
+      const served = offer.from === hallId ? entities.get(offer.to)! : source;
+      const rank = priorityRank(served.kind === 'site' ? undefined : served.priority);
 
-      return { offer, door, fill, distance: distanceSq(from.x, from.y, door.x, door.y) };
+      return { offer, door, fill, rank, distance: distanceSq(from.x, from.y, door.x, door.y) };
     });
 
     const age = (offer: Offer): number => (crew.kind === 'builder' ? offer.to : 0);
 
     offers.sort(
       (a, b) =>
-        b.fill - a.fill || age(a.offer) - age(b.offer) || b.offer.priority - a.offer.priority || a.distance - b.distance,
+        b.rank - a.rank ||
+        b.fill - a.fill ||
+        age(a.offer) - age(b.offer) ||
+        b.offer.priority - a.offer.priority ||
+        a.distance - b.distance,
     );
 
     for (const { offer, door } of offers) {

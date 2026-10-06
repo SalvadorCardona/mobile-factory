@@ -18,7 +18,7 @@ import type { EnemyId, WildlifeId } from '../data/enemies.ts';
 import type { ItemId } from '../data/items.ts';
 import type { ResearchId } from '../data/research.ts';
 import type { NeedId } from '../data/needs.ts';
-import type { JobPriority } from '../data/workers.ts';
+import type { JobPriority, WorkPriority } from '../data/workers.ts';
 import type { Housing } from './housing.ts';
 import type { Needs } from './needs.ts';
 import type { Store } from './store.ts';
@@ -77,6 +77,12 @@ interface Built extends Placed {
    * dans la population de la ville (`World.staffing()`).
    */
   staff: number;
+  /**
+   * Priorité de travail (`sim/staffing.ts`) : quand les ouvriers manquent,
+   * Haute se pourvoit d'abord et reprend ceux de Basse. `WORK_PRIORITY.initial`
+   * à la construction ; sans effet pour un bâtiment qui n'emploie personne.
+   */
+  priority: WorkPriority;
 }
 
 export interface Drill extends Built {

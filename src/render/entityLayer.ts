@@ -57,7 +57,8 @@ import { terrainAt } from '../sim/terrain.ts';
 import { floorCost, floorMissing } from '../sim/antenna.ts';
 import { isCollecting, labMissing, researchCost } from '../sim/research.ts';
 import type { SiteLine } from '../sim/siteLedger.ts';
-import { canPause } from '../sim/staffing.ts';
+import { canPause, employs } from '../sim/staffing.ts';
+import type { WorkPriority } from '../data/workers.ts';
 import { siteMissing, type World } from '../sim/world.ts';
 import { PLAYER_MAX_HP } from '../sim/player.ts';
 import { MobileLayer, drawHp } from './mobileLayer.ts';
@@ -112,6 +113,9 @@ const PAUSED_TINT = hex(PALETTE.paper.shade);
 
 /** La pointe d'une bulle (alerte, pause) descend d'autant sous le haut du cadre, et monte d'autant sur une barre de vie. */
 const FULL_DIP = 6;
+
+/** La pastille de priorité rentre d'autant dans le coin haut droit du cadre : sur le toit, pas dans le vide. */
+const PRIORITY_INSET = 4;
 const FULL_ABOVE_BAR = 16;
 /** La bulle d'alerte bat : ± `ALERT_PULSE` d'échelle, une fois par `ALERT_BEAT_MS` — doucement, sans clignoter. */
 const ALERT_PULSE = 0.08;
@@ -143,6 +147,9 @@ interface EntityView {
   alertShown: ProblemId | null;
   /** Bulle « pause » d'un producteur, visible quand il est à l'arrêt. */
   pause: Sprite | null;
+  /** Pastille de priorité de travail au coin haut droit, hors de Moyenne ; et la priorité qu'elle montre. */
+  priority: Sprite | null;
+  priorityShown: WorkPriority | null;
   /** La fissure d'un bâtiment sous la moitié de ses points de vie. */
   crack: Sprite | null;
   /** Teinte de repos du sprite, à laquelle il revient après un coup : blanc, ou pâli à l'arrêt. */
@@ -344,6 +351,16 @@ export class EntityLayer {
       root.addChild(pause);
     }
 
+    let priority: Sprite | null = null;
+
+    if (entity.kind !== 'site' && employs(entity.proto)) {
+      // Au coin haut droit du toit, à l'écart des bulles (au milieu) et de la pancarte (au pied).
+      priority = new Sprite(this.library.part('priority', 'high'));
+      priority.anchor.set(SPRITES.priority.anchorX, SPRITES.priority.anchorY);
+      priority.visible = false;
+      root.addChild(priority);
+    }
+
     let crack: Sprite | null = null;
 
     if (entity.kind !== 'site') {
@@ -373,6 +390,8 @@ export class EntityLayer {
       alert,
       alertShown: null,
       pause,
+      priority,
+      priorityShown: null,
       crack,
       tint: 0xffffff,
       shadow,
@@ -542,6 +561,7 @@ export class EntityLayer {
       this.showSign(view, entity, zoom);
       this.showAlert(view, entity, ticker.lastTime);
       this.showPause(view, entity, ticker.lastTime);
+      this.showPriority(view, entity);
       this.feel(view, ticker.deltaMS);
       this.animate(view, entity, ticker.lastTime);
     }
@@ -585,6 +605,24 @@ export class EntityLayer {
     const top = entity.height * TILE_SIZE - SPRITES[spriteOf(entity)].height;
 
     view.pause.y = top + FULL_DIP - (view.bar.visible ? FULL_ABOVE_BAR : 0) + Math.sin(now * 0.004) * 2;
+  }
+
+  /** La pastille de priorité : flèche haute ou basse, rien en Moyenne. */
+  private showPriority(view: EntityView, entity: Entity): void {
+    if (!view.priority || entity.kind === 'site') return;
+
+    const shown = entity.priority === 'normal' ? null : entity.priority;
+
+    view.priority.visible = shown !== null;
+    if (shown === null) return;
+    if (shown !== view.priorityShown) {
+      view.priorityShown = shown;
+      view.priority.texture = this.library.part('priority', shown);
+    }
+
+    const top = entity.height * TILE_SIZE - SPRITES[spriteOf(entity)].height;
+
+    view.priority.position.set(entity.width * TILE_SIZE - PRIORITY_INSET, top + PRIORITY_INSET);
   }
 
   /** L'ombre d'Adam prend la teinte du sol sous ses pieds. */

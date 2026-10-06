@@ -26,7 +26,7 @@ import { COLONY } from '../data/inhabitants.ts';
 import { ITEMS, type ItemId } from '../data/items.ts';
 import { NEED_IDS, NEEDS, type NeedId } from '../data/needs.ts';
 import { OBJECTIVES } from '../data/objectives.ts';
-import { JOB_PRIORITY, type JobPriority } from '../data/workers.ts';
+import { JOB_PRIORITY, WORK_PRIORITY, type JobPriority, type WorkPriority } from '../data/workers.ts';
 import { PERKS, type PerkId } from '../data/perks.ts';
 import { RESEARCH, type ResearchId } from '../data/research.ts';
 import type { PlantedTree } from './resources.ts';
@@ -34,7 +34,7 @@ import type { SchedulerSnapshot } from './scheduler.ts';
 import { ADAM_SALT, adultAge } from './inhabitants.ts';
 import { freshHousing, type Housing } from './housing.ts';
 import { freshNeeds, fullNeeds } from './needs.ts';
-import { canPause, clampStaff } from './staffing.ts';
+import { canPause, clampStaff, isWorkPriority, type StaffPost } from './staffing.ts';
 import type { Store, StoreSnapshot } from './store.ts';
 import type {
   BeastState,
@@ -69,7 +69,15 @@ export const SAVE_VERSION = 9;
 /** Une entité telle qu'elle est rangée : son coffre devient un simple stock. */
 export type SavedEntity = Stored<Entity>;
 
-type Stored<E> = E extends { store: Store } ? Omit<E, 'store'> & { store: StoreSnapshot } : E;
+/** Un bâtiment en données ; sa priorité est absente d'une sauvegarde d'avant elles. */
+type Stored<E> = E extends { store: Store; priority: WorkPriority }
+  ? Omit<E, 'store' | 'priority'> & { store: StoreSnapshot; priority?: WorkPriority }
+  : E;
+
+/** Les postes d'un bâtiment qui emploie, cf. `StaffPost`. */
+export interface SavedStaffPost extends StaffPost {
+  id: EntityId;
+}
 
 export type SavedPlayer = Omit<Player, 'inventory'> & { inventory: StoreSnapshot };
 
@@ -128,6 +136,12 @@ export interface WorldState {
   lureNight?: number;
   /** Les ouvriers adultes de la colonie. Absent d'avant eux : ceux qu'employaient les bâtiments finis. */
   colonists?: number;
+  /**
+   * La répartition des ouvriers entre les bâtiments qui emploient
+   * (`allocateStaff`) : postes occupés, et dernier gain. Absente d'avant les
+   * priorités : elle se refait d'un coup, priorité puis ancienneté.
+   */
+  staffPosts?: SavedStaffPost[];
   /** Les bases mutantes et leurs points de vie. Absent d'avant elles : elles se posent au chargement, hors du bâti. */
   enemyBases?: EnemyBase[];
   stats: WorldStats;
@@ -399,6 +413,7 @@ function parseState(raw: unknown): WorldState {
     seenBuildings: [...new Set(array(state['seenBuildings'] ?? []).map((id) => oneOf(id, BUILDINGS) as BuildingId))],
     rareTrades: parseRareTrades(state['rareTrades'] ?? {}),
     ...(state['colonists'] !== undefined && { colonists: int(state['colonists']) }),
+    ...(state['staffPosts'] !== undefined && { staffPosts: unique(array(state['staffPosts']).map(parseStaffPost)) }),
     ...parseObjectives(state),
     ...(state['enemyBases'] !== undefined && { enemyBases: unique(array(state['enemyBases']).map(parseEnemyBase)) }),
     player: parsePlayer(state['player']),
@@ -511,6 +526,14 @@ function parseRoads(raw: unknown): Record<string, number[]> {
   return roads;
 }
 
+function parseStaffPost(raw: unknown): SavedStaffPost {
+  const post = record(raw);
+  const filled = int(post['filled']);
+
+  if (filled < 0) throw new SaveError(`poste ${String(post['id'])} aux ouvriers négatifs`);
+  return { id: int(post['id']), filled, since: post['since'] === null ? null : int(post['since']) };
+}
+
 function parseEntity(raw: unknown): SavedEntity {
   const entity = record(raw);
   const proto = oneOf(entity['proto'], BUILDINGS) as BuildingId;
@@ -544,6 +567,8 @@ function parseEntity(raw: unknown): SavedEntity {
     // Absents des sauvegardes d'avant la pause et les effectifs : en marche, au complet.
     paused: entity['paused'] === undefined ? false : bool(entity['paused']) && canPause(proto),
     staff: entity['staff'] === undefined ? BUILDINGS[proto].workers : clampStaff(proto, int(entity['staff'])),
+    // Absente d'une sauvegarde d'avant les priorités, ou illisible : Moyenne.
+    priority: isWorkPriority(entity['priority']) ? entity['priority'] : WORK_PRIORITY.initial,
   };
 
   if (built.hp <= 0) throw new SaveError(`${proto} sans points de vie`);

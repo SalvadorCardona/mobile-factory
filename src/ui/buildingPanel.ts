@@ -37,6 +37,9 @@
  * a un sélecteur − / nombre / + (`setWorkers`) : un pictogramme d'ouvrier par
  * poste, plein s'il est occupé, vide sinon, marqué s'il est demandé mais
  * qu'aucun ouvrier libre ne vient le prendre.
+ * Sous lui, la priorité de travail en trois boutons segmentés — Basse,
+ * Moyenne, Haute (`setPriority`) : quand les ouvriers manquent, Haute se
+ * pourvoit d’abord.
  *
  * La forge (`GEAR_WORKSHOP`) forge aussi l'arc d'Adam : l'arc suivant, son
  * coût — ce qui manque en rouge — et « Forger l'arc » (`craftGear`).
@@ -77,7 +80,7 @@ import { NURSERY_CARE } from '../data/inhabitants.ts';
 import type { ItemId } from '../data/items.ts';
 import { RECIPES, type RecipeProto } from '../data/recipes.ts';
 import { WEAPONS } from '../data/weapons.ts';
-import { BUILDERS, FORESTERS, LOGISTICIANS, LUMBERJACKS } from '../data/workers.ts';
+import { BUILDERS, FORESTERS, LOGISTICIANS, LUMBERJACKS, WORK_PRIORITIES, type WorkPriority } from '../data/workers.ts';
 import { floorCost } from '../sim/antenna.ts';
 import { forgeRecipe } from '../sim/consumers.ts';
 import { canDamage, isStanding, raidCapacity } from '../sim/enemyBases.ts';
@@ -154,6 +157,10 @@ export class BuildingPanel {
   private readonly crewSlots: HTMLElement;
   private readonly crewCount: HTMLElement;
   private readonly crewNote: HTMLElement;
+  /** Le sélecteur de priorité de travail : Basse, Moyenne, Haute. */
+  private readonly priority: HTMLElement;
+  private readonly priorityLabel: HTMLElement;
+  private readonly priorityButtons: Map<WorkPriority, HTMLButtonElement>;
   private lastCrew = '';
   /** Le panneau Recherche, que seule la fenêtre du labo montre. */
   private readonly research: ResearchPanel;
@@ -334,7 +341,33 @@ export class BuildingPanel {
 
     this.crewNote = document.createElement('p');
     this.crewNote.className = 'building-panel-crew-note';
-    this.crew.append(crewRow, this.crewNote);
+
+    // Trois boutons segmentés, gros au pouce : celui de la priorité en cours est enfoncé.
+    this.priority = document.createElement('div');
+    this.priority.className = 'building-panel-priority';
+    this.priorityLabel = document.createElement('span');
+    this.priorityLabel.className = 'building-panel-priority-label';
+
+    const segments = document.createElement('div');
+
+    segments.className = 'building-panel-priority-segments';
+    segments.setAttribute('role', 'group');
+    this.priorityButtons = new Map(
+      WORK_PRIORITIES.map((priority) => {
+        const button = document.createElement('button');
+
+        button.type = 'button';
+        button.className = 'building-panel-priority-step';
+        button.dataset['priority'] = priority;
+        button.addEventListener('click', () => {
+          if (this.entityId !== null) this.world.push({ type: 'setPriority', id: this.entityId, priority });
+        });
+        segments.append(button);
+        return [priority, button];
+      }),
+    );
+    this.priority.append(this.priorityLabel, segments);
+    this.crew.append(crewRow, this.crewNote, this.priority);
 
     this.research = new ResearchPanel(world);
     this.research.root.hidden = true;
@@ -413,6 +446,9 @@ export class BuildingPanel {
       close.setAttribute('aria-label', t().common.close);
       this.crewLess.setAttribute('aria-label', text.crew.less);
       this.crewMore.setAttribute('aria-label', text.crew.more);
+      this.priorityLabel.textContent = text.crew.priority.label;
+      segments.setAttribute('aria-label', text.crew.priority.label);
+      for (const [priority, button] of this.priorityButtons) button.textContent = text.crew.priority[priority];
       this.tabs.bar.setAttribute('aria-label', text.tabs.label);
       this.tabs.setLabel('building', text.tabs.building);
       this.tabs.setLabel('inventory', text.tabs.inventory);
@@ -1104,6 +1140,9 @@ export class BuildingPanel {
 
     this.crewLess.disabled = wanted <= min;
     this.crewMore.disabled = wanted >= max;
+    for (const [priority, button] of this.priorityButtons) {
+      button.setAttribute('aria-pressed', String(priority === building.priority));
+    }
     if (key === this.lastCrew) return;
     this.lastCrew = key;
 
