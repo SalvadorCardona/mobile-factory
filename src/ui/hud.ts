@@ -217,7 +217,7 @@ export class Hud {
   private personHeight = 0;
   private personKey = '';
   private onFocus: (x: number, y: number) => void = () => {};
-  private readonly buttons: HTMLElement;
+  private readonly bar: HTMLElement;
   private readonly floats: HTMLElement;
   private readonly stats: HTMLElement;
   private readonly toasts: HTMLElement;
@@ -404,8 +404,6 @@ export class Hud {
 
     const buttons = element('div', 'hud-buttons');
 
-    this.buttons = buttons;
-
     this.pauseButton = element('button', 'hud-button hud-pause');
     this.pauseButton.type = 'button';
     this.pauseButton.append(uiIcon('pause'));
@@ -463,11 +461,18 @@ export class Hud {
     // Rien ne se chevauche, et rien ne bouge quand le conseil change.
     this.top = element('div', 'hud-top');
 
+    // Une barre unique, pleine largeur : la population, le sac, puis Pause et
+    // Réglages à droite. Dessous, la quête, et à côté la ville et l'alerte de vivres.
+    this.bar = element('div', 'panel hud-topbar');
+    this.bar.append(this.people, this.bag, buttons);
+
+    const under = element('div', 'hud-under');
     const side = element('div', 'hud-side');
 
     this.quest.append(fold);
-    side.append(buttons, this.town, this.people, this.hunger, this.bag);
-    this.top.append(this.quest, side, this.corner);
+    side.append(this.town, this.hunger);
+    under.append(this.quest, side, this.corner);
+    this.top.append(this.bar, under);
     // Sur un écran large, le bandeau de la ville se range juste après le
     // Prestige, sur sa ligne : il lit sa largeur ici (cf. `.hud-town` dans le CSS).
     new ResizeObserver(() => {
@@ -1003,9 +1008,9 @@ export class Hud {
     return this.quest.getBoundingClientRect().bottom;
   }
 
-  /** Les boutons et le sac, posés à droite de la quête : les repères de bord les contournent. */
+  /** La barre du haut et la ville, à côté de la quête : les repères de bord les contournent. */
   public obstacles(): DOMRect[] {
-    return [this.buttons.getBoundingClientRect(), this.town.getBoundingClientRect(), this.bag.getBoundingClientRect()];
+    return [this.bar.getBoundingClientRect(), this.town.getBoundingClientRect()];
   }
 
   /** La ressource que le conseil envoie chercher, ou `null` : le renderer y pointe un repère. */

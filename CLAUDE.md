@@ -544,6 +544,13 @@ Les règles, en résumé :
   `style.css` (`--accent`, `--good`, `--danger`…). Pas d'emoji : les
   pictogrammes sont des SVG de `src/art/ui.ts`. Le panneau de debug ne
   s'affiche qu'avec `?debug` en dev.
+- Le haut de l'écran (`.hud-top`) : une **barre unique** pleine largeur
+  (`.hud-topbar`, centrée, 760 px au plus) — population (au travail, inactifs,
+  enfants, logés, bonheur), sac, Pause et Réglages à droite, boutons de 40 px
+  (48 dès 600 px) — puis dessous la quête, la ville et l'alerte de vivres
+  (`.hud-under`). Sur un téléphone le sac n'y garde que son compte et sa jauge
+  (le détail est dans son panneau, un tap) ; la ville et l'objet réclamé
+  s'y ajoutent dès 420 px, les objets du sac dès 600 px.
 - Clavier : ZQSD / WASD (par position) et flèches font marcher Adam
   (`input/keyboard.ts`) ; Espace, flèches, Entrée et Échap tiennent le menu
   de construction (`BuildMenu.handleKey`) ; P, Échap, I, M et ² sont une
