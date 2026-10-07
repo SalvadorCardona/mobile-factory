@@ -227,17 +227,35 @@ button {
   position: relative;
   display: grid;
   grid-template-columns: 1fr minmax(0, 380px) 1fr;
-  /* La colonne de droite couvre les deux rangées : la capsule météo, sous la
-   * quête, ne descend pas sous l'alerte de vivres. */
+  /* La colonne de droite couvre les deux rangées : la capsule météo ne descend
+   * pas sous l'alerte de vivres. */
   grid-template-rows: auto 1fr;
   align-items: start;
   margin-top: 10px;
 }
 
+/*
+ * La quête n'est plus une carte posée sous la barre : l'objectif, tout à droite
+ * de la barre, la rouvre en fenêtre — le détail, l'attaque, le conseil d'Ève.
+ * Elle se referme seule, ou d'un tap sur sa tête.
+ */
 .hud-quest {
-  grid-column: 2;
+  position: absolute;
+  top: -4px;
+  right: 0;
+  z-index: 4;
+  width: min(380px, 100%);
   min-width: 0;
   padding: 8px 14px 12px;
+  box-shadow: 0 5px 0 var(--paper-shade), 0 10px 24px rgb(43 45 143 / 0.18);
+}
+
+.hud-quest:not([data-folded='false']) {
+  display: none;
+}
+
+.hud .hud-quest[data-folded='false'] {
+  pointer-events: auto;
 }
 
 .hud-side {
@@ -258,6 +276,7 @@ button {
   justify-content: space-between;
   gap: 8px;
   height: 24px;
+  cursor: pointer;
 }
 
 /*
@@ -275,10 +294,12 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  margin: -4px 0 -4px auto;
-  padding: 0;
+  margin: 0;
+  padding: 0 10px 0 4px;
   border: none;
-  background: none;
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow: var(--face);
   color: var(--ink);
   font: inherit;
   font-size: 14px;
@@ -637,46 +658,9 @@ button {
 
 /* ------------------------------------------------------- quête repliée */
 
-/* La ligne repliée ne sert que sur un téléphone. */
+/* L'objectif de la barre : sa ligne est dans la case (cf. `.hud-objective`). */
 .hud-quest-strip {
   display: none;
-}
-
-/*
- * Sur un téléphone, la quête mangeait un tiers de l'écran : repliée, elle
- * n'est plus qu'une ligne de 44 px — l'icône et le titre de l'objectif, sa
- * progression, les PV de la mairie, l'horloge. Un tap sur la ligne la
- * déplie ; le conseil s'ouvre dessous, l'ampoule reste au bout.
- */
-@media (max-width: 600px) {
-  .hud .hud-quest-head {
-    pointer-events: auto;
-    cursor: pointer;
-  }
-
-  .hud-quest[data-folded='true'] {
-    padding: 10px 12px;
-  }
-
-  .hud-quest[data-folded='true'] .hud-quest-title,
-  .hud-quest[data-folded='true'] .hud-quest-body {
-    display: none;
-  }
-
-  .hud-quest[data-folded='true'] .hud-quest-strip {
-    display: flex;
-    flex: 1;
-    align-items: center;
-    gap: 5px;
-    min-width: 0;
-    font-size: 15px;
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-  }
-
-  .hud-quest[data-folded='true'] .hud-hint {
-    margin-top: 8px;
-  }
 }
 
 .hud-quest-strip .icon {
@@ -1459,206 +1443,351 @@ button.hud-stock:active {
 /* ------------------------------------------------------- la barre du haut */
 
 /*
- * Une seule ligne, du bord à l'autre : la population (au travail, inactifs,
- * enfants, logés, bonheur), le sac, Pause et Réglages à droite. Sur un
- * téléphone tout est en icône + chiffre, et le sac ne garde que son compte et
- * sa jauge — le détail est dans son panneau ; dès 600 px, ses objets viennent
- * à la suite. Sur un grand écran la barre se centre, sans s'étirer.
+ * Une seule ligne, du bord à l'autre, bâtie sur une grille de cases : tout ce
+ * qu'elle porte a la même hauteur (`--cell-h`), les mêmes rayons, la même face
+ * lavande. Les cinq compteurs de la population (au travail, inactifs, enfants,
+ * logés, bonheur) sont des cases de même largeur (`--cell-w`, de quoi tenir
+ * « 10/10 », chiffres tabulaires : rien ne bouge quand un chiffre change) ;
+ * Pause et Réglages, des carrés ; le sac, une case qui s'étire et garde la
+ * même hauteur ; l'objectif ferme la ligne, tout à droite — une case de plus
+ * sur un téléphone (icône, progression), un intitulé court dès 600 px.
+ * La grille se resserre par paliers (< 360, 420, 600 px) ; un tap atteint
+ * toujours 40 px, la zone de tap déborde de la case.
  */
 .hud-topbar {
+  --cell-h: 34px;
+  --cell-w: 30px;
+  --cell-r: 12px;
+  --cell-gap: 2px;
+  --cell-font: 11px;
+  --cell-icon: 13px;
+  --cell-face: 0 3px 0 var(--violet-light);
+
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--cell-gap);
   width: 100%;
   max-width: 760px;
   margin: 0 auto;
-  padding: 4px 6px;
-  border-radius: 28px;
+  padding: 3px;
+  border-radius: calc(var(--cell-r) + 6px);
 }
 
+/* Les compteurs : la population reste un groupe, ses cases se rangent dans la ligne. */
 .hud .hud-topbar .hud-people {
-  flex: none;
-  width: auto;
-  flex-wrap: nowrap;
-  justify-content: flex-start;
-  gap: 4px;
-  padding: 0;
-  border-radius: 0;
-  background: none;
-  box-shadow: none;
+  display: contents;
 }
 
-/* Les puces Habitation et Bonheur se rangent dans la même ligne que les compteurs. */
+.hud .hud-topbar .hud-people[hidden] {
+  display: none;
+}
+
 .hud-topbar .hud-people-town {
   display: contents;
 }
 
 .hud-topbar .hud-people-count,
 .hud .hud-topbar .hud-people-idle {
-  font-size: 14px;
+  position: relative;
+  box-sizing: border-box;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  width: var(--cell-w);
+  height: var(--cell-h);
+  padding: 0;
+  border: none;
+  border-radius: var(--cell-r);
+  background: var(--paper-shade);
+  box-shadow: var(--cell-face);
+  font: inherit;
+  font-size: var(--cell-font);
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--ink);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .hud-topbar .hud-people-count .icon {
-  width: 15px;
-  height: 15px;
+  width: var(--cell-icon);
+  height: var(--cell-icon);
 }
 
-.hud .hud-topbar .hud-people-housing,
-.hud .hud-topbar .hud-people-happiness {
-  padding: 1px 4px;
-  gap: 1px;
+/* Une case d'alerte (inactifs, sans lit, malheureux) : corail, de la même taille. */
+.hud .hud-topbar .hud-people-count[data-alert='true'] {
+  background: var(--coral);
+  box-shadow: 0 3px 0 var(--coral-shade);
+  color: var(--paper);
+  font-weight: 700;
 }
 
-.hud .hud-topbar .hud-bag {
-  flex: 1 1 0;
-  min-width: 0;
-  width: auto;
-  gap: 3px;
-  padding: 2px 4px;
-  border-radius: 14px;
-  background: none;
+.hud .hud-topbar .hud-people-idle::after {
+  inset: 0 -1px;
+}
+
+.hud .hud-topbar .hud-people-idle:active {
+  transform: translateY(2px);
   box-shadow: none;
 }
 
-.hud .hud-topbar .hud-bag:active {
-  transform: none;
+/* La flèche du bonheur se glisse à côté de l'icône : la case ne grandit pas. */
+.hud .hud-topbar .hud-people-happiness .icon + .icon {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 9px;
+  height: 9px;
+}
+
+/* Le sac : une case qui s'étire, sa jauge en filet au pied. */
+.hud .hud-topbar .hud-bag {
+  position: relative;
+  box-sizing: border-box;
+  flex: 1 1 0;
+  min-width: var(--cell-w);
+  width: auto;
+  height: var(--cell-h);
+  justify-content: center;
+  gap: 0;
+  padding: 0 4px;
+  border-radius: var(--cell-r);
   background: var(--paper-shade);
+  box-shadow: var(--cell-face);
+}
+
+.hud .hud-topbar .hud-bag:active {
+  transform: translateY(2px);
+  box-shadow: none;
 }
 
 .hud-topbar .hud-bag .hud-bag-title {
+  flex-direction: column;
   flex-wrap: nowrap;
-  gap: 3px;
-  font-size: 14px;
+  justify-content: center;
+  gap: 0;
+  font-size: var(--cell-font);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: 0;
   white-space: nowrap;
+  color: var(--ink);
 }
 
 .hud-topbar .hud-bag .hud-bag-title .icon {
-  width: 16px;
-  height: 16px;
+  width: var(--cell-icon);
+  height: var(--cell-icon);
 }
 
 .hud-topbar .hud-bag .hud-bag-fill {
-  min-width: 36px;
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 3px;
+  height: 3px;
+  background: linear-gradient(90deg, var(--violet) var(--fill, 0%), var(--violet-light) var(--fill, 0%));
 }
 
+.hud-topbar .hud-bag .hud-bag-fill[data-full='true'] {
+  background: var(--coral);
+}
+
+.hud-topbar .hud-bag[data-empty='true'] .hud-stock-items,
+.hud-topbar .hud-bag .hud-stock-items {
+  display: none;
+}
+
+/* Pause et Réglages : deux carrés de la hauteur de la grille, sur la même face lavande. */
 .hud-topbar .hud-buttons {
   flex: none;
-  gap: 4px;
-  margin-left: auto;
+  display: flex;
+  gap: var(--cell-gap);
 }
 
-/* Sur la barre blanche, un bouton est une pastille lavande. */
 .hud-topbar .hud-button {
-  width: 40px;
-  height: 40px;
+  position: relative;
+  width: var(--cell-h);
+  height: var(--cell-h);
+  border-radius: var(--cell-r);
   background: var(--paper-shade);
-  box-shadow: 0 3px 0 var(--violet-light);
+  box-shadow: var(--cell-face);
+}
+
+.hud-topbar .hud-button .icon {
+  width: calc(var(--cell-h) * 0.55);
+  height: calc(var(--cell-h) * 0.55);
 }
 
 .hud-topbar .hud-button:active {
   box-shadow: none;
 }
 
-/* Un téléphone étroit : ni la ville ni l'objet réclamé n'y tiennent, leur chiffre est dans le panneau du sac. */
-@media (max-width: 419px) {
-  .hud-topbar .hud-bag-town,
-  .hud-topbar .hud-bag-wanted {
-    display: none;
+/* L'objectif : la dernière case, jaune de la colonie, au bord droit de la barre. */
+.hud-topbar .hud-objective {
+  position: relative;
+  box-sizing: border-box;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--cell-h);
+  max-width: 220px;
+  height: var(--cell-h);
+  padding: 0 3px;
+  border: none;
+  border-radius: var(--cell-r);
+  background: var(--yellow-light);
+  box-shadow: 0 3px 0 var(--yellow-shade);
+  font: inherit;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.hud-topbar .hud-objective:active,
+.hud-topbar .hud-objective[aria-expanded='true'] {
+  transform: translateY(2px);
+  box-shadow: none;
+}
+
+/* Un chantier de plus sur la face : l'objectif réussi rebondit et s'allume en menthe. */
+.hud-topbar .hud-objective[data-done='true'] {
+  background: var(--mint-light);
+  box-shadow: 0 3px 0 var(--mint-shade);
+  animation: objective-done 600ms cubic-bezier(0.2, 1.4, 0.4, 1) 3;
+}
+
+@keyframes objective-done {
+  40% {
+    transform: scale(1.2);
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-topbar .hud-objective[data-done='true'] {
+    animation: none;
+  }
+}
+
+/* Une zone de tap d'au moins 40 px, même sur une case plus petite. */
+.hud-topbar .hud-button::after,
+.hud-topbar .hud-objective::after,
+.hud-topbar .hud-bag::after {
+  content: '';
+  position: absolute;
+  inset: min(0px, calc((var(--cell-h) - 44px) / 2)) -1px;
+}
+
+.hud-topbar .hud-objective .hud-quest-strip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  min-width: 0;
+  font-size: var(--cell-font);
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.hud-topbar .hud-objective .icon {
+  width: var(--cell-icon);
+  height: var(--cell-icon);
+}
+
+/* Sur la barre, l'intitulé et les PV de la mairie sont dans la fenêtre de la quête, pas dans la case. */
+.hud-topbar .hud-objective .hud-strip-title,
+.hud-topbar .hud-objective .hud-strip-hp {
+  display: none;
+}
+
+/* Sans progression (attente d'une naissance, mairie tombée), le titre prend la place : sur un téléphone, l'icône seule. */
+.hud-topbar .hud-objective[data-urgent='true'] {
+  background: var(--coral);
+  box-shadow: 0 3px 0 var(--coral-shade);
+  color: var(--paper);
+}
+
+/* Ni la ville ni l'objet réclamé ne tiennent dans la case du sac : leur chiffre est dans son panneau. */
+.hud .hud-topbar .hud-bag-town,
+.hud .hud-topbar .hud-bag-wanted {
+  display: none;
 }
 
 @media (max-width: 359px) {
   .hud-top {
-    left: calc(var(--safe-left) + 6px);
-    right: calc(var(--safe-right) + 6px);
-  }
-
-  .hud-topbar {
-    gap: 3px;
-    padding: 3px 4px;
-  }
-
-  .hud .hud-topbar .hud-people {
-    gap: 2px;
-  }
-
-  .hud-topbar .hud-people-count,
-  .hud .hud-topbar .hud-people-idle {
-    font-size: 13px;
-  }
-
-  .hud-topbar .hud-people-count .icon {
-    width: 13px;
-    height: 13px;
-  }
-
-  .hud .hud-topbar .hud-people-housing,
-  .hud .hud-topbar .hud-people-happiness {
-    padding: 1px 3px;
-    gap: 0;
-  }
-
-  .hud .hud-topbar .hud-bag {
-    padding: 2px 0;
-  }
-
-  .hud-topbar .hud-bag .hud-bag-title {
-    gap: 2px;
-    font-size: 13px;
-  }
-
-  .hud-topbar .hud-bag .hud-bag-title .icon {
-    width: 14px;
-    height: 14px;
-  }
-
-  .hud-topbar .hud-buttons {
-    gap: 2px;
+    left: calc(var(--safe-left) + 4px);
+    right: calc(var(--safe-right) + 4px);
   }
 }
 
-/* Une tablette, un bureau, un téléphone couché : la barre respire, ses objets suivent le sac. */
-@media (min-width: 600px) {
+@media (min-width: 360px) {
   .hud-topbar {
-    gap: 12px;
-    padding: 6px 10px;
+    --cell-h: 36px;
+    --cell-w: 33px;
+    --cell-font: 12px;
+    --cell-icon: 14px;
+  }
+}
+
+@media (min-width: 420px) {
+  .hud-topbar {
+    --cell-h: 38px;
+    --cell-w: 36px;
+    --cell-r: 13px;
+    --cell-gap: 3px;
+    --cell-icon: 15px;
+
+    padding: 4px;
+  }
+}
+
+/* Une tablette, un bureau, un téléphone couché : la grille respire, l'icône passe à côté du chiffre. */
+@media (min-width: 600px) {
+  /* La quête s'ouvre sous l'objectif : au bord droit de la barre, pas de l'écran. */
+  .hud-quest {
+    right: max(0px, calc((100% - 920px) / 2));
   }
 
-  .hud .hud-topbar .hud-people {
-    gap: 8px;
+  .hud-topbar {
+    --cell-h: 44px;
+    --cell-w: 48px;
+    --cell-r: 16px;
+    --cell-gap: 5px;
+    --cell-font: 15px;
+    --cell-icon: 18px;
+
+    max-width: 920px;
+    padding: 5px 6px;
   }
 
   .hud-topbar .hud-people-count,
   .hud .hud-topbar .hud-people-idle {
-    font-size: 17px;
-  }
-
-  .hud-topbar .hud-people-count .icon {
-    width: 20px;
-    height: 20px;
-  }
-
-  .hud .hud-topbar .hud-people-housing,
-  .hud .hud-topbar .hud-people-happiness {
-    padding: 2px 8px;
-    gap: 3px;
+    flex-direction: row;
+    gap: 4px;
   }
 
   .hud .hud-topbar .hud-bag {
     flex-direction: row;
-    align-items: center;
-    gap: 10px;
+    gap: 8px;
+    padding: 0 12px;
   }
 
   .hud-topbar .hud-bag .hud-bag-title {
     flex: none;
-    font-size: 17px;
+    flex-direction: row;
+    gap: 5px;
   }
 
   .hud-topbar .hud-bag .hud-bag-fill {
+    position: static;
     flex: none;
-    width: 64px;
-    min-width: 0;
+    width: 48px;
+    height: 6px;
   }
 
   .hud-topbar .hud-bag .hud-stock-items {
@@ -1667,7 +1796,7 @@ button.hud-stock:active {
     min-width: 0;
     gap: 12px;
     overflow: hidden;
-    font-size: 16px;
+    font-size: 15px;
     white-space: nowrap;
   }
 
@@ -1675,13 +1804,40 @@ button.hud-stock:active {
     display: none;
   }
 
-  .hud-topbar .hud-button {
-    width: 48px;
-    height: 48px;
+  .hud-topbar .hud-objective {
+    padding: 0 12px 0 8px;
   }
 
-  .hud-topbar .hud-buttons {
-    gap: 8px;
+  .hud-topbar .hud-objective .hud-quest-strip {
+    flex-direction: row;
+    gap: 6px;
+    font-size: 15px;
+  }
+
+  .hud-topbar .hud-bag .hud-stock-name {
+    display: none;
+  }
+
+}
+
+/* Une tablette large, un bureau : des cases plus larges, l'intitulé entier de la barre. */
+@media (min-width: 900px) {
+  .hud-topbar {
+    --cell-w: 62px;
+    --cell-font: 16px;
+    --cell-icon: 20px;
+  }
+
+  .hud-topbar .hud-bag .hud-stock-name {
+    display: block;
+  }
+
+  .hud-topbar .hud-objective .hud-strip-title {
+    display: block;
+    flex: 0 1 auto;
+    max-width: 170px;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
 

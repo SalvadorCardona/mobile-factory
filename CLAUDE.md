@@ -560,12 +560,22 @@ Les règles, en résumé :
   pictogrammes sont des SVG de `src/art/ui.ts`. Le panneau de debug ne
   s'affiche qu'avec `?debug` en dev.
 - Le haut de l'écran (`.hud-top`) : une **barre unique** pleine largeur
-  (`.hud-topbar`, centrée, 760 px au plus) — population (au travail, inactifs,
-  enfants, logés, bonheur), sac, Pause et Réglages à droite, boutons de 40 px
-  (48 dès 600 px) — puis dessous la quête, la ville et l'alerte de vivres
-  (`.hud-under`). Sur un téléphone le sac n'y garde que son compte et sa jauge
-  (le détail est dans son panneau, un tap) ; la ville et l'objet réclamé
-  s'y ajoutent dès 420 px, les objets du sac dès 600 px.
+  (`.hud-topbar`, centrée, 920 px au plus), bâtie sur une grille de cases :
+  tout y a la même hauteur (`--cell-h`), les mêmes rayons et la même face
+  lavande. Dans l'ordre : cinq compteurs de la population (au travail,
+  inactifs, enfants, logés, bonheur) de même largeur (`--cell-w`, chiffres
+  tabulaires : rien ne bouge), le sac (une case qui s'étire, sa jauge en filet
+  au pied), Pause et Réglages (carrés), puis l'**objectif, dernier élément, au
+  bord droit** (`.hud-objective`, jaune : icône et progression, intitulé court
+  dès 900 px ; il rebondit en menthe quand une étape est réussie). Les alertes
+  (corail) ne changent pas la taille d'une case. La grille se resserre par
+  paliers (< 360, 360, 420, 600, 900 px) et tient sur une ligne dès 320 px ; la
+  zone de tap déborde de la case jusqu'à ~44 px. Le tap sur l'objectif ouvre la
+  **quête** en fenêtre sous la barre (`.hud-quest`, `data-folded`, `toggleQuest`
+  : détail, attaque, conseil d'Ève ; elle s'ouvre seule à un nouveau conseil,
+  un objectif réussi, la mairie qui faiblit, et se referme au temps ou d'un tap
+  sur sa tête). Dessous, en flux (`.hud-under`) : horloge du jour, ville, alerte
+  de vivres, Prestige, météo.
 - Clavier : ZQSD / WASD (par position) et flèches font marcher Adam
   (`input/keyboard.ts`) ; Espace, flèches, Entrée et Échap tiennent le menu
   de construction (`BuildMenu.handleKey`) ; P, Échap, I, M et ² sont une
