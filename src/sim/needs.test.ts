@@ -59,7 +59,7 @@ function colony(town: Stock): World {
   const x = (nursery.tx + 1) * TILE_SIZE;
   const y = (nursery.ty + nursery.height + 1) * TILE_SIZE;
   const mobiles: Mobile[] = [
-    { kind: 'kid', id: state.nextMobileId, age: 12, x, y, prevX: x, prevY: y, facing: 'down', moving: false, homeId: nursery.id, homeX: x, homeY: y, dirX: 0, dirY: 0, wanderTicks: 0, ...freshNeeds() },
+    { kind: 'kid', id: state.nextMobileId, sex: 'female', age: 12, x, y, prevX: x, prevY: y, facing: 'down', moving: false, homeId: nursery.id, homeX: x, homeY: y, dirX: 0, dirY: 0, wanderTicks: 0, ...freshNeeds() },
   ];
 
   // Adam à l'écart, immobile.

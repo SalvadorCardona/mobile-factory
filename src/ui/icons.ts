@@ -64,17 +64,18 @@ const PORTRAIT_PARTS = ['foot', 'down', 'claws'] as const;
 /**
  * URL du portrait d'une créature — habitant ou ennemi — pour la fenêtre :
  * les morceaux de son sprite, posés l'un sur l'autre dans leur cadre commun,
- * comme le pantin immobile qui regarde vers nous.
+ * comme le pantin immobile qui regarde vers nous — celui d'une femme pour `woman`.
  */
-export function creatureIconUrl(sprite: SpriteId): string {
+export function creatureIconUrl(sprite: SpriteId, woman = false): string {
   const { width, height, parts } = SPRITES[sprite];
   const layers = PORTRAIT_PARTS.flatMap((part) => {
-    const source = (parts as Record<string, string>)[part];
+    // Une femme : son corps à elle (`woman.down`), si le sprite en a un.
+    const source = (woman ? (parts as Record<string, string>)[`woman.${part}`] : undefined) ?? (parts as Record<string, string>)[part];
 
     return source === undefined ? [] : [embed(source, 0, 0)];
   });
 
-  return url(`creature:${sprite}`, svg(width, height, ...layers));
+  return url(`creature:${sprite}${woman ? ':woman' : ''}`, svg(width, height, ...layers));
 }
 
 /** URL du cadran de l'horloge du HUD (`dayDialSvg`) : il bouge sans cesse, rien à garder en cache. */

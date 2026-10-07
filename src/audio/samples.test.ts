@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { SAMPLES, SampleBank, type SampleSpec } from './samples.ts';
-import { SOUNDS, type SoundName } from './synth.ts';
+import { SOUNDS, VOICES, type SoundName } from './synth.ts';
 
 /** Un faux buffer : le chargeur ne regarde jamais dedans. */
 function bufferOf(url: string): AudioBuffer {
@@ -106,5 +106,11 @@ describe('échantillons', () => {
         for (const ext of ['ogg', 'm4a']) expect(existsSync(`public/audio/sfx/${file}.${ext}`), `${file}.${ext}`).toBe(true);
       }
     }
+  });
+
+  it('un homme dit « Hé ho ! », une femme « Hé ! » : chacun ses trois prises', () => {
+    expect(VOICES).toEqual({ male: 'heyHo', female: 'hey' });
+    expect(SAMPLES.heyHo.files).toEqual(['heho_1', 'heho_2', 'heho_3']);
+    expect(SAMPLES.hey.files).toEqual(['he_1', 'he_2', 'he_3']);
   });
 });

@@ -5,6 +5,7 @@ import type { ItemId } from '../data/items.ts';
 import { RECIPES } from '../data/recipes.ts';
 import type { Command } from './commands.ts';
 import { BUILD_REACH_TILES } from './player.ts';
+import { nameOf, sexOf } from './inhabitants.ts';
 import { SAVE_VERSION, decodeSave, deserialize, encodeSave, serialize } from './save.ts';
 import { oreAt } from './terrain.ts';
 import type { EntityId } from './types.ts';
@@ -229,6 +230,44 @@ describe('sauvegarde', () => {
     play(original, 600);
     play(copy, 600);
     expect(serialize(copy)).toEqual(serialize(original));
+  });
+
+  it('garde le sexe de chaque habitant, même celui que la seed ne lui aurait pas tiré', () => {
+    const raw = JSON.parse(JSON.stringify(state)) as { mobiles: { kind: string; id: number; sex?: string }[] };
+    const kid = raw.mobiles.find((mobile) => mobile.kind === 'kid')!;
+    const flipped = kid.sex === 'male' ? 'female' : 'male';
+
+    kid.sex = flipped;
+    expect(deserialize(raw).mobiles.get(kid.id)).toMatchObject({ sex: flipped });
+  });
+
+  it('une sauvegarde d’avant le sexe des habitants se charge : chacun reçoit celui de la seed, et garde son prénom', () => {
+    const raw = JSON.parse(JSON.stringify(state)) as { seed: number; mobiles: { kind: string; id: number; sex?: string }[] };
+    const names = new Map<number, string>();
+
+    for (const mobile of raw.mobiles) {
+      if (mobile.sex === undefined) continue;
+      names.set(mobile.id, nameOf(raw.seed, mobile.id, sexOf(raw.seed, mobile.id)));
+      delete mobile.sex;
+    }
+    expect(names.size).toBeGreaterThan(0);
+
+    const copy = deserialize(raw);
+
+    for (const [id, name] of names) {
+      const mobile = copy.mobiles.get(id)!;
+
+      if (!('sex' in mobile)) throw new Error(`habitant ${id} sans sexe`);
+      expect(mobile.sex).toBe(sexOf(copy.seed, id));
+      expect(nameOf(copy.seed, id, mobile.sex)).toBe(name);
+    }
+  });
+
+  it('refuse un sexe inconnu', () => {
+    const raw = JSON.parse(JSON.stringify(state)) as { mobiles: { kind: string; sex?: string }[] };
+
+    raw.mobiles.find((mobile) => mobile.kind === 'kid')!.sex = 'robot';
+    expect(() => deserialize(raw)).toThrow();
   });
 
   it('enveloppe versionnée : version, date, état', () => {

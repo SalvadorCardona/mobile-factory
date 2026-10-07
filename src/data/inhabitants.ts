@@ -45,7 +45,23 @@ export const AGES = {
   adultMax: 35,
 } as const;
 
-/** Les prénoms des habitants, tirés de la seed et de leur id : jamais sauvegardés. */
+/**
+ * Le sexe d'une personne : une femme ou un homme. Il se voit sur la carte
+ * (la queue de cheval d'une femme, la barbe courte d'un homme), s'entend au
+ * tap (« Hé ! », « Hé ho ! ») et se lit dans sa fiche.
+ */
+export const SEXES = ['female', 'male'] as const;
+
+export type Sex = (typeof SEXES)[number];
+
+/** Les deux héros ont le leur par l'histoire (`data/lore.ts`) : il n'est pas tiré. */
+export const STORY_SEXES = { adam: 'male', eve: 'female' } as const satisfies Record<string, Sex>;
+
+/**
+ * Les prénoms des habitants, tirés de la seed et de leur id : jamais sauvegardés.
+ * Ils alternent, au rang de `SEXES` : un rang pair est un prénom de femme, un
+ * rang impair un prénom d'homme (Sacha et Lou vont aux deux).
+ */
 export const NAMES = [
   'Lina',
   'Malo',

@@ -38,6 +38,9 @@ export const SAMPLES = {
   rock: { files: ['rock_1', 'rock_2', 'rock_3'], gain: 0.45, spread: 0.08 },
   deliver: { files: ['deliver'], gain: 0.5, spread: 0.05 },
   pickup: { files: ['pickup'], gain: 0.55, spread: 0.05 },
+  // Les voix des habitants : trois prises par sexe, et un léger écart de hauteur à chaque tap.
+  heyHo: { files: ['heho_1', 'heho_2', 'heho_3'], gain: 0.6, spread: 0.04 },
+  hey: { files: ['he_1', 'he_2', 'he_3'], gain: 0.6, spread: 0.04 },
   open: { files: ['open'], gain: 0.45 },
   deny: { files: ['deny'], gain: 0.55 },
   arrow: { files: ['arrow_1', 'arrow_2', 'arrow_3'], gain: 0.4, spread: 0.08 },

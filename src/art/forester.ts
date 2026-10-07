@@ -12,7 +12,7 @@
 
 import { PALETTE, leaf, pill, rect, svg } from '../data/artDirection.ts';
 import type { SpriteProto } from '../data/sprites.ts';
-import { foot, humanBody, idleParts, scaledAround, spade, type Facing, type IdleLook } from './people.ts';
+import { foot, humanBody, humanParts, spade, type Facing, type IdleLook, type SexLook } from './people.ts';
 
 const W = 32;
 const H = 48;
@@ -52,13 +52,9 @@ function apron(facing: Facing): string {
   }
 }
 
-/** Le corps d'adulte, avant réduction ; `look` : les bras levés ou le bâillement d'une pose de glande. */
-function figure(facing: Facing, look: IdleLook = {}): string {
+/** Le corps d'adulte, avant réduction ; `look` : son sexe, les bras levés ou le bâillement d'une pose de glande. */
+function figure(facing: Facing, look: IdleLook & SexLook = {}): string {
   return humanBody(facing, { ...OPTIONS, ...look }) + apron(facing) + hat(facing);
-}
-
-function body(facing: Facing): string {
-  return svg(W, H, scaledAround(16, GROUND, SCALE, figure(facing)));
 }
 
 export const FORESTER = {
@@ -67,11 +63,8 @@ export const FORESTER = {
   anchorX: 0.5,
   anchorY: 0.8,
   parts: {
-    down: body('down'),
-    up: body('up'),
-    side: body('side'),
+    ...humanParts(W, H, GROUND, SCALE, figure),
     foot: svg(W, H, foot(GROUND, 'ink', 0.9)),
-    ...idleParts(W, H, GROUND, SCALE, (look) => figure('down', look)),
     spade: svg(W, H, spade(...HAND)),
   },
   pivots: { spade: HAND },

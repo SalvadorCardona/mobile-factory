@@ -121,7 +121,7 @@ import type { WildlifeId } from '../data/enemies.ts';
 import { baseCenter, baseDoor, breed, canDamage, hitsBase, inBaseZone, isShielded, isStanding, onBase, placeEnemyBases } from './enemyBases.ts';
 import { compassOf, stepMutant, stepQueen, surfacePoint, type Compass, type MutantStep } from './enemies.ts';
 import { createEve, currentQuest, harvestYieldWithTools, isUnlocked, mostDamaged, questProgress, rideHome, walkTo } from './eve.ts';
-import { ADAM_SALT, adultAge, canWork, foeAge, nameOf, yearsToWork } from './inhabitants.ts';
+import { ADAM_SALT, adultAge, canWork, foeAge, nameOf, sexOf, yearsToWork } from './inhabitants.ts';
 import { KID_SPRINT, stepKid } from './kids.ts';
 import { drainNeeds, stuntingNeed, freshNeeds, needState, needsPace, pacedTick, urgentNeed } from './needs.ts';
 import { assignBeds, freshHousing, moodCauses, nightlyMood, moodOf, type Lodging } from './housing.ts';
@@ -3155,9 +3155,11 @@ export class World {
     const spot = this.freeTileAround(nursery.tx, nursery.ty, nursery.width, nursery.height);
     const x = spot ? (spot.tx + 0.5) * TILE_SIZE : home.x;
     const y = spot ? (spot.ty + 0.5) * TILE_SIZE : nursery.ty * TILE_SIZE + nursery.height * TILE_SIZE + 8;
+    const id = this.nextMobileId++;
     const kid: Kid = {
       kind: 'kid',
-      id: this.nextMobileId++,
+      id,
+      sex: sexOf(this.seed, id),
       ...freshNeeds(),
       age: AGES.nursery,
       x,
@@ -4018,6 +4020,7 @@ export class World {
     const worker: Worker = {
       kind: 'worker',
       id,
+      sex: sexOf(this.seed, id),
       ...freshNeeds(),
       ...freshHousing(),
       age: adultAge(this.seed, id),
@@ -4964,6 +4967,7 @@ export class World {
       const worker: Worker = {
         kind: 'worker',
         id,
+        sex: sexOf(this.seed, id),
         ...freshNeeds(),
         ...freshHousing(),
         age: adultAge(this.seed, id),
@@ -5108,8 +5112,8 @@ export class World {
       // Un enfant qui a faim ou soif ne grandit pas : il attend sa prochaine aube le ventre plein.
       const stunted = mobile.kind === 'kid' ? stuntingNeed(mobile.needs) : null;
 
-      if (stunted !== null) {
-        this.events.emit('growthStunted', { id: mobile.id, name: nameOf(this.seed, mobile.id), need: stunted });
+      if (mobile.kind === 'kid' && stunted !== null) {
+        this.events.emit('growthStunted', { id: mobile.id, name: nameOf(this.seed, mobile.id, mobile.sex), need: stunted });
         continue;
       }
       mobile.age += AGES.yearsPerCycle;
@@ -5128,10 +5132,10 @@ export class World {
     this.cancelMeal(kid);
 
     const hall = this.entities.get(this.townHallId);
-    const { id, x, y, prevX, prevY, facing, moving, age, needs } = kid;
+    const { id, sex, x, y, prevX, prevY, facing, moving, age, needs } = kid;
 
     if (hall) {
-      this.mobiles.set(id, freeWorker({ id, x, y, prevX, prevY, facing, moving, age, needs, meal: null, ...freshHousing() }, hall.id));
+      this.mobiles.set(id, freeWorker({ id, sex, x, y, prevX, prevY, facing, moving, age, needs, meal: null, ...freshHousing() }, hall.id));
     } else {
       this.mobiles.delete(id);
     }
@@ -5142,7 +5146,7 @@ export class World {
     const nursery = this.entities.get(kid.homeId);
 
     if (nursery?.kind === 'nursery') this.restart(nursery);
-    if (announce) this.events.emit('kidGrewUp', { id: kid.id, name: nameOf(this.seed, kid.id), x: kid.x, y: kid.y });
+    if (announce) this.events.emit('kidGrewUp', { id: kid.id, name: nameOf(this.seed, kid.id, kid.sex), x: kid.x, y: kid.y });
   }
 
   /** Le point, en pixels monde, d'où sortira la prochaine vague : la base la plus proche de la mairie, ou la mairie s'il n'en reste pas. */
@@ -5632,7 +5636,10 @@ export class World {
 
     this.mobiles.set(
       id,
-      freeWorker({ id, x, y, prevX: x, prevY: y, facing: 'down', moving: false, age: adultAge(this.seed, id), ...freshNeeds(), ...freshHousing() }, hall.id),
+      freeWorker(
+        { id, sex: sexOf(this.seed, id), x, y, prevX: x, prevY: y, facing: 'down', moving: false, age: adultAge(this.seed, id), ...freshNeeds(), ...freshHousing() },
+        hall.id,
+      ),
     );
   }
 
@@ -7571,11 +7578,11 @@ function hasCrew(kind: BuildingKind): boolean {
   return kind === 'house' || kind === 'depot' || kind === 'yard' || kind === 'lumberCamp' || kind === 'foresterHouse' || kind === 'farm';
 }
 
-/** Ce qu'un humain garde en changeant de métier : son id — donc son prénom —, sa place, son âge, ses jauges, son lit. */
-type Person = Pick<Worker, 'id' | 'x' | 'y' | 'prevX' | 'prevY' | 'facing' | 'moving' | 'age' | 'needs' | 'meal' | 'happiness' | 'bed' | 'sleepingOut'>;
+/** Ce qu'un humain garde en changeant de métier : son id — donc son prénom —, son sexe, sa place, son âge, ses jauges, son lit. */
+type Person = Pick<Worker, 'id' | 'sex' | 'x' | 'y' | 'prevX' | 'prevY' | 'facing' | 'moving' | 'age' | 'needs' | 'meal' | 'happiness' | 'bed' | 'sleepingOut'>;
 
-function personOf({ id, x, y, prevX, prevY, facing, moving, age, needs, meal, happiness, bed, sleepingOut }: Laborer): Person {
-  return { id, x, y, prevX, prevY, facing, moving, age, needs, meal, happiness, bed, sleepingOut };
+function personOf({ id, sex, x, y, prevX, prevY, facing, moving, age, needs, meal, happiness, bed, sleepingOut }: Laborer): Person {
+  return { id, sex, x, y, prevX, prevY, facing, moving, age, needs, meal, happiness, bed, sleepingOut };
 }
 
 /** Un ouvrier libre, là où il se tient : il ira flâner devant la mairie `hallId`. */

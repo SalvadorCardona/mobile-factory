@@ -23,6 +23,11 @@
  * Un son joue son échantillon enregistré s'il est décodé (`samples.ts`,
  * préchargé au premier geste), sa synthèse (`synth.ts`) sinon.
  *
+ * La voix d'un habitant tapé (`speak`) passe par sa propre prise, branchée
+ * sur les bruitages — muet et volume la tiennent comme le reste : une seule
+ * à la fois, chaque tap coupe la précédente en un éclair. Dix taps rapides
+ * font dix débuts de « Hé ho ! », jamais dix voix l'une sur l'autre.
+ *
  * Onglet caché, le contexte est suspendu (`setHidden`) : plus de musique en
  * arrière-plan, et elle reprend où elle en était au retour.
  */
@@ -40,7 +45,7 @@ import {
   type NightMoment,
 } from './nightMood.ts';
 import { SampleBank, type PickedSample } from './samples.ts';
-import { SOUNDS, type SoundName } from './synth.ts';
+import { SOUNDS, type SoundName, type VoiceName } from './synth.ts';
 
 const MUTE_KEY = 'mobile-factory:muted';
 const MUSIC_KEY = 'mobile-factory:music';
@@ -53,10 +58,15 @@ const SFX_GAIN = 0.8;
 /** Deux sons identiques à moins de cet intervalle : le second est ignoré. */
 const DEDUPE_MS = 35;
 
+/** La constante de temps du fondu qui coupe une voix quand une autre commence, en secondes : un clic évité, pas un chevauchement. */
+const VOICE_CUT_S = 0.015;
+
 export class AudioEngine {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   private sfx: GainNode | null = null;
+  /** La prise de la voix en cours : la couper fait taire la voix, échantillon ou synthèse. */
+  private voice: GainNode | null = null;
   private music: Music | null = null;
   private samples: SampleBank | null = null;
   private mood = DAY_MOOD;
@@ -184,14 +194,31 @@ export class AudioEngine {
     if (now - last < DEDUPE_MS) return;
     this.lastPlayed.set(name, now);
 
-    const sample = this.samples?.pick(name);
-
-    if (sample) this.playSample(sample);
-    else SOUNDS[name](this.ctx, this.sfx, this.ctx.currentTime);
+    this.emit(name, this.sfx);
   }
 
-  private playSample({ buffer, gain, rate }: PickedSample): void {
-    if (!this.ctx || !this.sfx) return;
+  /** Un habitant qu'on tape répond : sa voix coupe celle d'avant. */
+  public speak(name: VoiceName): void {
+    if (!this.ctx || !this.sfx || this.mutedFlag || this.ctx.state !== 'running') return;
+
+    this.voice?.gain.setTargetAtTime(0, this.ctx.currentTime, VOICE_CUT_S);
+    this.voice = this.ctx.createGain();
+    this.voice.connect(this.sfx);
+    this.emit(name, this.voice);
+  }
+
+  /** L'échantillon du son vers `out`, ou sa synthèse s'il n'est pas décodé. */
+  private emit(name: SoundName, out: AudioNode): void {
+    if (!this.ctx) return;
+
+    const sample = this.samples?.pick(name);
+
+    if (sample) this.playSample(sample, out);
+    else SOUNDS[name](this.ctx, out, this.ctx.currentTime);
+  }
+
+  private playSample({ buffer, gain, rate }: PickedSample, out: AudioNode): void {
+    if (!this.ctx) return;
 
     const source = this.ctx.createBufferSource();
     const level = this.ctx.createGain();
@@ -199,7 +226,7 @@ export class AudioEngine {
     source.buffer = buffer;
     source.playbackRate.value = rate;
     level.gain.value = gain;
-    source.connect(level).connect(this.sfx);
+    source.connect(level).connect(out);
     source.start(this.ctx.currentTime);
   }
 

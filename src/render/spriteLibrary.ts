@@ -139,9 +139,12 @@ export class SpriteLibrary {
 
     if (!context) throw new Error('SpriteLibrary : canvas 2D indisponible');
 
-    for (const { slot, x, y } of placed) context.drawImage(slot.image, x, y, slot.pw, slot.ph);
-
+    // La source d'abord : sa taille repasse par la résolution, et un arrondi
+    // (1558 px relus 1558,0000000000002) lui fait redimensionner le canvas —
+    // ce qui l'efface. Dessinée après, la page reste pleine.
     const source = new CanvasSource({ resource: canvas, resolution, scaleMode: 'linear', autoGenerateMipmaps: false });
+
+    for (const { slot, x, y } of placed) context.drawImage(slot.image, x, y, slot.pw, slot.ph);
 
     this.sources.push(source);
 
