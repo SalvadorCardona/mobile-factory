@@ -859,7 +859,7 @@ export class Hud {
       return;
     }
 
-    const line = personText(nameOf(this.world.seed, mobile.id), mobile.age, this.world.occupation(mobile));
+    const line = personText(nameOf(this.world.seed, mobile.id, mobile.sex), mobile.age, this.world.occupation(mobile));
     // La jauge avance par centièmes : l'infobulle ne se refait pas à chaque tick.
     const gauges = NEED_IDS.map((need) => Math.round(mobile.needs[need] * 100));
     const happiness = mobile.kind === 'kid' ? null : mobile.happiness;

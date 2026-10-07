@@ -3163,6 +3163,7 @@ button.hud-stock:active {
 .building-panel-info[hidden],
 .building-panel-description[hidden],
 .building-panel-lines[hidden],
+.building-panel-facts[hidden],
 .building-panel-needs[hidden],
 .building-panel-stats[hidden],
 .building-panel-stock[hidden],
@@ -3726,6 +3727,50 @@ button.hud-stock:active {
   font-size: 17px;
   font-variant-numeric: tabular-nums;
   white-space: pre-wrap;
+}
+
+/*
+ * La fiche d'une créature : un tableau à deux colonnes, le libellé à gauche
+ * en violet, la valeur à droite en indigo. Les lignes sont des capsules
+ * lavande une sur deux, sans trait : on suit la ligne sur un téléphone.
+ */
+.building-panel-facts {
+  width: 100%;
+  margin-top: 8px;
+  border-collapse: separate;
+  border-spacing: 0 2px;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.building-panel-facts th,
+.building-panel-facts td {
+  padding: 5px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.building-panel-facts th {
+  width: 40%;
+  color: var(--muted);
+  font-weight: 500;
+  white-space: nowrap;
+  border-radius: 12px 0 0 12px;
+}
+
+.building-panel-facts td {
+  font-weight: 600;
+  border-radius: 0 12px 12px 0;
+}
+
+/* ♂, ♀ : un pictogramme dessiné — la police arrondie n'a pas ces signes, et le repli varie d'un téléphone à l'autre. */
+.building-panel-facts-symbol {
+  margin-right: 4px;
+  vertical-align: -3px;
+}
+
+.building-panel-facts tr:nth-child(odd) > * {
+  background: var(--paper-shade);
 }
 
 /* Les jauges d'un habitant, sous ses lignes : la faim, la soif — icône, barre, état. */

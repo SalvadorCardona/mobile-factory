@@ -237,6 +237,25 @@ export const panel = {
 
   /** La fenêtre d'une créature — un habitant ou un ennemi —, tapée sur la carte (`ui/creatureView.ts`). */
   creature: {
+    /** Les libellés de la fiche, colonne de gauche : une ligne par donnée. */
+    field: {
+      sex: 'Sexe',
+      age: 'Âge',
+      role: 'Métier',
+      species: 'Espèce',
+      doing: 'Activité',
+      employer: 'Travaille pour',
+      bed: 'Dort à',
+      carry: 'Porte',
+      rank: 'Rôle',
+      target: 'Marche sur',
+      status: 'État',
+    },
+    /** Le sexe d'un habitant, après son symbole (♂, ♀). */
+    sex: {
+      male: 'Homme',
+      female: 'Femme',
+    },
     age: (years: number): string => `${years} an${s(years)} — un de plus à chaque aube`,
     /** Ce qu'il est : son métier, ou son espèce pour un ennemi. */
     role: {
@@ -251,15 +270,25 @@ export const panel = {
       exMutant: 'Ex-mutant, porteur',
       survivor: 'Survivant, porteur',
     },
-    home: (building: string): string => `Travaille pour : ${building}`,
-    homeless: 'Sans travail',
-    /** Où il dort : son lit, ou dehors faute de lit. */
-    sleepsIn: (building: string): string => `Dort à : ${building}`,
-    sleepsOutside: 'Dort à : dehors, faute de lit',
-    carrying: (load: string): string => `Porte : ${load}`,
-    /** Un mutant : sa cible, ou la flaque dont il sort. */
+    /** Le métier d'une femme. */
+    roleFemale: {
+      free: 'Ouvrière libre',
+      porter: 'Porteuse',
+      logistician: 'Logisticienne',
+      builder: 'Bâtisseuse',
+      lumberjack: 'Bûcheronne',
+      forester: 'Forestière',
+      farmer: 'Fermière',
+      child: 'Enfant',
+      exMutant: 'Ex-mutante, porteuse',
+      survivor: 'Survivante, porteuse',
+    },
+    /** Pour qui il travaille, quand son bâtiment est tombé. */
+    homeless: 'personne',
+    /** Où il dort, faute de lit. */
+    outside: 'dehors, faute de lit',
+    /** Un mutant : la flaque dont il sort. */
     emerging: 'Sort de sa flaque',
-    marchesOn: (building: string): string => `Marche sur : ${building}`,
     /** Une bête, selon son humeur (`BeastState`). */
     beast: {
       roam: 'Flâne autour de sa tanière',

@@ -16,10 +16,12 @@ import '@fontsource/fredoka/latin-700.css';
 import './style.css';
 import { AudioEngine } from './audio/engine.ts';
 import { prefetchMusic } from './audio/music.ts';
+import { VOICES } from './audio/synth.ts';
 import { assertPrototypes } from './data/validate.ts';
 import { GROUND, PARTICLES, type ParticleStyle } from './data/artDirection.ts';
 import { MENU_BUILDING_IDS } from './data/buildings.ts';
 import { CHIEF, type WildlifeId } from './data/enemies.ts';
+import { STORY_SEXES } from './data/inhabitants.ts';
 import type { ItemId } from './data/items.ts';
 import { OBJECTIVES, type ObjectiveProto } from './data/objectives.ts';
 import { TEST_SCENARIOS } from './data/testScenario.ts';
@@ -245,11 +247,21 @@ async function main(): Promise<void> {
     (x, y) => renderer.screenToWorld(x, y),
     // Pendant que la carte glisse d'elle-même, un tap viserait un point qui bouge : il n'ouvre rien.
     () => placement.mode === 'idle' && !renderer.cameraDrifting,
-    // Un bâtiment, un habitant ou un ennemi : la même fenêtre.
-    (selection) => (selection.kind === 'building' ? panel.show(selection.id) : panel.showCreature(selection.id)),
+    // Un bâtiment, un habitant ou un ennemi : la même fenêtre. Un habitant répond : « Hé ho ! », « Hé ! ».
+    (selection) => {
+      if (selection.kind === 'building') {
+        panel.show(selection.id);
+        return;
+      }
+      panel.showCreature(selection.id);
+
+      const mobile = world.mobiles.get(selection.id);
+
+      if (mobile && 'sex' in mobile) audio.speak(VOICES[mobile.sex]);
+    },
     () => {
       hud.talkToEve();
-      audio.play('open');
+      audio.speak(VOICES[STORY_SEXES.eve]);
     },
     () => panel.open,
     () => panel.close(),

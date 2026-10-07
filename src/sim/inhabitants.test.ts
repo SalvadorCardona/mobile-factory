@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_SIZE } from '../core/grid.ts';
+import { hash3 } from '../core/rng.ts';
 import { BUILDINGS } from '../data/buildings.ts';
 import { DAY_CYCLE } from '../data/dayNight.ts';
-import { AGES, COLONY, NURSERY_CARE } from '../data/inhabitants.ts';
+import { AGES, COLONY, NAMES, NURSERY_CARE, SEXES, STORY_SEXES } from '../data/inhabitants.ts';
 import type { ItemId } from '../data/items.ts';
+import { RECIPES } from '../data/recipes.ts';
 import { IDLE } from '../data/workers.ts';
 import { ENEMIES, FOE_NAMES, WILDLIFE } from '../data/enemies.ts';
 import { CYCLE_TICKS, ticksToDawn } from './dayNight.ts';
-import { ADAM_SALT, adultAge, foeAge, foeName, nameOf, yearsToWork } from './inhabitants.ts';
+import { ADAM_SALT, adultAge, foeAge, foeName, nameOf, sexOf, yearsToWork } from './inhabitants.ts';
 import { freshNeeds } from './needs.ts';
 import { SAVE_VERSION, decodeSave, encodeSave, type SavedEntity } from './save.ts';
 import { isWalkable, terrainAt } from './terrain.ts';
@@ -75,7 +77,7 @@ function colony(layout: Layout): World {
     const x = (nursery.tx + 1) * TILE_SIZE;
     const y = (nursery.ty + nursery.height + 1) * TILE_SIZE;
 
-    mobiles.push({ kind: 'kid', id: state.nextMobileId, age: layout.kidAge, x, y, prevX: x, prevY: y, facing: 'down', moving: false, homeId: nursery.id, homeX: x, homeY: y, dirX: 0, dirY: 0, wanderTicks: 0, ...freshNeeds() });
+    mobiles.push({ kind: 'kid', id: state.nextMobileId, sex: 'female', age: layout.kidAge, x, y, prevX: x, prevY: y, facing: 'down', moving: false, homeId: nursery.id, homeX: x, homeY: y, dirX: 0, dirY: 0, wanderTicks: 0, ...freshNeeds() });
   }
 
   // Adam à l'écart, immobile.
@@ -203,7 +205,7 @@ describe('travail à 14 ans', () => {
 
     toDawn(world);
 
-    expect(grown).toEqual([{ id: kid!.id, name: nameOf(world.seed, kid!.id) }]);
+    expect(grown).toEqual([{ id: kid!.id, name: nameOf(world.seed, kid!.id, kid!.sex) }]);
     expect(kids(world)).toHaveLength(0);
     expect(world.colonists).toBe(4);
     expect(world.population()).toMatchObject({ children: 0, workers: workersBefore + 1 });
@@ -429,5 +431,82 @@ describe('âge et surnom des ennemis', () => {
 
     if (!decoded.ok) throw new Error(`sauvegarde refusée : ${decoded.reason}`);
     expect(decoded.world.mobiles.get(6_000)).toMatchObject({ kind: 'mutant', age: ENEMIES.brute.age.min });
+  });
+});
+
+describe('sexe des habitants', () => {
+  it('Adam est un homme, Ève une femme', () => {
+    expect(STORY_SEXES).toEqual({ adam: 'male', eve: 'female' });
+  });
+
+  it('chacun est une femme ou un homme, à peu près moitié-moitié, et le même à chaque partie de la même seed', () => {
+    let women = 0;
+
+    for (let id = 0; id < 2_000; id += 1) {
+      const sex = sexOf(42, id);
+
+      expect(SEXES).toContain(sex);
+      expect(sexOf(42, id)).toBe(sex);
+      if (sex === 'female') women += 1;
+    }
+    expect(women).toBeGreaterThan(900);
+    expect(women).toBeLessThan(1_100);
+  });
+
+  it('un prénom de son sexe : un rang pair de `NAMES` pour une femme, impair pour un homme', () => {
+    expect(NAMES.length % SEXES.length).toBe(0);
+    for (let id = 0; id < 200; id += 1) {
+      expect(NAMES.indexOf(nameOf(7, id, 'female') as (typeof NAMES)[number]) % 2).toBe(0);
+      expect(NAMES.indexOf(nameOf(7, id, 'male') as (typeof NAMES)[number]) % 2).toBe(1);
+    }
+  });
+
+  it('le sexe tiré garde le prénom d’avant : aucun habitant d’une ancienne partie ne change de nom', () => {
+    for (let id = 0; id < 200; id += 1) {
+      expect(nameOf(9, id, sexOf(9, id))).toBe(NAMES[hash3(9, id, 0x4a3e) % NAMES.length]);
+    }
+  });
+
+  it('les dix ouvriers du départ ont le sexe de la seed, et une colonie a des femmes et des hommes', () => {
+    const seen = new Set<string>();
+
+    for (let seed = 1; seed <= 5; seed += 1) {
+      const world = new World(seed);
+      const workers = [...world.mobiles.values()].filter((mobile): mobile is Worker => mobile.kind === 'worker');
+
+      expect(workers).toHaveLength(COLONY.startingWorkers);
+      for (const worker of workers) {
+        expect(worker.sex).toBe(sexOf(world.seed, worker.id));
+        seen.add(worker.sex);
+      }
+    }
+    expect(seen).toEqual(new Set(SEXES));
+  });
+
+  it('un enfant naît avec le sexe de la seed', () => {
+    const world = colony({});
+    const nursery = [...world.entities.values()].find((entity): entity is Nursery => entity.kind === 'nursery')!;
+
+    // Nourrie, son heure passée pendant une pause : elle fait naître dès qu'elle repart.
+    nursery.store.add('food', RECIPES.raiseChild.inputs.food);
+    nursery.paused = true;
+    nursery.nextBirthTick = world.tickCount - 1;
+    world.push({ type: 'pauseBuilding', id: nursery.id, paused: false });
+    world.tick();
+
+    const [kid] = kids(world);
+
+    expect(kid).toBeDefined();
+    expect(kid!.sex).toBe(sexOf(world.seed, kid!.id));
+  });
+
+  it('un enfant garde son sexe en devenant ouvrier', () => {
+    const world = colony({ kidAge: AGES.work - 1 });
+    const kid = kids(world)[0]!;
+    const sex = kid.sex;
+
+    toDawn(world);
+
+    expect(world.mobiles.get(kid.id)).toMatchObject({ kind: 'worker', sex });
   });
 });

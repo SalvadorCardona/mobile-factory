@@ -60,6 +60,7 @@ function porter(x: number, y: number): Worker {
   return {
     kind: 'worker',
     id: 1,
+    sex: 'male',
     x,
     y,
     prevX: x,

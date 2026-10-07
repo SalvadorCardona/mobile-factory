@@ -22,7 +22,7 @@ import { ENEMY_BASE_LEVELS, RAIDS, enemyBaseLevel } from '../data/enemyBases.ts'
 import { ENEMIES, WILDLIFE, type EnemyId, type WildlifeId } from '../data/enemies.ts';
 import { MAX_GEAR } from '../data/gear.ts';
 import { HAPPINESS } from '../data/housing.ts';
-import { COLONY } from '../data/inhabitants.ts';
+import { COLONY, SEXES, type Sex } from '../data/inhabitants.ts';
 import { ITEMS, type ItemId } from '../data/items.ts';
 import { NEED_IDS, NEEDS, type NeedId } from '../data/needs.ts';
 import { OBJECTIVES } from '../data/objectives.ts';
@@ -33,7 +33,7 @@ import { RESOURCES, type ResourceId } from '../data/resources.ts';
 import type { SavedFog } from './fog.ts';
 import type { PlantedTree, ResourceStage, TileLook } from './resources.ts';
 import type { SchedulerSnapshot } from './scheduler.ts';
-import { ADAM_SALT, adultAge } from './inhabitants.ts';
+import { ADAM_SALT, adultAge, sexOf } from './inhabitants.ts';
 import { freshHousing, type Housing } from './housing.ts';
 import { freshNeeds, fullNeeds } from './needs.ts';
 import { canPause, clampStaff, isWorkPriority, type StaffPost } from './staffing.ts';
@@ -401,9 +401,10 @@ const FARMER_STATES: readonly FarmerState[] = ['idle', 'toSow', 'sow', 'toHarves
 
 function parseState(raw: unknown): WorldState {
   const state = record(raw);
+  const seed = int(state['seed']);
 
   return {
-    seed: int(state['seed']),
+    seed,
     tick: int(state['tick']),
     rng: int(state['rng']),
     nextId: int(state['nextId']),
@@ -442,7 +443,7 @@ function parseState(raw: unknown): WorldState {
     roads: parseRoads(state['roads'] ?? {}),
     ...(state['fog'] !== undefined && { fog: parseFog(state['fog']) }),
     entities: unique(array(state['entities']).map(parseEntity)),
-    mobiles: unique(array(state['mobiles']).map(parseMobile)),
+    mobiles: unique(array(state['mobiles']).map((mobile) => parseMobile(mobile, seed))),
     dens: unique(array(state['dens']).map(parseDen)),
     scheduler: parseScheduler(state['scheduler']),
   };
@@ -702,9 +703,11 @@ function nonNegative(value: number): number {
   return value;
 }
 
-function parseMobile(raw: unknown): Mobile {
+function parseMobile(raw: unknown, seed: number): Mobile {
   const mobile = record(raw);
   const base = { id: int(mobile['id']), ...moving(mobile) };
+  // Absent d'une sauvegarde d'avant le sexe des habitants : celui que la seed lui tire, qui garde son prénom.
+  const sex = (): Sex => (mobile['sex'] === undefined ? sexOf(seed, base.id) : oneOfList(mobile['sex'], SEXES));
 
   switch (mobile['kind']) {
     case 'mutant': {
@@ -776,6 +779,7 @@ function parseMobile(raw: unknown): Mobile {
       return {
         ...base,
         kind: 'kid',
+        sex: sex(),
         age: age(mobile['age']),
         ...needful(mobile),
         homeId: int(mobile['homeId']),
@@ -809,6 +813,7 @@ function parseMobile(raw: unknown): Mobile {
       return {
         ...base,
         kind: 'worker',
+        sex: sex(),
         age: age(mobile['age']),
         ...needful(mobile),
         ...housed(mobile),
@@ -838,6 +843,7 @@ function parseMobile(raw: unknown): Mobile {
       return {
         ...base,
         kind: 'lumberjack',
+        sex: sex(),
         age: age(mobile['age']),
         ...needful(mobile),
         ...housed(mobile),
@@ -859,6 +865,7 @@ function parseMobile(raw: unknown): Mobile {
       return {
         ...base,
         kind: 'forester',
+        sex: sex(),
         age: age(mobile['age']),
         ...needful(mobile),
         ...housed(mobile),
@@ -881,6 +888,7 @@ function parseMobile(raw: unknown): Mobile {
       return {
         ...base,
         kind: 'farmer',
+        sex: sex(),
         age: age(mobile['age']),
         ...needful(mobile),
         ...housed(mobile),

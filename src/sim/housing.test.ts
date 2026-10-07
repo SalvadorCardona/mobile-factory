@@ -284,6 +284,7 @@ describe("bonheur", () => {
       const porter: Worker = {
         kind: "worker",
         id: 1,
+        sex: "male",
         x: 0,
         y: 0,
         prevX: 0,
@@ -603,6 +604,7 @@ describe("Bonheur de la ville", () => {
     world.mobiles.set(id, {
       kind: "kid",
       id,
+      sex: "female",
       x,
       y,
       prevX: x,

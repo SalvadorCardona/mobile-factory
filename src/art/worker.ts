@@ -15,7 +15,7 @@ import { ICON_SIZE, ITEM_ICONS } from '../data/icons.ts';
 import { ITEM_IDS, type ItemId } from '../data/items.ts';
 import { PALETTE, embed, pill, svg } from '../data/artDirection.ts';
 import type { SpriteProto } from '../data/sprites.ts';
-import { foot, humanBody, idleParts, scaledAround, type Facing, type IdleLook } from './people.ts';
+import { foot, humanBody, humanParts, type Facing, type IdleLook, type SexLook } from './people.ts';
 
 const W = 32;
 const H = 48;
@@ -41,13 +41,9 @@ function band(facing: Facing): string {
   }
 }
 
-/** Le corps d'adulte, avant réduction ; `look` : les bras levés ou le bâillement d'une pose de glande. */
-function figure(facing: Facing, look: IdleLook = {}): string {
+/** Le corps d'adulte, avant réduction ; `look` : son sexe, les bras levés ou le bâillement d'une pose de glande. */
+function figure(facing: Facing, look: IdleLook & SexLook = {}): string {
   return humanBody(facing, { ...OPTIONS, ...look }) + band(facing);
-}
-
-function body(facing: Facing): string {
-  return svg(W, H, scaledAround(16, GROUND, SCALE, figure(facing)));
 }
 
 /** La charge : l'icône de l'objet, posée en équilibre sur la tête. */
@@ -73,11 +69,8 @@ export const WORKER = {
   anchorX: 0.5,
   anchorY: 0.8,
   parts: {
-    down: body('down'),
-    up: body('up'),
-    side: body('side'),
+    ...humanParts(W, H, GROUND, SCALE, figure),
     foot: svg(W, H, foot(GROUND, 'ink', 0.9)),
-    ...idleParts(W, H, GROUND, SCALE, (look) => figure('down', look)),
     ...loadParts(),
   },
 } satisfies SpriteProto;

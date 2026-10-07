@@ -11,7 +11,7 @@ import type { PuppetId } from './puppet.ts';
 /** Le pantin de chaque marcheur : sprite, ombre, écart des pieds, allure. */
 export function puppetOf(
   mobile: Exclude<Mobile, { kind: 'arrow' | 'spit' | 'pickup' | 'caravan' }>,
-): { id: PuppetId; shadowWidth: number; stride: number; gait?: 'scuttle' | 'limp' | 'hop' } {
+): { id: PuppetId; shadowWidth: number; stride: number; gait?: 'scuttle' | 'limp' | 'hop'; woman?: boolean } {
   switch (mobile.kind) {
     case 'mutant':
       return mobile.proto === 'queen'
@@ -20,21 +20,21 @@ export function puppetOf(
     case 'patient':
       return { id: 'patient', shadowWidth: 22, stride: 4, gait: 'limp' };
     case 'kid':
-      return { id: 'kid', shadowWidth: 15, stride: 3, gait: 'hop' };
+      return { id: 'kid', shadowWidth: 15, stride: 3, gait: 'hop', woman: mobile.sex === 'female' };
     case 'eve':
       return { id: 'eve', shadowWidth: 20, stride: 4 };
     case 'worker':
-      if (mobile.logistician) return { id: 'logistician', shadowWidth: 17, stride: 3 };
-      if (mobile.builder) return { id: 'builder', shadowWidth: 16, stride: 3 };
+      if (mobile.logistician) return { id: 'logistician', shadowWidth: 17, stride: 3, woman: mobile.sex === 'female' };
+      if (mobile.builder) return { id: 'builder', shadowWidth: 16, stride: 3, woman: mobile.sex === 'female' };
       return mobile.exMutant
-        ? { id: 'exMutant', shadowWidth: 18, stride: 3.5 }
-        : { id: 'worker', shadowWidth: 16, stride: 3 };
+        ? { id: 'exMutant', shadowWidth: 18, stride: 3.5, woman: mobile.sex === 'female' }
+        : { id: 'worker', shadowWidth: 16, stride: 3, woman: mobile.sex === 'female' };
     case 'lumberjack':
-      return { id: 'lumberjack', shadowWidth: 16, stride: 3 };
+      return { id: 'lumberjack', shadowWidth: 16, stride: 3, woman: mobile.sex === 'female' };
     case 'forester':
-      return { id: 'forester', shadowWidth: 16, stride: 3 };
+      return { id: 'forester', shadowWidth: 16, stride: 3, woman: mobile.sex === 'female' };
     case 'farmer':
-      return { id: 'farmer', shadowWidth: 16, stride: 3 };
+      return { id: 'farmer', shadowWidth: 16, stride: 3, woman: mobile.sex === 'female' };
     case 'beast':
       if (mobile.proto === 'guardian') return { id: WILDLIFE.guardian.sprite, shadowWidth: 24, stride: 4 };
       if (mobile.proto === 'spitter') return { id: WILDLIFE.spitter.sprite, shadowWidth: 18, stride: 3 };

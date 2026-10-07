@@ -92,6 +92,8 @@ export interface PuppetOptions {
   stride: number;
   /** `scuttle` : l'allure du crabe, de côté ; `limp` : le boitillement d'un patient ; `hop` : les bonds d'un enfant. Par défaut, la marche. */
   gait?: 'walk' | 'scuttle' | 'limp' | 'hop';
+  /** Une femme : son corps est le morceau `woman.<nom>` du sprite (`art/people.ts`), quand il l'a. */
+  woman?: boolean;
 }
 
 export class Puppet {
@@ -120,6 +122,7 @@ export class Puppet {
   private readonly proto: SpriteProto;
   private readonly stride: number;
   private readonly gait: 'walk' | 'scuttle' | 'limp' | 'hop';
+  private readonly woman: boolean;
   /** La bulle « zzz » de l'ouvrier qui bâille. */
   private readonly zzz: Sprite | null;
   private lounging: Lounge | null = null;
@@ -142,6 +145,7 @@ export class Puppet {
     this.proto = SPRITES[id];
     this.stride = options.stride;
     this.gait = options.gait ?? 'walk';
+    this.woman = options.woman ?? false;
 
     this.shadow = new Sprite(shadow);
     this.shadow.anchor.set(0.5);
@@ -151,7 +155,7 @@ export class Puppet {
 
     this.halo = id === 'mutant' || id === 'queen' || id === 'chief' ? this.part('halo') : null;
     this.feet = [this.part('foot'), this.part('foot')];
-    this.body = this.part('down');
+    this.body = this.part(this.bodyPart('down'));
     this.held =
       id === 'adam'
         ? { bow: this.part('bow'), axe: this.part('axe'), pickaxe: this.part('pickaxe'), hammer: this.part('hammer') }
@@ -176,6 +180,13 @@ export class Puppet {
       ),
     );
     this.root.addChild(this.shadow, this.figure);
+  }
+
+  /** Le morceau du corps qui porte ce nom : celui d'une femme, si elle en est une et que le sprite l'a. */
+  private bodyPart(name: string): string {
+    const woman = `woman.${name}`;
+
+    return this.woman && woman in this.proto.parts ? woman : name;
   }
 
   /** Un morceau, placé pour que le cadre du sprite tombe sur l'ancre commune. */
@@ -288,7 +299,7 @@ export class Puppet {
       const hurt = `${view}Hurt`;
       const shown = this.posed ?? (hurting && hurt in this.proto.parts ? hurt : view);
 
-      this.body.texture = this.library.texture(`${this.id}.${shown}`);
+      this.body.texture = this.library.texture(`${this.id}.${this.bodyPart(shown)}`);
     }
 
     this.figure.scale.x = facing === 'left' ? -1 : 1;

@@ -1,6 +1,15 @@
 /**
  * Morceaux communs aux humains : Adam et les enfants.
  *
+ * Un habitant est une femme ou un homme, et ça se voit même petit, de jour
+ * comme de nuit — par la silhouette, pas par la couleur : une femme a une
+ * **queue de cheval** indigo nouée d'un chouchou corail, qui dépasse de la
+ * tête de face, pend dans le dos et flotte derrière de profil ; un homme a
+ * les cheveux courts et, adulte, une **barbe courte** indigo. Chaque sprite
+ * d'habitant a donc deux corps : le sien (`down`, `up`, `side`, les poses),
+ * et celui d'une femme sous `woman.` (`humanParts`), que le pantin prend
+ * pour une femme.
+ *
  * Un humain se lit à trois choses : une tête ronde aux cheveux indigo, une
  * tunique orange (la teinte réservée aux humains) et une écharpe corail. Le
  * corps est dessiné par direction — face, dos, profil droit (le profil gauche
@@ -12,6 +21,7 @@
  */
 
 import { PALETTE, circle, curve, group, highlight, line, pill, polyline, rect, shadedBlock, svg } from '../data/artDirection.ts';
+import type { Sex } from '../data/inhabitants.ts';
 
 export type Facing = 'down' | 'up' | 'side';
 
@@ -26,7 +36,19 @@ export interface HumanOptions {
   armsUp?: boolean;
   /** Yeux fermés, bouche grande ouverte — un ouvrier qui bâille. De face seulement. */
   yawn?: boolean;
+  /** Queue de cheval indigo, nouée d'un chouchou corail : une femme. */
+  ponytail?: boolean;
+  /** Barbe courte indigo, sous les joues : un homme adulte. De dos, elle ne se voit pas. */
+  beard?: boolean;
 }
+
+/** Ce qui dit le sexe d'un adulte, dans `HumanOptions`. */
+export type SexLook = Pick<HumanOptions, 'ponytail' | 'beard'>;
+
+export const SEX_LOOKS: Record<Sex, SexLook> = {
+  female: { ponytail: true },
+  male: { beard: true },
+};
 
 const { ink, orange, coral, violet, skin, yellow, cyan } = PALETTE;
 
@@ -38,6 +60,8 @@ export function humanBody(facing: Facing, options: HumanOptions): string {
   switch (facing) {
     case 'down':
       return (
+        // La queue de cheval derrière la tête : elle dépasse sur le côté.
+        (options.ponytail ? ponytail('down') : '') +
         (options.pack ? pill(9.5, 17.5, 13, 6, violet.shade) : '') +
         // Bras, puis tunique en trois tons, mains.
         (options.armsUp
@@ -50,6 +74,7 @@ export function humanBody(facing: Facing, options: HumanOptions): string {
         (options.pack ? line(12.5, 22.5, 12.5, 28, violet.shade) + line(19.5, 22.5, 19.5, 28, violet.shade) : '') +
         (options.scarf ? pill(10, 19, 12, 4.5, coral.base) + pill(18.5, 21, 3.5, 7, coral.shade) : '') +
         headFront(options.cap, options.yawn ?? false) +
+        (options.beard ? beard('down') : '') +
         // Les mains par-dessus la tête : elles se rejoignent presque.
         (options.armsUp ? circle(6.75, 5.5, 2.3, skin.base) + circle(25.25, 5.5, 2.3, skin.base) : '')
       );
@@ -64,11 +89,15 @@ export function humanBody(facing: Facing, options: HumanOptions): string {
         circle(22.3, 32, 2, skin.base) +
         (options.pack ? shadedBlock(10, 20.5, 12, 13, 3, 'violet', 4) + pill(11.5, 20.5, 9, 4, violet.light) : '') +
         (options.scarf ? pill(10.5, 18.5, 11, 4, coral.base) + pill(13, 21, 3.5, 7, coral.shade) : '') +
-        headBack(options.cap)
+        headBack(options.cap) +
+        // De dos, elle pend du haut du crâne jusque sur les épaules.
+        (options.ponytail ? ponytail('up') : '')
       );
 
     case 'side':
       return (
+        // De profil, elle flotte derrière la tête.
+        (options.ponytail ? ponytail('side') : '') +
         (options.scarf ? pill(4.5, 19.5, 9, 3.2, coral.shade) : '') +
         (options.pack ? shadedBlock(6.5, 19.5, 7.5, 12.5, 3, 'violet', 3) : '') +
         rect(11, 21, 10, 14, orange.shade, 4.5) +
@@ -77,8 +106,40 @@ export function humanBody(facing: Facing, options: HumanOptions): string {
         pill(14.5, 22, 4.5, 10, orange.shade) +
         circle(17, 32, 2, skin.base) +
         (options.scarf ? pill(11, 19, 10.5, 4.5, coral.base) : '') +
-        headSide(options.cap)
+        headSide(options.cap) +
+        (options.beard ? beard('side') : '')
       );
+  }
+}
+
+/**
+ * La queue de cheval : une capsule de cheveux en trois tons indigo, le
+ * chouchou corail en haut. De face, elle dépasse à droite de la tête (on la
+ * dessine avant elle) ; de dos, elle pend au milieu ; de profil, derrière.
+ */
+function ponytail(facing: Facing): string {
+  const tail = (x: number, y: number, w: number, h: number): string =>
+    pill(x, y, w, h, ink.shade) + pill(x, y, w, h - 2, ink.base) + pill(x + 1, y + 2, 1.6, h * 0.4, ink.light);
+
+  switch (facing) {
+    case 'down':
+      return tail(20.5, 7.5, 6, 14) + circle(22.4, 8.6, 2.1, coral.base);
+    case 'up':
+      return tail(13.4, 9, 5.2, 14) + pill(13.2, 8.4, 5.6, 2.8, coral.base);
+    case 'side':
+      return tail(5.5, 8.5, 6.5, 13) + circle(9.6, 9.2, 2.1, coral.base);
+  }
+}
+
+/** La barbe courte : un croissant indigo sous les joues, la bouche y fait une encoche claire. */
+function beard(facing: Facing): string {
+  switch (facing) {
+    case 'down':
+      return pill(11, 17.4, 10, 3.6, ink.base) + pill(14.6, 17.6, 2.8, 1.3, coral.shade);
+    case 'up':
+      return '';
+    case 'side':
+      return pill(17.8, 16.8, 5.8, 3.4, ink.base);
   }
 }
 
@@ -258,6 +319,46 @@ function zzz(cx: number, cy: number): string {
     circle(cx, cy, 5.4, paper.base) +
     polyline([cx - 2.4, cy - 2.4, cx + 2.4, cy - 2.4, cx - 2.4, cy + 2.4, cx + 2.4, cy + 2.4], ink.base)
   );
+}
+
+/** Les morceaux du corps d'un habitant, sans le préfixe de sexe : les trois directions, les poses de glande. */
+type BodyPart = Facing | IdlePose;
+
+/**
+ * Les deux corps d'un habitant adulte — celui d'un homme, puis celui d'une
+ * femme sous `woman.` — dans le cadre `width × height`, et la bulle `zzz`.
+ * `figure` dessine le corps d'adulte (pieds en (16, 38.4)) dans une
+ * direction, avec ce qui le distingue — casque, caisse, tablier — et ce que
+ * `look` lui demande : le sexe (`SEX_LOOKS`), la pose de glande ; `scale` le
+ * réduit autour des pieds, posés à `ground`.
+ */
+export function humanParts(
+  width: number,
+  height: number,
+  ground: number,
+  scale: number,
+  figure: (facing: Facing, look: IdleLook & SexLook) => string,
+): Record<BodyPart | `woman.${BodyPart}` | 'zzz', string> {
+  const sexed = (sex: Sex): Record<BodyPart | 'zzz', string> => {
+    const look = SEX_LOOKS[sex];
+    const body = (facing: Facing): string => svg(width, height, scaledAround(16, ground, scale, figure(facing, look)));
+
+    return {
+      down: body('down'),
+      up: body('up'),
+      side: body('side'),
+      ...idleParts(width, height, ground, scale, (pose) => figure('down', { ...look, ...pose })),
+    };
+  };
+
+  const { zzz, ...woman } = sexed('female');
+
+  return { ...sexed('male'), ...womanParts(woman), zzz };
+}
+
+/** Le corps d'une femme : chaque morceau sous `woman.` (`render/puppet.ts` le préfère pour une femme). */
+export function womanParts<K extends string>(parts: Record<K, string>): Record<`woman.${K}`, string> {
+  return Object.fromEntries(Object.entries(parts).map(([name, source]) => [`woman.${name}`, source])) as Record<`woman.${K}`, string>;
 }
 
 /** Réduit un corps d'adulte autour des pieds : c'est ainsi qu'on dessine un enfant. */

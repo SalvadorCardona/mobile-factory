@@ -3,16 +3,17 @@
  * habitant (enfant, ouvrier, bûcheron, forestier) ou un ennemi (mutant, bête).
  *
  * Son nom — le prénom d'un habitant (`nameOf`), le surnom d'un ennemi
- * (`foeName`) —, son âge, son portrait (le sprite de son pantin), ses points
- * de vie s'il en a, et ce que le jeu sait de lui : son métier ou son
- * espèce, ce qu'il fait, pour qui il travaille, où il dort, ce qu'il porte,
- * sa faim, sa soif et son bonheur.
- * Rien d'inventé : tout
- * se lit dans le monde. Pur : testé sans DOM.
+ * (`foeName`) —, son portrait (le sprite de son pantin, celui de son sexe),
+ * ses points de vie s'il en a, et ce que le jeu sait de lui, en tableau —
+ * un libellé, une valeur, une ligne par donnée : son sexe, son âge, son
+ * métier ou son espèce, ce qu'il fait, pour qui il travaille, où il dort,
+ * ce qu'il porte ; dessous, sa faim, sa soif et son bonheur en jauges.
+ * Rien d'inventé : tout se lit dans le monde. Pur : testé sans DOM.
  */
 
 import type { BuildingId } from '../data/buildings.ts';
 import { ENEMIES, WILDLIFE } from '../data/enemies.ts';
+import type { Sex } from '../data/inhabitants.ts';
 import type { ItemId } from '../data/items.ts';
 import { NEED_IDS, type NeedId } from '../data/needs.ts';
 import type { SpriteId } from '../data/sprites.ts';
@@ -31,15 +32,31 @@ export type Selection = { kind: 'building'; id: EntityId } | { kind: 'creature';
 /** Une créature qui a une fenêtre : un habitant ou un ennemi. */
 export type Creature = Extract<Mobile, { kind: 'kid' | 'worker' | 'lumberjack' | 'forester' | 'farmer' | 'mutant' | 'beast' }>;
 
+/**
+ * Une ligne de la fiche : le libellé à gauche, la valeur à droite. Le sexe
+ * a son symbole devant le mot : ♂ ou ♀, dessiné (`art/ui.ts`, pictogramme
+ * `male` ou `female`) — le texte le garde pour la lecture d'écran.
+ */
+export interface CreatureFact {
+  label: string;
+  value: string;
+  symbol?: Sex;
+}
+
+/** Le symbole du sexe, en texte : ♂ un homme, ♀ une femme. */
+export const SEX_SYMBOLS = { male: '♂', female: '♀' } as const satisfies Record<Sex, string>;
+
 export interface CreatureView {
   name: string;
   /** Le sprite du portrait, celui que le rendu donne à son pantin. */
   portrait: SpriteId;
+  /** Une femme ou un homme ; `null` pour un ennemi. */
+  sex: Sex | null;
   age: number;
   /** Points de vie : un ennemi en a, un habitant non. */
   hp: { value: number; max: number } | null;
-  /** Ce qu'il est, puis ce qu'il fait, où il loge et ce qu'il porte. */
-  lines: string[];
+  /** Le tableau : son sexe, son âge, ce qu'il est, ce qu'il fait, où il loge, ce qu'il porte. */
+  facts: CreatureFact[];
   /** Ce qu'il porte, s'il porte quelque chose. */
   carry: { item: ItemId; amount: number } | null;
   /** Ses jauges, une par besoin — la faim, la soif — de 0 à 1 ; aucune pour un ennemi. */
@@ -67,28 +84,35 @@ export function creatureView(world: World, creature: Creature): CreatureView {
 
 function inhabitantView(world: World, person: Inhabitant): CreatureView {
   const text = t().panel.creature;
+  const { field } = text;
   const home = world.entities.get(person.homeId);
   const occupation = occupationText(world.occupation(person));
   const carry = carryOf(person);
-  const lines = [text.role[roleOf(person)], occupation.charAt(0).toUpperCase() + occupation.slice(1)];
+  const facts: CreatureFact[] = [
+    { label: field.sex, value: text.sex[person.sex], symbol: person.sex },
+    { label: field.age, value: text.age(person.age) },
+    { label: field.role, value: (person.sex === 'female' ? text.roleFemale : text.role)[roleOf(person)] },
+    { label: field.doing, value: occupation.charAt(0).toUpperCase() + occupation.slice(1) },
+  ];
 
   // Un ouvrier libre ne travaille pour personne : il attend devant la mairie qu'un bâtiment le prenne.
-  if (person.kind !== 'worker' || !person.free) lines.push(home ? text.home(t().buildings[home.proto].label) : text.homeless);
+  if (person.kind !== 'worker' || !person.free) facts.push({ label: field.employer, value: home ? t().buildings[home.proto].label : text.homeless });
 
   // Où il dort : son lit, ou dehors. Un enfant dort à sa nurserie, sans lit à lui.
   if (person.kind !== 'kid') {
     const bed = person.bed === null ? undefined : world.entities.get(person.bed);
 
-    lines.push(bed ? text.sleepsIn(t().buildings[bed.proto].label) : text.sleepsOutside);
+    facts.push({ label: field.bed, value: bed ? t().buildings[bed.proto].label : text.outside });
   }
 
-  if (carry) lines.push(text.carrying(t().panel.recipeAmount(carry.amount, t().items[carry.item])));
+  if (carry) facts.push({ label: field.carry, value: t().panel.recipeAmount(carry.amount, t().items[carry.item]) });
   return {
-    name: nameOf(world.seed, person.id),
+    name: nameOf(world.seed, person.id, person.sex),
     portrait: portraitOf(person),
+    sex: person.sex,
     age: person.age,
     hp: null,
-    lines,
+    facts,
     carry,
     needs: NEED_IDS.map((need) => ({ need, value: person.needs[need] })),
     happiness: person.kind === 'kid' ? null : person.happiness,
@@ -97,28 +121,30 @@ function inhabitantView(world: World, person: Inhabitant): CreatureView {
 
 function foeView(world: World, foe: Extract<Creature, { kind: 'mutant' | 'beast' }>): CreatureView {
   const text = t().panel.creature;
-  const lines: string[] = [];
+  const { field } = text;
+  const facts: CreatureFact[] = [];
 
   if (foe.kind === 'mutant') {
-    lines.push(t().enemies[foe.proto]);
+    facts.push({ label: field.species, value: t().enemies[foe.proto] }, { label: field.age, value: text.age(foe.age) });
 
     const goal = mutantGoal(world, foe);
 
-    if (foe.emerge > 0) lines.push(text.emerging);
-    else if (goal) lines.push(text.marchesOn(t().buildings[goal].label));
+    if (foe.emerge > 0) facts.push({ label: field.status, value: text.emerging });
+    else if (goal) facts.push({ label: field.target, value: t().buildings[goal].label });
   } else {
-    lines.push(t().wildlife[foe.proto]);
-    if (foe.proto === 'chief') lines.push(text.chief);
-    if (foe.proto === 'spitter') lines.push(text.spitter);
-    lines.push(foe.slam ? text.slamming : text.beast[foe.state]);
+    facts.push({ label: field.species, value: t().wildlife[foe.proto] }, { label: field.age, value: text.age(foe.age) });
+    if (foe.proto === 'chief') facts.push({ label: field.rank, value: text.chief });
+    if (foe.proto === 'spitter') facts.push({ label: field.rank, value: text.spitter });
+    facts.push({ label: field.status, value: foe.slam ? text.slamming : text.beast[foe.state] });
   }
 
   return {
     name: foeName(world.seed, foe.id),
     portrait: portraitOf(foe),
+    sex: null,
     age: foe.age,
     hp: { value: Math.max(0, Math.ceil(foe.hp)), max: foe.kind === 'mutant' ? ENEMIES[foe.proto].hp : world.beastMaxHp(foe) },
-    lines,
+    facts,
     carry: null,
     needs: [],
     happiness: null,

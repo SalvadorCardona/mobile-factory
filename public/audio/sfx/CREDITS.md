@@ -61,3 +61,21 @@ viennent de <https://kenney.nl> (crédit facultatif, donné quand même).
 | `faint` | [FX swanee whistle down.wav](https://freesound.org/people/v0idation/sounds/497093/) | v0idation (Freesound) | — |
 | `gloop` | [Bubbles.wav](https://freesound.org/people/erkanozan/sounds/51745/) | erkanozan (Freesound) | coupé à 0,7 s |
 | `pickup` | [Item or Material Pickup Pop 1 of 3](https://freesound.org/people/el_boss/sounds/665183/) | el_boss (Freesound) | — |
+
+## Voix des habitants — synthèse vocale Piper
+
+« Hé ho ! » (un homme qu'on tape) et « Hé ! » (une femme), dits par des voix
+neuronales [Piper](https://github.com/rhasspy/piper) (`rhasspy/piper-voices`),
+générées hors ligne pour ce jeu. Trois prises par sexe (vitesse et bruit du
+modèle variés, choisies à l'écoute de la transcription et de la hauteur),
+blancs coupés, hauteur retouchée formants préservés (`rubberband`),
+crête à −1,5 dBTP, mono 44,1 kHz ; `.m4a` : `ffmpeg -i x.ogg -c:a aac -b:a 96k x.m4a`.
+
+| Fichier | Voix | Licence du jeu de données | Retouche |
+| --- | --- | --- | --- |
+| `heho_1` | `fr_FR-gilles-low` — « Hé, ho ! » | [CC0](https://www.kaggle.com/datasets/bryanpark/french-single-speaker-speech-dataset) | × 0,97 (≈ 100 Hz) |
+| `heho_2` | `fr_FR-gilles-low` — « Hé, ho ! » | CC0 | — |
+| `heho_3` | `fr_FR-gilles-low` — « Hé, ho ! » | CC0 | × 0,94 |
+| `he_1` | `fr_FR-siwis-medium` — « Hé ! » | [CC BY 4.0](https://datashare.is.ed.ac.uk/handle/10283/2353) — SIWIS French Speech Synthesis Database, Université d'Édimbourg | × 1,19 (≈ 200 Hz) |
+| `he_2` | `fr_FR-siwis-medium` — « Hé ! » | CC BY 4.0 — SIWIS | × 1,22 |
+| `he_3` | `fr_FR-siwis-medium` — « Héé ! » | CC BY 4.0 — SIWIS | × 1,16 |

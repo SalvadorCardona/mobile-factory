@@ -15,6 +15,7 @@
 import type { BuildingId } from '../data/buildings.ts';
 import type { RareOfferId } from '../data/caravan.ts';
 import type { EnemyId, WildlifeId } from '../data/enemies.ts';
+import type { Sex } from '../data/inhabitants.ts';
 import type { ItemId } from '../data/items.ts';
 import type { ResearchId } from '../data/research.ts';
 import type { NeedId } from '../data/needs.ts';
@@ -447,6 +448,15 @@ export interface Spit extends Moving {
 }
 
 /**
+ * Ce que tout habitant — enfant, ouvrier, bûcheron, forestier, fermier —
+ * tient de sa venue : son sexe (`sexOf`, `sim/inhabitants.ts`), qu'il garde
+ * en changeant de métier comme un enfant en devenant ouvrier.
+ */
+export interface Born {
+  sex: Sex;
+}
+
+/**
  * Ce que tout habitant — enfant, ouvrier, bûcheron — porte de ses besoins
  * (`data/needs.ts`) : ses jauges, et le repas qu'il est allé chercher.
  */
@@ -474,7 +484,7 @@ export type Housed = Housing;
  * sort à `AGES.nursery` ans ; à `AGES.work`, il devient ouvrier — un
  * porteur logé à sa nurserie, sous le même id.
  */
-export interface Kid extends Moving, Needful {
+export interface Kid extends Moving, Born, Needful {
   kind: 'kid';
   /** Son âge, en années : une de plus à chaque aube. */
   age: number;
@@ -563,7 +573,7 @@ export interface Wandering {
  * Un bâtisseur est un ouvrier logé au poste de construction : il livre les
  * chantiers du rayon de son poste depuis la mairie, puis les bâtit (`build`).
  */
-export interface Worker extends Moving, Wandering, Needful, Housed {
+export interface Worker extends Moving, Born, Wandering, Needful, Housed {
   kind: 'worker';
   /** Son âge, en années : une de plus à chaque aube. */
   age: number;
@@ -616,7 +626,7 @@ export type LumberjackState = 'idle' | 'toTree' | 'chop' | 'toCamp' | 'wait';
  * `tree` est réservé dès qu'il est choisi, et la réservation, qui n'est pas
  * sauvegardée, se rejoue depuis les bûcherons au chargement — comme les jobs.
  */
-export interface Lumberjack extends Moving, Wandering, Needful, Housed {
+export interface Lumberjack extends Moving, Born, Wandering, Needful, Housed {
   kind: 'lumberjack';
   /** Son âge, en années : une de plus à chaque aube. */
   age: number;
@@ -648,7 +658,7 @@ export type ForesterState = 'idle' | 'toPlot' | 'plant';
  * carré l'une après l'autre, dans l'ordre (`plotTiles`), sans repasser chez
  * lui entre deux : rien à rapporter.
  */
-export interface Forester extends Moving, Wandering, Needful, Housed {
+export interface Forester extends Moving, Born, Wandering, Needful, Housed {
   kind: 'forester';
   /** Son âge, en années : une de plus à chaque aube. */
   age: number;
@@ -685,7 +695,7 @@ export type FarmerState = 'idle' | 'toSow' | 'sow' | 'toHarvest' | 'harvest' | '
  * réservée dès qu'il part la chercher (`load`) ; la réservation, qui n'est
  * pas sauvegardée, se rejoue au chargement — comme celle d'un bûcheron.
  */
-export interface Farmer extends Moving, Wandering, Needful, Housed {
+export interface Farmer extends Moving, Born, Wandering, Needful, Housed {
   kind: 'farmer';
   /** Son âge, en années : une de plus à chaque aube. */
   age: number;

@@ -507,6 +507,25 @@ export const UI_ICONS = {
     pill(5.5, 8, 2.6, 5, yellow.light),
     circle(18.5, 6, 1.6, cyan.base),
   ),
+  /** Un homme, dans la fiche d'un habitant : le cercle et sa flèche vers le haut à droite (♂). */
+  male: svg(
+    S,
+    S,
+    ring(10.4, 14.4, 6, 6, 2.6, ink.shade),
+    ring(10, 14, 6, 6, 2.6, ink.base),
+    group('rotate(-45 17 7)', pill(12.5, 5.7, 10, 2.6, ink.base)),
+    pill(14, 2.5, 8, 2.6, ink.base),
+    pill(19.4, 2.5, 2.6, 8, ink.base),
+  ),
+  /** Une femme, dans la fiche d'une habitante : le cercle et sa croix dessous (♀). */
+  female: svg(
+    S,
+    S,
+    ring(12.4, 9.4, 6, 6, 2.6, ink.shade),
+    ring(12, 9, 6, 6, 2.6, ink.base),
+    pill(10.7, 14.5, 2.6, 8, ink.base),
+    pill(8, 17.6, 8, 2.6, ink.base),
+  ),
   /** Le cercle de portée et son rayon : jusqu'où un bâtiment sert. */
   range: svg(
     S,

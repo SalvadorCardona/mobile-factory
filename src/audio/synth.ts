@@ -9,7 +9,13 @@
  *
  * Chaque fonction reçoit le contexte, la destination et l'instant de départ,
  * et branche ce qu'il faut. Les nœuds se libèrent seuls à la fin (`stop`).
+ *
+ * Les voix des habitants (« Hé ho ! », « Hé ! ») aussi : une dent de scie à
+ * la hauteur d'une voix, filtrée sur les formants de la voyelle — une voix
+ * de dessin animé, le temps que la vraie arrive.
  */
+
+import type { Sex } from '../data/inhabitants.ts';
 
 export type SoundName =
   | 'chop'
@@ -40,7 +46,14 @@ export type SoundName =
   | 'pickup'
   | 'eureka'
   | 'objective'
-  | 'colony';
+  | 'colony'
+  | 'heyHo'
+  | 'hey';
+
+/** Ce que dit un habitant qu'on tape : un homme « Hé ho ! » d'une voix grave, une femme « Hé ! » d'une voix aiguë. */
+export const VOICES = { male: 'heyHo', female: 'hey' } as const satisfies Record<Sex, SoundName>;
+
+export type VoiceName = (typeof VOICES)[Sex];
 
 /** Une seconde de bruit blanc, partagée par tous les sons qui en ont besoin. */
 let noiseBuffer: AudioBuffer | null = null;
@@ -120,6 +133,36 @@ function burst(
   source.connect(biquad).connect(gain).connect(out);
   source.start(at);
   source.stop(end + 0.02);
+}
+
+/**
+ * Une voyelle dite : une dent de scie à `pitch` Hz, qui glisse de `glide`,
+ * filtrée sur ses deux premiers formants `f1` et `f2` (Hz).
+ */
+function vowel(ctx: AudioContext, out: AudioNode, at: number, pitch: number, glide: number, f1: number, f2: number, decay: number): void {
+  const osc = ctx.createOscillator();
+  const gain = envelope(ctx, at, { attack: 0.03, decay, peak: 0.5 });
+  const end = at + 0.03 + decay;
+
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(pitch, at);
+  osc.frequency.exponentialRampToValueAtTime(pitch * glide, end);
+  for (const [frequency, q, level] of [
+    [f1, 6, 1],
+    [f2, 10, 0.5],
+  ] as const) {
+    const formant = ctx.createBiquadFilter();
+    const weight = ctx.createGain();
+
+    formant.type = 'bandpass';
+    formant.frequency.value = frequency;
+    formant.Q.value = q;
+    weight.gain.value = level;
+    osc.connect(formant).connect(weight).connect(gain);
+  }
+  gain.connect(out);
+  osc.start(at);
+  osc.stop(end + 0.02);
 }
 
 /** Variation aléatoire de ±`spread` autour de 1 : deux coups de hache ne sonnent jamais pareil. */
@@ -331,5 +374,18 @@ export const SOUNDS: Record<SoundName, (ctx: AudioContext, out: AudioNode, at: n
   /** Une fenêtre qui s'ouvre. */
   open(ctx, out, at) {
     tone(ctx, out, at, 'square', 880, 1320, { decay: 0.05, peak: 0.12 });
+  },
+
+  /** Un homme qu'on tape : « Hé ho ! », grave — un « é » qui monte, un « o » qui retombe. */
+  heyHo(ctx, out, at) {
+    const v = vary(0.05);
+
+    vowel(ctx, out, at, 125 * v, 1.1, 400, 2000, 0.16);
+    vowel(ctx, out, at + 0.24, 115 * v, 0.85, 450, 850, 0.26);
+  },
+
+  /** Une femme qu'on tape : « Hé ! », aigu, qui monte. */
+  hey(ctx, out, at) {
+    vowel(ctx, out, at, 235 * vary(0.05), 1.12, 470, 2300, 0.2);
   },
 };

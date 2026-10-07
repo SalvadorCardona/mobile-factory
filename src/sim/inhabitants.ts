@@ -11,7 +11,7 @@
 
 import { hash3 } from '../core/rng.ts';
 import { FOE_NAMES, type AgeRange } from '../data/enemies.ts';
-import { AGES, NAMES } from '../data/inhabitants.ts';
+import { AGES, NAMES, SEXES, type Sex } from '../data/inhabitants.ts';
 import type { MobileId } from './types.ts';
 
 /** Sel du hachage d'Adam, qui n'a pas d'id de mobile. */
@@ -24,9 +24,29 @@ export function adultAge(seed: number, id: MobileId): number {
   return AGES.adultMin + (hash3(seed, id, 0x0a9e) % span);
 }
 
-/** Le prénom d'un habitant, tiré de la seed et de son id. */
-export function nameOf(seed: number, id: MobileId): string {
-  return NAMES[hash3(seed, id, 0x4a3e) % NAMES.length]!;
+/** Le rang de `NAMES` que la seed et l'id tirent pour un habitant. */
+function nameRank(seed: number, id: MobileId): number {
+  return hash3(seed, id, 0x4a3e) % NAMES.length;
+}
+
+/**
+ * Le sexe d'un habitant à sa venue — enfant né à la nurserie, ouvrier de la
+ * colonie, ex-mutant, survivant —, à pile ou face sur la seed et son id :
+ * moitié-moitié, et le même à chaque partie de la même seed. Un hachage,
+ * comme l'âge, pas le PRNG du monde : en tirer un ne change pas la suite des
+ * vagues. C'est la parité du prénom tiré : une sauvegarde d'avant le sexe le
+ * retrouve au chargement sans qu'aucun prénom ne change.
+ */
+export function sexOf(seed: number, id: MobileId): Sex {
+  return SEXES[nameRank(seed, id) % SEXES.length]!;
+}
+
+/** Le prénom d'un habitant, tiré de la seed et de son id parmi ceux de son sexe. */
+export function nameOf(seed: number, id: MobileId, sex: Sex): string {
+  const rank = nameRank(seed, id);
+
+  // Le rang voisin est de l'autre sexe : un prénom de femme pour une femme, quoi qu'ait tiré le hachage.
+  return NAMES[SEXES[rank % SEXES.length] === sex ? rank : rank ^ 1]!;
 }
 
 /**

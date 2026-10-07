@@ -209,6 +209,21 @@ arrivé tout fait a un âge haché de la seed et de son id, son prénom aussi
 affecté à rien ; à 14, il rejoint les ouvriers de la colonie (`colonists`
 + 1, un ouvrier libre sous le même id, toast « Lina a 14 ans… ») — le porteur `grown` ne survit que dans les
 anciennes sauvegardes.
+**Sexe** — chaque habitant est une femme ou un homme (`Born.sex`,
+sauvegardé ; `SEXES`, `data/inhabitants.ts`) : tiré à sa venue par
+`sexOf` (hachage de la seed et de l'id, pas le PRNG du monde), gardé en
+changeant de métier ; une ancienne sauvegarde le retrouve au chargement,
+et son prénom ne change pas (`NAMES` alterne femme / homme, `nameOf` prend
+le sexe). Adam est un homme, Ève une femme (`STORY_SEXES`). Sur la carte,
+une femme a une queue de cheval indigo nouée de corail, un homme adulte une
+barbe courte (`SEX_LOOKS`, `humanParts` d'`art/people.ts` : le corps d'une
+femme est le morceau `woman.*`, que `render/puppet.ts` préfère). Un tap sur
+un habitant le fait répondre « Hé ho ! » (homme, grave) ou « Hé ! » (femme,
+aiguë) — `VOICES` de `audio/synth.ts`, trois prises Piper par sexe,
+`AudioEngine.speak` : une voix à la fois, la suivante coupe la précédente,
+sous le muet et le volume des bruitages ; Ève répond aussi. Sa fenêtre
+(`ui/creatureView.ts`) est un tableau libellé / valeur, la ligne Sexe en
+tête (pictogramme ♂/♀ `male`/`female` d'`art/ui.ts`), le métier accordé.
 Un ouvrier dehors sans tâche depuis `IDLE.graceTicks` est **inactif**
 (`World.isIdle`, compte non sauvegardé) : le rendu le fait glander (assis,
 adossé, s'étire, bâille avec bulle « zzz »), le HUD compte au travail /

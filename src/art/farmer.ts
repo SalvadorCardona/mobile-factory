@@ -15,7 +15,7 @@
 
 import { PALETTE, flower, line, pill, rect, svg } from '../data/artDirection.ts';
 import type { SpriteProto } from '../data/sprites.ts';
-import { foot, hoe, humanBody, idleParts, scaledAround, type Facing, type IdleLook } from './people.ts';
+import { foot, hoe, humanBody, humanParts, type Facing, type IdleLook, type SexLook } from './people.ts';
 import { loadParts } from './worker.ts';
 
 const W = 32;
@@ -82,13 +82,9 @@ function basket(facing: Facing): string {
   );
 }
 
-/** Le corps d'adulte, avant réduction ; `look` : les bras levés ou le bâillement d'une pose de glande. */
-function figure(facing: Facing, look: IdleLook = {}): string {
+/** Le corps d'adulte, avant réduction ; `look` : son sexe, les bras levés ou le bâillement d'une pose de glande. */
+function figure(facing: Facing, look: IdleLook & SexLook = {}): string {
   return humanBody(facing, { ...OPTIONS, ...look }) + overalls(facing) + hat(facing) + basket(facing);
-}
-
-function body(facing: Facing): string {
-  return svg(W, H, scaledAround(16, GROUND, SCALE, figure(facing)));
 }
 
 export const FARMER = {
@@ -97,11 +93,8 @@ export const FARMER = {
   anchorX: 0.5,
   anchorY: 0.8,
   parts: {
-    down: body('down'),
-    up: body('up'),
-    side: body('side'),
+    ...humanParts(W, H, GROUND, SCALE, figure),
     foot: svg(W, H, foot(GROUND, 'ink', 0.9)),
-    ...idleParts(W, H, GROUND, SCALE, (look) => figure('down', look)),
     hoe: svg(W, H, hoe(...HAND)),
     // La récolte rapportée au coffre, posée sur le chapeau.
     ...loadParts(1.5),

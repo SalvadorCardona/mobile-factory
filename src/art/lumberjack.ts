@@ -14,7 +14,7 @@
 
 import { PALETTE, pill, svg } from '../data/artDirection.ts';
 import type { SpriteProto } from '../data/sprites.ts';
-import { axe, foot, humanBody, idleParts, scaledAround, type Facing, type IdleLook } from './people.ts';
+import { axe, foot, humanBody, humanParts, type Facing, type IdleLook, type SexLook } from './people.ts';
 import { loadParts } from './worker.ts';
 
 const W = 32;
@@ -54,15 +54,12 @@ function beard(facing: Facing): string {
   }
 }
 
-/** Le corps d'adulte, avant réduction ; `look` : les bras levés ou le bâillement d'une pose de glande. */
-function figure(facing: Facing, look: IdleLook = {}): string {
+/** Le corps d'adulte, avant réduction ; `look` : son sexe, les bras levés ou le bâillement d'une pose de glande. */
+function figure(facing: Facing, look: IdleLook & SexLook = {}): string {
   const shirt = facing === 'side' ? plaid(11, 10) : plaid(10, 12);
 
-  return humanBody(facing, { ...OPTIONS, ...look }) + shirt + beard(facing);
-}
-
-function body(facing: Facing): string {
-  return svg(W, H, scaledAround(16, GROUND, SCALE, figure(facing)));
+  // Sa grande barbe tient lieu de barbe courte : un bûcheron en a une, une bûcheronne non.
+  return humanBody(facing, { ...OPTIONS, ...look, beard: false }) + shirt + (look.beard ? beard(facing) : '');
 }
 
 export const LUMBERJACK = {
@@ -71,11 +68,8 @@ export const LUMBERJACK = {
   anchorX: 0.5,
   anchorY: 0.8,
   parts: {
-    down: body('down'),
-    up: body('up'),
-    side: body('side'),
+    ...humanParts(W, H, GROUND, SCALE, figure),
     foot: svg(W, H, foot(GROUND, 'ink', 0.9)),
-    ...idleParts(W, H, GROUND, SCALE, (look) => figure('down', look)),
     axe: svg(W, H, axe(...HAND)),
     ...loadParts(),
   },

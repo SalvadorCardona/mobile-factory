@@ -93,7 +93,7 @@ import type { Building, EnemyBase, Entity, EntityId, Farmer, Forester, Forge, Mo
 import { TICKS_PER_SECOND, repairCost, siteMissing, type SiteCoverage, type World } from '../sim/world.ts';
 import type { UiIcon } from '../art/ui.ts';
 import { onLocale, t } from '../i18n/locale.ts';
-import { creatureView, isCreature, type CreatureView, type Selection } from './creatureView.ts';
+import { SEX_SYMBOLS, creatureView, isCreature, type CreatureView, type Selection } from './creatureView.ts';
 import { buildingIcon, buildingIconUrl, creatureIconUrl, enemyBaseIconUrl, itemAmount, itemIcon, jobIcon, jobIconUrl, uiIcon } from './icons.ts';
 import { moodMeter } from './moodMeter.ts';
 import { needMeter } from './needMeter.ts';
@@ -128,6 +128,9 @@ export class BuildingPanel {
   private readonly infoButton: HTMLButtonElement;
   private readonly description: HTMLElement;
   private readonly lines: HTMLElement;
+  /** La fiche d'une créature : un tableau, un libellé et une valeur par ligne. */
+  private readonly facts: HTMLTableElement;
+  private lastFacts = '';
   /** Les jauges d'un habitant : la faim, la soif. */
   private readonly needs: HTMLElement;
   private lastNeeds = '';
@@ -266,6 +269,10 @@ export class BuildingPanel {
 
     this.lines = document.createElement('pre');
     this.lines.className = 'building-panel-lines';
+
+    this.facts = document.createElement('table');
+    this.facts.className = 'building-panel-facts';
+    this.facts.hidden = true;
 
     this.needs = document.createElement('div');
     this.needs.className = 'building-panel-needs';
@@ -431,6 +438,7 @@ export class BuildingPanel {
         this.stock,
         this.items,
         this.lines,
+        this.facts,
         this.needs,
         this.crew,
         this.actions,
@@ -536,8 +544,10 @@ export class BuildingPanel {
     this.lastGear = '';
     this.lastCrew = '';
     this.lastNeeds = '';
-    // Les jauges de faim et de soif ne sont qu'à un habitant : `refreshCreature` les montre.
+    // Les jauges de faim et de soif ne sont qu'à un habitant, la fiche qu'à une créature : `refreshCreature` les montre.
     this.needs.hidden = true;
+    this.facts.hidden = true;
+    this.lastFacts = '';
     this.cancelArmed = false;
     // Rouverte, elle revient sur « Bâtiment ».
     this.tabs.select('building');
@@ -1059,7 +1069,7 @@ export class BuildingPanel {
     this.root.dataset['kind'] = 'creature';
     this.title.textContent = view.name;
 
-    const thumb = creatureIconUrl(view.portrait);
+    const thumb = creatureIconUrl(view.portrait, view.sex === 'female');
 
     if (this.thumb.src !== thumb) this.thumb.src = thumb;
     this.job.hidden = true;
@@ -1072,8 +1082,10 @@ export class BuildingPanel {
     for (const button of this.actions.children) (button as HTMLElement).hidden = true;
     this.actions.hidden = true;
 
-    this.setStats([{ icon: 'moon', value: String(view.age), label: text.creature.age(view.age) }]);
+    // L'âge est une ligne de la fiche : pas de puce.
+    this.setStats([]);
     this.setItems([], 'creature');
+    this.setFacts(view.facts);
     this.setNeeds(view.needs, view.happiness);
 
     const { hp } = view;
@@ -1083,10 +1095,41 @@ export class BuildingPanel {
     if (hp) {
       const value = `${hp.value}/${hp.max}`;
 
-      this.setBody(view.lines, hp.value / hp.max, 'hp', value, text.hp(value));
+      this.setBody([], hp.value / hp.max, 'hp', value, text.hp(value));
     } else {
-      this.setBody(view.lines, 0, 'hp', '', '');
+      this.setBody([], 0, 'hp', '', '');
     }
+  }
+
+  /** Le tableau d'une créature, reconstruit seulement quand une ligne change : libellé à gauche, valeur à droite. */
+  private setFacts(facts: CreatureView['facts']): void {
+    const key = facts.map(({ label, value, symbol }) => `${label}:${symbol ?? ''}${value}`).join('|');
+
+    this.facts.hidden = facts.length === 0;
+    if (key === this.lastFacts) return;
+    this.lastFacts = key;
+    this.facts.replaceChildren(
+      ...facts.map(({ label, value, symbol }) => {
+        const row = document.createElement('tr');
+        const head = document.createElement('th');
+        const cell = document.createElement('td');
+
+        head.scope = 'row';
+        head.textContent = label;
+        if (symbol) {
+          const mark = uiIcon(symbol, 18);
+
+          // L'image est décorative ; le symbole reste dans le texte, pour la lecture d'écran.
+          mark.classList.add('building-panel-facts-symbol');
+          cell.setAttribute('aria-label', `${SEX_SYMBOLS[symbol]} ${value}`);
+          cell.append(mark, value);
+        } else {
+          cell.textContent = value;
+        }
+        row.append(head, cell);
+        return row;
+      }),
+    );
   }
 
   /** Les jauges d'un habitant, une par besoin, puis son bonheur ; reconstruites quand l'une bouge d'un centième. */
