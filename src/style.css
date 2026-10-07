@@ -207,23 +207,31 @@ button {
 /* ------------------------------------------------------------------ quête */
 
 /*
- * Le haut de l'écran : une seule bande, en flux. La quête au centre (elle
- * prend toute la place qui reste sur un téléphone), les boutons et le sac
- * dans une colonne à droite. Sous la quête, seule la capsule météo : quand
- * son conseil s'ouvre ou se replie, aucun bouton ne bouge.
+ * Le haut de l'écran : la barre unique (population, sac, Pause et Réglages),
+ * pleine largeur, puis dessous une seule bande en flux. La quête au centre
+ * (elle prend toute la place qui reste sur un téléphone), à côté la ville et
+ * l'alerte de vivres. Sous la quête, seule la capsule météo : quand son
+ * conseil s'ouvre ou se replie, rien ne bouge.
  */
 .hud-top {
   position: absolute;
   top: calc(var(--safe-top) + 10px);
   left: calc(var(--safe-left) + 10px);
   right: calc(var(--safe-right) + 10px);
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+}
+
+.hud-under {
+  position: relative;
   display: grid;
   grid-template-columns: 1fr minmax(0, 380px) 1fr;
   /* La colonne de droite couvre les deux rangées : la capsule météo, sous la
-   * quête, ne descend pas sous le sac. */
+   * quête, ne descend pas sous l'alerte de vivres. */
   grid-template-rows: auto 1fr;
   align-items: start;
-  pointer-events: none;
+  margin-top: 10px;
 }
 
 .hud-quest {
@@ -1095,7 +1103,7 @@ button.hud-stock:active {
   }
 
   /* Le Prestige tient le coin : le bandeau se range à sa droite, sur sa ligne. */
-  .hud-top:has(.hud-prestige:not([hidden])) .hud-town {
+  .hud-under:has(.hud-prestige:not([hidden])) .hud-town {
     --town-left: calc(var(--prestige-width, 0px) + 10px);
   }
 
@@ -1445,6 +1453,235 @@ button.hud-stock:active {
   .hud-bag-wanted .icon {
     width: 18px;
     height: 18px;
+  }
+}
+
+/* ------------------------------------------------------- la barre du haut */
+
+/*
+ * Une seule ligne, du bord à l'autre : la population (au travail, inactifs,
+ * enfants, logés, bonheur), le sac, Pause et Réglages à droite. Sur un
+ * téléphone tout est en icône + chiffre, et le sac ne garde que son compte et
+ * sa jauge — le détail est dans son panneau ; dès 600 px, ses objets viennent
+ * à la suite. Sur un grand écran la barre se centre, sans s'étirer.
+ */
+.hud-topbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 4px 6px;
+  border-radius: 28px;
+}
+
+.hud .hud-topbar .hud-people {
+  flex: none;
+  width: auto;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  gap: 4px;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+/* Les puces Habitation et Bonheur se rangent dans la même ligne que les compteurs. */
+.hud-topbar .hud-people-town {
+  display: contents;
+}
+
+.hud-topbar .hud-people-count,
+.hud .hud-topbar .hud-people-idle {
+  font-size: 14px;
+}
+
+.hud-topbar .hud-people-count .icon {
+  width: 15px;
+  height: 15px;
+}
+
+.hud .hud-topbar .hud-people-housing,
+.hud .hud-topbar .hud-people-happiness {
+  padding: 1px 4px;
+  gap: 1px;
+}
+
+.hud .hud-topbar .hud-bag {
+  flex: 1 1 0;
+  min-width: 0;
+  width: auto;
+  gap: 3px;
+  padding: 2px 4px;
+  border-radius: 14px;
+  background: none;
+  box-shadow: none;
+}
+
+.hud .hud-topbar .hud-bag:active {
+  transform: none;
+  background: var(--paper-shade);
+}
+
+.hud-topbar .hud-bag .hud-bag-title {
+  flex-wrap: nowrap;
+  gap: 3px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.hud-topbar .hud-bag .hud-bag-title .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.hud-topbar .hud-bag .hud-bag-fill {
+  min-width: 36px;
+}
+
+.hud-topbar .hud-buttons {
+  flex: none;
+  gap: 4px;
+  margin-left: auto;
+}
+
+/* Sur la barre blanche, un bouton est une pastille lavande. */
+.hud-topbar .hud-button {
+  width: 40px;
+  height: 40px;
+  background: var(--paper-shade);
+  box-shadow: 0 3px 0 var(--violet-light);
+}
+
+.hud-topbar .hud-button:active {
+  box-shadow: none;
+}
+
+/* Un téléphone étroit : ni la ville ni l'objet réclamé n'y tiennent, leur chiffre est dans le panneau du sac. */
+@media (max-width: 419px) {
+  .hud-topbar .hud-bag-town,
+  .hud-topbar .hud-bag-wanted {
+    display: none;
+  }
+}
+
+@media (max-width: 359px) {
+  .hud-top {
+    left: calc(var(--safe-left) + 6px);
+    right: calc(var(--safe-right) + 6px);
+  }
+
+  .hud-topbar {
+    gap: 3px;
+    padding: 3px 4px;
+  }
+
+  .hud .hud-topbar .hud-people {
+    gap: 2px;
+  }
+
+  .hud-topbar .hud-people-count,
+  .hud .hud-topbar .hud-people-idle {
+    font-size: 13px;
+  }
+
+  .hud-topbar .hud-people-count .icon {
+    width: 13px;
+    height: 13px;
+  }
+
+  .hud .hud-topbar .hud-people-housing,
+  .hud .hud-topbar .hud-people-happiness {
+    padding: 1px 3px;
+    gap: 0;
+  }
+
+  .hud .hud-topbar .hud-bag {
+    padding: 2px 0;
+  }
+
+  .hud-topbar .hud-bag .hud-bag-title {
+    gap: 2px;
+    font-size: 13px;
+  }
+
+  .hud-topbar .hud-bag .hud-bag-title .icon {
+    width: 14px;
+    height: 14px;
+  }
+
+  .hud-topbar .hud-buttons {
+    gap: 2px;
+  }
+}
+
+/* Une tablette, un bureau, un téléphone couché : la barre respire, ses objets suivent le sac. */
+@media (min-width: 600px) {
+  .hud-topbar {
+    gap: 12px;
+    padding: 6px 10px;
+  }
+
+  .hud .hud-topbar .hud-people {
+    gap: 8px;
+  }
+
+  .hud-topbar .hud-people-count,
+  .hud .hud-topbar .hud-people-idle {
+    font-size: 17px;
+  }
+
+  .hud-topbar .hud-people-count .icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .hud .hud-topbar .hud-people-housing,
+  .hud .hud-topbar .hud-people-happiness {
+    padding: 2px 8px;
+    gap: 3px;
+  }
+
+  .hud .hud-topbar .hud-bag {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .hud-topbar .hud-bag .hud-bag-title {
+    flex: none;
+    font-size: 17px;
+  }
+
+  .hud-topbar .hud-bag .hud-bag-fill {
+    flex: none;
+    width: 64px;
+    min-width: 0;
+  }
+
+  .hud-topbar .hud-bag .hud-stock-items {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    gap: 12px;
+    overflow: hidden;
+    font-size: 16px;
+    white-space: nowrap;
+  }
+
+  .hud-topbar .hud-bag[data-empty='true'] .hud-stock-items {
+    display: none;
+  }
+
+  .hud-topbar .hud-button {
+    width: 48px;
+    height: 48px;
+  }
+
+  .hud-topbar .hud-buttons {
+    gap: 8px;
   }
 }
 
@@ -4694,4 +4931,9 @@ button.hud-stock:active {
   letter-spacing: 0.02em;
   white-space: nowrap;
   pointer-events: none;
+}
+
+/* La capsule « Partie de test » ne recouvre pas la barre du haut. */
+body:has(.test-banner) .hud-top {
+  top: calc(var(--safe-top) + 20px);
 }
