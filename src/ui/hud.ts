@@ -146,6 +146,9 @@ const QUEST_ALERT_TICKS = 4 * TICKS_PER_SECOND;
 /** Sous cette part de ses PV, la mairie déplie la quête repliée. */
 const QUEST_ALERT_HP = 0.5;
 
+/** Largeur du bandeau d'objectif réussi rangé sous la barre, en px. */
+const CELEBRATION_WIDTH = 380;
+
 /** Durée du bandeau d'objectif réussi, en ms (cf. `celebration-in` dans le CSS). */
 const CELEBRATION_MS = 4200;
 /** Rangé sous la quête quand une fenêtre est ouverte, le bandeau en garde ce jeu. */
@@ -172,9 +175,10 @@ export class Hud {
   private readonly quest: HTMLElement;
   private readonly questTitle: HTMLElement;
   private readonly questBody: HTMLElement;
-  /** La quête repliée en une ligne, sur un téléphone : icône, titre, progression, PV de la mairie, horloge. */
+  /** L'objectif dans la barre du haut, tout à droite : icône, progression (et intitulé court dès 600 px). Un tap ouvre la quête. */
+  private readonly objective: HTMLButtonElement;
   private readonly questStrip: HTMLElement;
-  /** Tick jusqu'auquel la quête reste dépliée sur un téléphone ; repliée au-delà. */
+  /** Tick jusqu'auquel la quête reste ouverte (en fenêtre sous la barre) ; fermée au-delà. */
   private questOpenUntil = 0;
   /** La mairie est déjà sous `QUEST_ALERT_HP` : elle ne déplie la quête qu'en y passant. */
   private hallLow = false;
@@ -308,8 +312,14 @@ export class Hud {
     this.hintBulb.addEventListener('click', () => this.unfoldHint());
 
     this.questStrip = element('div', 'hud-quest-strip');
+    this.objective = element('button', 'hud-objective');
+    this.objective.type = 'button';
+    this.objective.setAttribute('aria-haspopup', 'true');
+    this.objective.setAttribute('aria-expanded', 'false');
+    this.objective.append(this.questStrip);
+    this.objective.addEventListener('click', () => this.toggleQuest());
 
-    // Sur un téléphone, la tête de la quête se tape : elle déplie la carte, ou la replie.
+    // La quête est une fenêtre sous la barre : son objectif la rouvre, sa tête la referme.
     const head = element('div', 'hud-quest-head');
 
     // L'horloge : un tap dit l'heure en toutes lettres, sans déplier la quête.
@@ -329,11 +339,10 @@ export class Hud {
       this.updateClock();
     });
 
-    head.append(this.questTitle, this.questStrip, this.dayClock, this.hintBulb);
+    head.append(this.questTitle, this.hintBulb);
     head.addEventListener('click', (event) => {
-      if (event.target instanceof Element && event.target.closest('.hud-hint-bulb, .hud-clock')) return;
-      this.questOpenUntil = this.quest.dataset['folded'] === 'false' ? 0 : this.world.tickCount + QUEST_TAP_TICKS;
-      this.updateFold();
+      if (event.target instanceof Element && event.target.closest('.hud-hint-bulb')) return;
+      this.toggleQuest();
     });
     this.quest.append(head, this.questBody);
     this.quest.dataset['hint'] = 'none';
@@ -461,16 +470,17 @@ export class Hud {
     // Rien ne se chevauche, et rien ne bouge quand le conseil change.
     this.top = element('div', 'hud-top');
 
-    // Une barre unique, pleine largeur : la population, le sac, puis Pause et
-    // Réglages à droite. Dessous, la quête, et à côté la ville et l'alerte de vivres.
+    // Une barre unique, pleine largeur : la population, le sac, Pause et
+    // Réglages, puis l'objectif tout à droite. Dessous, la ville, l'horloge et
+    // l'alerte de vivres ; la quête s'ouvre en fenêtre sous l'objectif.
     this.bar = element('div', 'panel hud-topbar');
-    this.bar.append(this.people, this.bag, buttons);
+    this.bar.append(this.people, this.bag, buttons, this.objective);
 
     const under = element('div', 'hud-under');
     const side = element('div', 'hud-side');
 
     this.quest.append(fold);
-    side.append(this.town, this.hunger);
+    side.append(this.dayClock, this.town, this.hunger);
     under.append(this.quest, side, this.corner);
     this.top.append(this.bar, under);
     // Sur un écran large, le bandeau de la ville se range juste après le
@@ -1003,12 +1013,14 @@ export class Hud {
     this.project = project;
   }
 
-  /** Bas de la quête — de sa ligne, repliée sur un téléphone —, en pixels écran : les repères de bord du renderer restent dessous. */
+  /** Bas de la barre du haut — ou de la quête, ouverte dessous —, en pixels écran : les repères de bord du renderer restent dessous. */
   public topInset(): number {
-    return this.quest.getBoundingClientRect().bottom;
+    const bar = this.bar.getBoundingClientRect().bottom;
+
+    return this.quest.dataset['folded'] === 'false' ? Math.max(bar, this.quest.getBoundingClientRect().bottom) : bar;
   }
 
-  /** La barre du haut et la ville, à côté de la quête : les repères de bord les contournent. */
+  /** La barre du haut et la ville : les repères de bord les contournent. */
   public obstacles(): DOMRect[] {
     return [this.bar.getBoundingClientRect(), this.town.getBoundingClientRect()];
   }
@@ -1439,11 +1451,20 @@ export class Hud {
     this.updateFold();
   }
 
-  /** Repliée ou non : seul un téléphone en tient compte (cf. `style.css`). */
+  /** Ouverte ou fermée : la quête n'est une fenêtre sous la barre que le temps de la lire (cf. `style.css`). */
   private updateFold(): void {
     const folded = String(this.world.tickCount >= this.questOpenUntil);
 
-    if (this.quest.dataset['folded'] !== folded) this.quest.dataset['folded'] = folded;
+    if (this.quest.dataset['folded'] !== folded) {
+      this.quest.dataset['folded'] = folded;
+      this.objective.setAttribute('aria-expanded', String(folded === 'false'));
+    }
+  }
+
+  /** Un tap sur l'objectif ouvre la quête ; un autre, ou un tap sur sa tête, la ferme. */
+  private toggleQuest(): void {
+    this.questOpenUntil = this.quest.dataset['folded'] === 'false' ? 0 : this.world.tickCount + QUEST_TAP_TICKS;
+    this.updateFold();
   }
 
   /**
@@ -1500,6 +1521,7 @@ export class Hud {
     } else if (hint !== this.lastHint) {
       this.lastHint = hint;
       this.hintSince = this.world.tickCount;
+      if (hint !== '') this.unfoldQuest(HINT_FOLD_TICKS);
       // Le texte reste en place quand le conseil se tait : il part en se repliant.
       if (hint !== '') this.hintText.textContent = hint;
 
@@ -1519,6 +1541,7 @@ export class Hud {
   private unfoldHint(): void {
     this.hintSince = this.world.tickCount;
     this.quest.dataset['hint'] = this.lastHint === '' ? 'none' : 'open';
+    this.unfoldQuest(HINT_FOLD_TICKS);
   }
 
   /* ----------------------------------------------------------------- météo */
@@ -1685,6 +1708,7 @@ export class Hud {
       text('hud-celebration-text', words.celebration),
     );
     this.celebration.hidden = false;
+    this.objective.dataset['done'] = 'true';
     this.celebration.style.animation = 'none';
     void this.celebration.offsetWidth;
     this.celebration.style.animation = '';
@@ -1692,6 +1716,7 @@ export class Hud {
     window.clearTimeout(this.celebrationTimer);
     this.celebrationTimer = window.setTimeout(() => {
       this.celebration.hidden = true;
+      delete this.objective.dataset['done'];
     }, CELEBRATION_MS);
 
     this.rainLeaves();
@@ -1699,7 +1724,7 @@ export class Hud {
 
   /**
    * Une fenêtre ouverte (bâtiment ou sac) : le bandeau ne se pose pas dessus.
-   * Il se range sous la quête, à sa largeur, et la fenêtre se tasse sous lui
+   * Il se range sous la barre, à sa largeur, et la fenêtre se tasse sous lui
    * (`--celebration-bottom`, cf. le CSS) — jamais deux cartes l'une sur l'autre.
    */
   private placeCelebration(): void {
@@ -1714,15 +1739,16 @@ export class Hud {
       return;
     }
 
-    const quest = this.quest.getBoundingClientRect();
-    // Sur un téléphone, le Prestige et la météo sont sous la quête ; ailleurs, le Prestige est en haut à gauche.
+    const bar = this.bar.getBoundingClientRect();
+    // Sur un téléphone, le Prestige et la météo sont sous la barre ; ailleurs, le Prestige est en haut à gauche.
     const under = [this.prestige, this.weather].filter((node) => !node.hidden);
-    const above = Math.max(quest.bottom, ...under.map((node) => node.getBoundingClientRect().bottom));
+    const above = Math.max(bar.bottom, ...under.map((node) => node.getBoundingClientRect().bottom));
+    const width = Math.min(bar.width, CELEBRATION_WIDTH);
 
     this.root.dataset['celebration'] = 'docked';
     this.celebration.style.top = `${Math.round(above + CELEBRATION_GAP)}px`;
-    this.celebration.style.left = `${Math.round(quest.left + quest.width / 2)}px`;
-    this.celebration.style.width = `${Math.round(quest.width)}px`;
+    this.celebration.style.left = `${Math.round(bar.left + bar.width / 2)}px`;
+    this.celebration.style.width = `${Math.round(width)}px`;
     // Le bas sans l'animation (qui le fait rebondir) : la fenêtre ne bouge pas avec.
     const bottom = this.celebration.offsetTop + this.celebration.offsetHeight;
 
