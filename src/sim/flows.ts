@@ -9,6 +9,16 @@
  *   de la ville entre dans un anneau de `FLOW_SAMPLES` cases — deux minutes
  *   de jeu. Le débit d'un objet est l'écart entre le plus ancien et le plus
  *   récent, ramené à la minute.
+ * - **Entrées et sorties** : à chaque tick, l'écart du stock avec le tick
+ *   d'avant est compté en entrée (ce qui arrive : porteurs, Adam, récoltes)
+ *   ou en sortie (ce qui part : chantiers, recettes, repas) ; chaque
+ *   échantillon garde les siennes. Production et consommation par minute
+ *   s'en déduisent, et leur différence est le débit net.
+ * - **Tendance** : la flèche du HUD. Elle lit le débit net de la dernière
+ *   minute de jeu (`TREND_SPAN`), pas d'un tick à l'autre, et ne change qu'à
+ *   un échantillon ; un seuil d'entrée plus haut que le seuil de sortie
+ *   (`TREND_RISE`, `TREND_KEEP`) l'empêche de clignoter autour de zéro. Tout
+ *   se compte en ticks : en pause, rien ne bouge.
  * - **Alertes** : une recette qui attend un objet dont la ville manque
  *   (pénurie), ou un gros stock que rien n'utilise (surplus).
  *
@@ -38,7 +48,44 @@ export const SURPLUS_STOCK = 100;
 /** Alertes montrées au plus : le panneau est petit, la première compte. */
 export const MAX_ALERTS = 2;
 
+/** La tendance du HUD lit la dernière minute de jeu : 12 intervalles de 5 s. */
+export const TREND_SPAN = 12;
+
+/** Une flèche paraît quand le stock a bougé d'au moins tant d'unités sur la minute… */
+export const TREND_RISE = 2;
+
+/** … et tient tant qu'il a bougé d'au moins celui-ci, dans le même sens : pas de clignotement autour du seuil. */
+export const TREND_KEEP = 1;
+
 const TICKS_PER_MINUTE = 20 * 60;
+
+/** Ce que fait un objet en ville : il monte, il stagne, il baisse. */
+export type Trend = 'up' | 'flat' | 'down';
+
+/**
+ * Le relevé d'un objet de la ville, pour le panneau des ressources : son
+ * stock, sa tendance, ce qui entre et sort par minute sur l'anneau, son
+ * stock à chaque échantillon (la mini-courbe) et, s'il baisse, les minutes
+ * avant qu'il soit à sec.
+ */
+export interface ItemFlow {
+  item: ItemId;
+  stock: number;
+  trend: Trend;
+  produced: number;
+  consumed: number;
+  net: number;
+  history: readonly number[];
+  /** Minutes avant épuisement au débit net de l'anneau ; `null` s'il ne baisse pas. */
+  minutesLeft: number | null;
+}
+
+/** Un échantillon : le stock de chaque objet, et ce qui est entré et sorti depuis le précédent, dans l'ordre d'`ITEM_IDS`. */
+interface Sample {
+  stock: number[];
+  in: number[];
+  out: number[];
+}
 
 /**
  * Une alerte : une pénurie (une recette attend ce que la ville n'a pas) ou
@@ -56,18 +103,52 @@ export type FlowAlert =
   | { kind: 'surplus'; item: ItemId; target: EntityId; rate: number; stock: number };
 
 export class TownFlows {
-  /** Les échantillons, du plus ancien au plus récent : une quantité par objet, dans l'ordre d'`ITEM_IDS`. */
-  private readonly ring: number[][] = [];
+  /** Les échantillons, du plus ancien au plus récent. */
+  private readonly ring: Sample[] = [];
+  /** Le stock du tick d'avant, par objet ; vide tant qu'il n'y a pas de ville. */
+  private last: number[] = [];
+  /** Entrées et sorties depuis le dernier échantillon. */
+  private pendingIn = ITEM_IDS.map(() => 0);
+  private pendingOut = ITEM_IDS.map(() => 0);
+  /** La tendance de chaque objet, décidée à chaque échantillon. */
+  private readonly trends: Trend[] = ITEM_IDS.map(() => 'flat');
+  private samples = 0;
 
-  /** Appelé à chaque tick : échantillonne la ville toutes les `FLOW_SAMPLE_TICKS`. Sans ville, l'anneau se vide. */
+  /** Monte à chaque échantillon : ce que l'UI montre ne change pas entre deux. */
+  public get revision(): number {
+    return this.samples;
+  }
+
+  /**
+   * Appelé à chaque tick : compte ce qui est entré et sorti de la ville
+   * depuis le tick d'avant, et l'échantillonne toutes les
+   * `FLOW_SAMPLE_TICKS`. Sans ville, tout se vide.
+   */
   public observe(tick: number, town: Store | null): void {
     if (!town) {
-      this.ring.length = 0;
+      if (this.last.length > 0) this.reset();
       return;
     }
+
+    const counts = ITEM_IDS.map((item) => town.count(item));
+
+    if (this.last.length > 0) {
+      for (let index = 0; index < counts.length; index += 1) {
+        const delta = counts[index]! - this.last[index]!;
+
+        if (delta > 0) this.pendingIn[index]! += delta;
+        else if (delta < 0) this.pendingOut[index]! -= delta;
+      }
+    }
+    this.last = counts;
+
     if (tick % FLOW_SAMPLE_TICKS !== 0) return;
-    this.ring.push(ITEM_IDS.map((item) => town.count(item)));
+    this.ring.push({ stock: counts, in: this.pendingIn, out: this.pendingOut });
     if (this.ring.length > FLOW_SAMPLES) this.ring.shift();
+    this.pendingIn = ITEM_IDS.map(() => 0);
+    this.pendingOut = ITEM_IDS.map(() => 0);
+    this.samples += 1;
+    this.decideTrends();
   }
 
   /** Débit net de l'objet en ville, en unités par minute, sur l'anneau ; 0 tant qu'il n'a pas deux échantillons. */
@@ -79,7 +160,77 @@ export class TownFlows {
     const last = this.ring[this.ring.length - 1]!;
     const ticks = (this.ring.length - 1) * FLOW_SAMPLE_TICKS;
 
-    return ((last[index]! - first[index]!) * TICKS_PER_MINUTE) / ticks;
+    return ((last.stock[index]! - first.stock[index]!) * TICKS_PER_MINUTE) / ticks;
+  }
+
+  /** La flèche du HUD : monte, stagne ou baisse sur la dernière minute de jeu. */
+  public trend(item: ItemId): Trend {
+    return this.trends[ITEM_IDS.indexOf(item)]!;
+  }
+
+  /** Le relevé d'un objet, sur tout l'anneau. */
+  public stats(item: ItemId): ItemFlow {
+    const index = ITEM_IDS.indexOf(item);
+    const ticks = (this.ring.length - 1) * FLOW_SAMPLE_TICKS;
+    let entered = 0;
+    let left = 0;
+
+    // L'entrée du premier échantillon précède l'anneau : elle n'y compte pas.
+    for (const sample of this.ring.slice(1)) {
+      entered += sample.in[index]!;
+      left += sample.out[index]!;
+    }
+
+    const perMinute = (amount: number): number => (ticks > 0 ? (amount * TICKS_PER_MINUTE) / ticks : 0);
+    const stock = this.ring.at(-1)?.stock[index] ?? 0;
+    const net = perMinute(entered - left);
+
+    return {
+      item,
+      stock,
+      trend: this.trends[index]!,
+      produced: perMinute(entered),
+      consumed: perMinute(left),
+      net,
+      history: this.ring.map((sample) => sample.stock[index]!),
+      minutesLeft: net < 0 ? stock / -net : null,
+    };
+  }
+
+  /** Les objets que le panneau montre, dans l'ordre d'`ITEM_IDS` : ceux qu'a la ville, et ceux qui ont bougé sur l'anneau. */
+  public tracked(): ItemId[] {
+    return ITEM_IDS.filter((_, index) =>
+      this.ring.some((sample) => sample.stock[index]! > 0 || sample.in[index]! > 0 || sample.out[index]! > 0),
+    );
+  }
+
+  private reset(): void {
+    this.ring.length = 0;
+    this.last = [];
+    this.pendingIn = ITEM_IDS.map(() => 0);
+    this.pendingOut = ITEM_IDS.map(() => 0);
+    this.trends.fill('flat');
+  }
+
+  /**
+   * Une flèche paraît au-delà de `TREND_RISE`, et ne tombe que sous
+   * `TREND_KEEP` : l'hystérésis évite le clignotement. On lit l'écart du
+   * stock sur la minute, pas un débit extrapolé : juste après un chargement,
+   * une seule livraison sur cinq secondes ne fait pas une flèche.
+   */
+  private decideTrends(): void {
+    const from = Math.max(0, this.ring.length - 1 - TREND_SPAN);
+    const first = this.ring[from]!.stock;
+    const last = this.ring[this.ring.length - 1]!.stock;
+
+    for (let index = 0; index < ITEM_IDS.length; index += 1) {
+      const rate = last[index]! - first[index]!;
+      const current = this.trends[index]!;
+
+      if (current === 'up' && rate >= TREND_KEEP) continue;
+      if (current === 'down' && rate <= -TREND_KEEP) continue;
+      this.trends[index] = rate >= TREND_RISE ? 'up' : rate <= -TREND_RISE ? 'down' : 'flat';
+    }
   }
 
   /**

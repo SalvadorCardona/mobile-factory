@@ -180,6 +180,41 @@ export function dayDialSvg(
   );
 }
 
+/** Le cadre de la mini-courbe du panneau des ressources, en pixels. */
+export const SPARKLINE = { width: 72, height: 24 } as const;
+
+/** La couleur d'une mini-courbe : menthe si l'objet monte, corail s'il baisse, violet s'il stagne. */
+const SPARK_TONES = { up: 'mint', flat: 'violet', down: 'coral' } as const satisfies Record<string, Tone>;
+
+/**
+ * La mini-courbe d'un objet de la ville : son stock à chaque échantillon, du
+ * plus ancien au plus récent, sur une ligne de sol lavande, et un point au
+ * bout. Un seul trait, bouts ronds ; l'échelle va du plus bas au plus haut
+ * de la fenêtre — un stock qui ne bouge pas est une ligne au milieu.
+ */
+export function sparklineSvg(history: readonly number[], trend: keyof typeof SPARK_TONES): string {
+  const { width, height } = SPARKLINE;
+  const pad = 4;
+  const low = Math.min(...history);
+  const high = Math.max(...history);
+  const span = high - low;
+  const step = history.length > 1 ? (width - 2 * pad) / (history.length - 1) : 0;
+  const points = history.flatMap((value, index) => [
+    round(pad + index * step),
+    round(span > 0 ? height - pad - ((value - low) / span) * (height - 2 * pad) : height / 2),
+  ]);
+  const tone = PALETTE[SPARK_TONES[trend]];
+  const [x, y] = points.slice(-2) as [number, number];
+
+  return svg(
+    width,
+    height,
+    pill(pad - 1.5, height - pad - 0.5, width - 2 * pad + 3, 2, paper.shade),
+    history.length > 1 ? polyline(points, tone.shade) : '',
+    shadedCircle(x ?? width - pad, y ?? height / 2, 3, SPARK_TONES[trend]),
+  );
+}
+
 function round(value: number): number {
   return Math.round(value * 100) / 100;
 }
@@ -570,6 +605,18 @@ export const UI_ICONS = {
   takeAll: svg(S, S, group('translate(0.6 0.8)', arrow(true, violet.shade)), arrow(true, paper.base)),
   /** « Tout déposer » : une flèche blanche qui remonte vers le coffre. */
   depositAll: svg(S, S, group('translate(0.6 0.8)', arrow(false, mint.shade)), arrow(false, paper.base)),
+  /**
+   * Le détail des ressources : trois barres de la colonie qui montent, la
+   * dernière en menthe, et la courbe indigo qui les suit.
+   */
+  stats: svg(
+    S,
+    S,
+    shadedBlock(3, 13, 5, 8, 1.5, 'yellow', 2),
+    shadedBlock(9.5, 9, 5, 12, 1.5, 'yellow', 2),
+    shadedBlock(16, 5, 5, 16, 1.5, 'mint', 2),
+    polyline([4, 9.5, 11, 5.5, 18, 2.5], ink.base),
+  ),
   /** Le « i » qui déplie un texte d'ambiance. */
   info: svg(S, S, shadedCircle(12, 12, 10, 'cyan'), circle(12, 7.3, 1.7, paper.base), rect(10.5, 10.3, 3, 8.2, paper.base, 1.5)),
   /** Un drapeau planté : l'objectif en cours. */

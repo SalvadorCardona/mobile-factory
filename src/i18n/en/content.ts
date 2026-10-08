@@ -480,6 +480,7 @@ export const content: Content = {
     farm: 'Farm',
     housing: 'Houses',
     nursery: 'Nursery',
+    trends: 'Trends',
     raid: 'Mutant base',
   },
 };

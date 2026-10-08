@@ -214,6 +214,8 @@ export const hud: Messages['hud'] = {
     townTotal: (total: number): string => `Town — ${total} item${total === 1 ? '' : 's'} in stock`,
     inBag: (item: string, amount: number): string => `${item} — ${amount} in the bag`,
     inTown: (item: string, amount: number): string => `${item} — ${amount} in town`,
+    inTownUp: (item: string, amount: number): string => `${item} — ${amount} in town, rising`,
+    inTownDown: (item: string, amount: number): string => `${item} — ${amount} in town, falling`,
     wanted: (item: string, amount: number): string => `${item} — Eve needs it, ${amount} in the bag`,
     prestige: 'Prestige',
     prestigeLabel: (amount: number): string => `Prestige: ${amount}`,

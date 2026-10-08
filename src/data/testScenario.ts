@@ -159,6 +159,29 @@ export const TEST_SCENARIOS = {
     adam: { dx: 2, dy: 5 },
   },
   /**
+   * L'économie de la ville en trois flèches : les logisticiens rentrent le
+   * bois de la cabane (il monte), les bâtisseurs emportent la pierre aux
+   * chantiers d'une nurserie, de deux maisons et d'un puits (elle baisse,
+   * une bonne minute), et le charbon, que rien n'utilise, stagne. Le bouton
+   * au bout du bandeau de la ville ouvre le détail.
+   */
+  trends: {
+    label: 'Tendances',
+    seed: 100,
+    buildings: [
+      { building: 'lumberCamp', dx: -6, dy: 0 },
+      { building: 'logisticsPost', dx: -6, dy: 4 },
+      { building: 'constructionPost', dx: 6, dy: 0 },
+      { building: 'nursery', dx: 5, dy: 5, delivered: {} },
+      { building: 'home', dx: 9, dy: 5, delivered: {} },
+      { building: 'home', dx: 9, dy: 9, delivered: {} },
+      { building: 'well', dx: -3, dy: 9, delivered: {} },
+    ],
+    town: { wood: 60, stone: 40, coal: 25, food: 40, water: 40 },
+    bag: {},
+    adam: { dx: 1, dy: 4 },
+  },
+  /**
    * Adam à l'orée de la base mutante la plus proche, l'arc cerclé de fer au
    * poing : son chef, ses gardiens et son cracheur l'attendent. On esquive
    * le cercle de la massue et les crachats, on abat le chef, le bouclier
