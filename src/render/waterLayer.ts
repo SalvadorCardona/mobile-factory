@@ -1,247 +1,191 @@
 /**
- * L'eau qui bouge : l'écume des rives et les vaguelettes du large.
+ * L'eau : rive arrondie, profondeur en dégradé, écume, crêtes et ondulation,
+ * peintes par un seul shader (`waterShader.ts`).
  *
- * Le sol est baké une fois par bloc et ne l'est jamais plus (`chunkLayer.ts`) :
- * ce qui bouge ne peut pas y vivre. L'écume et les vaguelettes sont donc des
- * sprites de l'atlas, posés au-dessus du sol baké, sous les ombres portées —
- * tous sur la même page, un appel de dessin.
- *
- * Rien ne glisse ni ne s'allume : tout vit par la taille, sans transparence.
- * - L'**écume** borde chaque côté de tuile d'eau qui touche la rive : une
- *   rangée de bulles qui gonfle et monte d'un pas sur la rive, puis se
- *   retire, avec un déphasage le long de la rive — le ressac qui court.
- * - Les **vaguelettes** vivent sur une tuile du large sur huit : un croissant
- *   naît de rien, dérive de quelques pixels avec le vent en grandissant, puis
- *   se résorbe ; il renaît ailleurs dans sa tuile, à son propre rythme — pas
- *   de motif, pas de battement d'ensemble.
+ * Le sol baké (`chunkLayer.ts`) ne dessine pas l'eau : sous une tuile d'eau,
+ * il pose la terre de la rive. Ce calque passe par-dessus, sous les ombres
+ * portées, et peint l'eau au pixel près à partir du champ de chaque bloc
+ * (`waterField.ts`) : là où le champ dit « terre », le shader jette le pixel
+ * et le sable se montre — la rive n'a plus de marche.
  *
  * Coût tenu ici, par les mêmes blocs de 16 × 16 tuiles que le sol :
- * - un bloc n'existe que s'il touche l'écran, et il est détruit avec la
- *   même marge d'éviction que le sol ;
- * - un bloc hors de l'écran est caché et n'est pas animé ; dans un bloc
- *   visible, un sprite hors de l'écran est caché et n'est pas animé non plus,
- *   et une vaguelette entre deux vies est cachée ;
- * - `prefers-reduced-motion` : l'eau est figée, au repos — rien n'est animé.
+ * - un bloc n'a de maillage que s'il a de l'eau, et ce maillage ne couvre que
+ *   l'eau et ses voisines : le shader ne passe jamais sur la prairie ;
+ * - un seul programme, un jeu d'uniformes partagé : un appel de dessin par
+ *   bloc d'eau à l'écran, et rien à faire côté JS que de pousser l'heure ;
+ * - un bloc hors de l'écran est caché, et détruit — maillage et champ — avec
+ *   la même marge d'éviction que le sol ;
+ * - `prefers-reduced-motion` : l'heure s'arrête, l'eau est figée.
  *
- * Tout est seedé par tuile : les mêmes tuiles ont la même écume et les
- * mêmes vaguelettes d'une partie à l'autre. Rien ici n'est de l'état de jeu.
+ * Tout est seedé : les mêmes tuiles ont la même rive et les mêmes crêtes
+ * d'une partie à l'autre. L'heure est celle du rendu, pas celle de la
+ * simulation. Rien ici n'est de l'état de jeu.
  */
 
-import { Container, Sprite } from 'pixi.js';
+import { BufferImageSource, Container, GlProgram, Mesh, MeshGeometry, Shader, UniformGroup } from 'pixi.js';
 import { TILE_SIZE, coordKey } from '../core/grid.ts';
 import { hash3 } from '../core/rng.ts';
+import { GROUND, PALETTE, hex, type Color } from '../data/artDirection.ts';
 import type { Camera } from './camera.ts';
 import { BAKE_MARGIN, BLOCK_SIZE, BLOCK_TILES, KEEP_MARGIN } from './chunkLayer.ts';
-import { BlockTerrain, SIDES, SIDE_OFFSET, type Side, type TerrainTiles } from './terrainTiles.ts';
+import { FIELD_TEXELS, RIPPLE_TEXELS, ripplesTexture, waterField } from './waterField.ts';
+import { WATER_FRAGMENT, WATER_VERTEX } from './waterShader.ts';
 
-/** Période du ressac, et durée d'une vie de vaguelette (plus un écart tiré par tuile), en millisecondes. */
-const FOAM_PERIOD_MS = 4200;
-const WAVELET_LIFE_MS = 4200;
-const WAVELET_LIFE_SPREAD_MS = 2400;
+/** L'heure du shader repart de zéro après une heure : les flottants gardent leur précision. */
+const TIME_WRAP_S = 3600;
 
-/** Ressac : de combien l'écume monte sur la rive, s'épaissit et s'allonge. */
-const FOAM_REACH_PX = 1.5;
-const FOAM_SWELL = 0.2;
-const FOAM_STRETCH = 0.07;
-
-/** Dérive d'une vaguelette sur sa vie, avec le vent : vers la droite, un peu vers le haut. */
-const WAVELET_DRIFT_X = 5;
-const WAVELET_DRIFT_Y = -1.5;
-/** En dessous de cette taille, une vaguelette entre deux vies est cachée. */
-const WAVELET_MIN_SCALE = 0.05;
-
-/** Une vaguelette sur huit tuiles du large. */
-const WAVELET_ODDS = 8;
-
-/** Écart de l'écume au bord de la tuile, en pixels monde ; en bas, la face avant du creux la repousse. */
-const FOAM_INSET = 2;
-const FOAM_BOTTOM = 21;
-
-type Kind = 'foam' | 'wavelet';
-
-interface Ripple {
-  sprite: Sprite;
-  kind: Kind;
-  tx: number;
-  ty: number;
-  /** Écume : position de repos ; vaguelette : coin de sa tuile. */
-  x: number;
-  y: number;
-  /** Direction de la rive, vers où l'écume monte. */
-  towardX: number;
-  towardY: number;
-  /** Écume : déphasage, en radians ; vaguelette : décalage de sa vie, en vies. */
-  phase: number;
-  /** Durée d'une vie de vaguelette, en millisecondes. */
-  life: number;
-  /** Le tirage de la tuile : d'où renaît la vaguelette. */
-  roll: number;
-  /** ±1 : l'écume est retournée une fois sur deux, pour ne pas faire de motif. */
-  flip: number;
-}
-
-/** Sprites d'eau à l'écran au dernier cadre, et combien bougent. */
+/** Blocs d'eau à l'écran au dernier cadre, et les tuiles que leur maillage couvre. */
 export interface WaterStats {
-  sprites: number;
-  animated: number;
+  blocks: number;
+  tiles: number;
 }
 
 interface WaterBlock {
   bx: number;
   by: number;
-  container: Container;
-  ripples: Ripple[];
+  /** `null` : le bloc n'a pas d'eau. */
+  mesh: Mesh<MeshGeometry, Shader> | null;
+  field: BufferImageSource | null;
+  tiles: number;
 }
 
 export class WaterLayer {
   public readonly container = new Container();
 
   private readonly blocks = new Map<string, WaterBlock>();
-  private readonly tiles: TerrainTiles;
   private readonly seed: number;
   private readonly reducedMotion: MediaQueryList | null;
+  private readonly program: GlProgram;
+  private readonly uniforms: UniformGroup;
+  /** Le bruit des ondulations, partagé par tous les blocs. */
+  private readonly ripples: BufferImageSource;
   private time = 0;
 
-  /** Sprites affichés et animés au dernier cadre — remonté au HUD de debug. */
-  public stats: WaterStats = { sprites: 0, animated: 0 };
+  /** Blocs affichés au dernier cadre — remonté au HUD de debug. */
+  public stats: WaterStats = { blocks: 0, tiles: 0 };
 
-  public constructor(tiles: TerrainTiles, seed: number) {
-    this.tiles = tiles;
+  public constructor(seed: number) {
     this.seed = seed;
     this.reducedMotion = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
+    this.program = GlProgram.from({
+      name: 'water',
+      vertex: WATER_VERTEX,
+      fragment: WATER_FRAGMENT,
+      // Le bruit se calcule sur les coordonnées du monde : il lui faut la pleine précision.
+      preferredFragmentPrecision: 'highp',
+    });
+
+    this.ripples = new BufferImageSource({
+      resource: ripplesTexture(seed),
+      width: RIPPLE_TEXELS,
+      height: RIPPLE_TEXELS,
+      scaleMode: 'linear',
+      addressMode: 'repeat',
+      alphaMode: 'no-premultiply-alpha',
+    });
+
+    const roll = hash3(seed ^ 0x3c6ef372, 0, 0);
+
+    this.uniforms = new UniformGroup({
+      uTime: { value: 0, type: 'f32' },
+      // Décale le bruit et les crêtes : une autre seed, une autre eau.
+      uSeed: { value: new Float32Array([(roll % 997) + 0.5, ((roll >>> 10) % 991) + 0.5]), type: 'vec2<f32>' },
+      uShallow: { value: rgb(GROUND.water.shallow), type: 'vec3<f32>' },
+      uBase: { value: rgb(GROUND.water.base), type: 'vec3<f32>' },
+      uDeep: { value: rgb(GROUND.water.deep), type: 'vec3<f32>' },
+      uFoam: { value: rgb(PALETTE.paper.base), type: 'vec3<f32>' },
+      uCrest: { value: rgb(GROUND.water.light), type: 'vec3<f32>' },
+    });
   }
 
   public update(camera: Camera, deltaMs: number): void {
     const still = this.reducedMotion?.matches ?? false;
-    const blocks = camera.visibleCells(BLOCK_SIZE, BAKE_MARGIN);
-    const view = camera.visibleCells(TILE_SIZE, 0);
+    const bounds = camera.visibleCells(BLOCK_SIZE, BAKE_MARGIN);
 
-    if (!still) this.time += deltaMs;
+    if (!still) {
+      this.time = (this.time + deltaMs / 1000) % TIME_WRAP_S;
+      this.uniforms.uniforms.uTime = this.time;
+      this.uniforms.update();
+    }
 
-    for (let by = blocks.minCy; by <= blocks.maxCy; by += 1) {
-      for (let bx = blocks.minCx; bx <= blocks.maxCx; bx += 1) {
+    for (let by = bounds.minCy; by <= bounds.maxCy; by += 1) {
+      for (let bx = bounds.minCx; bx <= bounds.maxCx; bx += 1) {
         const key = coordKey(bx, by);
 
         if (!this.blocks.has(key)) this.blocks.set(key, this.build(bx, by));
       }
     }
 
-    let sprites = 0;
-    let animated = 0;
+    let blocks = 0;
+    let tiles = 0;
 
     for (const block of this.blocks.values()) {
+      if (!block.mesh) continue;
+
       const { bx, by } = block;
-      const onScreen = bx >= blocks.minCx && bx <= blocks.maxCx && by >= blocks.minCy && by <= blocks.maxCy;
+      const onScreen = bx >= bounds.minCx && bx <= bounds.maxCx && by >= bounds.minCy && by <= bounds.maxCy;
 
-      block.container.visible = onScreen;
+      block.mesh.visible = onScreen;
       if (!onScreen) continue;
-
-      for (const ripple of block.ripples) {
-        const visible = ripple.tx >= view.minCx && ripple.tx <= view.maxCx && ripple.ty >= view.minCy && ripple.ty <= view.maxCy;
-
-        ripple.sprite.visible = visible;
-        if (!visible) continue;
-
-        pose(ripple, still ? 0 : 1, this.time);
-        if (!ripple.sprite.visible) continue;
-        sprites += 1;
-        if (!still) animated += 1;
-      }
+      blocks += 1;
+      tiles += block.tiles;
     }
 
-    this.stats = { sprites, animated };
+    this.stats = { blocks, tiles };
     this.evict(camera.visibleCells(BLOCK_SIZE, KEEP_MARGIN));
   }
 
-  /** L'écume et les vaguelettes d'un bloc, tirées une fois depuis la seed. */
+  /**
+   * Le maillage d'un bloc : un quad par tuile à peindre, en coordonnées du
+   * monde, dont les UV tombent sur les nœuds du champ.
+   */
   private build(bx: number, by: number): WaterBlock {
-    const baseTx = bx * BLOCK_TILES;
-    const baseTy = by * BLOCK_TILES;
-    const terrain = new BlockTerrain(this.seed, baseTx, baseTy, BLOCK_TILES, 2);
-    const container = new Container();
-    const ripples: Ripple[] = [];
+    const field = waterField(this.seed, bx * BLOCK_TILES, by * BLOCK_TILES, BLOCK_TILES);
 
-    for (let ly = 0; ly < BLOCK_TILES; ly += 1) {
-      for (let lx = 0; lx < BLOCK_TILES; lx += 1) {
-        if (terrain.kind(lx, ly) !== 'water') continue;
+    if (!field) return { bx, by, mesh: null, field: null, tiles: 0 };
 
-        const tx = baseTx + lx;
-        const ty = baseTy + ly;
+    const count = field.tiles.length;
+    const positions = new Float32Array(count * 8);
+    const uvs = new Float32Array(count * 8);
+    const indices = new Uint32Array(count * 6);
+    const left = bx * BLOCK_SIZE;
+    const top = by * BLOCK_SIZE;
+    // Le nœud k du champ est à k / FIELD_TEXELS tuiles du coin du bloc ; son centre de texel, en (k + ½) / size.
+    const uv = (tiles: number): number => (tiles * FIELD_TEXELS + 0.5) / field.size;
 
-        for (const side of SIDES) {
-          const [dx, dy] = SIDE_OFFSET[side];
+    field.tiles.forEach(([lx, ly], i) => {
+      const corners = [
+        [lx, ly],
+        [lx + 1, ly],
+        [lx + 1, ly + 1],
+        [lx, ly + 1],
+      ] as const;
 
-          if (terrain.kind(lx + dx, ly + dy) !== 'water') ripples.push(this.foam(tx, ty, side));
-        }
+      corners.forEach(([x, y], c) => {
+        positions[i * 8 + c * 2] = left + x * TILE_SIZE;
+        positions[i * 8 + c * 2 + 1] = top + y * TILE_SIZE;
+        uvs[i * 8 + c * 2] = uv(x);
+        uvs[i * 8 + c * 2 + 1] = uv(y);
+      });
+      indices.set([i * 4, i * 4 + 1, i * 4 + 2, i * 4, i * 4 + 2, i * 4 + 3], i * 6);
+    });
 
-        const roll = hash3(this.seed ^ 0x3c6ef372, tx, ty);
+    const source = new BufferImageSource({
+      resource: field.data,
+      width: field.size,
+      height: field.size,
+      scaleMode: 'linear',
+      addressMode: 'clamp-to-edge',
+      alphaMode: 'no-premultiply-alpha',
+    });
+    const shader = new Shader({
+      glProgram: this.program,
+      resources: { waterUniforms: this.uniforms, uField: source, uRipples: this.ripples },
+    });
+    const mesh = new Mesh({ geometry: new MeshGeometry({ positions, uvs, indices }), shader });
 
-        if (terrain.depth(lx, ly) > 0 && roll % WAVELET_ODDS === 0) ripples.push(this.wavelet(tx, ty, roll));
-      }
-    }
-
-    for (const ripple of ripples) {
-      container.addChild(ripple.sprite);
-      pose(ripple, 0, 0);
-    }
-    this.container.addChild(container);
-    return { bx, by, container, ripples };
-  }
-
-  private foam(tx: number, ty: number, side: Side): Ripple {
-    const sprite = new Sprite(this.tiles.water(hash3(this.seed ^ 0x510e527f, tx, ty + SIDES.indexOf(side)) & 1 ? 'foam.1' : 'foam.0'));
-    const [dx, dy] = SIDE_OFFSET[side];
-    const left = tx * TILE_SIZE;
-    const top = ty * TILE_SIZE;
-    const middle = TILE_SIZE / 2;
-    const [x, y] =
-      side === 'top'
-        ? [left + middle, top + FOAM_INSET]
-        : side === 'bottom'
-          ? [left + middle, top + FOAM_BOTTOM]
-          : side === 'left'
-            ? [left + FOAM_INSET, top + middle]
-            : [left + TILE_SIZE - FOAM_INSET, top + middle];
-
-    sprite.anchor.set(0.5);
-    if (dx !== 0) sprite.rotation = Math.PI / 2;
-
-    return {
-      sprite,
-      kind: 'foam',
-      tx,
-      ty,
-      x,
-      y,
-      towardX: dx,
-      towardY: dy,
-      // Le ressac court le long de la rive : la phase suit la position.
-      phase: (tx + ty) * 0.55,
-      life: 0,
-      roll: 0,
-      flip: (tx + ty) & 1 ? -1 : 1,
-    };
-  }
-
-  private wavelet(tx: number, ty: number, roll: number): Ripple {
-    const sprite = new Sprite(this.tiles.water(roll & 0x100 ? 'wavelet.1' : 'wavelet.0'));
-
-    // Ancrée à sa base : elle naît du niveau de l'eau.
-    sprite.anchor.set(0.5, 0.8);
-    return {
-      sprite,
-      kind: 'wavelet',
-      tx,
-      ty,
-      x: tx * TILE_SIZE,
-      y: ty * TILE_SIZE,
-      towardX: 0,
-      towardY: 0,
-      phase: ((roll >>> 13) % 1000) / 1000,
-      life: WAVELET_LIFE_MS + ((roll >>> 9) % WAVELET_LIFE_SPREAD_MS),
-      roll,
-      flip: 1,
-    };
+    this.container.addChild(mesh);
+    return { bx, by, mesh, field: source, tiles: count };
   }
 
   private evict(bounds: { minCx: number; minCy: number; maxCx: number; maxCy: number }): void {
@@ -250,50 +194,32 @@ export class WaterLayer {
 
       if (bx >= bounds.minCx && bx <= bounds.maxCx && by >= bounds.minCy && by <= bounds.maxCy) continue;
 
-      block.container.destroy({ children: true });
+      release(block);
       this.blocks.delete(key);
     }
   }
 
   public destroy(): void {
-    for (const block of this.blocks.values()) block.container.destroy({ children: true });
+    for (const block of this.blocks.values()) release(block);
     this.blocks.clear();
     this.container.destroy();
+    this.ripples.destroy();
+    this.program.destroy();
   }
 }
 
-/**
- * Pose un sprite d'eau à l'instant `time`. `motion` vaut 0 pour l'eau au
- * repos : l'écume à sa place, chaque vaguelette au plus haut de sa première vie.
- */
-function pose(ripple: Ripple, motion: number, time: number): void {
-  const { sprite } = ripple;
+/** Rend le maillage, son shader et son champ ; le programme, les uniformes et le bruit partagés restent. */
+function release(block: WaterBlock): void {
+  if (!block.mesh) return;
+  block.mesh.geometry.destroy();
+  block.mesh.shader?.destroy(false);
+  block.mesh.destroy();
+  block.field?.destroy();
+}
 
-  if (ripple.kind === 'foam') {
-    const wave = Math.sin((time / FOAM_PERIOD_MS) * Math.PI * 2 + ripple.phase) * motion;
-    const reach = wave * FOAM_REACH_PX;
+/** `'#45d6ff'` → [r, g, b] entre 0 et 1, pour un uniforme. */
+function rgb(color: Color): Float32Array {
+  const value = hex(color);
 
-    sprite.position.set(ripple.x + ripple.towardX * reach, ripple.y + ripple.towardY * reach);
-    sprite.scale.set(ripple.flip * (1 + wave * FOAM_STRETCH), 1 + wave * FOAM_SWELL);
-    return;
-  }
-
-  // Au repos, la vaguelette est figée au milieu de sa première vie.
-  const age = motion === 0 ? 0.5 : time / ripple.life + ripple.phase;
-  const cycle = Math.floor(age);
-  const t = age - cycle;
-  // Elle naît, grandit puis se résorbe : jamais d'apparition ni d'effacement d'un coup.
-  const size = Math.sin(Math.PI * t);
-
-  sprite.visible = size > WAVELET_MIN_SCALE;
-  if (!sprite.visible) return;
-
-  // Chaque vie renaît ailleurs dans la tuile, loin des bords.
-  const spot = hash3(ripple.roll, cycle, 0x2545f491);
-
-  sprite.position.set(
-    ripple.x + 8 + (spot % 12) + (t - 0.5) * WAVELET_DRIFT_X * motion,
-    ripple.y + 10 + ((spot >>> 8) % 14) + (t - 0.5) * WAVELET_DRIFT_Y * motion,
-  );
-  sprite.scale.set(size);
+  return new Float32Array([((value >> 16) & 0xff) / 255, ((value >> 8) & 0xff) / 255, (value & 0xff) / 255]);
 }

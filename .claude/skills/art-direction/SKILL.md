@@ -53,7 +53,7 @@ art, jamais de `Graphics` Pixi dessiné « à l'œil » pour un sprite.
 
 Sols (`GROUND`, base / alt / ombre portée) : herbe `#93e8ae` / `#8ae0a6` / `#62c894` ;
 sable `#ffd98a` / `#ffd382` / `#f2b766` ; eau `#45d6ff` / `#3ccaf8` / `#2fb8ea`
-(profondeurs : bord `#45d6ff`, large `#3ccaf8`, fond `#35bdf4`) ;
+(dégradé du shader : rive `#74ecec`, eau franche `#45d6ff`, fond `#3a94f2`) ;
 roche `#b8c3ff` / `#afbaf9` / `#8a97e6`.
 
 ## Construire un volume

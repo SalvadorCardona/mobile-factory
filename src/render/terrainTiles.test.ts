@@ -15,38 +15,31 @@ describe('BlockTerrain', () => {
     }
   });
 
-  it('mesure la profondeur à la distance de la rive', () => {
-    const seen = new Set<number>();
+  it('pose sous l\'eau la terre de sa rive', () => {
+    const seen = new Set<string>();
 
     for (let ly = 0; ly < SIZE; ly += 1) {
       for (let lx = 0; lx < SIZE; lx += 1) {
-        const depth = terrain.depth(lx, ly);
-        let nearest = Infinity;
+        const kind = terrain.kind(lx, ly);
+        const ground = terrain.beneath(lx, ly);
 
-        if (terrain.kind(lx, ly) !== 'water') {
-          expect(depth).toBe(0);
+        if (kind !== 'water') {
+          expect(ground).toBe(kind);
           continue;
         }
-        for (let dy = -2; dy <= 2; dy += 1) {
-          for (let dx = -2; dx <= 2; dx += 1) {
-            if (terrain.kind(lx + dx, ly + dy) !== 'water') nearest = Math.min(nearest, Math.max(Math.abs(dx), Math.abs(dy)));
-          }
+        expect(ground).not.toBe('water');
+
+        const near = new Set<string>();
+
+        for (let dy = -1; dy <= 1; dy += 1) {
+          for (let dx = -1; dx <= 1; dx += 1) if (terrain.kind(lx + dx, ly + dy) !== 'water') near.add(terrain.kind(lx + dx, ly + dy));
         }
-        expect(depth).toBe(nearest === 1 ? 0 : nearest === 2 ? 1 : 2);
-        seen.add(depth);
+        // Une rive : une des terres voisines ; le large : le sable.
+        if (near.size > 0) expect(near.has(ground)).toBe(true);
+        else expect(ground).toBe('sand');
+        seen.add(ground);
       }
     }
-    expect([...seen].sort()).toEqual([0, 1, 2]);
-  });
-
-  it('ne saute jamais un palier entre deux tuiles voisines', () => {
-    for (let ly = 0; ly < SIZE - 1; ly += 1) {
-      for (let lx = 0; lx < SIZE - 1; lx += 1) {
-        const depth = terrain.depth(lx, ly);
-
-        expect(Math.abs(depth - terrain.depth(lx + 1, ly))).toBeLessThanOrEqual(1);
-        expect(Math.abs(depth - terrain.depth(lx, ly + 1))).toBeLessThanOrEqual(1);
-      }
-    }
+    expect(seen.has('sand')).toBe(true);
   });
 });

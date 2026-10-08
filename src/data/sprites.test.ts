@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { brandBanner, brandIcon } from '../art/brand.ts';
 import { ROAD_THUMB, ROAD_TILES } from '../art/road.ts';
-import { GROUND_TILES, WATER_SPRITES, WATER_TILES, cornerTile, edgeTile, shadowTile } from '../art/terrain.ts';
+import { GROUND_TILES, cornerTile, edgeTile, shadowTile } from '../art/terrain.ts';
 import { UI_ICONS, dayDialSvg } from '../art/ui.ts';
 import { DIAL_ARCS } from '../sim/dayNight.ts';
 import { GROUND, PALETTE, auditSvg, type Ground } from './artDirection.ts';
@@ -28,12 +28,7 @@ function everySvg(): [string, string][] {
     [`terrain.shadow.${ground}`, shadowTile(ground)] as [string, string],
     [`terrain.corner.${ground}`, cornerTile(GROUND[ground].base, 'tl')] as [string, string],
   ]);
-  const water = [
-    ...([1, 2] as const).flatMap((depth) =>
-      WATER_TILES[depth].map((svg, i): [string, string] => [`terrain.water.${depth}.${i}`, svg]),
-    ),
-    ...Object.entries(WATER_SPRITES).map(([name, svg]): [string, string] => [`terrain.${name}`, svg]),
-    ['terrain.corner.water.deep', cornerTile(GROUND.water.deep, 'tl')] as [string, string],
+  const roads = [
     ...ROAD_TILES.map((svg, links): [string, string] => [`terrain.road.${links}`, svg]),
     ['terrain.road.vignette', ROAD_THUMB] as [string, string],
   ];
@@ -50,7 +45,7 @@ function everySvg(): [string, string][] {
     ['brand.banner', brandBanner()],
   ];
 
-  return [...sprites, ...terrain, ...water, ...icons, ...brand];
+  return [...sprites, ...terrain, ...roads, ...icons, ...brand];
 }
 
 describe('sprites', () => {

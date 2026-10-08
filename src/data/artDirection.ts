@@ -62,8 +62,11 @@ export const PALETTE = {
  * et `thicket`, plus dense ; et la terre battue de ses chemins, `trail`,
  * avec la trace plus claire du milieu, `trailLight`.
  *
- * L'eau a trois profondeurs : `base` au bord, `alt` au large, `deep` au
- * milieu des grands lacs — la même teinte, qui glisse doucement vers le bleu.
+ * L'eau est un dégradé continu sur la distance à la rive (`render/waterShader.ts`) :
+ * `shallow`, turquoise clair contre le sable, puis `base`, l'eau franche, et
+ * `deep`, le bleu du fond des grands lacs ; `light` fait ses crêtes et ses
+ * reflets, et l'écume est blanche (`PALETTE.paper`). `alt` est l'eau de la
+ * carte du monde.
  */
 export const GROUND = {
   grass: {
@@ -77,7 +80,7 @@ export const GROUND = {
     trailLight: '#f6e6bf',
   },
   sand: { base: '#ffd98a', alt: '#ffd382', shade: '#f2b766', light: '#ffe9b8' },
-  water: { base: '#45d6ff', alt: '#3ccaf8', deep: '#35bdf4', shade: '#2fb8ea', light: '#b8f1ff' },
+  water: { base: '#45d6ff', alt: '#3ccaf8', shallow: '#74ecec', deep: '#3a94f2', shade: '#2fb8ea', light: '#b8f1ff' },
   rock: { base: '#b8c3ff', alt: '#afbaf9', shade: '#8a97e6', light: '#d3daff' },
 } as const;
 

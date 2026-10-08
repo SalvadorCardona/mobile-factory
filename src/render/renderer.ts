@@ -99,7 +99,7 @@ export class GameRenderer {
 
     world.events.on('roadPaved', repave);
     world.events.on('roadRemoved', repave);
-    this.waterLayer = new WaterLayer(this.tiles, world.seed);
+    this.waterLayer = new WaterLayer(world.seed);
     this.signboards = new Signboards(app.renderer, library);
     this.entityLayer = new EntityLayer(world, library, this.tiles, this.shadows, this.signboards);
     this.resourceLayer = new ResourceLayer(world, library, this.tiles, this.entityLayer.container, this.shadows);

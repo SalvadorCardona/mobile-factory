@@ -19,7 +19,7 @@
 
 import { writeFileSync } from 'node:fs';
 import { ROAD_TILES } from '../art/road.ts';
-import { GROUND_TILES, WATER_SPRITES, WATER_TILES, cornerTile, edgeTile, shadowTile } from '../art/terrain.ts';
+import { GROUND_TILES, cornerTile, edgeTile, shadowTile } from '../art/terrain.ts';
 import { UI_ICONS, dayDialSvg } from '../art/ui.ts';
 import { DIAL_ARCS } from '../sim/dayNight.ts';
 import { GROUND, PALETTE, rect, svg, type Ground } from '../data/artDirection.ts';
@@ -100,11 +100,6 @@ const allSections: [string, Cell[][]][] = [
         }),
         cell(`${ground}.coin`, cornerTile(GROUND[ground].base, 'tl')),
         cell(`${ground}.ombre`, shadowTile(ground)),
-      ]),
-    ).concat(
-      rows([
-        ...([1, 2] as const).flatMap((depth) => WATER_TILES[depth].map((svg, i) => cell(`water.${depth}.${i}`, svg))),
-        ...Object.entries(WATER_SPRITES).map(([name, svg]) => cell(`water.${name}`, svg)),
       ]),
     ),
   ],
