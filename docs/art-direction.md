@@ -104,36 +104,34 @@ montre qu'en mode construction, en pointillés autour du fantôme.
 | eau | `#45d6ff` | `#3ccaf8` | `#2fb8ea` | `#b8f1ff` |
 | roche | `#b8c3ff` | `#afbaf9` | `#8a97e6` | `#d3daff` |
 
-L'eau a trois profondeurs, la même teinte glissant vers le bleu : `base` au
-bord, `alt` au large (à deux tuiles de la rive), `deep` (`#35bdf4`) au milieu
-des grands lacs ; chaque palier a les coins arrondis des autres sols. Le long
-des rives, une écume en bulles `light` de tailles mêlées, un reflet blanc
-dans la plus grosse ; au large, des vaguelettes : des croissants `light` à
-point blanc. Aucun reflet n'est baké dans le sol : figé, une capsule claire
-se lit comme un tiret peint sur l'eau (« marquage routier »). Écume et
-vaguelettes sont des sprites animés au-dessus du sol baké
-(`render/waterLayer.ts`), et rien n'y glisse ni ne s'allume — tout vit par la
-taille, sans transparence ni clignotement, figé sous `prefers-reduced-motion` :
+L'eau n'est pas une tuile : le sol baké pose sous elle la terre de sa rive,
+et **un seul shader** la peint par-dessus, au pixel près
+(`render/waterLayer.ts`, `render/waterShader.ts`), à partir d'un petit
+champ par bloc de 16 × 16 tuiles (`render/waterField.ts` : quatre texels par
+tuile, lissés d'un flou d'une demi-tuile). Rien n'y suit la grille :
 
-- le **ressac** : l'écume gonfle et monte d'un pas sur la rive, puis se
-  retire, la vague courant le long du bord ;
-- les **vaguelettes** naissent d'un point, dérivent de quelques pixels avec
-  le vent en grandissant, puis se résorbent et renaissent ailleurs, chacune
-  à son rythme.
+- la **rive** est la courbe où le champ passe ½ : un bord droit tombe entre
+  deux tuiles, une rive en biais devient une pente, un coin s'arrondit ; un
+  bruit fixe la fait onduler de quelques pixels ;
+- la **profondeur** est un dégradé continu sur la distance à la rive (jusqu'à
+  quatre tuiles) : `shallow` (`#74ecec`), turquoise clair contre le sable,
+  `base` (`#45d6ff`), l'eau franche, puis `deep` (`#3a94f2`), le bleu du fond ;
+- l'**écume** est une bande blanche (`paper`) qui suit la rive et respire en
+  trois secondes — elle monte un peu sur le sable et se retire, déphasée le
+  long du bord —, et une ligne de ressac arrive du large pour s'y fondre ;
+- quelques **crêtes** `light` au large, des arcs bombés vers la lumière, une
+  pour trois cellules de 3 × 3 tuiles environ, à des places tirées de la
+  seed : chacune naît en fondu, dérive avec le vent, s'efface et renaît
+  ailleurs ;
+- une **ondulation** très discrète : des reflets nets, à peine plus clairs,
+  qui glissent et changent de forme.
 
-| Avant / après, sur la rive | Avant / après, au milieu d'un lac | L'eau animée |
-| --- | --- | --- |
-| ![La rive avant et après](art-direction/eau-avant-apres.png) | ![Le lac avant et après](art-direction/eau-lac-avant-apres.png) | ![L'eau animée](art-direction/eau-animee.gif) |
+L'animation tourne sur le temps de rendu, jamais sur le tick de la
+simulation ; elle s'arrête sous `prefers-reduced-motion`.
 
-L'animation a été retravaillée : avant, l'écume en capsules avançait d'un
-pixel et les reflets glissaient — des tirets. Trois pistes ont été
-comparées ; on a gardé les vaguelettes au large et le ressac sur la rive.
-Les étoiles qui scintillent, trop rares, n'animent pas un lac, et plus
-nombreuses elles clignotent.
-
-| Avant | Piste : vaguelettes | Piste : ressac | Piste : scintillements |
-| --- | --- | --- | --- |
-| ![L'eau animée, avant](art-direction/eau-animee-avant.gif) | ![Vaguelettes](art-direction/eau-piste-vaguelettes.gif) | ![Ressac](art-direction/eau-piste-ressac.gif) | ![Scintillements](art-direction/eau-piste-scintillements.gif) |
+| Avant / après, sur la plage voisine de la mairie (partie de test) | L'eau animée |
+| --- | --- |
+| ![La rive avant et après](art-direction/eau-avant-apres.png) | ![L'eau animée](art-direction/eau-animee.gif) |
 
 ### Couleurs réservées
 
@@ -272,11 +270,12 @@ par chunk, quatre chunks au plus gardés, soit au plus ~800 sprites et autant
 d'ombres — tous sur la même page d'atlas, donc un ou deux appels de dessin.
 À surveiller si la densité des forêts augmente : c'est le premier poste à
 découper plus finement (par blocs, comme le sol) avant d'ajouter du culling.
-L'eau animée : ~50 à 70 sprites à l'écran (écume des rives, une vaguelette
-sur huit tuiles du large, cachée entre deux vies), rangés par blocs de
-16 × 16 tuiles comme le sol ; un bloc ou un sprite hors de l'écran est caché
-et n'est pas animé. Coût mesuré : moins d'un dixième de milliseconde de JS
-par cadre avec le CPU bridé ×4, un appel de dessin.
+L'eau : un programme, un jeu d'uniformes et une texture de bruit partagés, un
+maillage par bloc qui a de l'eau — un appel de dessin par bloc à l'écran —,
+qui ne couvre que l'eau et ses voisines : le shader ne passe jamais sur la
+prairie. Par pixel, trois lectures de texture et un peu de calcul ; les
+bruits fixes sont rangés dans le champ du bloc, calculé une fois. Côté JS,
+rien par cadre que l'heure à pousser.
 
 ## Exemples
 

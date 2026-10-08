@@ -10,8 +10,8 @@
  * sa vie vient des taches, des brins et des chemins que le bake pose
  * par-dessus (`chunkLayer.ts`) ; les autres sols tirent une variante, la
  * sobre le plus souvent — un sol trop chargé fatigue l'œil et noie les
- * ressources. L'eau tire la sienne parmi celles de sa profondeur
- * (`BlockTerrain.depth`).
+ * ressources. L'eau n'a pas de tuile : le bake pose sous elle la terre de
+ * sa rive (`BlockTerrain.beneath`), et `waterLayer.ts` la peint par-dessus.
  */
 
 import type { Texture } from 'pixi.js';
@@ -24,9 +24,6 @@ import {
   SHADOW_SIZE,
   TRAIL_DOTS,
   TRAIL_WIDTH,
-  WATER_DEPTH_COLORS,
-  WATER_SPRITES,
-  WATER_TILES,
   cornerTile,
   edgeTile,
   shadowTile,
@@ -34,15 +31,13 @@ import {
   type MeadowSprinkle,
   type PatchTone,
   type Side,
-  type WaterDepth,
-  type WaterSprite,
 } from '../art/terrain.ts';
 import { ROAD_TILES } from '../art/road.ts';
 import { hash3 } from '../core/rng.ts';
 import { terrainAt, type TerrainKind } from '../sim/terrain.ts';
 import type { SpriteLibrary, SvgSource } from './spriteLibrary.ts';
 
-export type { Corner, Side, WaterDepth };
+export type { Corner, Side };
 
 export const SIDES: readonly Side[] = ['top', 'right', 'bottom', 'left'];
 export const CORNERS: readonly Corner[] = ['tl', 'tr', 'bl', 'br'];
@@ -66,19 +61,12 @@ export const CORNER_SIDES: Record<Corner, readonly [Side, Side]> = {
 const GROUNDS = Object.keys(GROUND) as Ground[];
 const TILE = 32;
 
-type GroundColor = (typeof GROUND)[Ground]['base' | 'alt'] | (typeof WATER_DEPTH_COLORS)[number];
-
 /**
- * Couleurs de fond qu'un coin arrondi peut prendre : la base de chaque sol,
- * et les deux profondeurs du large, qui arrondissent les paliers de l'eau.
- * L'herbe près d'un autre sol est toujours sa base : aucune tache ne touche
- * un autre sol (`chunkLayer.ts`).
+ * Couleurs de fond qu'un coin arrondi peut prendre : la base de chaque sol
+ * à sec. L'herbe près d'un autre sol est toujours sa base : aucune tache ne
+ * touche un autre sol (`chunkLayer.ts`).
  */
-const CORNER_COLORS: readonly GroundColor[] = [
-  ...GROUNDS.map((ground) => GROUND[ground].base),
-  GROUND.water.alt,
-  GROUND.water.deep,
-];
+const CORNER_COLORS = GROUNDS.filter((ground) => ground !== 'water').map((ground) => GROUND[ground].base);
 
 /** Les images du sol, à passer à `SpriteLibrary.load`. */
 export function terrainSources(): SvgSource[] {
@@ -95,14 +83,6 @@ export function terrainSources(): SvgSource[] {
       if (svg) add(`terrain.edge.${ground}.${side}`, svg);
     }
     add(`terrain.shadow.${ground}`, shadowTile(ground), SHADOW_SIZE.width, SHADOW_SIZE.height);
-  }
-  for (const depth of WATER_DEPTHS) {
-    WATER_TILES[depth].forEach((svg, variant) => add(`terrain.water.${depth}.${variant}`, svg));
-  }
-  for (const [name, svg] of Object.entries(WATER_SPRITES)) {
-    const [, width, height] = /width="([\d.]+)" height="([\d.]+)"/.exec(svg) ?? [];
-
-    add(`terrain.${name}`, svg, Number(width), Number(height));
   }
   for (const color of CORNER_COLORS) {
     for (const corner of CORNERS) add(`terrain.corner.${color}.${corner}`, cornerTile(color, corner));
@@ -123,15 +103,11 @@ export class TerrainTiles {
   }
 
   /**
-   * La tuile de sol. `roll` est un hachage seedé de la tuile :
-   * il choisit la variante des sols qui en ont plusieurs. `depth` ne sert
-   * qu'à l'eau.
+   * La tuile d'un sol à sec. `roll` est un hachage seedé de la tuile :
+   * il choisit la variante des sols qui en ont plusieurs.
    */
-  public ground(ground: Ground, roll: number, depth: WaterDepth = 0): Texture {
+  public ground(ground: DryGround, roll: number): Texture {
     if (ground === 'grass') return this.library.texture('terrain.grass.0');
-    if (ground === 'water') {
-      return this.library.texture(`terrain.water.${depth}.${Math.min(variantOf(roll), WATER_TILES[depth].length - 1)}`);
-    }
     return this.library.texture(`terrain.${ground}.${variantOf(roll)}`);
   }
 
@@ -140,11 +116,9 @@ export class TerrainTiles {
     return edgeTile(owner, side) ? this.library.texture(`terrain.edge.${owner}.${side}`) : null;
   }
 
-  /** Coin arrondi, peint dans la couleur du sol voisin ; pour l'eau, celle de sa profondeur `depth`. */
-  public corner(neighbour: Ground, corner: Corner, depth: WaterDepth = 0): Texture {
-    const color = neighbour === 'water' ? WATER_DEPTH_COLORS[depth] : GROUND[neighbour].base;
-
-    return this.library.texture(`terrain.corner.${color}.${corner}`);
+  /** Coin arrondi, peint dans la couleur du sol voisin. */
+  public corner(neighbour: DryGround, corner: Corner): Texture {
+    return this.library.texture(`terrain.corner.${GROUND[neighbour].base}.${corner}`);
   }
 
   /** La dalle d'une route dont les voisines pavées sont `links` (bits `ROAD_LINK`). */
@@ -167,27 +141,18 @@ export class TerrainTiles {
     return this.library.texture(`terrain.trail.${part}`);
   }
 
-  /** Un sprite animé de l'eau : écume des rives ou vaguelette du large. */
-  public water(name: WaterSprite): Texture {
-    return this.library.texture(`terrain.${name}`);
-  }
-
   /** Ombre portée pleine, dans la teinte foncée du sol ; `SHADOW_SIZE` px, à étirer. */
   public shadow(ground: Ground): Texture {
     return this.library.texture(`terrain.shadow.${ground}`);
   }
 }
 
-const WATER_DEPTHS: readonly WaterDepth[] = [0, 1, 2];
+/** Un sol à sec : ce que le bake dessine. */
+export type DryGround = Exclude<Ground, 'water'>;
 
 /**
  * Le sol d'un bloc de `size` tuiles et de sa marge, lu une fois depuis la
- * seed : la nature de chaque tuile, et la profondeur de l'eau.
- *
- * La profondeur se lit à la distance de la rive : 0 quand une des huit
- * voisines est à sec, 1 quand la rive est à deux tuiles, 2 au-delà. Elle
- * regarde deux tuiles autour : elle n'est juste qu'à `margin - 2` tuiles
- * du bloc, au plus.
+ * seed : la nature de chaque tuile, et la terre que le bake pose sous l'eau.
  */
 export class BlockTerrain {
   private readonly kinds: TerrainKind[];
@@ -211,20 +176,29 @@ export class BlockTerrain {
     return this.kinds[(ly + this.margin) * this.span + lx + this.margin]!;
   }
 
-  /** Profondeur de l'eau en (lx, ly) ; 0 pour une tuile à sec. */
-  public depth(lx: number, ly: number): WaterDepth {
-    if (this.kind(lx, ly) !== 'water') return 0;
+  /**
+   * Le sol que le bake dessine en (lx, ly) : la tuile elle-même si elle est
+   * à sec ; sous l'eau, la terre la plus présente parmi ses huit voisines —
+   * le sable d'une plage, le plus souvent. Là où la rive arrondie du shader
+   * se retire d'une tuile d'eau, c'est elle qui se montre. Regarde une tuile
+   * autour : juste jusqu'à `margin - 1` tuiles du bloc.
+   */
+  public beneath(lx: number, ly: number): DryGround {
+    const kind = this.kind(lx, ly);
 
-    let depth: WaterDepth = 2;
+    if (kind !== 'water') return kind;
 
-    for (let dy = -2; dy <= 2; dy += 1) {
-      for (let dx = -2; dx <= 2; dx += 1) {
-        if (this.kind(lx + dx, ly + dy) === 'water') continue;
-        if (Math.abs(dx) <= 1 && Math.abs(dy) <= 1) return 0;
-        depth = 1;
+    const counts: Record<DryGround, number> = { sand: 0, grass: 0, rock: 0 };
+
+    for (let dy = -1; dy <= 1; dy += 1) {
+      for (let dx = -1; dx <= 1; dx += 1) {
+        const near = this.kind(lx + dx, ly + dy);
+
+        if (near !== 'water') counts[near] += 1;
       }
     }
-    return depth;
+    // À égalité, et loin de toute rive, le sable.
+    return counts.grass > counts.sand && counts.grass >= counts.rock ? 'grass' : counts.rock > counts.sand ? 'rock' : 'sand';
   }
 }
 

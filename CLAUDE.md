@@ -715,7 +715,7 @@ Les règles, en résumé :
   de leur tuile, Adam passe derrière. Une ressource peut avoir plusieurs
   sprites (`RESOURCES[id].sprites` : feuillu, sapin, arbre mort), tirés par
   tuile depuis la seed.
-- Le sol (`src/art/terrain.ts` : herbe, sable, eau, roche, transitions,
+- Le sol (`src/art/terrain.ts` : herbe, sable, roche, transitions,
   coins arrondis d'une demi-tuile — une rive en biais fait une vague, pas un
   escalier) et le décor (`src/data/decor.ts`, sprite `decor`, tiré par
   `decorAt()`) sont bakés par blocs de 16 × 16 tuiles (`render/chunkLayer.ts`,
@@ -726,10 +726,12 @@ Les règles, en résumé :
   bâtie à chaque bâtiment fini, lus dans la ville — le bloc qu'un chemin
   traverse se rebake quand il apparaît ou disparaît, comme sous une route.
   Le décor ne se heurte pas et n'est jamais de l'état.
-  L'eau a trois profondeurs bakées, sans reflet baké ; son écume en bulles
-  (le ressac) et ses vaguelettes (des croissants qui naissent, dérivent et se
-  résorbent, par la taille) sont des sprites par-dessus (`render/waterLayer.ts`), par blocs, cachés et
-  immobiles hors de l'écran, figés sous `prefers-reduced-motion`.
+  L'eau n'est pas bakée (sous elle, la terre de sa rive) : un seul shader la
+  peint par-dessus (`render/waterLayer.ts`, `waterShader.ts`), d'après un
+  champ par bloc (`render/waterField.ts` : niveau lissé, distance à la rive) —
+  rive arrondie sans marche, dégradé turquoise → bleu, écume qui respire en
+  3 s, crêtes en arc qui naissent et s'effacent ; un maillage par bloc
+  d'eau, sur le temps de rendu, figé sous `prefers-reduced-motion`.
 - Ombres portées : capsules pleines dans la teinte foncée du sol sous
   l'objet (`TerrainTiles.shadow`), dans un conteneur sous tout le reste.
 - Ressenti (rebond, secousse, tremblement, flash, caméra) : des minuteurs

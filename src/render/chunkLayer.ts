@@ -130,10 +130,10 @@ export class ChunkLayer {
   /**
    * Dessine le bloc dans sa RenderTexture, puis jette la scène.
    *
-   * Huit passes, dans l'ordre du peintre : le sol (l'eau selon sa
-   * profondeur), les taches de la prairie, ses brins et fleurettes, les
-   * transitions (faces avant, liserés), les coins arrondis — entre sols et
-   * entre profondeurs d'eau —, les chemins de terre battue, qui passent
+   * Huit passes, dans l'ordre du peintre : le sol (sous l'eau, la terre de
+   * sa rive : l'eau est peinte par `waterLayer.ts`), les taches de la
+   * prairie, ses brins et fleurettes, les transitions (faces avant,
+   * liserés), les coins arrondis entre sols, les chemins de terre battue, qui passent
    * d'un sol à l'autre comme une rampe, les routes, puis le décor, qu'une dalle recouvre : pas de fleur sur un pavé. Les
    * sprites sont temporaires : seule la texture survit. Celles du tileset,
    * partagées, restent.
@@ -151,53 +151,42 @@ export class ChunkLayer {
     const baseTy = by * BLOCK_TILES;
     const { seed } = this;
 
-    // Trois rangées de marge : les coins du bord regardent la profondeur de
-    // la voisine, qui regarde elle-même deux tuiles autour.
-    const terrain = new BlockTerrain(seed, baseTx, baseTy, BLOCK_TILES, 3);
-    // Un palier par sol, et un par profondeur d'eau : c'est entre paliers que les coins s'arrondissent.
-    const layerAt = (lx: number, ly: number): string => {
-      const kind = terrain.kind(lx, ly);
-
-      return kind === 'water' ? `water${terrain.depth(lx, ly)}` : kind;
-    };
+    // Deux rangées de marge : un coin du bord regarde le sol de la voisine,
+    // qui regarde elle-même une tuile autour quand elle est sous l'eau.
+    const terrain = new BlockTerrain(seed, baseTx, baseTy, BLOCK_TILES, 2);
 
     for (let ly = 0; ly < BLOCK_TILES; ly += 1) {
       for (let lx = 0; lx < BLOCK_TILES; lx += 1) {
         const tx = baseTx + lx;
         const ty = baseTy + ly;
-        const kind = terrain.kind(lx, ly);
+        // L'eau n'est pas bakée : sous elle, la terre de sa rive (`waterLayer.ts` la peint par-dessus).
+        const ground = terrain.beneath(lx, ly);
         const roll = groundRoll(seed, tx, ty);
 
-        scene.addChild(tileSprite(this.tiles.ground(kind, roll, terrain.depth(lx, ly)), lx, ly));
+        scene.addChild(tileSprite(this.tiles.ground(ground, roll), lx, ly));
 
         for (const side of SIDES) {
           const [dx, dy] = SIDE_OFFSET[side];
 
-          if (terrain.kind(lx + dx, ly + dy) === kind) continue;
+          if (terrain.beneath(lx + dx, ly + dy) === ground) continue;
 
-          const edge = this.tiles.edge(kind, side);
+          const edge = this.tiles.edge(ground, side);
 
           if (edge) edges.addChild(tileSprite(edge, lx, ly));
         }
 
         // Un coin est saillant quand ses deux voisins orthogonaux sont d'un
-        // même autre palier : on l'arrondit, peint dans la couleur de ce palier.
-        const layer = layerAt(lx, ly);
-
+        // même autre sol : on l'arrondit, peint dans la couleur de ce sol.
         for (const corner of CORNERS) {
           const [vertical, horizontal] = CORNER_SIDES[corner];
           const [vx, vy] = SIDE_OFFSET[vertical];
           const [hx, hy] = SIDE_OFFSET[horizontal];
-          const above = layerAt(lx + vx, ly + vy);
-          const beside = layerAt(lx + hx, ly + hy);
+          const above = terrain.beneath(lx + vx, ly + vy);
+          const beside = terrain.beneath(lx + hx, ly + hy);
 
-          if (above === layer || beside !== above) continue;
+          if (above === ground || beside !== above) continue;
 
-          const neighbour = terrain.kind(lx + hx, ly + hy);
-
-          corners.addChild(
-            tileSprite(this.tiles.corner(neighbour, corner, terrain.depth(lx + hx, ly + hy)), lx, ly),
-          );
+          corners.addChild(tileSprite(this.tiles.corner(beside, corner), lx, ly));
         }
 
         if (this.roads.has(tx, ty)) {
@@ -212,7 +201,7 @@ export class ChunkLayer {
           continue;
         }
 
-        const sprinkle = kind === 'grass' ? sprinkleAt(seed, tx, ty) : null;
+        const sprinkle = terrain.kind(lx, ly) === 'grass' ? sprinkleAt(seed, tx, ty) : null;
 
         if (sprinkle) {
           const sprite = new Sprite(this.tiles.sprinkle(sprinkle.name));

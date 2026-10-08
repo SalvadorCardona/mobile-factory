@@ -1904,7 +1904,7 @@ export class Hud {
     const lines = [
       `tick ${this.world.tickCount}   ${fps.toFixed(0)} fps   seed ${this.world.seed}`,
       `chunk ${cx},${cy}   ${chunks} blocs de sol   ${this.world.resources.size()} tuiles entamées`,
-      `eau ${water.sprites} sprite(s) à l'écran, ${water.animated} animé(s)`,
+      `eau ${water.blocks} bloc(s) à l'écran, ${water.tiles} tuile(s) au shader`,
       `atlas ${atlas.images} images → ${atlas.pages} texture(s), ${atlas.megapixels.toFixed(1)} Mpx @${atlas.resolution}x, ${atlas.ms} ms`,
       `${this.world.entities.size} bâtiment(s)   ${this.world.mobiles.size} mobile(s)   ${this.world.pendingWakes()} réveil(s)`,
       `météo ${this.world.weather()?.id ?? 'calme'}   ${weatherParticles} particule(s)`,
