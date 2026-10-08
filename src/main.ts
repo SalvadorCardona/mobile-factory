@@ -728,6 +728,7 @@ function wireAudio(world: World, audio: AudioEngine, settings: SettingsPanel): v
   world.events.on('chiefSlamWarned', () => audio.play('brute'));
   world.events.on('chiefSlammed', () => audio.play('thud'));
   world.events.on('enemyChiefDefeated', () => audio.play('objective'));
+  world.events.on('levelUp', () => audio.play('objective'));
   world.events.on('gearCrafted', () => audio.play('upgrade'));
   world.events.on('siteCancelled', () => audio.play('deliver'));
   world.events.on('roadPaved', () => audio.play('deliver'));
@@ -981,6 +982,11 @@ function wireParticles(world: World, renderer: GameRenderer): void {
     particles.burst(x, y, PARTICLES.rubble, 8, 0.1);
   });
   world.events.on('spitSplashed', ({ x, y }) => particles.burst(x, y, PARTICLES.mutant, 5, 0.08));
+  // Un niveau de plus : une gerbe de confettis et d'étoiles autour d'Adam.
+  world.events.on('levelUp', ({ x, y }) => {
+    particles.burst(x, y - 16, PARTICLES.confetti, 16, 0.16);
+    particles.burst(x, y - 16, PARTICLES.star, 8, 0.12);
+  });
   world.events.on('enemyChiefDefeated', ({ x, y }) => {
     particles.burst(x, y - 16, PARTICLES.mutant, 14, 0.14);
     particles.burst(x, y - 16, PARTICLES.confetti, 12, 0.16);

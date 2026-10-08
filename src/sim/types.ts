@@ -16,6 +16,7 @@ import type { BuildingId } from '../data/buildings.ts';
 import type { RareOfferId } from '../data/caravan.ts';
 import type { EnemyId, WildlifeId } from '../data/enemies.ts';
 import type { Sex } from '../data/inhabitants.ts';
+import type { Shooter } from '../data/levels.ts';
 import type { ItemId } from '../data/items.ts';
 import type { ResearchId } from '../data/research.ts';
 import type { NeedId } from '../data/needs.ts';
@@ -309,6 +310,8 @@ export interface Player {
   gear: number;
   /** Ticks depuis le dernier coup reçu : Adam ne récupère qu'au calme. */
   calmTicks: number;
+  /** Son expérience totale (`data/levels.ts`) : son niveau et sa barre s'en déduisent. */
+  xp: number;
   /** Son âge, en années : une de plus à chaque aube (`data/inhabitants.ts`). */
   age: number;
   /**
@@ -430,6 +433,8 @@ export interface Arrow extends Moving {
   damage: number;
   /** La base mutante visée : la flèche la frappe en traversant son emprise. Absent : elle ne vise que les ennemis. */
   baseId?: number;
+  /** Qui a tiré, pour l'XP du coup fatal (`XP_SHARE`). Absent : Adam. */
+  shooter?: Shooter;
 }
 
 /**

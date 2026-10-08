@@ -112,6 +112,8 @@ export const hud: Messages['hud'] = {
     enemyZone: (level: number): string => `Mutant base zone (level ${level}): no harvesting or building while it stands`,
     baseDestroyed: (prestige: number): string => `Mutant base destroyed! +${prestige} Prestige, its zone is free`,
     baseShielded: 'Its chief shields it: bring him down first, the shield falls with him',
+    levelUp: (level: number, maxHp: number, bowDamage: number): string =>
+      `Level ${level}! +${maxHp} max HP, +${Math.round(bowDamage * 100) / 100} bow damage`,
     chiefDefeated: (prestige: number): string => `Base chief defeated! +${prestige} Prestige — the base has lost its shield`,
     gearCrafted: (gear: string, level: number): string => `${gear} forged: you can now damage level ${level} bases`,
     survivors: (count: number): string =>
@@ -124,6 +126,8 @@ export const hud: Messages['hud'] = {
     upgraded: (level: string): string => `${level}!`,
     enough: 'enough',
     prestige: (amount: number): string => `+${amount} Prestige`,
+    /** Experience gained from a slain enemy. */
+    xp: (amount: number): string => `+${amount} XP`,
   },
   wave: {
     night: (night: number): string => `Night ${night}`,
@@ -213,6 +217,10 @@ export const hud: Messages['hud'] = {
     wanted: (item: string, amount: number): string => `${item} — Eve needs it, ${amount} in the bag`,
     prestige: 'Prestige',
     prestigeLabel: (amount: number): string => `Prestige: ${amount}`,
+    /** Adam's level, short, in the town banner. */
+    level: (level: number): string => `Lv ${level}`,
+    levelTip: (level: number, into: number, needed: number, max: boolean): string =>
+      max ? `Level ${level} (maximum)` : `Level ${level} — ${into} / ${needed} XP to the next`,
   },
   hintBulb: 'Show the tip',
   pause: 'Pause',

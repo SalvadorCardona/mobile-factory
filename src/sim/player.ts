@@ -63,6 +63,7 @@ export function createPlayer(x: number, y: number, age: number = AGES.adultMin):
     target: null,
     hp: PLAYER_MAX_HP,
     calmTicks: 0,
+    xp: 0,
     gear: 0,
     age,
     inventory: new Store(INVENTORY_CAPACITY),

@@ -60,7 +60,6 @@ import type { SiteLine } from '../sim/siteLedger.ts';
 import { canPause, employs } from '../sim/staffing.ts';
 import type { WorkPriority } from '../data/workers.ts';
 import { siteMissing, type World } from '../sim/world.ts';
-import { PLAYER_MAX_HP } from '../sim/player.ts';
 import { MobileLayer, drawHp } from './mobileLayer.ts';
 import { type HeldTool, Puppet } from './puppet.ts';
 import { NEEDS_MIN_ZOOM, SiteNeeds } from './siteNeeds.ts';
@@ -532,8 +531,10 @@ export class EntityLayer {
 
     if (player.hp !== this.adamHpShown) {
       this.adamHpShown = player.hp;
-      this.adamHp.visible = player.hp < PLAYER_MAX_HP;
-      if (this.adamHp.visible) drawHp(this.adamHp, player.hp / PLAYER_MAX_HP);
+      const maxHp = this.world.maxHp();
+
+      this.adamHp.visible = player.hp < maxHp;
+      if (this.adamHp.visible) drawHp(this.adamHp, player.hp / maxHp);
     }
 
     this.mobiles.update(alpha, ticker);

@@ -431,6 +431,19 @@ ruine rebâtie ne paie pas), chaque ennemi vaincu `KILL_PRESTIGE` ;
 événement `prestigeGained`, « +N Prestige » flottant, médaille et nombre
 en tête du bandeau de la ville, en haut à gauche du HUD (sous la barre sur un téléphone). Rien ne le dépense encore.
 
+**Niveaux d'Adam** (`src/data/levels.ts`, `src/sim/levels.ts`) — chaque
+ennemi abattu rapporte de l'XP (`KILL_XP` ; une base et son chef, `BASE_XP`
+par niveau de base) : seule l'XP totale est de l'état (`Player.xp`, absente
+d'une ancienne sauvegarde : niveau 1), le niveau (`World.level()`, borné à
+`MAX_LEVEL`, courbe `XP_CURVE`) s'en déduit. Qui a tiré compte
+(`XP_SHARE`, `Arrow.shooter`) : Adam en plein, les compagnons de l'armée à
+moitié, les tours pas du tout. Chaque niveau donne `LEVEL_GAINS` : des PV max
+(`World.maxHp()`) et des modificateurs additifs sur les statistiques de la
+recherche, cumulés avec le labo dans l'unique `World.bonus(stat)`. Un niveau
+passé soigne Adam (événement `levelUp`, toast, confettis) ; le niveau et la
+barre d'XP ouvrent le bandeau de la ville (`.hud-level`), « +N XP » flotte
+sur l'ennemi.
+
 **Bases mutantes** (`src/data/enemyBases.ts`, `src/sim/enemyBases.ts`) —
 à la création de la partie, des anneaux de campements (`ENEMY_BASE_RINGS` :
 34, 54, 76 tuiles de la mairie, niveaux 1 à 3) se tirent de la seed, sans

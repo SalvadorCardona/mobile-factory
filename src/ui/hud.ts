@@ -77,6 +77,8 @@ import { currentObjective, goalProgress, goalWait, type GoalWait } from '../sim/
 import { TICKS_PER_SECOND, type Inhabitant, type Workforce, type World } from '../sim/world.ts';
 import { locale, onLocale, t } from '../i18n/locale.ts';
 import { carriesWanted, harvestRefusedText, tutorialAdvice, type Advice } from './hint.ts';
+import { MAX_LEVEL } from '../data/levels.ts';
+import { levelProgress } from '../sim/levels.ts';
 import { buildingIcon, dayDialUrl, itemAmount, itemIcon, prestigeIcon, uiIcon } from './icons.ts';
 import { effectLine } from './researchText.ts';
 import { moodMeter } from './moodMeter.ts';
@@ -198,11 +200,14 @@ export class Hud {
   private readonly town: HTMLElement;
   /** Le Prestige de la colonie : son icône et son compte, en haut à gauche. */
   private readonly prestige: HTMLElement;
+  /** Le niveau d'Adam et sa barre d'XP, en tête du bandeau de la ville. */
+  private readonly level: HTMLElement;
   /** À gauche de la barre (ou sous elle, sur un téléphone) : le Prestige, la ville et son alerte de vivres. */
   private readonly left: HTMLElement;
   /** À droite de la barre (ou sous elle) : la météo et l'horloge du jour. */
   private readonly right: HTMLElement;
   private lastPrestige = '';
+  private lastLevel = '';
   /** La population de la ville : au travail, inactifs, enfants. */
   private readonly people: HTMLElement;
   private lastPeople = '';
@@ -380,6 +385,8 @@ export class Hud {
     this.prestige = element('div', 'hud-prestige');
     this.prestige.hidden = true;
     this.prestige.setAttribute('role', 'status');
+    this.level = element('div', 'hud-level');
+    this.level.setAttribute('role', 'status');
     this.people = element('div', 'panel hud-people');
     this.people.hidden = true;
     this.person = element('div', 'hud-speech hud-person');
@@ -524,6 +531,7 @@ export class Hud {
       this.lastBag = '';
       this.lastTown = '';
       this.lastPrestige = '';
+      this.lastLevel = '';
       this.lastPeople = '';
       this.lastWeather = '';
       if (!this.defeat.hidden) this.renderDefeat();
@@ -591,6 +599,12 @@ export class Hud {
       if (entity) this.celebrate(entity, t().hud.float.built(t().buildings[entity.proto].label));
     });
     world.events.on('prestigeGained', ({ amount, x, y }) => this.floatPrestige(amount, x, y));
+    world.events.on('xpGained', ({ amount, x, y }) => this.floatXp(amount, x, y));
+    world.events.on('levelUp', ({ level, maxHp, bowDamage }) => {
+      this.notify(t().hud.toast.levelUp(level, maxHp, bowDamage), 'good');
+      this.level.dataset['up'] = 'true';
+      window.setTimeout(() => delete this.level.dataset['up'], 1400);
+    });
     world.events.on('buildingUpgraded', ({ id, level, fromBag }) => {
       const entity = world.entities.get(id);
 
@@ -1216,6 +1230,18 @@ export class Hud {
     window.setTimeout(() => floater.remove(), PRESTIGE_FLOAT_MS);
   }
 
+  /** « +N XP » qui monte de l'ennemi abattu. */
+  private floatXp(amount: number, worldX: number, worldY: number): void {
+    const { x, y } = this.project(worldX, worldY - 20);
+    const floater = element('span', 'hud-float hud-float-prestige hud-float-xp');
+
+    floater.style.left = `${Math.round(x)}px`;
+    floater.style.top = `${Math.round(y)}px`;
+    floater.append(t().hud.float.xp(amount));
+    this.floats.append(floater);
+    window.setTimeout(() => floater.remove(), PRESTIGE_FLOAT_MS);
+  }
+
   /** L'icône de l'objet refusé, qui tressaute au-dessus d'Adam : il n'en prend plus. */
   private refused(item: ItemId): void {
     const { player } = this.world;
@@ -1259,6 +1285,7 @@ export class Hud {
     this.updateBag();
     this.updateTown();
     this.updatePrestige();
+    this.updateLevel();
     this.updatePeople();
     this.updateHunger();
     this.updateSpeech();
@@ -1641,8 +1668,8 @@ export class Hud {
     this.town.dataset['empty'] = String(entries.length === 0);
     const scroll = this.townItems()?.scrollLeft ?? 0;
 
-    // Le Prestige ouvre le bandeau, avant la ville et ses objets.
-    this.town.replaceChildren(this.prestige, title, items);
+    // Le niveau d'Adam et le Prestige ouvrent le bandeau, avant la ville et ses objets.
+    this.town.replaceChildren(this.level, this.prestige, title, items);
     items.scrollLeft = scroll;
     this.markTownOverflow();
   }
@@ -1672,6 +1699,25 @@ export class Hud {
     this.prestige.hidden = prestige <= 0;
     this.prestige.replaceChildren(prestigeIcon(18), text('hud-prestige-count', key));
     setTip(this.prestige, label.prestigeLabel(prestige));
+  }
+
+  /** Le niveau d'Adam : « Niv. 3 » et une fine barre d'XP dessous, en tête du bandeau de la ville. */
+  private updateLevel(): void {
+    const { level, into, needed } = levelProgress(this.world.player.xp);
+    const max = level >= MAX_LEVEL;
+    const key = `${level}:${into}`;
+
+    if (key === this.lastLevel) return;
+    this.lastLevel = key;
+
+    const label = t().hud.stock;
+    const bar = element('span', 'hud-level-bar');
+    const fill = element('span', 'hud-level-fill');
+
+    fill.style.width = `${Math.round((into / needed) * 100)}%`;
+    bar.append(fill);
+    this.level.replaceChildren(text('hud-level-label', label.level(level)), bar);
+    setTip(this.level, label.levelTip(level, into, needed, max));
   }
 
   /* ------------------------------------------------------------ célébration */
