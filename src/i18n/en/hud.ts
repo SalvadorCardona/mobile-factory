@@ -40,6 +40,12 @@ export const hud: Messages['hud'] = {
     maxLevel: 'You already have the best bow',
     missingItems: 'Not enough to forge this bow — not in the bag, not in town',
   },
+  recruit: {
+    outOfReach: 'Too far from the barracks — get closer',
+    busy: 'The barracks is already training a recruit',
+    full: 'Troop is full: five companions at most',
+    missingItems: 'Not enough to equip this recruit — not in the bag, not in town',
+  },
   repair: {
     outOfReach: 'Too far — get closer',
     intact: 'Nothing to repair',
@@ -115,6 +121,9 @@ export const hud: Messages['hud'] = {
     levelUp: (level: number, maxHp: number, bowDamage: number): string =>
       `Level ${level}! +${maxHp} max HP, +${Math.round(bowDamage * 100) / 100} bow damage`,
     chiefDefeated: (prestige: number): string => `Base chief defeated! +${prestige} Prestige — the base has lost its shield`,
+    companionTraining: (label: string, seconds: number): string => `${label} in training — ${seconds} s`,
+    companionJoined: (label: string): string => `${label} joins Adam!`,
+    companionDied: (label: string): string => `${label} has fallen — recruit another at the barracks`,
     gearCrafted: (gear: string, level: number): string => `${gear} forged: you can now damage level ${level} bases`,
     survivors: (count: number): string =>
       count > 1
@@ -201,6 +210,10 @@ export const hud: Messages['hud'] = {
     happinessName: 'Town happiness',
     happiness: (total: number, average: number, unhappy: number): string =>
       `Town happiness: ${total} (average ${average} per inhabitant, ${unhappy} unhappy)`,
+  },
+  army: {
+    label: (n: number, max: number, hp: number, maxHp: number, training: number): string =>
+      `Companions: ${n}/${max} — health ${hp}/${maxHp}` + (training > 0 ? ` (${training} in training)` : ''),
   },
   stock: {
     bag: 'Bag',

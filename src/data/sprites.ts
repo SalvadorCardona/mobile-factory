@@ -20,6 +20,8 @@ import { ADAM } from '../art/adam.ts';
 import { ALERT } from '../art/alert.ts';
 import { ANTENNA, ANTENNA_2, ANTENNA_3 } from '../art/antenna.ts';
 import { ARROW } from '../art/arrow.ts';
+import { ARCHER, HEALER, WARRIOR } from '../art/companions.ts';
+import { BARRACKS } from '../art/barracks.ts';
 import { BUILDER } from '../art/builder.ts';
 import { BUILDER_HOUSE } from '../art/builderHouse.ts';
 import { CARAVAN_SPRITE } from '../art/caravan.ts';
@@ -114,6 +116,10 @@ export const SPRITES = {
   logistician: LOGISTICIAN,
   /** Un bâtisseur : casque jaune, ceinture à outils, et son marteau, qui s'abat à chaque coup. */
   builder: BUILDER,
+  /** Les compagnons d'Adam : le guerrier (casque, bouclier, épée), l'archer (capuchon, carquois, arc) et le soigneur (surplis blanc, croix menthe). */
+  warrior: WARRIOR,
+  archer: ARCHER,
+  healer: HEALER,
   /** Un mutant assommé, puis qui suit Adam jusqu'à la clinique. */
   patient: PATIENT,
   /** Un mutant guéri : un habitant, porteur, avec sa touffe fluo. */
@@ -181,6 +187,7 @@ export const SPRITES = {
   charcoalKiln: CHARCOAL_KILN,
   reinforcedTower: REINFORCED_TOWER,
   clinic: CLINIC_SPRITE,
+  barracks: BARRACKS,
   lab: LAB,
   lumberCamp: LUMBER_CAMP,
   foresterHouse: FORESTER_HOUSE,

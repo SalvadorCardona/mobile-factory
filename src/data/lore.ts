@@ -258,6 +258,16 @@ export const LORE = {
         'habitant, un peu vert sur les bords, qui porte plus lourd que les autres.',
       effect: 'Soigne les mutants assommés : 3 places.',
     },
+    barracks: {
+      name: 'Caserne',
+      sign: 'Caserne',
+      site: 'Une palissade à dresser, un râtelier vide qui attend ses armes. Il faudra ensuite de quoi équiper les recrues.',
+      description:
+        'Un fortin trapu, un râtelier de lances de fortune et un bouclier rond au-dessus de la porte. ' +
+        'On y forme jusqu’à cinq compagnons — guerrier, archer ou soigneur — qui suivent Adam, ' +
+        'se battent à ses côtés et se font soigner quand ça tourne mal.',
+      effect: 'Forme des compagnons qui suivent Adam : guerrier, archer, soigneur. Cinq au plus.',
+    },
     lab: {
       name: 'Labo de recherche',
       sign: 'Labo',

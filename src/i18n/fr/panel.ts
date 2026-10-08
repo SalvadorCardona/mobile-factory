@@ -231,6 +231,25 @@ export const panel = {
     comeCloser: ' — rapprochez-vous.',
   },
 
+  barracks: {
+    /** `n` compagnons sur `max`, formations comprises. */
+    army: (n: number, max: number): string => `Troupe : ${n}/${max}`,
+    recruitTitle: 'Recruter',
+    training: (label: string, seconds: number): string => `Formation : ${label}, encore ${seconds} s`,
+    full: (max: number): string => `Troupe complète : ${max} compagnons au plus. Un compagnon tombé laisse une place.`,
+    rosterTitle: 'Armée',
+    none: 'Aucun compagnon pour l’instant : recrutez-en un ci-dessus.',
+    hp: (hp: number, max: number): string => `${hp}/${max} PV`,
+    stats: {
+      hp: (n: number): string => `${n} points de vie`,
+      damage: (n: number): string => `${n} dégât${n > 1 ? 's' : ''} par coup`,
+      range: (n: number): string => `portée ${n} case${n > 1 ? 's' : ''}`,
+      heal: (n: number): string => `soigne ${n} point${n > 1 ? 's' : ''} de vie`,
+    },
+    recruit: 'Recruter',
+    seconds: (n: number): string => `${n} s de formation`,
+    comeCloser: ' — rapprochez-vous.',
+  },
   clinic: {
     beds: (used: number, beds: number): string => `Places occupées : ${used}/${beds}`,
     full: 'Complète : les mutants vaincus ne tombent plus assommés pour elle.',

@@ -17,6 +17,7 @@
 
 import { CHUNK_TILES } from '../core/grid.ts';
 import { BUILDINGS, MENU_BUILDING_IDS, maxLevel, type BuildingId } from '../data/buildings.ts';
+import { COMPANION_CLASSES, isCompanionClass, type CompanionClassId } from '../data/companions.ts';
 import { RARE_OFFERS, type RareOfferId } from '../data/caravan.ts';
 import { ENEMY_BASE_LEVELS, RAIDS, enemyBaseLevel } from '../data/enemyBases.ts';
 import { ENEMIES, WILDLIFE, type EnemyId, type WildlifeId } from '../data/enemies.ts';
@@ -677,6 +678,14 @@ function parseEntity(raw: unknown): SavedEntity {
     case 'yard':
     case 'antenna':
       return { ...built, kind };
+    case 'barracks': {
+      const raw = entity['training'];
+      // Absente d'une sauvegarde d'avant la caserne : aucune recrue.
+      const training = raw === undefined || raw === null ? null : record(raw);
+
+      if (training && !isCompanionClass(training['role'])) throw new SaveError(`recrue inconnue : ${String(training['role'])}`);
+      return { ...built, kind, training: training && { role: training['role'] as CompanionClassId, endTick: int(training['endTick']) } };
+    }
     case 'lab': {
       const research = entity['research'] === null ? null : (oneOf(entity['research'], RESEARCH) as ResearchId);
       const endTick = int(entity['endTick']);
@@ -932,6 +941,25 @@ function parseMobile(raw: unknown, seed: number): Mobile {
 
       if (!PATIENT_STATES.includes(state as PatientState)) throw new SaveError(`patient inconnu : ${String(state)}`);
       return { ...base, kind: 'patient', state: state as PatientState, clinicId: int(mobile['clinicId']), ticks: int(mobile['ticks']) };
+    }
+    case 'companion': {
+      const role = mobile['role'];
+
+      if (!isCompanionClass(role)) throw new SaveError(`compagnon inconnu : ${String(role)}`);
+
+      const hp = int(mobile['hp']);
+
+      // Un compagnon n'a pas plus de points de vie que sa classe, et un mort n'est pas sauvegardé.
+      if (hp <= 0 || hp > COMPANION_CLASSES[role].hp) throw new SaveError(`compagnon à ${hp} points de vie`);
+      return {
+        ...base,
+        kind: 'companion',
+        role,
+        hp,
+        cooldown: mobile['cooldown'] === undefined ? 0 : int(mobile['cooldown']),
+        hurtTicks: mobile['hurtTicks'] === undefined ? 0 : int(mobile['hurtTicks']),
+        stuck: mobile['stuck'] === undefined ? 0 : int(mobile['stuck']),
+      };
     }
     case 'caravan': {
       const state = mobile['state'];

@@ -99,6 +99,7 @@ import { moodMeter } from './moodMeter.ts';
 import { needMeter } from './needMeter.ts';
 import { PanelTabs } from './panelTabs.ts';
 import { siteNeedRow } from './siteNeedRow.ts';
+import { BarracksPanel } from './barracksPanel.ts';
 import { ResearchPanel } from './researchPanel.ts';
 import { TransferPanel } from './transferPanel.ts';
 
@@ -171,6 +172,7 @@ export class BuildingPanel {
   private lastCrew = '';
   /** Le panneau Recherche, que seule la fenêtre du labo montre. */
   private readonly research: ResearchPanel;
+  private readonly barracks: BarracksPanel;
   private readonly upgrade: HTMLElement;
   private readonly upgradeEffect: HTMLElement;
   private readonly upgradeCost: HTMLElement;
@@ -382,6 +384,8 @@ export class BuildingPanel {
 
     this.research = new ResearchPanel(world);
     this.research.root.hidden = true;
+    this.barracks = new BarracksPanel(world);
+    this.barracks.root.hidden = true;
 
     this.upgrade = document.createElement('div');
     this.upgrade.className = 'building-panel-upgrade';
@@ -445,6 +449,7 @@ export class BuildingPanel {
         this.upgrade,
         this.gear,
         this.research.root,
+        this.barracks.root,
       );
     this.tabs.page('inventory').append(this.exchange.root);
 
@@ -629,6 +634,8 @@ export class BuildingPanel {
     if (lab) this.setDescription(false);
     this.research.root.hidden = !lab;
     if (entity.kind === 'lab') this.research.update(entity);
+    this.barracks.root.hidden = entity.kind !== 'barracks';
+    if (entity.kind === 'barracks') this.barracks.update(entity, this.world.inReach(entity));
 
     delete this.items.dataset['layout'];
     if (entity.kind === 'site') {
@@ -1015,6 +1022,7 @@ export class BuildingPanel {
     this.meter.hidden = false;
     this.infoButton.hidden = false;
     this.research.root.hidden = true;
+    this.barracks.root.hidden = true;
     for (const part of [this.crew, this.upgrade, this.gear, this.stock]) part.hidden = true;
     this.exchange.show(null);
     this.tabs.setAvailable('inventory', false);
@@ -1078,6 +1086,7 @@ export class BuildingPanel {
     this.infoButton.hidden = true;
     this.setDescription(false);
     this.research.root.hidden = true;
+    this.barracks.root.hidden = true;
     this.exchange.show(null);
     this.tabs.setAvailable('inventory', false);
     for (const part of [this.crew, this.upgrade, this.gear, this.stock]) part.hidden = true;

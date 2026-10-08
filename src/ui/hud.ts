@@ -55,6 +55,7 @@
 
 import { TILE_SIZE } from '../core/grid.ts';
 import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
+import { COMPANIONS, COMPANION_CLASSES } from '../data/companions.ts';
 import type { ItemId } from '../data/items.ts';
 import { NEED_IDS, type NeedId } from '../data/needs.ts';
 import { SIGNAL_WAVES } from '../data/artDirection.ts';
@@ -631,6 +632,15 @@ export class Hud {
       for (const [item, amount] of fromBag) this.float(item, -amount);
       this.notify(t().hud.toast.gearCrafted(t().gear[level] ?? '', level), 'good');
     });
+    world.events.on('companionTraining', ({ role, endTick, fromBag }) => {
+      for (const [item, amount] of fromBag) this.float(item, -amount);
+      this.notify(t().hud.toast.companionTraining(t().companionClasses[role].label, Math.ceil((endTick - world.tickCount) / TICKS_PER_SECOND)), 'info');
+    });
+    world.events.on('companionJoined', ({ role }) => this.notify(t().hud.toast.companionJoined(t().companionClasses[role].label), 'good'));
+    world.events.on('companionDied', ({ role }) => this.notify(t().hud.toast.companionDied(t().companionClasses[role].label), 'bad'));
+    world.events.on('recruitRejected', ({ reason }) => {
+      if (reason !== 'missing') this.notify(t().hud.recruit[reason], 'bad');
+    });
     world.events.on('gearRejected', ({ reason }) => {
       if (reason !== 'missing') this.notify(t().hud.gear[reason], 'bad');
     });
@@ -925,7 +935,11 @@ export class Hud {
 
     if (this.moodTrend && performance.now() >= this.moodTrend.until) this.moodTrend = null;
     const trend = this.moodTrend ? (this.moodTrend.up ? 'up' : 'down') : '';
-    const key = `${working}:${idle}:${children}:${housed}/${population}:${mood.total}:${mood.unhappy}:${trend}`;
+    const troop = this.world.companions();
+    const training = this.world.companionCount() - troop.length;
+    const troopHp = troop.reduce((sum, companion) => sum + companion.hp, 0);
+    const troopMax = troop.reduce((sum, companion) => sum + COMPANION_CLASSES[companion.role].hp, 0);
+    const key = `${working}:${idle}:${children}:${housed}/${population}:${mood.total}:${mood.unhappy}:${trend}:${troop.length}/${training}/${troopHp}/${troopMax}`;
 
     if (key === this.lastPeople) return;
     const label = t().hud.people;
@@ -966,13 +980,30 @@ export class Hud {
     }
     setTip(happiness, label.happiness(mood.total, mood.average, mood.unhappy));
 
-    this.people.hidden = working + idle + children === 0;
+    // L'armée : compagnons / plafond, et une jauge de leur santé réunie — en corail dès qu'ils sont à moins du tiers.
+    const army = text('hud-people-count hud-people-army', `${troop.length}/${COMPANIONS.max}`);
+    const health = document.createElement('span');
+    const fill = document.createElement('span');
+
+    health.className = 'hud-army-bar';
+    fill.className = 'hud-army-fill';
+    fill.style.width = `${troopMax > 0 ? Math.round((troopHp / troopMax) * 100) : 0}%`;
+    health.append(fill);
+    army.dataset['alert'] = String(troopMax > 0 && troopHp / troopMax < 1 / 3);
+    army.prepend(uiIcon('army', 18));
+    army.append(health);
+    setTip(army, t().hud.army.label(troop.length, COMPANIONS.max, troopHp, troopMax, training));
+
+    const hasArmy = troop.length + training > 0;
+
+    this.people.hidden = working + idle + children === 0 && !hasArmy;
     this.people.replaceChildren(
       count('toil', working, label.working(working)),
       lazy,
       count('child', children, label.children(children)),
       housing,
       happiness,
+      ...(hasArmy ? [army] : []),
     );
   }
 

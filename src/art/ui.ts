@@ -393,6 +393,16 @@ export const UI_ICONS = {
     heart(18.3, 17, 2.6, coral.base),
     pill(15.6, 15.5, 2.4, 1.2, coral.light),
   ),
+  /** Les compagnons d'Adam : un bouclier rond cyan, la croix corail dessus. */
+  army: svg(
+    S,
+    S,
+    circle(12.6, 12.8, 8.6, cyan.shade),
+    circle(12, 12, 8.6, cyan.base),
+    pill(6.5, 6.6, 5, 2, cyan.light),
+    rect(10.6, 6.4, 2.8, 11.2, coral.base, 1.2),
+    rect(6.4, 10.6, 11.2, 2.8, coral.base, 1.2),
+  ),
   /** Un enfant : la tête, la casquette jaune des enfants de la colonie, la tunique orange. */
   child: svg(
     S,

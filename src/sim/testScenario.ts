@@ -39,6 +39,7 @@ export function stageScenario(scenario: TestScenarioProto): World {
   // La base et ses abords sont connus : le brouillard de guerre commence au-delà.
   world.revealAround(hx + 1, hy + 1, scenario.reveal ?? SCENARIO_REVEAL);
   deliver(world, world.townHallId, BUILDINGS.townHall.cost);
+  for (const research of scenario.research ?? []) world.researchDone.push(research);
 
   for (const { building, dx, dy, delivered } of scenario.buildings) {
     const tx = hx + dx;

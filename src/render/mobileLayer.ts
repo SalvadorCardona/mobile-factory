@@ -67,6 +67,7 @@
 import { Container, Graphics, Sprite, type Texture, type Ticker } from 'pixi.js';
 import { TILE_SIZE, floorDiv } from '../core/grid.ts';
 import { PALETTE, hex } from '../data/artDirection.ts';
+import { COMPANION_CLASSES } from '../data/companions.ts';
 import { CHIEF, ENEMIES, LOOT_DROPS, SPITTER } from '../data/enemies.ts';
 import { SLAM_MARK_RADIUS } from '../art/spitter.ts';
 import type { NeedId } from '../data/needs.ts';
@@ -110,6 +111,8 @@ const SLAM_FILL_ALPHA = 0.55;
 const QUEEN_PUDDLE = 2.6;
 
 const SPAWN_MS = 500;
+/** L'épée d'un guerrier reste levée autant de ms après un coup. */
+const COMPANION_SWING_MS = 260;
 
 /** La bulle d'un habitant à bout d'un besoin : l'épi de la faim, la goutte de la soif ; ou la moue d'un malheureux. */
 type Bubble = 'hungry' | 'thirsty' | 'unhappy';
@@ -241,6 +244,8 @@ interface Corpse {
 export class MobileLayer {
   private readonly views = new Map<MobileId, MobileView>();
   private readonly corpses: Corpse[] = [];
+  /** Les guerriers qui viennent de frapper : ms restantes d'épée levée. */
+  private readonly swings = new Map<MobileId, number>();
   private readonly puddles: Puddle[] = [];
 
   private readonly world: World;
@@ -308,12 +313,16 @@ export class MobileLayer {
       view.recoil = { dx, dy, left: RECOIL_MS };
     });
     world.events.on('beastDied', fall);
+    // Un compagnon tombé s'écrase et s'efface comme un mutant.
+    world.events.on('companionDied', fall);
     world.events.on('playerHurt', ({ by }) => this.views.get(by)?.puppet?.strike());
     // Le cracheur crache : il se détend d'un coup vers Adam.
     world.events.on('spitShot', ({ id }) => this.views.get(id)?.puppet?.strike());
     // Le crachat s'écrase : une petite mare fluo qui se résorbe.
     world.events.on('spitSplashed', ({ x, y }) => this.spill({ id: -1, x, y: y + 6 }, SPIT_SPLASH, true));
     world.events.on('chiefSlammed', ({ id }) => this.views.get(id)?.puppet?.strike());
+    // Le guerrier frappe : son épée s'abat un instant.
+    world.events.on('companionStruck', ({ id }) => this.swings.set(id, COMPANION_SWING_MS));
   }
 
   public update(alpha: number, ticker: Ticker): void {
@@ -395,6 +404,23 @@ export class MobileLayer {
           stars.orbit.visible = stunned;
           if (stunned) stars.spin.rotation += deltaMs * STARS_SPIN * (mobile.ticks < STARS_HURRY_TICKS ? 2 : 1);
           puppet.update(deltaMs, stunned ? 'down' : mobile.facing, mobile.moving ? 'walk' : 'idle');
+          break;
+        }
+
+        case 'companion': {
+          const puppet = view.puppet!;
+          const max = COMPANION_CLASSES[mobile.role].hp;
+          const swing = this.swings.get(mobile.id) ?? 0;
+
+          view.root.zIndex = y + 6;
+          this.ground(view, x, y);
+          // Sa barre de vie ne se montre qu'une fois entamé.
+          view.hp!.visible = mobile.hp < max;
+          if (view.hp!.visible) drawHp(view.hp!, mobile.hp / max);
+          if (mobile.hp < view.lastHp) puppet.hit();
+          view.lastHp = mobile.hp;
+          if (swing > 0) this.swings.set(mobile.id, swing - deltaMs);
+          puppet.update(deltaMs, mobile.facing, swing > 0 ? 'act' : mobile.moving ? 'walk' : 'idle');
           break;
         }
 
@@ -891,6 +917,12 @@ export class MobileLayer {
         root.addChild(hp);
         root.alpha = 0;
       }
+      if (mobile.kind === 'companion') {
+        hp = new Graphics();
+        hp.position.set(-HP_WIDTH / 2, -SPRITES[id].height * SPRITES[id].anchorY - 2);
+        hp.visible = false;
+        root.addChild(hp);
+      }
       const stars = mobile.kind === 'patient' ? this.stars() : null;
 
       if (stars) root.addChild(stars.orbit);
@@ -913,7 +945,7 @@ export class MobileLayer {
       }
       const puddle = mobile.kind === 'mutant' ? puddleSize(mobile) : 1;
 
-      view = { root, puppet, hp, lastHp: foe ? mobile.hp : 0, age: foe ? 0 : SPAWN_MS, tile: '', bike, stars, size: scale, puddle, recoil: null, kind: mobile.kind, lounge: null, loungeLeft: 0, hungry, need: 'hungry', sleeper };
+      view = { root, puppet, hp, lastHp: foe || mobile.kind === 'companion' ? mobile.hp : 0, age: foe ? 0 : SPAWN_MS, tile: '', bike, stars, size: scale, puddle, recoil: null, kind: mobile.kind, lounge: null, loungeLeft: 0, hungry, need: 'hungry', sleeper };
       if (mobile.kind === 'mutant' && mobile.emerge > 0) this.spill(mobile, puddle);
     }
 

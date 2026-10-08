@@ -165,7 +165,7 @@ export class Puppet {
       id === 'worker' || id === 'exMutant' || id === 'lumberjack' || id === 'logistician' || id === 'builder' || id === 'farmer'
         ? this.part('load.wood')
         : null;
-    this.toolName = 'hammer' in this.proto.parts ? 'hammer' : 'spade' in this.proto.parts ? 'spade' : 'hoe' in this.proto.parts ? 'hoe' : 'axe';
+    this.toolName = 'sword' in this.proto.parts ? 'sword' : 'hammer' in this.proto.parts ? 'hammer' : 'spade' in this.proto.parts ? 'spade' : 'hoe' in this.proto.parts ? 'hoe' : 'axe';
     this.tool = this.toolName in this.proto.parts ? this.part(this.toolName) : null;
     this.zzz = 'zzz' in this.proto.parts ? this.part('zzz') : null;
 
@@ -526,6 +526,9 @@ export type PuppetId = Extract<
   | 'worker'
   | 'logistician'
   | 'builder'
+  | 'warrior'
+  | 'archer'
+  | 'healer'
   | 'lumberjack'
   | 'forester'
   | 'farmer'

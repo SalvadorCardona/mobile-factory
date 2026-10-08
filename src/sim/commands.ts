@@ -10,6 +10,7 @@
 
 import type { TileCoord } from '../core/grid.ts';
 import type { BuildingId } from '../data/buildings.ts';
+import type { CompanionClassId } from '../data/companions.ts';
 import type { ItemId } from '../data/items.ts';
 import type { PerkId } from '../data/perks.ts';
 import type { ResearchId } from '../data/research.ts';
@@ -100,6 +101,14 @@ export type Command =
    * si la forge est dans son rayon. Adam doit être à portée de la forge.
    */
   | { type: 'craftGear'; forge: EntityId }
+  /**
+   * Recrute un compagnon de la classe `role` à la caserne : le coût de la
+   * classe est payé d'un coup, le sac d'abord, puis la ville si la caserne
+   * est dans son rayon, et la formation commence. Refusé au-delà de
+   * `COMPANIONS.max` compagnons, vivants ou en formation. Le bouton
+   * « Recruter » de la fenêtre de la caserne.
+   */
+  | { type: 'recruitCompanion'; barracks: EntityId; role: CompanionClassId }
   /**
    * Répare un bâtiment abîmé au bois (`REPAIR`) : ce qu'il faut pour le
    * remettre à neuf, le sac d'abord, puis la ville dans son rayon. Le bouton
@@ -274,6 +283,19 @@ export type GearRejection =
   | 'outOfReach'
   /** Adam a déjà le meilleur arc. */
   | 'maxLevel'
+  /** Ni le sac, ni la ville à portée n'ont tout le coût. */
+  | 'missingItems';
+
+/** Motif de refus d'un recrutement — remonté à l'UI par un événement. */
+export type RecruitRejection =
+  /** La caserne n'existe plus ou n'est qu'un chantier. */
+  | 'missing'
+  /** Adam est trop loin de la caserne. */
+  | 'outOfReach'
+  /** La caserne forme déjà une recrue. */
+  | 'busy'
+  /** La troupe est complète : `COMPANIONS.max`, formations comprises. */
+  | 'full'
   /** Ni le sac, ni la ville à portée n'ont tout le coût. */
   | 'missingItems';
 
