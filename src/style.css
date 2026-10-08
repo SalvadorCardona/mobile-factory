@@ -5205,7 +5205,7 @@ button {
   color: var(--muted);
 }
 
-.barracks-card-body button {
+.barracks-card-body .building-panel-actions {
   align-self: flex-start;
   min-height: 44px;
 }

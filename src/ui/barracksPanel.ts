@@ -74,6 +74,7 @@ export class BarracksPanel {
     const effect = element('p', 'barracks-card-effect');
     const stats = element('p', 'barracks-card-stats');
     const cost = element('div', 'building-panel-items');
+    const actions = element('div', 'building-panel-actions');
     const button = document.createElement('button');
 
     portrait.className = 'barracks-card-portrait';
@@ -84,7 +85,8 @@ export class BarracksPanel {
     button.addEventListener('click', () => {
       if (this.barracksId !== null) this.world.push({ type: 'recruitCompanion', barracks: this.barracksId, role });
     });
-    body.append(name, effect, stats, cost, button);
+    actions.append(button);
+    body.append(name, effect, stats, cost, actions);
     root.append(portrait, body);
     return { root, name, effect, stats, cost, button, last: '' };
   }
