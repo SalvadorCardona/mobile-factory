@@ -207,31 +207,87 @@ button {
 /* ------------------------------------------------------------------ quête */
 
 /*
- * Le haut de l'écran : la barre unique (population, sac, Pause et Réglages),
- * pleine largeur, puis dessous une seule bande en flux. La quête au centre
- * (elle prend toute la place qui reste sur un téléphone), à côté la ville et
- * l'alerte de vivres. Sous la quête, seule la capsule météo : quand son
- * conseil s'ouvre ou se replie, rien ne bouge.
+ * Le haut de l'écran : une seule rangée, collée en haut — la zone sûre plus
+ * `--hud-margin`, rien d'autre. À gauche le Prestige, la ville et son alerte
+ * de vivres, au centre la barre (`.hud-main`), à droite la météo et l'horloge
+ * du jour. Tous les blocs ont la même hauteur, `--hud-h`, la seule variable de
+ * hauteur du haut, ajustée par paliers ; la barre en tire ses cases
+ * (`--cell-h`). Aucun cadre n'englobe un groupe : chaque bloc est sa propre
+ * carte blanche, de même hauteur et de mêmes rayons que la barre.
+ *
+ * Tout ne tient sur une ligne qu'à partir de 1366 px : la barre veut ~830 px
+ * (cinq compteurs de 62 px, le sac et sa jauge, Pause, Réglages, l'objectif et
+ * son intitulé), et chaque groupe `--hud-side`, 250 px (le Prestige et deux
+ * objets de la ville ; la météo et l'horloge) : 830 + 2 × 250 + les écarts et
+ * les marges ≈ 1360 px. En dessous, la barre reste seule en haut,
+ * et les deux groupes font une seconde rangée juste dessous, alignée elle aussi.
  */
 .hud-top {
+  --hud-margin: 8px;
+  --hud-gap: 8px;
+  --hud-side: 250px;
+  --hud-h: 40px;
+  --hud-pad: 3px;
+  --cell-h: calc(var(--hud-h) - 2 * var(--hud-pad));
+  --cell-w: 30px;
+  --cell-r: 12px;
+  --cell-gap: 2px;
+  --cell-font: 11px;
+  --cell-icon: 13px;
+  --cell-face: 0 3px 0 var(--violet-light);
+  --hud-r: calc(var(--cell-r) + 6px);
+
   position: absolute;
-  top: calc(var(--safe-top) + 10px);
-  left: calc(var(--safe-left) + 10px);
-  right: calc(var(--safe-right) + 10px);
-  display: flex;
-  flex-direction: column;
+  top: calc(var(--safe-top) + var(--hud-margin));
+  left: calc(var(--safe-left) + var(--hud-margin));
+  right: calc(var(--safe-right) + var(--hud-margin));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) fit-content(50%);
+  grid-template-areas:
+    'main main'
+    'left right';
+  align-items: start;
+  gap: var(--hud-gap);
   pointer-events: none;
 }
 
-.hud-under {
+/* La barre et la fenêtre de la quête, qui s'ouvre sous elle, calée sur son bord droit. */
+.hud-main {
+  grid-area: main;
   position: relative;
-  display: grid;
-  grid-template-columns: 1fr minmax(0, 380px) 1fr;
-  /* La colonne de droite couvre les deux rangées : la capsule météo ne descend
-   * pas sous l'alerte de vivres. */
-  grid-template-rows: auto 1fr;
-  align-items: start;
-  margin-top: 10px;
+  justify-self: center;
+  width: 100%;
+  max-width: 760px;
+  min-width: 0;
+}
+
+.hud-left,
+.hud-right {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--hud-gap);
+  min-width: 0;
+}
+
+.hud-left {
+  grid-area: left;
+}
+
+/* De droite à gauche : l'horloge au bord ; la météo, si elle ne tient pas à côté, passe dessous. */
+.hud-right {
+  grid-area: right;
+  flex-direction: row-reverse;
+  flex-wrap: wrap;
+}
+
+/* Un bloc d'un groupe : une carte blanche de la hauteur et des rayons de la barre. */
+.hud .hud-top .hud-left > *,
+.hud .hud-top .hud-right > * {
+  box-sizing: border-box;
+  flex: none;
+  height: var(--hud-h);
+  margin: 0;
+  border-radius: var(--hud-r);
 }
 
 /*
@@ -241,7 +297,7 @@ button {
  */
 .hud-quest {
   position: absolute;
-  top: -4px;
+  top: calc(100% + 6px);
   right: 0;
   z-index: 4;
   width: min(380px, 100%);
@@ -258,17 +314,6 @@ button {
   pointer-events: auto;
 }
 
-.hud-side {
-  grid-column: 3;
-  grid-row: 1 / span 2;
-  justify-self: end;
-  margin-left: 10px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 10px;
-}
-
 /* Le titre, et l'ampoule du conseil replié dans le coin : une ligne de hauteur fixe. */
 .hud-quest-head {
   display: flex;
@@ -280,9 +325,9 @@ button {
 }
 
 /*
- * L'horloge du jour et de la nuit, au bout de la tête : le cadran et « J2 ».
- * Il déborde un peu de la ligne de 24 px ; la nuit qui approche le fait
- * battre. Un tap montre le détail dans une bulle dessous.
+ * L'horloge du jour et de la nuit, au bord droit du haut : le cadran et « J2 ».
+ * La nuit qui approche le fait battre. Un tap montre le détail dans une bulle
+ * dessous.
  */
 .hud .hud-clock {
   pointer-events: auto;
@@ -293,16 +338,15 @@ button {
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   margin: 0;
-  padding: 0 10px 0 4px;
+  padding: 0 12px 0 8px;
   border: none;
-  border-radius: 999px;
   background: var(--paper);
   box-shadow: var(--face);
   color: var(--ink);
   font: inherit;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
@@ -310,13 +354,6 @@ button {
 
 .hud-clock[hidden] {
   display: none;
-}
-
-/* La zone de tap déborde du cadran, comme pour l'ampoule. */
-.hud-clock::after {
-  content: '';
-  position: absolute;
-  inset: -6px -4px;
 }
 
 .hud-clock-dial {
@@ -995,25 +1032,14 @@ button.hud-stock:active {
 }
 
 /*
- * Le Prestige de la colonie : sa médaille et son compte, comme les compteurs
- * de la population, dans la colonne de gauche, en haut. Le survol et l'appui
- * long lisent son libellé.
+ * Le Prestige de la colonie : sa médaille et son compte, en tête du groupe
+ * de gauche. Le survol et l'appui long lisent son libellé.
  */
-.hud-corner {
-  display: contents;
-}
-
 .hud .hud-prestige {
-  grid-column: 1;
-  grid-row: 1;
-  justify-self: start;
-  margin-right: 10px;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  height: 32px;
-  padding: 0 10px 0 7px;
-  border-radius: 999px;
+  gap: 4px;
+  padding: 0 12px 0 10px;
   font-size: 15px;
   font-variant-numeric: tabular-nums;
 }
@@ -1028,26 +1054,52 @@ button.hud-stock:active {
 }
 
 /*
- * Sur un téléphone, la quête prend toute la largeur à gauche des boutons :
- * le Prestige se range sous elle, au bord gauche, sur la ligne de la capsule
- * météo, qui se centre dans ce qui reste.
+ * La ville : un bandeau d'une ligne à droite du Prestige, « Ville » puis ses
+ * objets côte à côte. Il prend la place qui reste dans son groupe — l'alerte
+ * de vivres, à sa droite, passe avant ; ce qui ne tient pas défile de côté
+ * (la molette aussi), sans jamais revenir à la ligne.
  */
-@media (max-width: 599px) {
-  .hud-corner {
-    grid-column: 2;
-    grid-row: 2;
-    min-width: 0;
-    margin-top: 10px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
+.hud .hud-top .hud-town {
+  flex: 0 1 auto;
+  width: auto;
+  min-width: 0;
+  overflow: hidden;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  pointer-events: auto;
+}
 
+.hud-town .hud-bag-title {
+  flex: none;
+}
+
+.hud-town .hud-stock-items {
+  display: flex;
+  min-width: 0;
+  gap: 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  white-space: nowrap;
+}
+
+.hud-town .hud-stock-items::-webkit-scrollbar {
+  display: none;
+}
+
+.hud-town .hud-stock-items[data-more='true'] {
+  mask-image: linear-gradient(90deg, black calc(100% - 28px), transparent);
+}
+
+.hud-town .item-amount {
+  flex: none;
+}
+
+/* Sur un téléphone, les mêmes blocs, un peu plus serrés. */
+@media (max-width: 599px) {
   .hud .hud-prestige {
-    flex: none;
-    margin-right: 0;
-    height: 28px;
-    padding: 0 8px 0 6px;
+    padding: 0 10px 0 8px;
     font-size: 14px;
   }
 
@@ -1056,64 +1108,19 @@ button.hud-stock:active {
     height: 15px;
   }
 
-  .hud-corner .hud-weather {
-    min-width: 0;
-    margin: 0 auto;
-  }
-}
-
-/*
- * Sur un écran large, la ville quitte la colonne de droite pour la colonne
- * de gauche, vide : un bandeau d'une ligne en haut à gauche, « Ville » puis
- * ses objets côte à côte, de la hauteur du Prestige. Il s'arrête avant la
- * quête ; ce qui ne tient pas défile de côté (la molette aussi), sans jamais
- * revenir à la ligne.
- */
-@media (min-width: 1024px) and (min-height: 500px) {
-  .hud .hud-town {
-    --town-left: 0px;
-
-    position: absolute;
-    top: 0;
-    left: var(--town-left);
-    width: auto;
-    max-width: calc((100% - 380px) / 2 - 10px - var(--town-left));
-    height: 32px;
-    flex-direction: row;
-    align-items: center;
-    gap: 10px;
-    padding: 0 14px;
-    pointer-events: auto;
-  }
-
-  /* Le Prestige tient le coin : le bandeau se range à sa droite, sur sa ligne. */
-  .hud-under:has(.hud-prestige:not([hidden])) .hud-town {
-    --town-left: calc(var(--prestige-width, 0px) + 10px);
-  }
-
-  .hud-town .hud-bag-title {
-    flex: none;
+  .hud .hud-top .hud-town {
+    gap: 8px;
+    padding: 0 10px;
   }
 
   .hud-town .hud-stock-items {
-    display: flex;
-    min-width: 0;
-    gap: 12px;
-    overflow-x: auto;
-    scrollbar-width: none;
-    white-space: nowrap;
+    gap: 8px;
+    font-size: 14px;
   }
 
-  .hud-town .hud-stock-items::-webkit-scrollbar {
-    display: none;
-  }
-
-  .hud-town .hud-stock-items[data-more='true'] {
-    mask-image: linear-gradient(90deg, black calc(100% - 28px), transparent);
-  }
-
-  .hud-town .item-amount {
-    flex: none;
+  .hud-town .hud-stock-items .icon {
+    width: 15px;
+    height: 15px;
   }
 }
 
@@ -1272,7 +1279,7 @@ button.hud-stock:active {
 }
 
 /*
- * L'alerte de nourriture, sous la population : une capsule corail — ce qui
+ * L'alerte de nourriture, à droite de la ville : un bloc corail — ce qui
  * va manquer et le temps qu'il reste. Un tap montre qui a faim.
  */
 .hud .hud-hunger {
@@ -1281,8 +1288,7 @@ button.hud-stock:active {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  width: 124px;
-  padding: 4px 8px;
+  padding: 0 12px;
   border: none;
   background: var(--coral);
   box-shadow: 0 3px 0 var(--coral-shade);
@@ -1308,9 +1314,10 @@ button.hud-stock:active {
   box-shadow: none;
 }
 
+/* Elle bat sans changer de taille : le bloc reste aligné sur les autres. */
 @keyframes hunger-pulse {
   50% {
-    transform: scale(1.04);
+    filter: brightness(1.12);
   }
 }
 
@@ -1374,10 +1381,6 @@ button.hud-stock:active {
  * le panneau, qui a tout le détail.
  */
 @media (max-width: 599px), (max-height: 499px) {
-  .hud-town {
-    display: none;
-  }
-
   .hud .hud-people {
     width: 104px;
     padding: 4px 6px;
@@ -1385,8 +1388,7 @@ button.hud-stock:active {
   }
 
   .hud .hud-hunger {
-    width: 104px;
-    padding: 3px 6px;
+    padding: 0 10px;
     font-size: 14px;
   }
 
@@ -1443,34 +1445,27 @@ button.hud-stock:active {
 /* ------------------------------------------------------- la barre du haut */
 
 /*
- * Une seule ligne, du bord à l'autre, bâtie sur une grille de cases : tout ce
- * qu'elle porte a la même hauteur (`--cell-h`), les mêmes rayons, la même face
+ * Une seule ligne, haute de `--hud-h` comme les blocs des deux groupes, bâtie
+ * sur une grille de cases : tout ce qu'elle porte a la même hauteur (`--cell-h`,
+ * tirée de `--hud-h`, cf. `.hud-top`), les mêmes rayons, la même face
  * lavande. Les cinq compteurs de la population (au travail, inactifs, enfants,
  * logés, bonheur) sont des cases de même largeur (`--cell-w`, de quoi tenir
  * « 10/10 », chiffres tabulaires : rien ne bouge quand un chiffre change) ;
  * Pause et Réglages, des carrés ; le sac, une case qui s'étire et garde la
  * même hauteur ; l'objectif ferme la ligne, tout à droite — une case de plus
  * sur un téléphone (icône, progression), un intitulé court dès 600 px.
- * La grille se resserre par paliers (< 360, 420, 600 px) ; un tap atteint
- * toujours 40 px, la zone de tap déborde de la case.
+ * La grille se resserre par paliers (< 360, 360, 420, 600, 900 px) ; un tap
+ * atteint toujours 40 px, la zone de tap déborde de la case.
  */
 .hud-topbar {
-  --cell-h: 34px;
-  --cell-w: 30px;
-  --cell-r: 12px;
-  --cell-gap: 2px;
-  --cell-font: 11px;
-  --cell-icon: 13px;
-  --cell-face: 0 3px 0 var(--violet-light);
-
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: var(--cell-gap);
   width: 100%;
-  max-width: 760px;
-  margin: 0 auto;
-  padding: 3px;
-  border-radius: calc(var(--cell-r) + 6px);
+  height: var(--hud-h);
+  padding: 0 var(--hud-pad);
+  border-radius: var(--hud-r);
 }
 
 /* Les compteurs : la population reste un groupe, ses cases se rangent dans la ligne. */
@@ -1646,9 +1641,13 @@ button.hud-stock:active {
   cursor: pointer;
 }
 
-.hud-topbar .hud-objective:active,
-.hud-topbar .hud-objective[aria-expanded='true'] {
+.hud-topbar .hud-objective:active {
   transform: translateY(2px);
+  box-shadow: none;
+}
+
+/* La quête ouverte : la case perd sa face, mais reste à sa place, alignée sur les autres. */
+.hud-topbar .hud-objective[aria-expanded='true'] {
   box-shadow: none;
 }
 
@@ -1718,6 +1717,7 @@ button.hud-stock:active {
   display: none;
 }
 
+/* Le haut ne se décolle que de la marge : sur le plus petit écran, les côtés se serrent, pas le haut. */
 @media (max-width: 359px) {
   .hud-top {
     left: calc(var(--safe-left) + 4px);
@@ -1726,8 +1726,8 @@ button.hud-stock:active {
 }
 
 @media (min-width: 360px) {
-  .hud-topbar {
-    --cell-h: 36px;
+  .hud-top {
+    --hud-h: 42px;
     --cell-w: 33px;
     --cell-font: 12px;
     --cell-icon: 14px;
@@ -1735,34 +1735,34 @@ button.hud-stock:active {
 }
 
 @media (min-width: 420px) {
-  .hud-topbar {
-    --cell-h: 38px;
+  .hud-top {
+    --hud-h: 46px;
+    --hud-pad: 4px;
     --cell-w: 36px;
     --cell-r: 13px;
     --cell-gap: 3px;
     --cell-icon: 15px;
-
-    padding: 4px;
   }
 }
 
 /* Une tablette, un bureau, un téléphone couché : la grille respire, l'icône passe à côté du chiffre. */
 @media (min-width: 600px) {
-  /* La quête s'ouvre sous l'objectif : au bord droit de la barre, pas de l'écran. */
-  .hud-quest {
-    right: max(0px, calc((100% - 920px) / 2));
-  }
-
-  .hud-topbar {
-    --cell-h: 44px;
+  .hud-top {
+    --hud-h: 54px;
+    --hud-pad: 5px;
     --cell-w: 48px;
     --cell-r: 16px;
     --cell-gap: 5px;
     --cell-font: 15px;
     --cell-icon: 18px;
+  }
 
+  .hud-main {
     max-width: 920px;
-    padding: 5px 6px;
+  }
+
+  .hud-topbar {
+    padding: 0 calc(var(--hud-pad) + 1px);
   }
 
   .hud-topbar .hud-people-count,
@@ -1771,8 +1771,10 @@ button.hud-stock:active {
     gap: 4px;
   }
 
+  /* La jauge se centre à côté du titre : rien ne dépasse en haut de la case. */
   .hud .hud-topbar .hud-bag {
     flex-direction: row;
+    align-items: center;
     gap: 8px;
     padding: 0 12px;
   }
@@ -1820,9 +1822,17 @@ button.hud-stock:active {
 
 }
 
+/* Un téléphone couché : deux rangées, donc des blocs moins hauts — la carte garde sa place. */
+@media (min-width: 600px) and (max-height: 499px) {
+  .hud-top {
+    --hud-h: 46px;
+    --hud-pad: 4px;
+  }
+}
+
 /* Une tablette large, un bureau : des cases plus larges, l'intitulé entier de la barre. */
 @media (min-width: 900px) {
-  .hud-topbar {
+  .hud-top {
     --cell-w: 62px;
     --cell-font: 16px;
     --cell-icon: 20px;
@@ -1838,6 +1848,22 @@ button.hud-stock:active {
     max-width: 170px;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+}
+
+/*
+ * Un bureau : tout le haut sur une seule rangée. La barre au centre, 880 px au
+ * plus, qui cède sa place aux groupes jusqu'à `--hud-side` chacun ; la ville
+ * défile de côté dans ce qui lui reste.
+ */
+@media (min-width: 1366px) {
+  .hud-top {
+    grid-template-columns: minmax(var(--hud-side), 1fr) minmax(0, 880px) minmax(var(--hud-side), 1fr);
+    grid-template-areas: 'left main right';
+  }
+
+  .hud-main {
+    max-width: none;
   }
 }
 
@@ -2031,18 +2057,12 @@ button.hud-stock:active {
 
 /* ----------------------------------------------------------------- météo */
 
-/* Une capsule sous la quête : ce qui arrive, puis ce qui tombe. */
-/* Sous la quête, dans sa colonne : la colonne des boutons reste en place. */
+/* Un bloc du groupe de droite, à côté de l'horloge : ce qui arrive, puis ce qui tombe. */
 .hud-weather {
-  grid-column: 2;
-  grid-row: 2;
-  justify-self: center;
-  margin-top: 10px;
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 14px 5px 10px;
-  border-radius: 999px;
+  padding: 0 14px 0 10px;
   background: var(--paper);
   box-shadow: var(--face);
   font-size: 15px;
@@ -5113,16 +5133,15 @@ button.hud-stock:active {
 }
 
 /*
- * « Partie de test » (`…/test`) : une petite capsule corail tout en haut,
- * par-dessus le panneau de quête, pour ne jamais la prendre pour sa vraie
- * partie. Elle ne capte aucun tap.
+ * « Partie de test » (`…/test`) : une petite capsule corail en bas à gauche,
+ * pour ne jamais la prendre pour sa vraie partie — hors du haut, qui reste
+ * collé au bord comme dans une vraie partie. Elle ne capte aucun tap.
  */
 .test-banner {
   position: absolute;
-  top: calc(var(--safe-top) + 2px);
-  left: 50%;
+  bottom: calc(var(--safe-bottom) + 8px);
+  left: calc(var(--safe-left) + 8px);
   z-index: 5;
-  transform: translateX(-50%);
   padding: 1px 10px 2px;
   border-radius: 999px;
   background: var(--coral);
@@ -5132,9 +5151,4 @@ button.hud-stock:active {
   letter-spacing: 0.02em;
   white-space: nowrap;
   pointer-events: none;
-}
-
-/* La capsule « Partie de test » ne recouvre pas la barre du haut. */
-body:has(.test-banner) .hud-top {
-  top: calc(var(--safe-top) + 20px);
 }
