@@ -208,28 +208,27 @@ button {
 
 /*
  * Le haut de l'écran : une seule rangée, collée en haut — la zone sûre plus
- * `--hud-margin`, rien d'autre. À gauche le Prestige, la ville et son alerte
- * de vivres, au centre la barre (`.hud-main`), à droite la météo et l'horloge
- * du jour. Tous les blocs ont la même hauteur, `--hud-h`, la seule variable de
- * hauteur du haut, ajustée par paliers ; la barre en tire ses cases
- * (`--cell-h`). Aucun cadre n'englobe un groupe : chaque bloc est sa propre
- * carte blanche, de même hauteur et de mêmes rayons que la barre.
+ * `--hud-margin`, rien d'autre. À gauche la ville (le Prestige en tête), la
+ * population, l'horloge du jour et l'alerte de vivres, au centre la barre
+ * (`.hud-main`, l'objectif), à droite la météo. Tous les blocs ont la même hauteur, `--hud-h`,
+ * la seule variable de hauteur du haut, ajustée par paliers ; la barre en tire
+ * ses cases (`--cell-h`). Aucun cadre n'englobe un groupe : chaque bloc est sa
+ * propre carte blanche, de même hauteur et de mêmes rayons que la barre.
  *
- * Tout ne tient sur une ligne qu'à partir de 1366 px : la barre veut ~830 px
- * (cinq compteurs de 62 px, le sac et sa jauge, Pause, Réglages, l'objectif et
- * son intitulé), et chaque groupe `--hud-side`, 250 px (le Prestige et deux
- * objets de la ville ; la météo et l'horloge) : 830 + 2 × 250 + les écarts et
- * les marges ≈ 1360 px. En dessous, la barre reste seule en haut,
- * et les deux groupes font une seconde rangée juste dessous, alignée elle aussi.
+ * Tout ne tient sur une ligne qu'à partir de 1366 px : la barre veut 420 px au
+ * plus (l'objectif et son intitulé), le groupe de gauche `--hud-side`, 520 px
+ * (la population, l'horloge, le Prestige et quelques objets de la ville), la
+ * météo le reste. En dessous, la
+ * barre reste seule en haut, et les deux groupes font une seconde rangée juste
+ * dessous, alignée elle aussi.
  */
 .hud-top {
   --hud-margin: 8px;
   --hud-gap: 8px;
-  --hud-side: 250px;
-  --hud-h: 40px;
+  --hud-side: 520px;
+  --hud-h: 34px;
   --hud-pad: 3px;
   --cell-h: calc(var(--hud-h) - 2 * var(--hud-pad));
-  --cell-w: 30px;
   --cell-r: 12px;
   --cell-gap: 2px;
   --cell-font: 11px;
@@ -273,7 +272,7 @@ button {
   grid-area: left;
 }
 
-/* De droite à gauche : l'horloge au bord ; la météo, si elle ne tient pas à côté, passe dessous. */
+/* De droite à gauche : la météo au bord. */
 .hud-right {
   grid-area: right;
   flex-direction: row-reverse;
@@ -382,7 +381,7 @@ button {
 .hud-clock-tip {
   position: absolute;
   top: calc(100% + 8px);
-  right: -4px;
+  left: -4px;
   z-index: 2;
   padding: 4px 10px;
   border-radius: 999px;
@@ -801,11 +800,6 @@ button {
 
 /* --------------------------------------------------------------- boutons */
 
-.hud-buttons {
-  display: flex;
-  gap: 8px;
-}
-
 /* Les boutons ronds de la maquette : un disque blanc sur sa face lavande. */
 .hud-button {
   display: grid;
@@ -824,8 +818,9 @@ button {
 }
 
 /*
- * Le zoom : trois petits disques empilés sur le bord droit, à mi-hauteur —
- * entre la colonne du sac et le bouton « Bâtir », loin du joystick.
+ * La colonne du bord droit, à mi-hauteur : Pause et Réglages, la carte du
+ * monde, puis les trois disques du zoom — loin du sac et du joystick (bas
+ * gauche) et du bouton « Bâtir » (bas droite).
  */
 .hud-zoom {
   position: absolute;
@@ -840,6 +835,11 @@ button {
 .hud-zoom-button {
   width: 40px;
   height: 40px;
+}
+
+/* Réglages ferme le duo Pause / Réglages : un écart avant la carte du monde. */
+.hud-settings {
+  margin-bottom: 6px;
 }
 
 .hud-zoom-button[disabled] {
@@ -961,19 +961,6 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
-/* Le sac est un bouton : il garde l'allure d'une carte, et s'enfonce sur sa face au toucher. */
-button.hud-stock {
-  border: none;
-  font: inherit;
-  color: inherit;
-  text-align: left;
-}
-
-button.hud-stock:active {
-  transform: translateY(3px);
-  box-shadow: 0 2px 0 var(--paper-shade);
-}
-
 .hud-bag-title {
   display: flex;
   align-items: center;
@@ -1000,21 +987,6 @@ button.hud-stock:active {
   color: var(--muted);
 }
 
-.hud-bag-title[data-full='true'] .hud-bag-count {
-  color: var(--danger);
-}
-
-.hud-bag-fill {
-  height: 6px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, var(--yellow-shade) var(--fill, 0%), var(--paper-shade) var(--fill, 0%));
-}
-
-.hud-bag-fill[data-full='true'] {
-  background: var(--coral);
-  animation: blink 0.8s steps(2) infinite;
-}
-
 .hud-stock-items {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1032,14 +1004,17 @@ button.hud-stock:active {
 }
 
 /*
- * Le Prestige de la colonie : sa médaille et son compte, en tête du groupe
- * de gauche. Le survol et l'appui long lisent son libellé.
+ * Le Prestige de la colonie : sa médaille et son compte, en tête du bandeau
+ * de la ville, séparé d'elle par un filet. Le survol et l'appui long lisent
+ * son libellé.
  */
 .hud .hud-prestige {
+  flex: none;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 0 12px 0 10px;
+  padding-right: 10px;
+  border-right: 2px solid var(--paper-shade);
   font-size: 15px;
   font-variant-numeric: tabular-nums;
 }
@@ -1054,8 +1029,8 @@ button.hud-stock:active {
 }
 
 /*
- * La ville : un bandeau d'une ligne à droite du Prestige, « Ville » puis ses
- * objets côte à côte. Il prend la place qui reste dans son groupe — l'alerte
+ * La ville : un bandeau d'une ligne, le Prestige en tête, puis la maison et
+ * les objets de la ville côte à côte. Il prend la place qui reste dans son groupe — l'alerte
  * de vivres, à sa droite, passe avant ; ce qui ne tient pas défile de côté
  * (la molette aussi), sans jamais revenir à la ligne.
  */
@@ -1099,7 +1074,7 @@ button.hud-stock:active {
 /* Sur un téléphone, les mêmes blocs, un peu plus serrés. */
 @media (max-width: 599px) {
   .hud .hud-prestige {
-    padding: 0 10px 0 8px;
+    padding-right: 8px;
     font-size: 14px;
   }
 
@@ -1125,28 +1100,39 @@ button.hud-stock:active {
 }
 
 /*
- * La population de la ville : au travail, inactifs, enfants. Seul le compteur
- * d'inactifs se tape ; il passe en corail dès qu'un ouvrier glande.
+ * La population de la ville, sa propre bulle blanche à côté de la ville :
+ * au travail, inactifs, enfants, logés / habitants, bonheur. Des icônes et des
+ * chiffres, comme les objets de la ville — rien qui ait l'air d'un bouton. Un
+ * compteur qui va mal (un inactif, quelqu'un dort dehors, la ville est
+ * malheureuse) passe en corail ; seul celui des inactifs se tape (il pointe
+ * l'un d'eux, puis le suivant), les autres prennent le survol et l'appui long
+ * pour leur libellé.
  */
-.hud .hud-people {
-  pointer-events: none;
-  width: 124px;
+.hud .hud-top .hud-people {
   display: flex;
-  justify-content: space-between;
-  gap: 2px;
-  padding: 6px 8px;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  padding: 0 14px;
+  font-size: 15px;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
-.hud-people[hidden] {
+.hud .hud-top .hud-people[hidden] {
   display: none;
 }
 
-.hud-people-count {
+.hud .hud-people-count {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 1px;
-  font-size: 15px;
+  gap: 3px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
 }
 
 .hud-people-count .icon {
@@ -1154,81 +1140,36 @@ button.hud-stock:active {
   height: 18px;
 }
 
-.hud .hud-people-idle {
-  position: relative;
-  pointer-events: auto;
-  padding: 1px 5px 1px 2px;
-  border: none;
-  border-radius: 999px;
-  background: var(--paper-shade);
-  box-shadow: 0 2px 0 var(--violet-light);
-  font: inherit;
-  font-size: 15px;
-  color: inherit;
-  cursor: pointer;
-}
-
-/* La capsule est petite, le doigt ne l'est pas : la zone de tap déborde. */
-.hud-people-idle::after {
-  content: '';
-  position: absolute;
-  inset: -8px -4px;
-}
-
-.hud .hud-people-idle[data-alert='true'] {
-  background: var(--coral);
-  box-shadow: 0 2px 0 var(--coral-shade);
-  color: var(--paper);
+.hud .hud-people-count[data-alert='true'] {
+  color: var(--danger);
   font-weight: 700;
 }
 
-.hud-people-idle:active {
-  transform: translateY(2px);
-  box-shadow: none;
+.hud .hud-people-idle {
+  pointer-events: auto;
+  cursor: pointer;
 }
 
-/*
- * L'Habitation, logés / habitants, et le Bonheur de la ville, sur leur
- * propre ligne sous les trois compteurs : chacun en corail quand ça va mal
- * — quelqu'un dort dehors, l'habitant moyen est malheureux. Ils prennent
- * le survol et l'appui long, pour leur libellé.
- */
-.hud .hud-people {
-  flex-wrap: wrap;
-}
-
-.hud-people-town {
-  display: flex;
-  flex-basis: 100%;
-  justify-content: center;
-  gap: 4px;
-  margin-top: 2px;
+/* Le chiffre est petit, le doigt ne l'est pas : la zone de tap déborde. */
+.hud-people-idle::after {
+  content: '';
+  position: absolute;
+  inset: -10px -6px;
 }
 
 .hud .hud-people-housing,
 .hud .hud-people-happiness {
   pointer-events: auto;
-  justify-content: center;
-  gap: 3px;
-  padding: 1px 6px;
-  border-radius: 999px;
-  background: var(--paper-shade);
 }
 
-.hud .hud-people-housing[data-alert='true'],
-.hud .hud-people-happiness[data-alert='true'] {
-  background: var(--coral);
-  color: var(--paper);
-  font-weight: 700;
-}
-
-/* L'aube a fait bouger le Bonheur : la puce flashe, la flèche dit de quel côté. */
+/* L'aube a fait bouger le Bonheur : le chiffre flashe, la flèche dit de quel côté. */
 .hud .hud-people-happiness .icon + .icon {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
 }
 
 .hud .hud-people-happiness[data-trend] {
+  border-radius: 999px;
   animation: mood-flash 0.5s ease-out 3;
 }
 
@@ -1250,6 +1191,28 @@ button.hud-stock:active {
 @media (prefers-reduced-motion: reduce) {
   .hud .hud-people-happiness[data-trend] {
     animation: none;
+  }
+}
+
+/* Sur un téléphone, la ville garde sa rangée ; la population passe dessous. */
+@media (max-width: 599px) {
+  .hud-left {
+    flex-wrap: wrap;
+  }
+
+  .hud .hud-top .hud-town {
+    flex: 1 1 100%;
+  }
+
+  .hud .hud-top .hud-people {
+    gap: 8px;
+    padding: 0 10px;
+    font-size: 14px;
+  }
+
+  .hud-people-count .icon {
+    width: 15px;
+    height: 15px;
   }
 }
 
@@ -1368,77 +1331,11 @@ button.hud-stock:active {
   }
 }
 
-/* Le résumé de la pastille (ville, objet réclamé) ne sert que sur un téléphone. */
-.hud-bag-town,
-.hud-bag-wanted {
-  display: none;
-}
-
-/*
- * Sur un téléphone, on joue à la vue : la ville et le sac n'y font plus
- * qu'une pastille, de la largeur des boutons. Le compte et la jauge du sac,
- * ce que compte la ville, et l'objet que le conseil réclame ; un tap ouvre
- * le panneau, qui a tout le détail.
- */
+/* Sur un téléphone, l'alerte de vivres se serre. */
 @media (max-width: 599px), (max-height: 499px) {
-  .hud .hud-people {
-    width: 104px;
-    padding: 4px 6px;
-    border-radius: 18px;
-  }
-
   .hud .hud-hunger {
     padding: 0 10px;
     font-size: 14px;
-  }
-
-  .hud-people-count,
-  .hud .hud-people-idle {
-    font-size: 14px;
-  }
-
-  .hud-people-count .icon {
-    width: 15px;
-    height: 15px;
-  }
-
-  .hud-bag {
-    width: 104px;
-    gap: 4px;
-    padding: 6px 10px 8px;
-    border-radius: 18px;
-  }
-
-  .hud-bag .hud-bag-title {
-    flex-wrap: wrap;
-    gap: 2px 6px;
-    font-size: 15px;
-    letter-spacing: 0;
-  }
-
-  .hud-bag .hud-stock-name,
-  .hud-bag .hud-stock-items {
-    display: none;
-  }
-
-  .hud-bag-town,
-  .hud-bag-wanted {
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-  }
-
-  .hud-bag-town {
-    color: var(--yellow-shade);
-  }
-
-  .hud-bag-wanted {
-    color: var(--ink);
-  }
-
-  .hud-bag-wanted .icon {
-    width: 18px;
-    height: 18px;
   }
 }
 
@@ -1448,12 +1345,9 @@ button.hud-stock:active {
  * Une seule ligne, haute de `--hud-h` comme les blocs des deux groupes, bâtie
  * sur une grille de cases : tout ce qu'elle porte a la même hauteur (`--cell-h`,
  * tirée de `--hud-h`, cf. `.hud-top`), les mêmes rayons, la même face
- * lavande. Les cinq compteurs de la population (au travail, inactifs, enfants,
- * logés, bonheur) sont des cases de même largeur (`--cell-w`, de quoi tenir
- * « 10/10 », chiffres tabulaires : rien ne bouge quand un chiffre change) ;
- * Pause et Réglages, des carrés ; le sac, une case qui s'étire et garde la
- * même hauteur ; l'objectif ferme la ligne, tout à droite — une case de plus
- * sur un téléphone (icône, progression), un intitulé court dès 600 px.
+ * lavande : l'objectif, qui prend toute la ligne — icône et progression, son
+ * intitulé court dès 420 px. Le sac est le gros bouton du bas (`.hud-bag`),
+ * Pause et Réglages sont en tête de la colonne du zoom, au bord droit.
  * La grille se resserre par paliers (< 360, 360, 420, 600, 900 px) ; un tap
  * atteint toujours 40 px, la zone de tap déborde de la case.
  */
@@ -1468,170 +1362,17 @@ button.hud-stock:active {
   border-radius: var(--hud-r);
 }
 
-/* Les compteurs : la population reste un groupe, ses cases se rangent dans la ligne. */
-.hud .hud-topbar .hud-people {
-  display: contents;
-}
-
-.hud .hud-topbar .hud-people[hidden] {
-  display: none;
-}
-
-.hud-topbar .hud-people-town {
-  display: contents;
-}
-
-.hud-topbar .hud-people-count,
-.hud .hud-topbar .hud-people-idle {
-  position: relative;
-  box-sizing: border-box;
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0;
-  width: var(--cell-w);
-  height: var(--cell-h);
-  padding: 0;
-  border: none;
-  border-radius: var(--cell-r);
-  background: var(--paper-shade);
-  box-shadow: var(--cell-face);
-  font: inherit;
-  font-size: var(--cell-font);
-  font-weight: 600;
-  line-height: 1.1;
-  color: var(--ink);
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-
-.hud-topbar .hud-people-count .icon {
-  width: var(--cell-icon);
-  height: var(--cell-icon);
-}
-
-/* Une case d'alerte (inactifs, sans lit, malheureux) : corail, de la même taille. */
-.hud .hud-topbar .hud-people-count[data-alert='true'] {
-  background: var(--coral);
-  box-shadow: 0 3px 0 var(--coral-shade);
-  color: var(--paper);
-  font-weight: 700;
-}
-
-.hud .hud-topbar .hud-people-idle::after {
-  inset: 0 -1px;
-}
-
-.hud .hud-topbar .hud-people-idle:active {
-  transform: translateY(2px);
-  box-shadow: none;
-}
-
-/* La flèche du bonheur se glisse à côté de l'icône : la case ne grandit pas. */
-.hud .hud-topbar .hud-people-happiness .icon + .icon {
-  position: absolute;
-  top: 1px;
-  right: 1px;
-  width: 9px;
-  height: 9px;
-}
-
-/* Le sac : une case qui s'étire, sa jauge en filet au pied. */
-.hud .hud-topbar .hud-bag {
-  position: relative;
-  box-sizing: border-box;
-  flex: 1 1 0;
-  min-width: var(--cell-w);
-  width: auto;
-  height: var(--cell-h);
-  justify-content: center;
-  gap: 0;
-  padding: 0 4px;
-  border-radius: var(--cell-r);
-  background: var(--paper-shade);
-  box-shadow: var(--cell-face);
-}
-
-.hud .hud-topbar .hud-bag:active {
-  transform: translateY(2px);
-  box-shadow: none;
-}
-
-.hud-topbar .hud-bag .hud-bag-title {
-  flex-direction: column;
-  flex-wrap: nowrap;
-  justify-content: center;
-  gap: 0;
-  font-size: var(--cell-font);
-  font-weight: 600;
-  line-height: 1.1;
-  letter-spacing: 0;
-  white-space: nowrap;
-  color: var(--ink);
-}
-
-.hud-topbar .hud-bag .hud-bag-title .icon {
-  width: var(--cell-icon);
-  height: var(--cell-icon);
-}
-
-.hud-topbar .hud-bag .hud-bag-fill {
-  position: absolute;
-  left: 8px;
-  right: 8px;
-  bottom: 3px;
-  height: 3px;
-  background: linear-gradient(90deg, var(--violet) var(--fill, 0%), var(--violet-light) var(--fill, 0%));
-}
-
-.hud-topbar .hud-bag .hud-bag-fill[data-full='true'] {
-  background: var(--coral);
-}
-
-.hud-topbar .hud-bag[data-empty='true'] .hud-stock-items,
-.hud-topbar .hud-bag .hud-stock-items {
-  display: none;
-}
-
-/* Pause et Réglages : deux carrés de la hauteur de la grille, sur la même face lavande. */
-.hud-topbar .hud-buttons {
-  flex: none;
-  display: flex;
-  gap: var(--cell-gap);
-}
-
-.hud-topbar .hud-button {
-  position: relative;
-  width: var(--cell-h);
-  height: var(--cell-h);
-  border-radius: var(--cell-r);
-  background: var(--paper-shade);
-  box-shadow: var(--cell-face);
-}
-
-.hud-topbar .hud-button .icon {
-  width: calc(var(--cell-h) * 0.55);
-  height: calc(var(--cell-h) * 0.55);
-}
-
-.hud-topbar .hud-button:active {
-  box-shadow: none;
-}
-
 /* L'objectif : la dernière case, jaune de la colonie, au bord droit de la barre. */
 .hud-topbar .hud-objective {
   position: relative;
   box-sizing: border-box;
-  flex: none;
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
   justify-content: center;
   min-width: var(--cell-h);
-  max-width: 220px;
   height: var(--cell-h);
-  padding: 0 3px;
+  padding: 0 8px;
   border: none;
   border-radius: var(--cell-r);
   background: var(--yellow-light);
@@ -1671,9 +1412,7 @@ button.hud-stock:active {
 }
 
 /* Une zone de tap d'au moins 40 px, même sur une case plus petite. */
-.hud-topbar .hud-button::after,
-.hud-topbar .hud-objective::after,
-.hud-topbar .hud-bag::after {
+.hud-topbar .hud-objective::after {
   content: '';
   position: absolute;
   inset: min(0px, calc((var(--cell-h) - 44px) / 2)) -1px;
@@ -1711,12 +1450,6 @@ button.hud-stock:active {
   color: var(--paper);
 }
 
-/* Ni la ville ni l'objet réclamé ne tiennent dans la case du sac : leur chiffre est dans son panneau. */
-.hud .hud-topbar .hud-bag-town,
-.hud .hud-topbar .hud-bag-wanted {
-  display: none;
-}
-
 /* Le haut ne se décolle que de la marge : sur le plus petit écran, les côtés se serrent, pas le haut. */
 @media (max-width: 359px) {
   .hud-top {
@@ -1727,8 +1460,7 @@ button.hud-stock:active {
 
 @media (min-width: 360px) {
   .hud-top {
-    --hud-h: 42px;
-    --cell-w: 33px;
+    --hud-h: 36px;
     --cell-font: 12px;
     --cell-icon: 14px;
   }
@@ -1736,25 +1468,37 @@ button.hud-stock:active {
 
 @media (min-width: 420px) {
   .hud-top {
-    --hud-h: 46px;
-    --hud-pad: 4px;
-    --cell-w: 36px;
+    --hud-h: 38px;
+    --hud-pad: 3px;
     --cell-r: 13px;
     --cell-gap: 3px;
     --cell-icon: 15px;
+  }
+
+  /* L'objectif a la place : son intitulé court s'affiche à côté de l'icône. */
+  .hud-topbar .hud-objective .hud-quest-strip {
+    flex-direction: row;
+    gap: 6px;
+  }
+
+  .hud-topbar .hud-objective .hud-strip-title {
+    display: block;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
 
 /* Une tablette, un bureau, un téléphone couché : la grille respire, l'icône passe à côté du chiffre. */
 @media (min-width: 600px) {
   .hud-top {
-    --hud-h: 54px;
-    --hud-pad: 5px;
-    --cell-w: 48px;
-    --cell-r: 16px;
-    --cell-gap: 5px;
-    --cell-font: 15px;
-    --cell-icon: 18px;
+    --hud-h: 42px;
+    --hud-pad: 4px;
+    --cell-r: 14px;
+    --cell-gap: 4px;
+    --cell-font: 14px;
+    --cell-icon: 16px;
   }
 
   .hud-main {
@@ -1765,59 +1509,8 @@ button.hud-stock:active {
     padding: 0 calc(var(--hud-pad) + 1px);
   }
 
-  .hud-topbar .hud-people-count,
-  .hud .hud-topbar .hud-people-idle {
-    flex-direction: row;
-    gap: 4px;
-  }
-
-  /* La jauge se centre à côté du titre : rien ne dépasse en haut de la case. */
-  .hud .hud-topbar .hud-bag {
-    flex-direction: row;
-    align-items: center;
-    gap: 8px;
-    padding: 0 12px;
-  }
-
-  .hud-topbar .hud-bag .hud-bag-title {
-    flex: none;
-    flex-direction: row;
-    gap: 5px;
-  }
-
-  .hud-topbar .hud-bag .hud-bag-fill {
-    position: static;
-    flex: none;
-    width: 48px;
-    height: 6px;
-  }
-
-  .hud-topbar .hud-bag .hud-stock-items {
-    display: flex;
-    flex: 1;
-    min-width: 0;
-    gap: 12px;
-    overflow: hidden;
-    font-size: 15px;
-    white-space: nowrap;
-  }
-
-  .hud-topbar .hud-bag[data-empty='true'] .hud-stock-items {
-    display: none;
-  }
-
   .hud-topbar .hud-objective {
     padding: 0 12px 0 8px;
-  }
-
-  .hud-topbar .hud-objective .hud-quest-strip {
-    flex-direction: row;
-    gap: 6px;
-    font-size: 15px;
-  }
-
-  .hud-topbar .hud-bag .hud-stock-name {
-    display: none;
   }
 
 }
@@ -1825,40 +1518,28 @@ button.hud-stock:active {
 /* Un téléphone couché : deux rangées, donc des blocs moins hauts — la carte garde sa place. */
 @media (min-width: 600px) and (max-height: 499px) {
   .hud-top {
-    --hud-h: 46px;
-    --hud-pad: 4px;
+    --hud-h: 38px;
+    --hud-pad: 3px;
   }
 }
 
-/* Une tablette large, un bureau : des cases plus larges, l'intitulé entier de la barre. */
+/* Une tablette large, un bureau : des chiffres et des icônes plus grands. */
 @media (min-width: 900px) {
   .hud-top {
-    --cell-w: 62px;
-    --cell-font: 16px;
-    --cell-icon: 20px;
-  }
-
-  .hud-topbar .hud-bag .hud-stock-name {
-    display: block;
-  }
-
-  .hud-topbar .hud-objective .hud-strip-title {
-    display: block;
-    flex: 0 1 auto;
-    max-width: 170px;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    --cell-font: 15px;
+    --cell-icon: 18px;
   }
 }
 
 /*
- * Un bureau : tout le haut sur une seule rangée. La barre au centre, 880 px au
- * plus, qui cède sa place aux groupes jusqu'à `--hud-side` chacun ; la ville
- * défile de côté dans ce qui lui reste.
+ * Un bureau : tout le haut sur une seule rangée. Le groupe de gauche (la ville,
+ * la population, l'horloge) prend ce qui reste ; la barre, 420 px au plus, puis
+ * la météo à droite, à sa taille. La ville défile de côté dans ce qui lui
+ * reste.
  */
 @media (min-width: 1366px) {
   .hud-top {
-    grid-template-columns: minmax(var(--hud-side), 1fr) minmax(0, 880px) minmax(var(--hud-side), 1fr);
+    grid-template-columns: minmax(var(--hud-side), 1fr) minmax(0, 420px) auto;
     grid-template-areas: 'left main right';
   }
 
@@ -2057,7 +1738,7 @@ button.hud-stock:active {
 
 /* ----------------------------------------------------------------- météo */
 
-/* Un bloc du groupe de droite, à côté de l'horloge : ce qui arrive, puis ce qui tombe. */
+/* Le bloc du groupe de droite : ce qui arrive, puis ce qui tombe. */
 .hud-weather {
   display: inline-flex;
   align-items: center;
@@ -2665,6 +2346,77 @@ button.hud-stock:active {
 .building-panel-actions button[disabled] {
   opacity: 0.45;
   transform: none;
+}
+
+/*
+ * Le sac : un gros bouton violet en bas à gauche, le pendant de « Bâtir » en
+ * bas à droite — même capsule, même face avant, même reflet, le violet du sac
+ * d'Adam. « 7/60 » dans une capsule qui se remplit (corail qui clignote,
+ * plein) ; l'objet que le conseil réclame à côté ; la touche I sur un clavier.
+ */
+.hud .hud-bag {
+  position: absolute;
+  left: calc(var(--safe-left) + 10px);
+  bottom: calc(var(--safe-bottom) + 14px);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 60px;
+  padding: 0 18px 0 14px;
+  border: none;
+  border-radius: 999px;
+  background: var(--violet);
+  box-shadow: 0 5px 0 var(--violet-shade);
+  font: inherit;
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--paper);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.hud .hud-bag::before {
+  content: '';
+  position: absolute;
+  top: 7px;
+  left: 16px;
+  width: 26px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--violet-light);
+  pointer-events: none;
+}
+
+.hud .hud-bag:active {
+  transform: translateY(3px);
+  box-shadow: 0 2px 0 var(--violet-shade);
+}
+
+.hud-bag-count {
+  padding: 1px 9px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--violet-light) var(--fill, 0%), var(--violet-shade) var(--fill, 0%));
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-bag-count[data-full='true'] {
+  background: var(--coral);
+  animation: blink 0.8s steps(2) infinite;
+}
+
+.hud-bag-wanted {
+  font-size: 15px;
+}
+
+.hud-bag-wanted .icon {
+  width: 20px;
+  height: 20px;
+}
+
+.hud-bag .key-hint {
+  margin-left: 2px;
 }
 
 /* ------------------------------------------------------ menu de construction */
@@ -5134,12 +4886,13 @@ button.hud-stock:active {
 
 /*
  * « Partie de test » (`…/test`) : une petite capsule corail en bas à gauche,
- * pour ne jamais la prendre pour sa vraie partie — hors du haut, qui reste
- * collé au bord comme dans une vraie partie. Elle ne capte aucun tap.
+ * au-dessus du bouton du sac, pour ne jamais la prendre pour sa vraie partie —
+ * hors du haut, qui reste collé au bord comme dans une vraie partie. Elle ne
+ * capte aucun tap.
  */
 .test-banner {
   position: absolute;
-  bottom: calc(var(--safe-bottom) + 8px);
+  bottom: calc(var(--safe-bottom) + 90px);
   left: calc(var(--safe-left) + 8px);
   z-index: 5;
   padding: 1px 10px 2px;

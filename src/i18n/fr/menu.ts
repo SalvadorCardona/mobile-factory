@@ -13,6 +13,7 @@ export const menu = {
   /** Les touches, en petites capsules (masquées sans clavier). */
   keys: {
     space: 'Espace',
+    inventory: 'I',
     arrows: 'Flèches',
     enter: 'Entrée',
     escape: 'Échap',

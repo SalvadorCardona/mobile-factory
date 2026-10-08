@@ -13,6 +13,7 @@ export const menu: Messages['menu'] = {
   build: 'Build',
   keys: {
     space: 'Space',
+    inventory: 'I',
     arrows: 'Arrows',
     enter: 'Enter',
     escape: 'Esc',

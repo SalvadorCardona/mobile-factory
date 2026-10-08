@@ -361,8 +361,10 @@ export class Hud {
     clip.append(this.hint);
     fold.append(clip);
 
-    this.bag = element('button', 'panel hud-stock hud-bag');
+    // Le sac : un gros bouton en bas à gauche, comme « Bâtir » en bas à droite.
+    this.bag = element('button', 'hud-bag');
     this.bag.type = 'button';
+    this.bag.setAttribute('aria-keyshortcuts', 'I');
     this.town = element('div', 'panel hud-stock hud-town');
     // Le bandeau d'un écran large défile de côté : la molette aussi, et son
     // bord droit s'estompe tant qu'il reste des objets cachés.
@@ -375,7 +377,7 @@ export class Hud {
     }, { passive: false });
     this.town.addEventListener('scroll', () => this.markTownOverflow(), true);
     window.addEventListener('resize', () => this.markTownOverflow());
-    this.prestige = element('div', 'panel hud-prestige');
+    this.prestige = element('div', 'hud-prestige');
     this.prestige.hidden = true;
     this.prestige.setAttribute('role', 'status');
     this.people = element('div', 'panel hud-people');
@@ -411,18 +413,16 @@ export class Hud {
     bannerBody.append(this.bannerTitle, this.bannerText);
     this.banner.append(this.bannerArrow, bannerBody);
 
-    const buttons = element('div', 'hud-buttons');
-
-    this.pauseButton = element('button', 'hud-button hud-pause');
+    // Pause et Réglages : deux disques en tête de la colonne du zoom, au bord droit (`main.ts`).
+    this.pauseButton = element('button', 'hud-button hud-zoom-button hud-pause');
     this.pauseButton.type = 'button';
     this.pauseButton.append(uiIcon('pause'));
 
-    this.settingsButton = element('button', 'hud-button hud-settings');
+    this.settingsButton = element('button', 'hud-button hud-zoom-button hud-settings');
     this.settingsButton.type = 'button';
     this.settingsButton.setAttribute('aria-haspopup', 'dialog');
     this.settingsButton.append(uiIcon('settings'));
     onLocale(() => setTip(this.settingsButton, t().settings.title));
-    buttons.append(this.pauseButton, this.settingsButton);
 
     this.defeat = element('div', 'overlay hud-defeat');
     this.defeat.hidden = true;
@@ -466,31 +466,32 @@ export class Hud {
     this.confetti = element('div', 'hud-confetti');
 
     // Le haut de l'écran : une seule rangée, collée en haut, de blocs de même
-    // hauteur (`--hud-h`) — à gauche le Prestige et la ville, au centre la
-    // barre, à droite l'alerte de vivres, la météo et l'horloge. Sur un écran
+    // hauteur (`--hud-h`) — à gauche la ville (le Prestige en tête), la
+    // population, l'horloge du jour et l'alerte de vivres, au centre la barre
+    // (l'objectif), à droite la météo. Sur un écran
     // trop étroit, les deux groupes passent ensemble sur une rangée dessous.
     this.top = element('div', 'hud-top');
 
-    // La barre : la population, le sac, Pause et Réglages, puis l'objectif
-    // tout à droite ; la quête s'ouvre en fenêtre sous l'objectif.
+    // La barre : l'objectif ; la quête s'ouvre en fenêtre sous lui.
     this.bar = element('div', 'panel hud-topbar');
-    this.bar.append(this.people, this.bag, buttons, this.objective);
+    this.bar.append(this.objective);
 
     const main = element('div', 'hud-main');
 
     this.quest.append(fold);
     main.append(this.bar, this.quest);
     this.left = element('div', 'hud-left');
-    this.left.append(this.prestige, this.town, this.hunger);
-    // Rangés de droite à gauche : l'horloge tient le bord, la météo passe dessous si la place manque.
+    // L'horloge du jour juste à droite de la population.
+    this.left.append(this.town, this.people, this.dayClock, this.hunger);
     this.right = element('div', 'hud-right');
-    this.right.append(this.dayClock, this.weather);
+    this.right.append(this.weather);
     this.top.append(this.left, main, this.right);
 
     this.root.append(
       // Les confettis d'abord : ils tombent derrière les cartes du HUD et les fenêtres.
       this.confetti,
       this.top,
+      this.bag,
       this.countdown,
       this.speech,
       this.person,
@@ -943,15 +944,13 @@ export class Hud {
     }
     setTip(happiness, label.happiness(mood.total, mood.average, mood.unhappy));
 
-    const town = element('div', 'hud-people-town');
-
-    town.append(housing, happiness);
     this.people.hidden = working + idle + children === 0;
     this.people.replaceChildren(
       count('toil', working, label.working(working)),
       lazy,
       count('child', children, label.children(children)),
-      town,
+      housing,
+      happiness,
     );
   }
 
@@ -1573,13 +1572,11 @@ export class Hud {
   /* ------------------------------------------------------------------- sac */
 
   /**
-   * Le sac : son pictogramme, « 7/60 », la jauge de remplissage, et une
-   * pastille « icône + quantité » par objet. Le DOM n'est reconstruit que si
-   * le contenu change — comparer une clé texte coûte moins qu'un diff.
-   *
-   * Sur un téléphone, la carte se replie en pastille (cf. `style.css`) :
-   * seuls restent le compte, la jauge, le total de la ville et l'objet que
-   * le conseil réclame, tous déjà là, cachés sur grand écran.
+   * Le sac : un gros bouton violet en bas à gauche, le pendant de « Bâtir » —
+   * son pictogramme, « Sac », « 7/60 » dans une capsule qui se remplit,
+   * l'objet que le conseil réclame et la touche I. Le détail est dans le
+   * panneau qu'il ouvre. Le DOM n'est reconstruit que si le contenu change —
+   * comparer une clé texte coûte moins qu'un diff.
    */
   private updateBag(): void {
     const { inventory } = this.world.player;
@@ -1587,46 +1584,34 @@ export class Hud {
     const stock = this.world.townStock();
     const town = stock?.entries().reduce((sum, [, amount]) => sum + amount, 0) ?? null;
     const wanted = this.wanted;
-    const key = `${inventory.total()}/${inventory.capacity}|${entries.map(([item, amount]) => `${item}:${amount}`).join(',')}|${town}|${wanted}`;
+    const key = `${inventory.total()}/${inventory.capacity}|${entries.map(([item, amount]) => `${item}:${amount}`).join(',')}|${town}|${wanted}|${locale()}`;
 
     if (key === this.lastBag) return;
     this.lastBag = key;
 
-    const title = element('div', 'hud-bag-title');
-    const fill = element('div', 'hud-bag-fill');
-    const ratio = inventory.total() / inventory.capacity;
-
     const label = t().hud.stock;
+    const full = inventory.freeSpace() <= 0;
+    const count = text('hud-bag-count', `${inventory.total()}/${inventory.capacity}`);
+    const hint = element('kbd', 'key-hint');
 
-    title.append(uiIcon('bag', 20), text('hud-stock-name', label.bag), text('hud-bag-count', `${inventory.total()}/${inventory.capacity}`));
-    setTip(title, label.bagTip(inventory.total(), inventory.capacity));
-    if (town !== null) {
-      const summary = text('hud-bag-town', String(town));
-
-      summary.prepend(uiIcon('town', 18));
-      setTip(summary, label.townTotal(town));
-      title.append(summary);
-    }
+    count.dataset['full'] = String(full);
+    count.style.setProperty('--fill', `${Math.round((inventory.total() / inventory.capacity) * 100)}%`);
+    hint.textContent = t().menu.keys.inventory;
+    this.bag.replaceChildren(uiIcon('bagButton', 28), text('hud-bag-name', label.bag), count);
     if (wanted) {
       const chip = itemAmount(wanted, inventory.count(wanted));
 
       chip.classList.add('hud-bag-wanted');
       setTip(chip, label.wanted(t().items[wanted], inventory.count(wanted)));
-      title.append(chip);
+      this.bag.append(chip);
     }
-    title.dataset['full'] = String(inventory.freeSpace() <= 0);
+    this.bag.append(hint);
+    this.bag.dataset['full'] = String(full);
+    setTip(this.bag, label.bagTip(inventory.total(), inventory.capacity));
     this.bag.setAttribute(
       'aria-label',
       town === null ? label.bagLabel(inventory.total(), inventory.capacity) : label.bagLabelTown(inventory.total(), inventory.capacity, town),
     );
-    fill.style.setProperty('--fill', `${Math.round(ratio * 100)}%`);
-    fill.dataset['full'] = String(inventory.freeSpace() <= 0);
-
-    const items = element('div', 'hud-stock-items');
-
-    items.append(...entries.map(([item, amount]) => tipped(itemAmount(item, amount), label.inBag(t().items[item], amount))));
-    this.bag.dataset['empty'] = String(entries.length === 0);
-    this.bag.replaceChildren(title, fill, items);
   }
 
   /**
@@ -1646,7 +1631,7 @@ export class Hud {
 
     const label = t().hud.stock;
 
-    title.append(uiIcon('town', 20), text('hud-stock-name', label.town));
+    title.append(uiIcon('town', 20));
     if (!stock) title.append(text('hud-town-state', label.toBuild));
     setTip(title, label.townTitle);
 
@@ -1656,7 +1641,8 @@ export class Hud {
     this.town.dataset['empty'] = String(entries.length === 0);
     const scroll = this.townItems()?.scrollLeft ?? 0;
 
-    this.town.replaceChildren(title, items);
+    // Le Prestige ouvre le bandeau, avant la ville et ses objets.
+    this.town.replaceChildren(this.prestige, title, items);
     items.scrollLeft = scroll;
     this.markTownOverflow();
   }
@@ -1673,7 +1659,7 @@ export class Hud {
     items.dataset['more'] = String(items.scrollLeft + items.clientWidth < items.scrollWidth - 1);
   }
 
-  /** Le Prestige : caché tant que la colonie n'en a pas, puis toujours là, en haut à gauche. */
+  /** Le Prestige : caché tant que la colonie n'en a pas, puis toujours là, en tête du bandeau de la ville. */
   private updatePrestige(): void {
     const { prestige } = this.world;
     const key = String(prestige);
