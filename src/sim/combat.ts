@@ -24,9 +24,10 @@
 
 import { TILE_SIZE, distanceSq } from '../core/grid.ts';
 import { ENEMIES, SPITTER, WILDLIFE } from '../data/enemies.ts';
+import { FIREBALL } from '../data/enemyBases.ts';
 import { WEAPONS, type WeaponId } from '../data/weapons.ts';
 import { PLAYER_HALF_H, PLAYER_HALF_W } from './player.ts';
-import type { Arrow, Foe, MobileId, Spit } from './types.ts';
+import type { Arrow, Fireball, Foe, MobileId, Spit } from './types.ts';
 
 /**
  * L'ennemi le plus proche de (x, y) à moins de `range` tuiles, ou `null`.
@@ -197,15 +198,53 @@ export function spit(id: number, from: MobileId, x: number, y: number, target: {
   };
 }
 
+/**
+ * Une boule de feu partant de (x, y) vers la cible, à `FIREBALL.speed` : elle
+ * vole un peu au-delà de `range` tuiles, puis s'éteint. Pas d'anticipation,
+ * pas de vent. L'id est donné par le monde.
+ */
+export function fireball(
+  id: number,
+  baseId: number,
+  x: number,
+  y: number,
+  target: { x: number; y: number },
+  range: number,
+  damage: number,
+  buildingDamage: number,
+): Fireball {
+  const pixelsPerTick = (FIREBALL.speed * TILE_SIZE) / 20;
+  const dx = target.x - x;
+  const dy = target.y - y;
+  const distance = Math.hypot(dx, dy) || 1;
+
+  return {
+    kind: 'fireball',
+    id,
+    x,
+    y,
+    prevX: x,
+    prevY: y,
+    facing: 'down',
+    moving: true,
+    vx: (dx / distance) * pixelsPerTick,
+    vy: (dy / distance) * pixelsPerTick,
+    ttl: Math.ceil(((range + 2) * TILE_SIZE) / pixelsPerTick),
+    damage,
+    buildingDamage,
+    baseId,
+  };
+}
+
 /** Ce qu'un crachat a rencontré ce tick : Adam, un mur, ou rien (`null`) ; `ttl` à zéro, il est tombé. */
 export type SpitHit = 'player' | 'wall' | null;
 
 /**
- * Un tick de crachat : il avance et touche Adam s'il traverse son corps —
+ * Un tick de crachat ou de boule de feu : il avance et touche Adam s'il traverse son corps —
  * balayé, comme une flèche —, ou s'écrase sur ce que `wall(x, y)` déclare
  * plein (un bâtiment, une base). Arbres et rochers, il passe par-dessus.
  */
-export function stepSpit(spit: Spit, player: { x: number; y: number }, wall: (x: number, y: number) => boolean): SpitHit {
+export function stepSpit(spit: Spit | Fireball, player: { x: number; y: number }, wall: (x: number, y: number) => boolean): SpitHit {
   spit.prevX = spit.x;
   spit.prevY = spit.y;
   spit.ttl -= 1;

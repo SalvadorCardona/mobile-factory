@@ -96,6 +96,11 @@ const SPIT_TRAIL = [
   { ticks: 0.9, scale: 0.9 },
   { ticks: 1.8, scale: 0.6 },
 ] as const;
+/** La traînée d'une boule de feu : deux braises derrière elle. */
+const FIREBALL_TRAIL = [
+  { ticks: 1, scale: 0.9 },
+  { ticks: 2, scale: 0.55 },
+] as const;
 /** La mare d'un crachat écrasé, en taille de flaque de mutant. */
 const SPIT_SPLASH = 0.3;
 /** Le cercle du coup de zone : son anneau, et le disque qui s'y remplit, posés en transparence. */
@@ -340,6 +345,15 @@ export class MobileLayer {
             view.root.getChildAt(k).position.set(-mobile.vx * ticks, -mobile.vy * ticks);
           }
           view.root.getChildAt(SPIT_TRAIL.length).rotation += deltaMs * 0.01;
+          break;
+
+        case 'fireball':
+          // Comme le crachat : au-dessus de tout, braises derrière, la boule qui pulse.
+          view.root.zIndex = y + 64;
+          for (const [k, { ticks }] of FIREBALL_TRAIL.entries()) {
+            view.root.getChildAt(k).position.set(-mobile.vx * ticks, -mobile.vy * ticks);
+          }
+          view.root.getChildAt(FIREBALL_TRAIL.length).scale.set(1 + Math.sin(mobile.ttl * 1.2) * 0.1);
           break;
 
         case 'eve': {
@@ -812,6 +826,20 @@ export class MobileLayer {
 
       glob.anchor.set(SPRITES.spit.anchorX, SPRITES.spit.anchorY);
       root.addChild(glob);
+      view = { root, puppet: null, hp: null, lastHp: 0, age: SPAWN_MS, tile: '', bike: null, stars: null, size: 1, puddle: 1, recoil: null, kind: mobile.kind, lounge: null, loungeLeft: 0, hungry: null, need: 'hungry', sleeper: null };
+    } else if (mobile.kind === 'fireball') {
+      for (const { scale } of FIREBALL_TRAIL) {
+        const ember = new Sprite(this.library.part('fireball', 'ember'));
+
+        ember.anchor.set(SPRITES.fireball.anchorX, SPRITES.fireball.anchorY);
+        ember.scale.set(scale);
+        root.addChild(ember);
+      }
+
+      const ball = new Sprite(this.library.part('fireball', 'fly'));
+
+      ball.anchor.set(SPRITES.fireball.anchorX, SPRITES.fireball.anchorY);
+      root.addChild(ball);
       view = { root, puppet: null, hp: null, lastHp: 0, age: SPAWN_MS, tile: '', bike: null, stars: null, size: 1, puddle: 1, recoil: null, kind: mobile.kind, lounge: null, loungeLeft: 0, hungry: null, need: 'hungry', sleeper: null };
     } else if (mobile.kind === 'pickup') {
       const tx = floorDiv(mobile.x, TILE_SIZE);

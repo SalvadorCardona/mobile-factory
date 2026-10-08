@@ -290,6 +290,7 @@ export const UI_ICONS = {
     circle(8.6, 15.4, 1, coral.light),
     circle(15.4, 15.4, 1, coral.light),
   ),
+  flame: svg(S, S, circle(12.6, 14, 7.6, orange.shade), circle(12, 13.4, 7.2, orange.base), pill(10.4, 3.4, 3.4, 6, orange.base), circle(12.4, 14.4, 3.8, PALETTE.yellow.base), pill(8, 9.5, 4, 2, PALETTE.yellow.light)),
   heart: svg(S, S, heart(12, 9.5, 4.6, coral.shade), heart(11.6, 9, 4.2, coral.base), pill(6.5, 6.5, 4, 2, coral.light)),
   /** Un habitant : la tête et la tunique orange des humains. */
   people: svg(S, S, shadedPill(5, 12, 14, 10, 3, 'orange'), circle(12, 8, 5, PALETTE.skin.base), pill(7, 3, 10, 5, ink.base)),

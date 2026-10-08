@@ -768,6 +768,17 @@ function parseMobile(raw: unknown, seed: number): Mobile {
         damage: finite(mobile['damage']),
         from: int(mobile['from']),
       };
+    case 'fireball':
+      return {
+        ...base,
+        kind: 'fireball',
+        vx: finite(mobile['vx']),
+        vy: finite(mobile['vy']),
+        ttl: int(mobile['ttl']),
+        damage: finite(mobile['damage']),
+        buildingDamage: finite(mobile['buildingDamage']),
+        baseId: int(mobile['baseId']),
+      };
     case 'arrow':
       return {
         ...base,
@@ -1038,6 +1049,8 @@ function parseEnemyBase(raw: unknown): EnemyBase {
     guards: base['guards'] === undefined ? (hp > 0 ? enemyBaseLevel(level).guards.count : 0) : int(base['guards']),
     spitters: base['spitters'] === undefined ? (hp > 0 ? enemyBaseLevel(level).guards.spitters : 0) : int(base['spitters']),
     mend: base['mend'] === undefined ? 0 : int(base['mend']),
+    // D'avant les boules de feu : elle repart avec son délai plein.
+    fire: base['fire'] === undefined ? enemyBaseLevel(level).fire.cooldownTicks : int(base['fire']),
     chief: base['chief'] === undefined ? (hp > 0 ? enemyBaseLevel(level).chief.hp : 0) : nonNegative(finite(base['chief'])),
   };
 }

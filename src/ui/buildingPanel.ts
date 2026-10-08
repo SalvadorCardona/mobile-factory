@@ -1027,6 +1027,7 @@ export class BuildingPanel {
     const stats: Stat[] = [
       { icon: 'goal', value: String(base.level), label: text.level(base.level) },
       { icon: 'range', value: String(level.zoneRadius), label: text.zone(level.zoneRadius) },
+      { icon: 'flame', value: String(level.fire.damage), label: text.fire(level.fire.range, level.fire.damage) },
       { icon: 'moon', value: `${base.raiders}/${capacity}`, label: text.raiders(base.raiders, capacity) },
       { icon: 'mutant', value: `${base.guards}/${level.guards.count}`, label: text.guards(base.guards, level.guards.count) },
       { icon: 'mutant', value: `${base.spitters}/${level.guards.spitters}`, label: text.spitters(base.spitters, level.guards.spitters) },
@@ -1040,6 +1041,7 @@ export class BuildingPanel {
 
     const lines = [
       ...(shielded ? [text.shielded, text.chiefReward(level.chief.prestige + KILL_PRESTIGE.chief)] : []),
+      text.fireWarning,
       capacity > 0 ? text.raid : text.asleep(level.raid.from),
       text.required(gear, base.level),
       canDamage(base, this.world.player.gear) ? text.ready : text.weak,

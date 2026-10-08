@@ -203,6 +203,8 @@ export const PARTICLES = {
     gravity: 0.0009,
     spin: true,
   },
+  /** L'impact d'une boule de feu : des braises. */
+  ember: { shape: 'spark', colors: [PALETTE.orange.base, PALETTE.yellow.base, PALETTE.yellow.light], lifeMs: 350, gravity: 0.0006, spin: false },
   star: { shape: 'square', colors: [PALETTE.yellow.base, PALETTE.yellow.light, PALETTE.paper.base], lifeMs: 500, gravity: 0.0009, spin: true },
 } as const satisfies Record<string, ParticleStyle>;
 

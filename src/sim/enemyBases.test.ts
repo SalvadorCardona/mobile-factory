@@ -242,7 +242,11 @@ describe('bases mutantes', () => {
     unguarded(world);
     world.player.gear = base.level;
     standBelow(world, base);
-    for (let i = 0; i < 4000 && isStanding(base); i += 1) world.tick();
+    for (let i = 0; i < 6000 && isStanding(base); i += 1) {
+      // Ses boules de feu ne sont pas l'objet de ce test : Adam tient debout.
+      world.player.hp = 100;
+      world.tick();
+    }
 
     expect(destroyed).toEqual([base.id]);
     expect(world.prestige - prestige).toBe(enemyBaseLevel(base.level).prestige);
@@ -300,7 +304,7 @@ describe('bases mutantes', () => {
 
 describe('bases mutantes — production et sorties', () => {
   it('produit des assaillants le jour, jusqu’à sa capacité, puis attend la nuit', () => {
-    const base: EnemyBase = { id: 1, tx: 0, ty: 0, level: 1, hp: ENEMY_BASE_LEVELS[0].hp, raiders: 0, brood: 0, guards: 2, spitters: 1, mend: 0, chief: 24 };
+    const base: EnemyBase = { id: 1, tx: 0, ty: 0, level: 1, hp: ENEMY_BASE_LEVELS[0].hp, raiders: 0, brood: 0, guards: 2, spitters: 1, mend: 0, chief: 36, fire: 70 };
     const capacity = raidCapacity(1, 1);
     const ticks = raidTicks(1, 1);
     const counts: number[] = [];
@@ -429,7 +433,7 @@ describe('bases mutantes — production et sorties', () => {
   });
 
   it('refait le jour, lentement, un gardien tombé', () => {
-    const base: EnemyBase = { id: 1, tx: 0, ty: 0, level: 1, hp: ENEMY_BASE_LEVELS[0].hp, raiders: 0, brood: 0, guards: 1, spitters: 1, mend: 0, chief: 24 };
+    const base: EnemyBase = { id: 1, tx: 0, ty: 0, level: 1, hp: ENEMY_BASE_LEVELS[0].hp, raiders: 0, brood: 0, guards: ENEMY_BASE_LEVELS[0].guards.count - 1, spitters: 1, mend: 0, chief: 36, fire: 70 };
     const { guards } = ENEMY_BASE_LEVELS[0];
 
     for (let i = 0; i < guards.respawnTicks - 1; i += 1) expect(breed(base, 1).guard).toBe(false);
