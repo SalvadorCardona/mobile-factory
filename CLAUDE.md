@@ -74,7 +74,15 @@ défile de côté. Le sac (tap, ou touche I) ouvre
 section Ville est un tableau de bord (`sim/flows.ts`, `World.flows`) : débit
 net par objet sur deux minutes (anneau d'échantillons, pas sauvegardé) et
 deux alertes au plus — pénurie d'une recette, surplus que rien n'utilise —
-dont le tap pointe un repère de bord vers le bâtiment en cause. Loin de
+dont le tap pointe un repère de bord vers le bâtiment en cause. Dans le
+bandeau de la ville, chaque objet porte sa **tendance** sur la dernière
+minute de jeu (`TownFlows.trend`, `TREND_SPAN`) : flèche menthe s'il monte,
+corail s'il baisse, rien s'il stagne — seuil d'entrée `TREND_RISE`, de
+sortie `TREND_KEEP`, pour ne pas clignoter. Le bouton au bout du bandeau
+(`.hud-resources`) ouvre `ui/resourcePanel.ts` : par objet, entrées,
+sorties et solde par minute (écart tick à tick du stock), mini-courbe
+(`sparklineSvg`) et temps avant épuisement ; partie de test
+`/test/trends`. Loin de
 la mairie, « Jeter » pose le sac au sol en tas (le mobile `pickup` du
 butin, avec `amount`), qu'Adam reprend après s'en être éloigné.
 Tant que la mairie n'est pas debout, Adam ne récolte d'un objet que ce

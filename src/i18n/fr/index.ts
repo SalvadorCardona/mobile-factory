@@ -11,6 +11,7 @@ import { inventory } from './inventory.ts';
 import { menu } from './menu.ts';
 import { panel } from './panel.ts';
 import { researchPanel } from './researchPanel.ts';
+import { resourcePanel } from './resourcePanel.ts';
 import { screens } from './screens.ts';
 import { trade } from './trade.ts';
 
@@ -24,5 +25,6 @@ export const FR = {
   inventory,
   trade,
   researchPanel,
+  resourcePanel,
   ...content,
 };

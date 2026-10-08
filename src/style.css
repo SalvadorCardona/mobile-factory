@@ -1139,8 +1139,50 @@ button {
   flex: none;
 }
 
+/*
+ * La tendance d'un objet de la ville, sur la dernière minute de jeu : une
+ * petite flèche menthe s'il monte, corail s'il baisse, rien s'il stagne.
+ */
+.hud-town .hud-stock-items .icon.hud-trend {
+  width: 12px;
+  height: 12px;
+  margin-left: -3px;
+}
+
+/*
+ * Au bout du bandeau, le bouton du panneau des ressources : toute la hauteur
+ * du bandeau jusqu'à son bord droit, séparé des objets par un filet comme le
+ * Prestige. Les objets défilent, lui reste.
+ */
+.hud-town .hud-resources {
+  flex: none;
+  display: grid;
+  place-items: center;
+  align-self: stretch;
+  width: 44px;
+  margin-right: -14px;
+  padding: 0;
+  border: none;
+  border-left: 2px solid var(--paper-shade);
+  background: none;
+  color: inherit;
+}
+
+.hud-town .hud-resources[hidden] {
+  display: none;
+}
+
+.hud-town .hud-resources:active {
+  background: var(--paper-shade);
+}
+
 /* Sur un téléphone, les mêmes blocs, un peu plus serrés. */
 @media (max-width: 599px) {
+  .hud-town .hud-resources {
+    width: 40px;
+    margin-right: -10px;
+  }
+
   .hud .hud-prestige {
     padding-right: 8px;
     font-size: 14px;
@@ -1752,6 +1794,97 @@ button {
 }
 
 .inventory-rate[data-trend='down'] {
+  color: var(--danger);
+}
+
+/*
+ * Le panneau des ressources : une carte lavande par objet — son icône, son
+ * nom, son stock et sa flèche, la mini-courbe à droite ; dessous, entrées,
+ * sorties et solde par minute ; en corail, le temps avant épuisement.
+ */
+.resource-panel h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.resource-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.resource-row {
+  padding: 8px 10px;
+  border-radius: 16px;
+  background: var(--paper-shade);
+}
+
+.resource-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.resource-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resource-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.resource-spark {
+  flex: none;
+}
+
+.resource-figures {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.resource-figure {
+  display: flex;
+  flex-direction: column;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.resource-figure strong {
+  font-size: 15px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+
+.resource-figure strong[data-tone='up'] {
+  color: var(--good);
+}
+
+.resource-figure strong[data-tone='down'] {
+  color: var(--danger);
+}
+
+.resource-runway {
+  margin: 6px 0 0;
+  font-size: 13px;
   color: var(--danger);
 }
 

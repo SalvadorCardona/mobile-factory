@@ -68,6 +68,7 @@ import type { AtlasStats } from '../render/spriteLibrary.ts';
 import type { WaterStats } from '../render/waterLayer.ts';
 import type { RoadRejection } from '../sim/commands.ts';
 import type { Compass } from '../sim/enemies.ts';
+import type { Trend } from '../sim/flows.ts';
 import { nameOf } from '../sim/inhabitants.ts';
 import type { Entity, Mobile, MobileId } from '../sim/types.ts';
 import { DIAL_ARCS } from '../sim/dayNight.ts';
@@ -196,6 +197,8 @@ export class Hud {
   private clockTipUntil = 0;
   /** Le sac, compact : un bouton qui ouvre le panneau inventaire. */
   public readonly bag: HTMLButtonElement;
+  /** Au bout du bandeau de la ville : ouvre le panneau des ressources (`main.ts` le branche). */
+  public readonly resourcesButton: HTMLButtonElement;
   /** Le stock de la ville, compact. */
   private readonly town: HTMLElement;
   /** Le Prestige de la colonie : son icône et son compte, en haut à gauche. */
@@ -381,6 +384,11 @@ export class Hud {
       items.scrollLeft += event.deltaX + event.deltaY;
     }, { passive: false });
     this.town.addEventListener('scroll', () => this.markTownOverflow(), true);
+    this.resourcesButton = element('button', 'hud-resources');
+    this.resourcesButton.type = 'button';
+    this.resourcesButton.setAttribute('aria-haspopup', 'dialog');
+    this.resourcesButton.append(uiIcon('stats', 20));
+    onLocale(() => setTip(this.resourcesButton, t().resourcePanel.open));
     window.addEventListener('resize', () => this.markTownOverflow());
     this.prestige = element('div', 'hud-prestige');
     this.prestige.hidden = true;
@@ -1644,12 +1652,16 @@ export class Hud {
   /**
    * La ville : le stock commun, ce que les chantiers et les porteurs
    * consomment. Tant que la mairie est en chantier, il n'y a pas de ville —
-   * la carte le dit au lieu de montrer un stock vide.
+   * la carte le dit au lieu de montrer un stock vide. À côté de chaque objet,
+   * sa tendance sur la dernière minute de jeu (`TownFlows.trend`) : une
+   * flèche menthe s'il monte, corail s'il baisse, rien s'il stagne. Au bout
+   * du bandeau, le bouton du panneau des ressources.
    */
   private updateTown(): void {
     const stock = this.world.townStock();
     const entries = stock?.entries() ?? [];
-    const key = stock ? entries.map(([item, amount]) => `${item}:${amount}`).join(',') : 'none';
+    const { flows } = this.world;
+    const key = stock ? entries.map(([item, amount]) => `${item}:${amount}:${flows.trend(item)}`).join(',') : 'none';
 
     if (key === this.lastTown) return;
     this.lastTown = key;
@@ -1664,12 +1676,13 @@ export class Hud {
 
     const items = element('div', 'hud-stock-items');
 
-    items.append(...entries.map(([item, amount]) => tipped(itemAmount(item, amount), label.inTown(t().items[item], amount))));
+    items.append(...entries.map(([item, amount]) => townEntry(item, amount, flows.trend(item))));
     this.town.dataset['empty'] = String(entries.length === 0);
+    this.resourcesButton.hidden = !stock;
     const scroll = this.townItems()?.scrollLeft ?? 0;
 
-    // Le niveau d'Adam et le Prestige ouvrent le bandeau, avant la ville et ses objets.
-    this.town.replaceChildren(this.level, this.prestige, title, items);
+    // Le niveau d'Adam et le Prestige ouvrent le bandeau, avant la ville et ses objets ; le bouton des ressources le ferme.
+    this.town.replaceChildren(this.level, this.prestige, title, items, this.resourcesButton);
     items.scrollLeft = scroll;
     this.markTownOverflow();
   }
@@ -1923,6 +1936,22 @@ function chip(icon: 'people' | 'mutant', value: number, label: string): HTMLElem
 }
 
 /** `node`, avec son libellé (`setTip`). */
+/** Un objet du bandeau de la ville : son icône, sa quantité, et sa flèche s'il monte ou baisse. */
+function townEntry(item: ItemId, amount: number, trend: Trend): HTMLElement {
+  const label = t().hud.stock;
+  const name = t().items[item];
+  const entry = itemAmount(item, amount);
+
+  if (trend === 'flat') return tipped(entry, label.inTown(name, amount));
+
+  const arrow = uiIcon(trend === 'up' ? 'trendUp' : 'trendDown', 12);
+
+  arrow.classList.add('hud-trend');
+  entry.dataset['trend'] = trend;
+  entry.append(arrow);
+  return tipped(entry, trend === 'up' ? label.inTownUp(name, amount) : label.inTownDown(name, amount));
+}
+
 function tipped(node: HTMLElement, label: string): HTMLElement {
   setTip(node, label);
   return node;

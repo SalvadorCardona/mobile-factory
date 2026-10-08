@@ -3,7 +3,8 @@ import { TILE_SIZE } from '../core/grid.ts';
 import { BUILDINGS, type BuildingId } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
 import { RECIPES } from '../data/recipes.ts';
-import { FLOW_SAMPLE_TICKS, FLOW_SAMPLES, MAX_ALERTS } from './flows.ts';
+import { FLOW_SAMPLE_TICKS, FLOW_SAMPLES, MAX_ALERTS, TownFlows, TREND_KEEP, TREND_RISE } from './flows.ts';
+import { Store } from './store.ts';
 import { decodeSave, encodeSave, type SavedEntity } from './save.ts';
 import { isWalkable, terrainAt } from './terrain.ts';
 import type { EntityId } from './types.ts';
@@ -178,5 +179,147 @@ describe('alertes de la ville', () => {
     world.push({ type: 'pauseBuilding', id: idOf(world, 'forge'), paused: true });
     run(world, 2);
     expect(world.flows.alerts(world)).toEqual([]);
+  });
+});
+
+describe('tendance de la ville', () => {
+  /** Fait tourner l'anneau `seconds` secondes de jeu, en appliquant `step` au stock à chaque tick. */
+  function run(flows: TownFlows, town: Store, from: number, seconds: number, step: (tick: number) => void = () => {}): number {
+    let tick = from;
+
+    for (const end = from + seconds * TICKS_PER_SECOND; tick < end; tick += 1) {
+      step(tick);
+      flows.observe(tick, town);
+    }
+    return tick;
+  }
+
+  /** Un objet par seconde de jeu entre (ou sort, si `rate` est négatif). */
+  function perSecond(town: Store, item: ItemId, rate: number): (tick: number) => void {
+    return (tick) => {
+      if (tick % TICKS_PER_SECOND !== 0) return;
+      if (rate > 0) town.add(item, rate);
+      else town.remove(item, -rate);
+    };
+  }
+
+  it('monte, stagne, baisse : sur la dernière minute, pas d’un tick à l’autre', () => {
+    const flows = new TownFlows();
+    const town = new Store(Infinity);
+
+    town.add('stone', 50);
+    town.add('food', 200);
+    town.add('water', 40);
+    run(flows, town, 0, 60, (tick) => {
+      perSecond(town, 'stone', 1)(tick);
+      perSecond(town, 'food', -1)(tick);
+    });
+
+    expect(flows.trend('stone')).toBe('up');
+    expect(flows.trend('food')).toBe('down');
+    expect(flows.trend('water')).toBe('flat');
+  });
+
+  it('sous le seuil, il stagne : une unité par minute ne fait pas de flèche', () => {
+    const flows = new TownFlows();
+    const town = new Store(Infinity);
+
+    town.add('wood', 10);
+    run(flows, town, 0, 120, (tick) => {
+      if (tick % MINUTE === 1) town.add('wood', TREND_KEEP);
+    });
+
+    expect(TREND_KEEP).toBeLessThan(TREND_RISE);
+    expect(flows.trend('wood')).toBe('flat');
+  });
+
+  it('la flèche ne clignote pas : paru au-dessus du seuil, elle tient tant que le débit reste au-dessus de la moitié', () => {
+    const flows = new TownFlows();
+    const town = new Store(Infinity);
+    const seen = new Set<string>();
+
+    // Un porteur dépose 3 bois toutes les 90 s : le débit de la minute oscille entre 0 et 3, le stock monte toujours.
+    let tick = run(flows, town, 0, 60, (now) => {
+      if (now % (90 * TICKS_PER_SECOND) === 10) town.add('wood', 3);
+    });
+
+    expect(flows.trend('wood')).toBe('up');
+    tick = run(flows, town, tick, 300, (now) => {
+      if (now % (90 * TICKS_PER_SECOND) === 10) town.add('wood', 3);
+      if (now % FLOW_SAMPLE_TICKS === 0) seen.add(flows.trend('wood'));
+    });
+    expect(seen).not.toContain('down');
+
+    // Puis le flux s'arrête : la flèche tombe une fois la minute passée, sans repasser par « baisse ».
+    run(flows, town, tick, 70);
+    expect(flows.trend('wood')).toBe('flat');
+  });
+
+  it('une fenêtre glissante : ce qui est sorti il y a plus d’une minute ne fait plus baisser', () => {
+    const flows = new TownFlows();
+    const town = new Store(Infinity);
+
+    town.add('food', 100);
+    let tick = run(flows, town, 0, 30, perSecond(town, 'food', -1));
+
+    expect(flows.trend('food')).toBe('down');
+    tick = run(flows, town, tick, 40);
+    expect(flows.trend('food')).toBe('down');
+    run(flows, town, tick, 30);
+    expect(flows.trend('food')).toBe('flat');
+  });
+
+  it('temps de jeu : en pause, rien ne tourne et rien ne change ; à la reprise, la fenêtre reprend où elle était', () => {
+    const flows = new TownFlows();
+    const town = new Store(Infinity);
+
+    town.add('stone', 20);
+    let tick = run(flows, town, 0, 60, perSecond(town, 'stone', 1));
+    const before = flows.stats('stone');
+
+    // La pause : la simulation ne tick plus, le temps réel passe sans rien compter.
+    expect(flows.stats('stone')).toEqual(before);
+    expect(flows.trend('stone')).toBe('up');
+
+    // La reprise, sans plus rien gagner : la minute doit s'écouler en temps de jeu pour que la flèche tombe.
+    tick = run(flows, town, tick, 30);
+    expect(flows.trend('stone')).toBe('up');
+    run(flows, town, tick, 35);
+    expect(flows.trend('stone')).toBe('flat');
+  });
+
+  it('production, consommation et net par minute ; temps avant épuisement s’il baisse', () => {
+    const flows = new TownFlows();
+    const town = new Store(Infinity);
+
+    town.add('food', 400);
+    // +2 par seconde à la récolte, −3 par seconde aux repas : net −60 par minute.
+    run(flows, town, 0, 125, (tick) => {
+      perSecond(town, 'food', 2)(tick);
+      perSecond(town, 'food', -3)(tick - TICKS_PER_SECOND / 2);
+    });
+
+    const food = flows.stats('food');
+
+    expect(food.produced).toBeCloseTo(120, 0);
+    expect(food.consumed).toBeCloseTo(180, 0);
+    expect(food.net).toBeCloseTo(-60, 0);
+    expect(food.net).toBeCloseTo(flows.netRate('food'), 6);
+    expect(food.minutesLeft).toBeCloseTo(food.stock / 60, 6);
+    expect(food.history).toHaveLength(FLOW_SAMPLES);
+    expect(food.history.at(-1)).toBe(food.stock);
+    expect(flows.stats('stone').minutesLeft).toBeNull();
+    expect(flows.tracked()).toEqual(['food']);
+  });
+
+  it('sans ville, tout se vide', () => {
+    const flows = new TownFlows();
+    const town = new Store(Infinity);
+
+    run(flows, town, 0, 60, perSecond(town, 'wood', 1));
+    expect(flows.trend('wood')).toBe('up');
+    flows.observe(60 * TICKS_PER_SECOND, null);
+    expect(flows.trend('wood')).toBe('flat');
+    expect(flows.tracked()).toEqual([]);
   });
 });

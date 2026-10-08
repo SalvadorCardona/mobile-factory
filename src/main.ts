@@ -50,6 +50,7 @@ import { detectLocale, onLocale, setLocale, t } from './i18n/locale.ts';
 import { BuildingPanel } from './ui/buildingPanel.ts';
 import { CaravanPanel } from './ui/caravanPanel.ts';
 import { InventoryPanel } from './ui/inventoryPanel.ts';
+import { ResourcePanel } from './ui/resourcePanel.ts';
 import { escapeAction } from './ui/escape.ts';
 import { JoystickView } from './ui/joystick.ts';
 import { BuildMenu } from './ui/buildMenu.ts';
@@ -219,9 +220,10 @@ async function main(): Promise<void> {
   }
   const hud = new Hud(world, debug);
   const buildMenu = new BuildMenu(world, placement, MENU_BUILDING_IDS, () => audio.play('open'));
-  // La fenêtre d'un bâtiment, le sac et le troc occupent la même place : l'un ferme les autres.
+  // La fenêtre d'un bâtiment, le sac, les ressources et le troc occupent la même place : l'un ferme les autres.
   const panel = new BuildingPanel(world, () => {
     inventory.close();
+    resources.close();
     trade.close();
     audio.play('open');
   });
@@ -229,14 +231,26 @@ async function main(): Promise<void> {
     world,
     () => {
       panel.close();
+      resources.close();
       trade.close();
       audio.play('open');
     },
     (alert) => renderer.pointTo(alert.target, alert.item),
   );
+  const resources = new ResourcePanel(
+    world,
+    () => {
+      panel.close();
+      inventory.close();
+      trade.close();
+      audio.play('open');
+    },
+    hud.resourcesButton,
+  );
   const trade = new CaravanPanel(world, () => {
     panel.close();
     inventory.close();
+    resources.close();
     audio.play('open');
   });
 
@@ -291,6 +305,7 @@ async function main(): Promise<void> {
       buildMenu.close();
       panel.close();
       inventory.close();
+      resources.close();
       trade.close();
       audio.play('open');
     },
@@ -308,9 +323,10 @@ async function main(): Promise<void> {
 
   // La colonne du bord droit : Pause, Réglages, la carte du monde, puis le zoom.
   zoom.root.prepend(hud.pauseButton, hud.settingsButton, worldMap.button);
-  hud.root.append(worldMap.root, zoom.root, stick.root, buildMenu.root, panel.root, inventory.root, trade.root);
+  hud.root.append(worldMap.root, zoom.root, stick.root, buildMenu.root, panel.root, inventory.root, resources.root, trade.root);
   stick.avoid(buildMenu.bottomParts, hud.root);
   hud.bag.addEventListener('click', () => inventory.toggle());
+  hud.resourcesButton.addEventListener('click', () => resources.toggle());
   hud.setProjector((x, y) => renderer.worldToScreen(x, y));
   buildMenu.setProjector((x, y) => renderer.worldToScreen(x, y));
   hud.setFocus((x, y) => renderer.peek(x, y));
@@ -456,7 +472,7 @@ async function main(): Promise<void> {
         mapOpen: worldMap.open,
         menuOpen: buildMenu.isOpen,
         panelOpen: panel.open || trade.open,
-        inventoryOpen: inventory.open,
+        inventoryOpen: inventory.open || resources.open,
       });
 
       if (action === 'closeSettings') settings.close();
@@ -466,7 +482,10 @@ async function main(): Promise<void> {
         panel.close();
         trade.close();
       }
-      else if (action === 'closeInventory') inventory.close();
+      else if (action === 'closeInventory') {
+        inventory.close();
+        resources.close();
+      }
       else setPaused(action === 'pause');
     }
     if (shortcut === 'inventory' && started && !paused && !settings.open && !worldMap.open) inventory.toggle();
@@ -530,7 +549,7 @@ async function main(): Promise<void> {
   wireShake(
     world,
     renderer,
-    () => placement.mode !== 'idle' || buildMenu.isOpen || panel.open || inventory.open || trade.open || worldMap.open,
+    () => placement.mode !== 'idle' || buildMenu.isOpen || panel.open || inventory.open || resources.open || trade.open || worldMap.open,
   );
 
   let accumulator = 0;
@@ -594,11 +613,12 @@ async function main(): Promise<void> {
     buildMenu.refresh();
     panel.update();
     inventory.update();
+    resources.update();
     trade.update();
     // Un menu, une fenêtre ou la pause par-dessus : le joystick s'efface et
     // lâche son doigt ; il revient à la fermeture.
     stick.setEnabled(
-      running && !world.defeated && !buildMenu.isOpen && !panel.open && !inventory.open && !trade.open && !worldMap.open,
+      running && !world.defeated && !buildMenu.isOpen && !panel.open && !inventory.open && !resources.open && !trade.open && !worldMap.open,
     );
     if (hud.root.dataset['stick'] !== String(stick.shown)) hud.root.dataset['stick'] = String(stick.shown);
   });
@@ -611,7 +631,7 @@ async function main(): Promise<void> {
     const height = renderer.app.screen.height;
     let top = height - HUD_BOTTOM_INSET;
 
-    for (const node of [...buildMenu.bottomParts, panel.root, inventory.root, trade.root]) {
+    for (const node of [...buildMenu.bottomParts, panel.root, inventory.root, resources.root, trade.root]) {
       const rect = node.getBoundingClientRect();
 
       if (rect.height > 0) top = Math.min(top, rect.top);

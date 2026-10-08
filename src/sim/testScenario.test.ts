@@ -83,4 +83,14 @@ describe('parties de test', () => {
     expect(nursery.store.count('food')).toBe(BUILDINGS.nursery.demand.food);
     expect(world.townStock()?.count('food')).toBe((TEST_SCENARIOS.nursery.town.food ?? 0) - BUILDINGS.nursery.demand.food);
   });
+
+  it('les tendances : le bois monte, la pierre baisse, le charbon stagne', () => {
+    const world = stageScenario(TEST_SCENARIOS.trends);
+
+    // 45 s de jeu : les logisticiens ont rentré du bois, les bâtisseurs emporté de la pierre.
+    for (let i = 0; i < 45 * 20; i += 1) world.tick();
+    expect(world.flows.trend('wood')).toBe('up');
+    expect(world.flows.trend('stone')).toBe('down');
+    expect(world.flows.trend('coal')).toBe('flat');
+  });
 });

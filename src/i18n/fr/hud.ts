@@ -268,6 +268,9 @@ export const hud = {
     townTotal: (total: number): string => `Ville — ${total} objet${s(total)} en stock`,
     inBag: (item: string, amount: number): string => `${item} — ${amount} dans le sac`,
     inTown: (item: string, amount: number): string => `${item} — ${amount} en ville`,
+    /** La même, quand l'objet monte ou baisse sur la dernière minute. */
+    inTownUp: (item: string, amount: number): string => `${item} — ${amount} en ville, en hausse`,
+    inTownDown: (item: string, amount: number): string => `${item} — ${amount} en ville, en baisse`,
     wanted: (item: string, amount: number): string => `${item} — Ève en demande, ${amount} dans le sac`,
     prestige: 'Prestige',
     prestigeLabel: (amount: number): string => `Prestige : ${amount}`,
