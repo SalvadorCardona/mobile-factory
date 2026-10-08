@@ -65,8 +65,11 @@ prend que ce qui rentre, le réservé reste au coffre, un coffre filtré grise
 le reste. Les chantiers
 puisent dans les deux, la ville seulement dans son rayon (`logisticRadius`,
 `sim/warehouse.ts`, le cercle jaune du mode construction). Le HUD
-les montre en deux blocs du haut (le sac, une case de la barre ; la ville, un
-bandeau d'une ligne à gauche, qui défile de côté) ; le sac (tap, ou touche I) ouvre
+les montre à part : le sac, un gros bouton violet en bas à gauche (`.hud-bag`,
+le pendant de « Bâtir » : pictogramme blanc `bagButton`, « Sac », « 10/60 »
+dans une capsule qui se remplit, l'objet que réclame le conseil, touche I) ; la
+ville, un bandeau d'une ligne en haut à gauche, une maison sans libellé, qui
+défile de côté. Le sac (tap, ou touche I) ouvre
 `ui/inventoryPanel.ts`, sans pause, comme la fenêtre d'un bâtiment. Sa
 section Ville est un tableau de bord (`sim/flows.ts`, `World.flows`) : débit
 net par objet sur deux minutes (anneau d'échantillons, pas sauvegardé) et
@@ -290,8 +293,8 @@ journée sans mutant (~3 min), un crépuscule (carte teintée indigo, lampions
 allumés, « La nuit tombe — rentrez »), une nuit (~100 s) dont la vague sort des bases mutantes à sa tombée, puis
 l'aube : les mutants restants fuient et le butin tombe dans le sac. Le rendu
 (`render/nightLayer.ts`) n'applique que la teinte : un quad `multiply` et des
-lueurs `add`, pas de filtre. Le HUD l'affiche en **horloge** au bord droit du
-haut (`World.dayDial`, `DIAL_ARCS` : aube, jour, crépuscule, nuit à
+lueurs `add`, pas de filtre. Le HUD l'affiche en **horloge** en haut, juste
+à droite de la population (`World.dayDial`, `DIAL_ARCS` : aube, jour, crépuscule, nuit à
 leurs vraies durées ; cadran `dayDialSvg` de `art/ui.ts`) : l'aiguille porte
 le soleil, la lune la nuit, « J2 » à côté (un de plus à chaque aube) ; à
 `DAY_DIAL.nightWarning` de la nuit, elle bat en corail ; un tap dit « Jour 2 ·
@@ -426,7 +429,7 @@ sauvegarde : 0), ni porté ni stocké. Chaque bâtiment achevé rapporte
 `BUILD_PRESTIGE` une seule fois par emplacement (`prestigeSites` : une
 ruine rebâtie ne paie pas), chaque ennemi vaincu `KILL_PRESTIGE` ;
 événement `prestigeGained`, « +N Prestige » flottant, médaille et nombre
-en haut à gauche du HUD, le bandeau de la ville à côté (sous la barre sur un téléphone). Rien ne le dépense encore.
+en tête du bandeau de la ville, en haut à gauche du HUD (sous la barre sur un téléphone). Rien ne le dépense encore.
 
 **Bases mutantes** (`src/data/enemyBases.ts`, `src/sim/enemyBases.ts`) —
 à la création de la partie, des anneaux de campements (`ENEMY_BASE_RINGS` :
@@ -561,28 +564,29 @@ Les règles, en résumé :
   s'affiche qu'avec `?debug` en dev.
 - Le haut de l'écran (`.hud-top`) est **une seule rangée**, une grille collée
   en haut — la zone sûre plus `--hud-margin` (8 px), rien d'autre : à gauche
-  (`.hud-left`) le Prestige, la ville en bandeau d'une ligne qui défile de côté
-  et l'alerte de vivres ; au centre (`.hud-main`) la barre ; à droite
-  (`.hud-right`, rangée de droite à gauche) l'horloge du jour au bord, la météo
-  à côté. **Une seule variable de hauteur, `--hud-h`**, posée sur `.hud-top` et
-  ajustée par paliers (40, 42, 46, 54 px ; 46 sur un téléphone couché) : la
+  (`.hud-left`) la ville en bandeau d'une ligne qui défile de côté (le Prestige
+  en tête, séparé par un filet, puis la maison sans libellé et les objets), la
+  **population** dans sa propre bulle blanche (`.hud-people` : au travail,
+  inactifs, enfants, logés, bonheur — icônes et chiffres comme la ville, sans
+  air de bouton ; corail quand ça va mal, seul « inactifs » se tape ; sous la
+  ville sur un téléphone), l'**horloge du jour** juste à sa droite et l'alerte
+  de vivres ; au centre (`.hud-main`) la barre ; à droite (`.hud-right`) la
+  météo. Pause et Réglages ne sont plus en haut : deux disques en tête de la
+  colonne du bord droit, au-dessus de la carte du monde et du zoom. **Une seule variable de hauteur, `--hud-h`**, posée sur `.hud-top` et
+  ajustée par paliers (34, 36, 38, 42 px ; 38 sur un téléphone couché) : la
   barre et chaque bloc des deux groupes la prennent, sans marge ni `top` ni
   hauteur à eux ; chaque bloc est sa propre carte blanche, aux rayons de la
   barre (`--hud-r`), sans cadre qui englobe un groupe. Tout tient sur une ligne
-  dès 1366 px (la barre veut ~830 px, chaque groupe `--hud-side`, 250 px) ; en
+  dès 1366 px (la barre 420 px au plus, le groupe de gauche `--hud-side`,
+  520 px, la droite à sa taille) ; en
   dessous, la barre reste seule en haut et les deux groupes font une seconde
   rangée juste dessous, de même hauteur. `src/ui/hudTop.test.ts` verrouille ces
   règles dans `style.css` : un bloc du haut qui prend sa propre hauteur, une
   marge ou une transformation casse le test.
-  La **barre** (`.hud-topbar`, 920 px au plus, 880 sur la rangée unique) est
-  bâtie sur une grille de cases : tout y a la même hauteur (`--cell-h`, tirée de
-  `--hud-h`), les mêmes rayons et la même face lavande. Dans l'ordre : cinq
-  compteurs de la population (au travail, inactifs, enfants, logés, bonheur) de
-  même largeur (`--cell-w`, chiffres tabulaires : rien ne bouge), le sac (une
-  case qui s'étire, sa jauge en filet au pied, ou centrée à côté du titre dès
-  600 px — rien ne dépasse d'une case), Pause et Réglages (carrés), puis
-  l'**objectif, dernier élément, au bord droit** (`.hud-objective`, jaune :
-  icône et progression, intitulé court dès 900 px ; il rebondit en menthe quand
+  La **barre** (`.hud-topbar`, 920 px au plus, 420 sur la rangée unique) ne
+  porte plus que l'**objectif**, sur toute sa largeur, à la hauteur des cases
+  (`--cell-h`, tirée de `--hud-h`) (`.hud-objective`, jaune : icône et progression, intitulé court dès
+  420 px ; il rebondit en menthe quand
   une étape est réussie). Les alertes (corail) ne changent pas la taille d'une
   case. La grille se resserre par paliers (< 360, 360, 420, 600, 900 px) et
   tient sur une ligne dès 320 px ; la zone de tap déborde de la case jusqu'à
@@ -688,7 +692,7 @@ Les règles, en résumé :
   de vue côté `render/`, jamais de l'état de simulation.
   Le **zoom** du joueur (`Camera.level`, bornes `ZOOM` : 0,6–1,5) se
   pilote aux trois boutons du bord droit (`ui/zoomControls.ts` : avancer,
-  revenir sur Adam, reculer), à la molette sous le curseur et au pinch
+  revenir sur Adam, reculer ; Pause, Réglages et la carte du monde au-dessus), à la molette sous le curseur et au pinch
   (`input/zoom.ts`, le geste à deux doigts de `PointerDispatch`, qui ne
   prend que des doigts libres ou de tap) ; mémorisé sous
   `mobile-factory:zoom` (`storage/localZoom.ts`), jamais dans la partie.

@@ -1,8 +1,9 @@
 /**
- * Les boutons de zoom : une colonne de trois petits disques blancs sur le
- * bord droit, à mi-hauteur — loin du joystick (bas gauche), du bouton
- * « Bâtir » (bas droite) et de la colonne du sac (haut droite). Avancer,
- * revenir sur Adam au zoom par défaut, reculer.
+ * Les boutons de zoom : une colonne de petits disques blancs sur le bord
+ * droit, à mi-hauteur — loin du joystick, du sac (bas gauche) et du bouton
+ * « Bâtir » (bas droite). Pause, Réglages et la carte du monde s'y posent en
+ * tête (`main.ts`), puis avancer, revenir sur Adam au zoom par défaut,
+ * reculer.
  *
  * Ils ne touchent pas à la caméra : chacun appelle son rappel, et `update`
  * les grise en butée (et le bouton du milieu quand on est déjà chez soi).

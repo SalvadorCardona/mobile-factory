@@ -306,7 +306,8 @@ async function main(): Promise<void> {
     recenter: () => (worldMap.open ? worldMap.recenter() : renderer.resetZoom()),
   });
 
-  zoom.root.prepend(worldMap.button);
+  // La colonne du bord droit : Pause, Réglages, la carte du monde, puis le zoom.
+  zoom.root.prepend(hud.pauseButton, hud.settingsButton, worldMap.button);
   hud.root.append(worldMap.root, zoom.root, stick.root, buildMenu.root, panel.root, inventory.root, trade.root);
   stick.avoid(buildMenu.bottomParts, hud.root);
   hud.bag.addEventListener('click', () => inventory.toggle());

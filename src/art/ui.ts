@@ -470,6 +470,20 @@ export const UI_ICONS = {
     pill(9.5, 15, 3, 1.6, violet.light),
   ),
   /**
+   * Le sac du gros bouton violet du bas : le même sac à dos, en blanc et
+   * lavande comme le marteau de « Bâtir », sa poche dans le violet clair du
+   * bouton.
+   */
+  bagButton: svg(
+    S,
+    S,
+    curve('M8.5 7.5 C8.5 3 15.5 3 15.5 7.5', paper.shade),
+    rect(5, 6.5, 14, 15, paper.shade, 3),
+    rect(5, 6.5, 14, 13, paper.base, 3),
+    rect(8, 13, 8, 4.5, violet.light, 2),
+    pill(9.5, 14, 3, 1.6, paper.base),
+  ),
+  /**
    * La ville : la mairie en petit — murs jaunes de la colonie, toit corail,
    * porte indigo et fanion. Devant le stock commun, face au sac d'Adam.
    */

@@ -74,9 +74,9 @@ function declared(block: string, property: string): string[] {
 }
 
 /** Les blocs de la rangée du haut : la barre, et ceux des groupes de gauche et de droite. */
-const BLOCKS = ['.hud-topbar', '.hud-prestige', '.hud-town', '.hud-clock', '.hud-hunger', '.hud-weather'];
+const BLOCKS = ['.hud-topbar', '.hud-town', '.hud-people', '.hud-clock', '.hud-hunger', '.hud-weather'];
 /** Les cases de la barre : toutes de la hauteur `--cell-h`, tirée de `--hud-h`. */
-const CELLS = ['.hud-people-count', '.hud-people-idle', '.hud-bag', '.hud-button', '.hud-objective'];
+const CELLS = ['.hud-objective'];
 
 describe('le haut de l’écran', () => {
   it('se colle au bord : la zone sûre et la marge fixe, partout', () => {
@@ -128,9 +128,4 @@ describe('le haut de l’écran', () => {
     for (const rule of expanded) expect(rule.declarations.has('transform')).toBe(false);
   });
 
-  it('centre la jauge du sac à côté de son titre : rien ne dépasse en haut de la case', () => {
-    const wide = rules.filter((rule) => rule.selectors.includes('.hud .hud-topbar .hud-bag') && rule.declarations.get('flex-direction') === 'row');
-
-    expect(wide.map((rule) => rule.declarations.get('align-items'))).toEqual(['center']);
-  });
 });
