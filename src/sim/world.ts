@@ -75,6 +75,7 @@ import { HOUSING } from '../data/housing.ts';
 import { AGES, COLONY, NURSERY_CARE } from '../data/inhabitants.ts';
 import { TOWN_PLENTY, type ItemId } from '../data/items.ts';
 import { NEED_ALERT, NEED_IDS, NEEDS, type NeedId } from '../data/needs.ts';
+import { LEVEL_GAINS, MAX_LEVEL, type Shooter } from '../data/levels.ts';
 import { BUILD_PRESTIGE, KILL_PRESTIGE } from '../data/prestige.ts';
 import { PROBLEMS, type ProblemId } from '../data/problems.ts';
 import {
@@ -93,6 +94,7 @@ import { RESEARCH, type ResearchId, type ResearchStat } from '../data/research.t
 import { CROPS, RESOURCES, SAPLING, type ResourceId } from '../data/resources.ts';
 import { ROADS } from '../data/roads.ts';
 import { WEAPONS } from '../data/weapons.ts';
+import { baseXp, killXp, levelBonus, levelHp, levelOf, sharedXp } from './levels.ts';
 import { BUILDERS, FARMERS, FORESTERS, IDLE, JOB_PRIORITY, LUMBERJACKS, PORTERS, WORK_PRIORITY, type WorkPriority } from '../data/workers.ts';
 import { WEATHER, WEATHER_CALENDAR, type WeatherId } from '../data/weather.ts';
 import { ChunkIndex } from './chunk.ts';
@@ -521,6 +523,10 @@ export type WorldEvents = {
   beastDied: { id: MobileId; proto: WildlifeId; x: number; y: number };
   /** Du Prestige gagné (`data/prestige.ts`) : `x`, `y`, en pixels monde, d'où il monte ; `total` est le nouveau compte. */
   prestigeGained: { amount: number; total: number; x: number; y: number };
+  /** Adam gagne de l'expérience : `amount` rapporté par l'ennemi, `x`, `y` d'où il tombe. */
+  xpGained: { amount: number; total: number; x: number; y: number };
+  /** Adam passe un niveau : ce qu'il y gagne, pour le message et l'effet. */
+  levelUp: { level: number; maxHp: number; bowDamage: number; x: number; y: number };
   /** Une bête — ou le crachat d'un cracheur — a frappé Adam ; `hp` est ce qui lui reste. */
   playerHurt: { by: MobileId; hp: number };
   /** Un cracheur a craché (`spit` est le crachat) : il se gonfle et recule d'un coup. */
@@ -2263,10 +2269,21 @@ export class World {
    * Ce que les recherches finies ajoutent à une statistique : **le** point
    * où la simulation lit leurs effets. L'arc, le sac, la marche d'Adam, les
    * porteurs, la récolte du bois, les foreuses et les fermes l'appellent au
-   * moment d'agir ; les données, elles, ne changent jamais.
+   * moment d'agir ; les données, elles, ne changent jamais. Les niveaux
+   * d'Adam (`sim/levels.ts`) s'y ajoutent : un seul cumul, aucun doublon.
    */
   public bonus(stat: ResearchStat): number {
-    return researchBonus(this.researchDone, stat);
+    return researchBonus(this.researchDone, stat) + levelBonus(this.level(), stat);
+  }
+
+  /** Le niveau d'Adam, déduit de son XP. */
+  public level(): number {
+    return levelOf(this.player.xp);
+  }
+
+  /** Les points de vie max d'Adam : ceux de base, plus ses niveaux. */
+  public maxHp(): number {
+    return PLAYER_MAX_HP + levelHp(this.level());
   }
 
   /** Le labo fini de la colonie — il n'y en a qu'un —, ou `null`. */
@@ -3464,11 +3481,11 @@ export class World {
 
           if (hit) {
             this.mobiles.delete(mobile.id);
-            if (hit.kind === 'mutant') this.hurtMutant(hit, mobile.damage, mobile.vx, mobile.vy);
-            else this.hurtBeast(hit, mobile.damage);
+            if (hit.kind === 'mutant') this.hurtMutant(hit, mobile.damage, mobile.vx, mobile.vy, mobile.shooter);
+            else this.hurtBeast(hit, mobile.damage, mobile.shooter);
           } else if (base && isStanding(base) && hitsBase(base, mobile.x, mobile.y)) {
             this.mobiles.delete(mobile.id);
-            this.hurtBase(base, mobile.damage);
+            this.hurtBase(base, mobile.damage, mobile.shooter);
           } else if (mobile.ttl <= 0) {
             this.mobiles.delete(mobile.id);
           }
@@ -3776,7 +3793,7 @@ export class World {
    * Une flèche frappe une base. À zéro, elle tombe pour de bon : sa zone est
    * libre, le Prestige gagné, et son butin tombe au sol.
    */
-  private hurtBase(base: EnemyBase, damage: number): void {
+  private hurtBase(base: EnemyBase, damage: number, shooter: Shooter = 'player'): void {
     const { x, y } = baseCenter(base);
 
     // Le bouclier de son chef : la flèche s'y brise.
@@ -3794,6 +3811,7 @@ export class World {
     base.raiders = 0;
     base.brood = 0;
     this.gainPrestige(level.prestige, x, y);
+    this.gainXp(baseXp(base.level, 'base'), shooter, x, y);
     if (this.zoneBase === base.id) this.zoneBase = null;
     this.events.emit('enemyBaseDestroyed', { id: base.id, level: base.level, prestige: level.prestige, x, y });
     this.dropLoot(level.loot, x, y + TILE_SIZE);
@@ -3854,6 +3872,7 @@ export class World {
     const arrow = shoot(this.nextMobileId++, weapon, x, y, target, this.wind());
 
     arrow.damage += extraDamage;
+    if (weapon !== 'bow') arrow.shooter = 'tower';
     this.mobiles.set(arrow.id, arrow);
     this.events.emit('arrowShot', { x, y });
   }
@@ -3864,7 +3883,7 @@ export class World {
    * tombe alors assommé, sans butin, mais avec une chance d'être recruté.
    * (vx, vy) : la vitesse de la flèche, dont le rendu tire le recul.
    */
-  private hurtMutant(mutant: Mutant, damage: number, vx: number, vy: number): void {
+  private hurtMutant(mutant: Mutant, damage: number, vx: number, vy: number, shooter: Shooter = 'player'): void {
     mutant.hp -= damage;
 
     if (mutant.hp > 0) {
@@ -3876,6 +3895,7 @@ export class World {
     this.mobiles.delete(mutant.id);
     this.kills += 1;
     this.gainPrestige(KILL_PRESTIGE[mutant.proto], mutant.x, mutant.y);
+    this.gainXp(killXp(mutant.proto), shooter, mutant.x, mutant.y);
 
     // La Reine et ses larves ne tombent jamais assommées : pas de tirage, le PRNG ne bouge pas.
     const clinic = ENEMIES[mutant.proto].stunnable ? this.freeClinic(mutant.x, mutant.y) : null;
@@ -4292,7 +4312,7 @@ export class World {
   /* ------------------------------------------------------------------ faune */
 
   /** Une bête touchée charge qui l'a blessée ; abattue, elle laisse sa tanière et parfois son butin. */
-  private hurtBeast(beast: Beast, damage: number): void {
+  private hurtBeast(beast: Beast, damage: number, shooter: Shooter = 'player'): void {
     beast.hp -= damage;
 
     const home = beast.proto === 'chief' && beast.guardOf !== undefined ? this.enemyBase(beast.guardOf) : undefined;
@@ -4328,6 +4348,7 @@ export class World {
 
     this.events.emit('beastDied', { id: beast.id, proto: beast.proto, x: beast.x, y: beast.y });
     this.gainPrestige(KILL_PRESTIGE[beast.proto], beast.x, beast.y);
+    this.gainXp(killXp(beast.proto) + (beast.proto === 'chief' && base ? baseXp(base.level, 'chief') : 0), shooter, beast.x, beast.y);
     this.dropLoot(proto.loot, beast.x, beast.y);
   }
 
@@ -4410,7 +4431,7 @@ export class World {
 
     player.x = player.prevX = x;
     player.y = player.prevY = y;
-    player.hp = PLAYER_MAX_HP;
+    player.hp = this.maxHp();
     this.events.emit('playerKnockedOut', { x, y });
   }
 
@@ -4420,7 +4441,7 @@ export class World {
 
     player.calmTicks += 1;
 
-    if (player.hp >= PLAYER_MAX_HP || player.calmTicks < PLAYER_CALM_TICKS) return;
+    if (player.hp >= this.maxHp() || player.calmTicks < PLAYER_CALM_TICKS) return;
     if ((player.calmTicks - PLAYER_CALM_TICKS) % PLAYER_REGEN_TICKS === 0) player.hp += 1;
   }
 
@@ -6980,6 +7001,36 @@ export class World {
     if (this.prestigeSites.has(key)) return;
     this.prestigeSites.add(key);
     this.gainPrestige(BUILD_PRESTIGE[building.proto], (building.tx + building.width / 2) * TILE_SIZE, building.ty * TILE_SIZE);
+  }
+
+  /**
+   * L'XP d'un ennemi vaincu, pour la part de celui qui a tiré (`XP_SHARE`).
+   * Un niveau passé soigne Adam à fond et le dit (`levelUp`) ; un gros gain
+   * peut en passer plusieurs d'un coup, le message ne dit que le dernier
+   * avec tout ce qu'ils ont rapporté.
+   */
+  private gainXp(amount: number, shooter: Shooter, x: number, y: number): void {
+    const gained = sharedXp(amount, shooter);
+    const { player } = this;
+
+    if (gained <= 0 || this.level() >= MAX_LEVEL) return;
+
+    const before = this.level();
+
+    player.xp += gained;
+    this.events.emit('xpGained', { amount: gained, total: player.xp, x, y });
+
+    const after = this.level();
+
+    if (after === before) return;
+    player.hp = this.maxHp();
+    this.events.emit('levelUp', {
+      level: after,
+      maxHp: LEVEL_GAINS.maxHp * (after - before),
+      bowDamage: levelBonus(after, 'bowDamage') - levelBonus(before, 'bowDamage'),
+      x: player.x,
+      y: player.y,
+    });
   }
 
   private gainPrestige(amount: number, x: number, y: number): void {

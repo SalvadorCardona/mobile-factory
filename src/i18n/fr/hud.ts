@@ -138,6 +138,8 @@ export const hud = {
     enemyZone: (level: number): string => `Zone d’une base mutante (niveau ${level}) : ni récolte ni construction tant qu’elle tient`,
     baseDestroyed: (prestige: number): string => `Base mutante détruite ! +${prestige} Prestige, sa zone est libre`,
     baseShielded: 'Son chef la protège : abattez-le d’abord, le bouclier tombera avec lui',
+    levelUp: (level: number, maxHp: number, bowDamage: number): string =>
+      `Niveau ${level} ! +${maxHp} PV max, +${String(Math.round(bowDamage * 100) / 100).replace('.', ',')} dégâts d’arc`,
     chiefDefeated: (prestige: number): string => `Chef de base abattu ! +${prestige} Prestige — la base n’a plus de bouclier`,
     /** `gear` : l'arc forgé, avec sa majuscule. */
     gearCrafted: (gear: string, level: number): string => `${gear} forgé : vous entamez les bases de niveau ${level}`,
@@ -155,6 +157,8 @@ export const hud = {
     enough: 'assez',
     /** Le Prestige gagné, qui monte du bâtiment ou de l'ennemi. */
     prestige: (amount: number): string => `+${amount} Prestige`,
+    /** L'expérience gagnée sur un ennemi abattu. */
+    xp: (amount: number): string => `+${amount} XP`,
   },
   /** Le bandeau des vagues et de la Reine. */
   wave: {
@@ -267,6 +271,10 @@ export const hud = {
     wanted: (item: string, amount: number): string => `${item} — Ève en demande, ${amount} dans le sac`,
     prestige: 'Prestige',
     prestigeLabel: (amount: number): string => `Prestige : ${amount}`,
+    /** Le niveau d'Adam, court, dans le bandeau de la ville. */
+    level: (level: number): string => `Niv. ${level}`,
+    levelTip: (level: number, into: number, needed: number, max: boolean): string =>
+      max ? `Niveau ${level} (maximum)` : `Niveau ${level} — ${into} / ${needed} XP pour le suivant`,
   },
   hintBulb: 'Afficher le conseil',
   pause: 'Pause',

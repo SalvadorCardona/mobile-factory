@@ -17,6 +17,7 @@ import { TILE_SIZE } from '../core/grid.ts';
 import { auditSvg } from './artDirection.ts';
 import { BUILDINGS, RUIN, type BuildingProto } from './buildings.ts';
 import { DAWN_REWARD, DAY_CYCLE } from './dayNight.ts';
+import { BASE_XP, KILL_XP, LEVEL_GAINS, MAX_LEVEL, XP_CURVE, XP_SHARE } from './levels.ts';
 import { ENEMY_BASE_LEVELS, GUARD_RANGE, RAIDS, type EnemyBaseLevel } from './enemyBases.ts';
 import { CHIEF, ENEMIES, LOOT_DROPS, SPITTER, NIGHT_BOSSES, WAVES, WILDLIFE, WILDLIFE_SPAWN, type LootTable, type WaveSpec, type WildlifeProto } from './enemies.ts';
 import { EVE } from './eve.ts';
@@ -609,6 +610,8 @@ export function validatePrototypes(): string[] {
     labels.set(proto.label, id);
   }
 
+  errors.push(...levelErrors());
+
   return errors;
 }
 
@@ -715,6 +718,29 @@ function lootErrors(owner: string, table: LootTable): string[] {
       errors.push(`${owner} : quantités de « ${item} » incohérentes (${min}–${max})`);
     }
     if (!(chance > 0 && chance <= 1)) errors.push(`${owner} : probabilité de « ${item} » hors de ]0, 1]`);
+  }
+  return errors;
+}
+
+/** Les niveaux d'Adam : une courbe qui monte, des gains positifs, de l'XP pour chaque ennemi et chaque base. */
+function levelErrors(): string[] {
+  const errors: string[] = [];
+
+  if (!Number.isInteger(MAX_LEVEL) || MAX_LEVEL < 2) errors.push('MAX_LEVEL : au moins le niveau 2');
+  if (XP_CURVE.base <= 0 || XP_CURVE.growth < 1) errors.push('XP_CURVE : base positive et croissance d’au moins 1 (chaque niveau demande plus)');
+  for (const [id, xp] of Object.entries(KILL_XP)) {
+    if (!Number.isInteger(xp) || xp <= 0) errors.push(`KILL_XP.${id} : un nombre entier d'XP strictement positif`);
+  }
+  if (BASE_XP.length !== ENEMY_BASE_LEVELS.length) errors.push('BASE_XP : une entrée par niveau de base mutante');
+  for (const [index, xp] of BASE_XP.entries()) {
+    if (xp.base <= 0 || xp.chief <= 0) errors.push(`BASE_XP[${index}] : XP de la base et de son chef strictement positives`);
+  }
+  for (const [id, share] of Object.entries(XP_SHARE)) {
+    if (share < 0 || share > 1) errors.push(`XP_SHARE.${id} : une part dans [0, 1]`);
+  }
+  if (LEVEL_GAINS.maxHp <= 0) errors.push('LEVEL_GAINS.maxHp : au moins un point de vie par niveau');
+  for (const [stat, gain] of Object.entries(LEVEL_GAINS.stats)) {
+    if (!(stat in RESEARCH_STATS) || !(Number(gain) > 0)) errors.push(`LEVEL_GAINS.stats.${stat} : statistique inconnue ou gain nul`);
   }
   return errors;
 }
