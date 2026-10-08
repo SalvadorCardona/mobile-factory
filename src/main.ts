@@ -752,6 +752,11 @@ function wireAudio(world: World, audio: AudioEngine, settings: SettingsPanel): v
   world.events.on('enemyChiefDefeated', () => audio.play('objective'));
   world.events.on('levelUp', () => audio.play('objective'));
   world.events.on('gearCrafted', () => audio.play('upgrade'));
+  world.events.on('companionTraining', () => audio.play('upgrade'));
+  world.events.on('companionJoined', () => audio.play('objective'));
+  world.events.on('companionDied', () => audio.play('deny'));
+  world.events.on('recruitRejected', () => audio.play('deny'));
+  world.events.on('companionHealed', () => audio.play('pickup'));
   world.events.on('siteCancelled', () => audio.play('deliver'));
   world.events.on('roadPaved', () => audio.play('deliver'));
   world.events.on('roadRemoved', () => audio.play('pickup'));

@@ -13,6 +13,7 @@
  */
 
 import type { BuildingId } from '../data/buildings.ts';
+import type { CompanionClassId } from '../data/companions.ts';
 import type { RareOfferId } from '../data/caravan.ts';
 import type { EnemyId, WildlifeId } from '../data/enemies.ts';
 import type { Sex } from '../data/inhabitants.ts';
@@ -169,6 +170,18 @@ export interface Clinic extends Built {
 }
 
 /**
+ * La caserne : elle forme une recrue à la fois (`training`), payée d'avance.
+ * Au bout de la formation, le compagnon sort par sa porte. Les compagnons ne
+ * sont pas à elle : ce sont des mobiles qui la désignent (`barracksId`), et
+ * le plafond (`COMPANIONS.max`) vaut pour la colonie entière.
+ */
+export interface Barracks extends Built {
+  kind: 'barracks';
+  /** La classe en formation et le tick où elle sort ; `null` : la caserne attend une commande. */
+  training: { role: CompanionClassId; endTick: number } | null;
+}
+
+/**
  * Le labo de recherche, un seul par colonie. Il mène une recherche à la
  * fois : choisie, elle attend que son coût soit déposé dans le coffre ; payé,
  * le coût est consommé et le compte à rebours tourne jusqu'à `endTick`, où
@@ -243,6 +256,7 @@ export type Entity =
   | Quarry
   | Forge
   | Clinic
+  | Barracks
   | Lab
   | LumberCamp
   | ForesterHouse
@@ -775,6 +789,24 @@ export interface Patient extends Moving {
 }
 
 /**
+ * Un compagnon d'Adam (`data/companions.ts`) : il le suit en formation
+ * souple, attaque les ennemis proches de lui selon sa classe, puis revient.
+ * Ni ouvrier ni habitant : pas de faim, pas de lit, pas de métier.
+ */
+export interface Companion extends Moving {
+  kind: 'companion';
+  role: CompanionClassId;
+  /** Points de vie ; à zéro, il tombe. Le maximum est celui de sa classe. */
+  hp: number;
+  /** Ticks avant sa prochaine attaque ou son prochain soin. */
+  cooldown: number;
+  /** Ticks d'immunité après un coup reçu. */
+  hurtTicks: number;
+  /** Ticks passés bloqué loin d'Adam : au-delà de `COMPANIONS.stuckTicks`, il le rejoint d'un bond. */
+  stuck: number;
+}
+
+/**
  * Un échange de la caravane, tiré à son arrivée (`sim/caravan.ts`) :
  * ce qu'il coûte, ce qu'il rapporte — objets ou places de sac —, et s'il a
  * déjà été fait. Chaque échange ne se fait qu'une fois.
@@ -815,7 +847,7 @@ export interface Caravan extends Moving {
   met: boolean;
 }
 
-export type Mobile = Mutant | Beast | Arrow | Spit | Fireball | Kid | Eve | Worker | Lumberjack | Forester | Farmer | Pickup | Patient | Caravan;
+export type Mobile = Mutant | Beast | Arrow | Spit | Fireball | Kid | Eve | Worker | Lumberjack | Forester | Farmer | Pickup | Patient | Companion | Caravan;
 
 /**
  * Les compteurs de la partie, que les objectifs lisent. Ils ne font que

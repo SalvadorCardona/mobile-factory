@@ -123,6 +123,16 @@ export const RESEARCH = {
     effect: null,
     unlocks: ['clinic'],
   },
+  militia: {
+    label: 'Milice',
+    description: 'Des lances taillées, un râtelier : de quoi former une petite escorte.',
+    theme: 'building',
+    cost: { wood: 10, stone: 8, wolfFang: 2 },
+    duration: 20 * 45,
+    requires: [],
+    effect: null,
+    unlocks: ['barracks'],
+  },
   sharpArrows: {
     label: 'Flèches à croc',
     description: 'Des crocs de loup en pointe de flèche : ça mord.',

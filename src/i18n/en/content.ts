@@ -181,6 +181,15 @@ export const content: Content = {
       effect: 'Treats knocked-out mutants: 3 beds.',
       upgrades: [],
     },
+    barracks: {
+      label: 'Barracks',
+      sign: 'Barracks',
+      siteDescription: 'A palisade to raise, an empty rack waiting for weapons. The recruits will need gear afterwards.',
+      description:
+        'A squat fort, a rack of makeshift spears and a round shield above the door. Up to five companions are trained here — warrior, archer or healer — who follow Adam, fight at his side and patch him up when things go wrong.',
+      effect: 'Trains companions who follow Adam: warrior, archer, healer. Five at most.',
+      upgrades: [],
+    },
     lab: {
       label: 'Research lab',
       sign: 'Lab',
@@ -231,6 +240,11 @@ export const content: Content = {
     bow: 'Makeshift bow',
     towerBow: 'Tower bow',
     reinforcedBow: 'Reinforced bow',
+  },
+  companionClasses: {
+    warrior: { label: 'Warrior', effect: 'Fights up close, lots of hit points.' },
+    archer: { label: 'Archer', effect: 'Shoots from afar and keeps his distance, few hit points.' },
+    healer: { label: 'Healer', effect: 'Does not fight: heals Adam and wounded companions.' },
   },
   enemies: {
     mutant: 'Radioactive mutant',
@@ -393,6 +407,10 @@ export const content: Content = {
       label: 'Makeshift medicine',
       description: 'Mutant goo under the magnifier: what changes them can be cured.',
     },
+    militia: {
+      label: 'Militia',
+      description: 'Sharpened spears and a rack: enough to train a small escort.',
+    },
     sharpArrows: {
       label: 'Fang arrows',
       description: 'Wolf fangs for arrowheads: they bite.',
@@ -481,6 +499,7 @@ export const content: Content = {
     housing: 'Houses',
     nursery: 'Nursery',
     trends: 'Trends',
+    army: 'Barracks',
     raid: 'Mutant base',
   },
 };

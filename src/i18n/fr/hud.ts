@@ -53,6 +53,13 @@ export const hud = {
     maxLevel: 'Vous avez déjà le meilleur arc',
     missingItems: 'Il manque de quoi forger cet arc — ni dans le sac, ni en ville',
   },
+  /** Pourquoi un compagnon n'a pas été recruté (`RecruitRejection`, hors `missing`). */
+  recruit: {
+    outOfReach: 'Trop loin de la caserne — rapprochez-vous',
+    busy: 'La caserne forme déjà une recrue',
+    full: 'Troupe complète : cinq compagnons au plus',
+    missingItems: 'Il manque de quoi équiper cette recrue — ni dans le sac, ni en ville',
+  },
   /** Pourquoi une réparation n'a pas eu lieu (`RepairRejection`, hors `missing`). */
   repair: {
     outOfReach: 'Trop loin — rapprochez-vous',
@@ -142,6 +149,9 @@ export const hud = {
       `Niveau ${level} ! +${maxHp} PV max, +${String(Math.round(bowDamage * 100) / 100).replace('.', ',')} dégâts d’arc`,
     chiefDefeated: (prestige: number): string => `Chef de base abattu ! +${prestige} Prestige — la base n’a plus de bouclier`,
     /** `gear` : l'arc forgé, avec sa majuscule. */
+    companionTraining: (label: string, seconds: number): string => `${label} en formation — ${seconds} s`,
+    companionJoined: (label: string): string => `${label} rejoint Adam !`,
+    companionDied: (label: string): string => `${label} est tombé — recrutez-en un autre à la caserne`,
     gearCrafted: (gear: string, level: number): string => `${gear} forgé : vous entamez les bases de niveau ${level}`,
     survivors: (count: number): string =>
       count > 1
@@ -253,6 +263,12 @@ export const hud = {
     happinessName: 'Bonheur de la ville',
     happiness: (total: number, average: number, unhappy: number): string =>
       `Bonheur de la ville : ${total} (moyenne ${average} par habitant, ${unhappy} malheureux)`,
+  },
+  /** Les compagnons d'Adam, dans la bulle de la population. */
+  army: {
+    /** `n` compagnons sur `max`, `hp` points de vie sur `maxHp`, `training` recrues en formation. */
+    label: (n: number, max: number, hp: number, maxHp: number, training: number): string =>
+      `Compagnons : ${n}/${max} — santé ${hp}/${maxHp}` + (training > 0 ? ` (${training} en formation)` : ''),
   },
   /** Le sac et la ville, en version compacte. */
   stock: {

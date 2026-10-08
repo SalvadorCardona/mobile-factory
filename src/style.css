@@ -1274,8 +1274,32 @@ button {
 }
 
 .hud .hud-people-housing,
-.hud .hud-people-happiness {
+.hud .hud-people-happiness,
+.hud .hud-people-army {
   pointer-events: auto;
+}
+
+/* Les compagnons : « 3/5 » et une jauge de leur santé réunie, une capsule qui se vide. */
+.hud-army-bar {
+  position: relative;
+  display: inline-block;
+  width: 26px;
+  height: 6px;
+  margin-left: 3px;
+  border-radius: 999px;
+  background: var(--paper-shade);
+  overflow: hidden;
+}
+
+.hud-army-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--good);
+}
+
+.hud .hud-people-army[data-alert='true'] .hud-army-fill {
+  background: var(--danger);
 }
 
 /* L'aube a fait bouger le Bonheur : le chiffre flashe, la flèche dit de quel côté. */
@@ -5111,4 +5135,123 @@ button {
   letter-spacing: 0.02em;
   white-space: nowrap;
   pointer-events: none;
+}
+
+/* La caserne : la troupe, la recrue en formation, une carte par classe, puis l'armée. */
+.barracks[hidden],
+.barracks [hidden] {
+  display: none;
+}
+
+.barracks {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.barracks-army,
+.barracks-training {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--violet);
+}
+
+.barracks-training {
+  color: var(--good);
+}
+
+.barracks-classes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.barracks-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 18px;
+  background: var(--paper);
+  box-shadow: var(--face);
+}
+
+.barracks-card-portrait {
+  flex: none;
+  width: 56px;
+  height: 84px;
+  object-fit: contain;
+}
+
+.barracks-card-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.barracks-card-name {
+  margin: 0;
+  font-size: 18px;
+}
+
+.barracks-card-effect,
+.barracks-card-stats {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.barracks-card-body button {
+  align-self: flex-start;
+  min-height: 44px;
+}
+
+.barracks-roster-title {
+  margin: 4px 0 0;
+  font-size: 16px;
+}
+
+.barracks-roster {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.barracks-roster-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+}
+
+.barracks-roster-line img {
+  width: 24px;
+  height: 36px;
+  object-fit: contain;
+}
+
+.barracks-roster-name {
+  flex: 1;
+  font-weight: 600;
+}
+
+.barracks-roster-hp {
+  font-variant-numeric: tabular-nums;
+}
+
+.barracks-roster-hp[data-alert='true'] {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.barracks-roster-none {
+  font-size: 14px;
+  color: var(--muted);
 }

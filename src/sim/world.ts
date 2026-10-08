@@ -50,6 +50,7 @@ import { hash3, mulberry32, type StatefulRng } from '../core/rng.ts';
 import { BUILDINGS, MENU_BUILDING_IDS, REPAIR, RUIN, bedsOf, buildingLevel, nextUpgrade, type BuildingId, type BuildingKind, type BuildingProto } from '../data/buildings.ts';
 import { CARAVAN, RARE_OFFERS, type RareOfferId } from '../data/caravan.ts';
 import { CLINIC } from '../data/clinic.ts';
+import { COMPANIONS, COMPANION_CLASSES, type CompanionClassId } from '../data/companions.ts';
 import { DAWN_REWARD, SURVIVORS } from '../data/dayNight.ts';
 import {
   CHIEF,
@@ -100,7 +101,8 @@ import { WEATHER, WEATHER_CALENDAR, type WeatherId } from '../data/weather.ts';
 import { ChunkIndex } from './chunk.ts';
 import { floorCost, floorMissing, floorNeeds, floorWants } from './antenna.ts';
 import { consumerRecipe, consumerRoom, consumerWants, forgeRecipe, isConsumer, isStarving } from './consumers.ts';
-import { NO_WIND, fireball, nearestFoe, shoot, spit, stepArrow, stepSpit, type Wind } from './combat.ts';
+import { createCompanion, stepCompanion } from './companions.ts';
+import { NO_WIND, fireball, isTargetable, nearestFoe, shoot, spit, stepArrow, stepSpit, type Wind } from './combat.ts';
 import { clockAt, CYCLE_TICKS, dayDial, nextWave, ticksToDawn, ticksToWave, waveAt, type DayClock, type DayDial } from './dayNight.ts';
 import type {
   Command,
@@ -108,6 +110,7 @@ import type {
   DepositRejection,
   GearRejection,
   PlacementRejection,
+  RecruitRejection,
   RepairRejection,
   ResearchRejection,
   RoadRejection,
@@ -192,6 +195,7 @@ import type {
   Building,
   Caravan,
   Clinic,
+  Companion,
   Contact,
   Depot,
   Drill,
@@ -603,6 +607,20 @@ export type WorldEvents = {
   patientAdmitted: { id: MobileId; clinicId: EntityId };
   /** Il en ressort guéri : `id` est l'ex-mutant, un ouvrier de plus. */
   mutantHealed: { id: MobileId; clinicId: EntityId; x: number; y: number };
+  /** La caserne `id` a commencé à former un compagnon de la classe `role`. */
+  companionTraining: { id: EntityId; role: CompanionClassId; endTick: number; fromBag: [ItemId, number][] };
+  /** Un compagnon sort de la caserne. */
+  companionJoined: { id: MobileId; barracksId: EntityId; role: CompanionClassId; x: number; y: number };
+  /** Un compagnon est tombé. */
+  companionDied: { id: MobileId; role: CompanionClassId; x: number; y: number };
+  /** Un compagnon a reçu un coup. */
+  companionHurt: { id: MobileId; hp: number };
+  /** Un guerrier a frappé. */
+  companionStruck: { id: MobileId };
+  /** Un soigneur a rendu `amount` points de vie à Adam (`'player'`) ou à un compagnon. */
+  companionHealed: { by: MobileId; who: 'player' | MobileId; amount: number; x: number; y: number };
+  /** Un recrutement a été refusé. */
+  recruitRejected: { reason: RecruitRejection };
   /** Un enfant a eu 14 ans : il devient ouvrier, sous le même id. */
   kidGrewUp: { id: MobileId; name: string; x: number; y: number };
   /** L'habitant `id` a comblé un besoin à la mairie : sa jauge est pleine. */
@@ -1239,6 +1257,10 @@ export class World {
 
       case 'craftGear':
         this.craftGear(command.forge);
+        break;
+
+      case 'recruitCompanion':
+        this.recruit(command.barracks, command.role);
         break;
 
       case 'repairBuilding':
@@ -2850,6 +2872,10 @@ export class World {
         building = { ...base, kind: 'clinic' };
         break;
 
+      case 'barracks':
+        building = { ...base, kind: 'barracks', training: null };
+        break;
+
       case 'lab':
         building = { ...base, kind: 'lab', research: null, endTick: 0 };
         break;
@@ -2935,6 +2961,10 @@ export class World {
 
       case 'clinic':
         // Des lits vides : elle attend qu'un mutant tombe assommé.
+        break;
+
+      case 'barracks':
+        // Aucune recrue en formation : elle attend le joueur.
         break;
 
       case 'lab':
@@ -3031,6 +3061,7 @@ export class World {
       case 'townHall':
       case 'house':
       case 'clinic':
+      case 'barracks':
       case 'lumberCamp':
       case 'foresterHouse':
       case 'depot':
@@ -3438,7 +3469,11 @@ export class World {
     // Une fois par seconde : les lits suivent les maisons finies ou tombées, les ouvriers venus ou partis.
     if (this.tickCount % HOUSING.assignTicks === 0) this.settleBeds();
 
+    // Les casernes comptent leur formation à la seconde.
+    if (this.tickCount % TICKS_PER_SECOND === 0) this.stepBarracks();
+
     // Une fois par tick, pas une fois par ouvrier.
+    const troop = this.companions();
     const alarm = this.hasMutants();
     const bedtime = this.isBedtime();
     let lootBlocked = false;
@@ -3563,6 +3598,10 @@ export class World {
 
         case 'patient':
           this.stepPatient(mobile);
+          break;
+
+        case 'companion':
+          this.stepCompanion(mobile, troop);
           break;
 
         case 'caravan':
@@ -4088,6 +4127,159 @@ export class World {
     this.mobiles.set(worker.id, worker);
     this.events.emit('mutantHealed', { id: worker.id, clinicId: clinic.id, x: door.x, y: door.y });
   }
+
+  /* ------------------------------------------------------------ compagnons */
+
+  /** La troupe vivante, dans l'ordre des ids. */
+  public companions(): Companion[] {
+    const troop: Companion[] = [];
+
+    for (const mobile of this.mobiles.values()) {
+      if (mobile.kind === 'companion') troop.push(mobile);
+    }
+    return troop;
+  }
+
+  /** Compagnons vivants et recrues en formation, toutes casernes confondues : ce que plafonne `COMPANIONS.max`. */
+  public companionCount(): number {
+    let count = 0;
+
+    for (const mobile of this.mobiles.values()) {
+      if (mobile.kind === 'companion') count += 1;
+    }
+    for (const entity of this.entities.values()) {
+      if (entity.kind === 'barracks' && entity.training !== null) count += 1;
+    }
+    return count;
+  }
+
+  /**
+   * Ce qui manque pour recruter un compagnon de cette classe, d'ici — objet
+   * par objet, le sac puis la ville si la caserne est dans son rayon.
+   */
+  public recruitMissing(barracks: Building, role: CompanionClassId): Partial<Record<ItemId, number>> {
+    const town = this.townStockFor(barracks);
+    const missing: Partial<Record<ItemId, number>> = {};
+
+    for (const [item, needed] of Object.entries(COMPANION_CLASSES[role].cost) as [ItemId, number][]) {
+      const short = needed - this.player.inventory.available(item) - (town?.available(item) ?? 0);
+
+      if (short > 0) missing[item] = short;
+    }
+    return missing;
+  }
+
+  /** Le bouton « Recruter » : le coût d'un coup, puis la formation. */
+  private recruit(id: EntityId, role: CompanionClassId): void {
+    const barracks = this.entities.get(id);
+    const reject = (reason: RecruitRejection): void => this.events.emit('recruitRejected', { reason });
+
+    if (barracks?.kind !== 'barracks') return reject('missing');
+    if (!this.inReach(barracks)) return reject('outOfReach');
+    if (barracks.training !== null) return reject('busy');
+    if (this.companionCount() >= COMPANIONS.max) return reject('full');
+    if (Object.keys(this.recruitMissing(barracks, role)).length > 0) return reject('missingItems');
+
+    const town = this.townStockFor(barracks);
+    const fromBag: [ItemId, number][] = [];
+
+    for (const [item, needed] of Object.entries(COMPANION_CLASSES[role].cost) as [ItemId, number][]) {
+      const bag = Math.min(needed, this.player.inventory.available(item));
+
+      if (bag > 0) {
+        this.player.inventory.remove(item, bag);
+        fromBag.push([item, bag]);
+      }
+      if (needed > bag) town?.remove(item, needed - bag);
+    }
+
+    barracks.training = { role, endTick: this.tickCount + COMPANION_CLASSES[role].trainTicks };
+    this.events.emit('companionTraining', { id, role, endTick: barracks.training.endTick, fromBag });
+  }
+
+  /** Chaque seconde : une recrue dont la formation est finie sort par la porte de sa caserne. */
+  private stepBarracks(): void {
+    for (const entity of this.entities.values()) {
+      if (entity.kind !== 'barracks' || entity.training === null || this.tickCount < entity.training.endTick) continue;
+
+      const door = doorOf(entity);
+      const companion = createCompanion(this.nextMobileId++, entity.training.role, door.x, door.y);
+
+      entity.training = null;
+      this.mobiles.set(companion.id, companion);
+      this.events.emit('companionJoined', { id: companion.id, barracksId: entity.id, role: companion.role, x: companion.x, y: companion.y });
+    }
+  }
+
+  /** Un tick de compagnon : il agit, puis encaisse le coup de l'ennemi qui le touche. */
+  private stepCompanion(companion: Companion, troop: readonly Companion[]): void {
+    const act = stepCompanion(companion, {
+      player: this.player,
+      troop,
+      foes: this.foes(),
+      isSolid: this.companionSolid,
+      stepSeconds: STEP_SECONDS,
+    });
+
+    switch (act.type) {
+      case 'strike': {
+        const dx = act.foe.x - companion.x;
+        const dy = act.foe.y - companion.y;
+
+        this.events.emit('companionStruck', { id: companion.id });
+        if (act.foe.kind === 'mutant') this.hurtMutant(act.foe, act.damage, dx, dy);
+        else this.hurtBeast(act.foe, act.damage);
+        break;
+      }
+
+      case 'shoot':
+        // Le corps est au-dessus des pieds : la flèche part de la poitrine.
+        this.fire('bow', companion.x, companion.y - 8, act.foe, act.damage - WEAPONS.bow.damage);
+        break;
+
+      case 'heal': {
+        const { player } = this;
+
+        if (act.who === 'player') player.hp = Math.min(PLAYER_MAX_HP, player.hp + act.amount);
+        else act.who.hp = Math.min(COMPANION_CLASSES[act.who.role].hp, act.who.hp + act.amount);
+
+        const at = act.who === 'player' ? player : act.who;
+
+        this.events.emit('companionHealed', { by: companion.id, who: act.who === 'player' ? 'player' : act.who.id, amount: act.amount, x: at.x, y: at.y });
+        break;
+      }
+
+      case 'warp':
+      case 'none':
+        break;
+    }
+
+    if (companion.hurtTicks > 0) return;
+
+    const reach = COMPANIONS.contactRange * TILE_SIZE;
+
+    for (const foe of this.foes()) {
+      if (!isTargetable(foe) || distanceSq(foe.x, foe.y, companion.x, companion.y) > reach * reach) continue;
+      this.hurtCompanion(companion, foe.kind === 'mutant' ? ENEMIES[foe.proto].damage : this.beastDamage(foe));
+      break;
+    }
+  }
+
+  /** Un coup sur un compagnon. À zéro, il tombe : la caserne peut en former un autre. */
+  private hurtCompanion(companion: Companion, damage: number): void {
+    companion.hp = Math.max(0, companion.hp - damage);
+    companion.hurtTicks = COMPANIONS.hurtTicks;
+
+    if (companion.hp > 0) {
+      this.events.emit('companionHurt', { id: companion.id, hp: companion.hp });
+      return;
+    }
+    this.mobiles.delete(companion.id);
+    this.events.emit('companionDied', { id: companion.id, role: companion.role, x: companion.x, y: companion.y });
+  }
+
+  /** Ce qui arrête un compagnon : l'eau, le bâti, l'emprise d'une base mutante — pas les arbres, il se faufile. */
+  private readonly companionSolid = (tx: number, ty: number): boolean => this.isOpenGroundSolid(tx, ty) || this.enemyBaseAt(tx, ty) !== null;
 
   /* ------------------------------------------------------------------ butin */
 
@@ -5226,7 +5418,7 @@ export class World {
   private ageInhabitants(): void {
     this.player.age += AGES.yearsPerCycle;
     for (const mobile of [...this.mobiles.values()]) {
-      if (mobile.kind === 'arrow' || mobile.kind === 'spit' || mobile.kind === 'fireball' || mobile.kind === 'pickup' || mobile.kind === 'patient' || mobile.kind === 'caravan') continue;
+      if (mobile.kind === 'arrow' || mobile.kind === 'spit' || mobile.kind === 'fireball' || mobile.kind === 'pickup' || mobile.kind === 'patient' || mobile.kind === 'companion' || mobile.kind === 'caravan') continue;
       // Un enfant qui a faim ou soif ne grandit pas : il attend sa prochaine aube le ventre plein.
       const stunted = mobile.kind === 'kid' ? stuntingNeed(mobile.needs) : null;
 
@@ -7688,6 +7880,7 @@ export class World {
 /** Une entité en données : le coffre devient son stock, le reste est copié. */
 function saveEntity(entity: Entity): SavedEntity {
   if (entity.kind === 'site') return { ...entity, delivered: { ...entity.delivered } };
+  if (entity.kind === 'barracks') return { ...entity, store: entity.store.toJSON(), training: entity.training && { ...entity.training } };
   return { ...entity, store: entity.store.toJSON() };
 }
 

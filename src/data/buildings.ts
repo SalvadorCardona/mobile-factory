@@ -28,6 +28,7 @@ export type BuildingKind =
   | 'quarry'
   | 'forge'
   | 'clinic'
+  | 'barracks'
   | 'lab'
   | 'lumberCamp'
   | 'foresterHouse'
@@ -556,6 +557,30 @@ export const BUILDINGS = {
     unique: false,
     plan: false,
     sprite: 'clinic',
+    weapon: null,
+    upgrades: [],
+  },
+  barracks: {
+    label: LORE.buildings.barracks.name,
+    sign: LORE.buildings.barracks.sign,
+    siteDescription: LORE.buildings.barracks.site,
+    description: LORE.buildings.barracks.description,
+    effect: LORE.buildings.barracks.effect,
+    kind: 'barracks',
+    category: 'defense',
+    width: 2,
+    height: 2,
+    cost: { wood: 20, stone: 14 },
+    // Pas de coffre : le recrutement se paie d'un coup, le sac d'abord, puis la ville dans son rayon.
+    storage: 0,
+    logisticRadius: 0,
+    hp: 80,
+    workers: 0,
+    minWorkers: 0,
+    menu: true,
+    unique: false,
+    plan: false,
+    sprite: 'barracks',
     weapon: null,
     upgrades: [],
   },

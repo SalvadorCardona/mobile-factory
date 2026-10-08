@@ -18,6 +18,7 @@
 
 import type { BuildingId } from './buildings.ts';
 import type { ItemId } from './items.ts';
+import type { ResearchId } from './research.ts';
 
 /** Un bâtiment de la base, posé à (dx, dy) tuiles du coin de la mairie. */
 export interface ScenarioBuilding {
@@ -52,6 +53,8 @@ export interface TestScenarioProto {
   reveal?: number;
   /** Vrai : la partie s'ouvre au crépuscule du premier jour, plutôt qu'au matin — le moment où l'on va dormir. */
   dusk?: boolean;
+  /** Recherches déjà finies : ce qu'elles débloquent est au menu de construction d'emblée. */
+  research?: readonly ResearchId[];
   /** Le niveau de l'arc d'Adam (`data/gear.ts`) ; absent : l'arc de fortune. */
   gear?: number;
   /**
@@ -180,6 +183,20 @@ export const TEST_SCENARIOS = {
     town: { wood: 60, stone: 40, coal: 25, food: 40, water: 40 },
     bag: {},
     adam: { dx: 1, dy: 4 },
+  },
+  /**
+   * La caserne finie à côté d'Adam (la Milice est faite), et de quoi recruter
+   * à la mairie : nourriture, bois, plaques de fer. On choisit une classe,
+   * on recrute, et le compagnon sort après sa formation pour suivre Adam.
+   */
+  army: {
+    label: 'Caserne',
+    seed: 100,
+    buildings: [{ building: 'barracks', dx: 4, dy: 5 }],
+    research: ['militia'],
+    town: { wood: 60, stone: 30, food: 60, water: 20, ironPlate: 10 },
+    bag: {},
+    adam: { dx: 3, dy: 4 },
   },
   /**
    * Adam à l'orée de la base mutante la plus proche, l'arc cerclé de fer au

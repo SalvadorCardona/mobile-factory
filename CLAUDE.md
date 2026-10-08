@@ -362,6 +362,29 @@ Adam le touche, il le suit en boitillant jusqu'à la porte ; après une
 ex-mutants logés : une clinique pleine n'assomme plus personne. Oublié dix
 secondes, ou sans clinique, l'assommé s'évapore et lâche son butin.
 
+**Armée de compagnons** (`src/data/companions.ts`, `src/sim/companions.ts`) —
+la **caserne** (`barracks`, kind `barracks`, famille Attaque) est débloquée au
+labo par la recherche « Milice » (`militia`) : le labo est ce qui fait entrer au
+menu les bâtiments hors histoire (forge, clinique), un objectif ou une quête ne
+servant qu'à l'histoire. Sa fenêtre (`ui/barracksPanel.ts`) montre trois cartes
+— **guerrier** (corps à corps, beaucoup de PV), **archer** (tire de loin, recule
+sous `keep` tuiles, peu de PV), **soigneur** (ne combat pas, rend des PV à Adam
+et au compagnon le plus blessé à portée) —, leur coût en icônes, « Recruter »
+(commande `recruitCompanion`, payé sac puis ville dans le rayon, refus
+`RecruitRejection`) et l'armée actuelle. Une seule formation à la fois par
+caserne (`Barracks.training`, `endTick`, sauvegardé) ; au bout, le compagnon
+(mobile `companion`, `Companion`) sort par la porte. Plafond `COMPANIONS.max`
+(5) **formations comprises**, toutes casernes confondues ; un compagnon tombé
+libère sa place. Ils suivent Adam en arc derrière lui (`formationSlot`, le
+guerrier devant, le soigneur au fond), ne sont dans la collision de personne,
+engagent l'ennemi le plus proche parmi ceux qui sont à `engageRange` d'Adam
+puis reviennent, et le rejoignent d'un bond s'ils sont trop loin ou coincés
+(`teleportRange`, `stuckTicks`). Un ennemi au contact les frappe (une fois par
+seconde au plus). Ni faim, ni lit, ni population. Le HUD les compte dans la
+bulle de la population (`n/5` et une jauge de santé réunie). Compagnons et
+formation sont sauvegardés (mobiles `companion`, `training` de la caserne) ; une
+ancienne sauvegarde se lit sans compagnons. Partie de test `/test/army`.
+
 **Ève** — ingénieure bricoleuse, taquine (`src/data/eve.ts`, `src/sim/eve.ts`).
 Elle **tutoie** Adam, qui reste muet ; le jeu (bulles, boutons, écrans)
 **vouvoie** le joueur. Les conseils du HUD sont ses répliques, par radio

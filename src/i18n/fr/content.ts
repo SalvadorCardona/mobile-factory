@@ -17,6 +17,7 @@ import { OBJECTIVES, type ObjectiveProto } from '../../data/objectives.ts';
 import { PERKS } from '../../data/perks.ts';
 import { QUESTS, TOOLS } from '../../data/quests.ts';
 import { RECIPES } from '../../data/recipes.ts';
+import { COMPANION_CLASSES } from '../../data/companions.ts';
 import { RESEARCH, RESEARCH_STATS, RESEARCH_THEMES } from '../../data/research.ts';
 import { RESOURCES } from '../../data/resources.ts';
 import { TEST_SCENARIOS } from '../../data/testScenario.ts';
@@ -78,6 +79,7 @@ export const content = {
   resources: mapTable(RESOURCES, (resource): string => resource.verb),
   recipes: mapTable(RECIPES, (recipe): string => recipe.label),
   weapons: mapTable(WEAPONS, (weapon): string => weapon.label),
+  companionClasses: mapTable(COMPANION_CLASSES, ({ label, effect }): { label: string; effect: string } => ({ label, effect })),
   enemies: mapTable(ENEMIES, (enemy): string => enemy.label),
   wildlife: mapTable(WILDLIFE, (beast): string => beast.label),
   enemyBase: { label: ENEMY_BASE.label, description: ENEMY_BASE.description },

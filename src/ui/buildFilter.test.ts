@@ -44,11 +44,11 @@ describe('filterCards', () => {
 
   it('une famille ne montre que ses bâtiments', () => {
     expect(ids(filterCards(cards(), 'ore', '').visible)).toEqual(['drill', 'quarry']);
-    expect(ids(filterCards(cards(), 'defense', '').visible)).toEqual(['watchtower']);
+    expect(ids(filterCards(cards(), 'defense', '').visible)).toEqual(['barracks', 'watchtower']);
   });
 
   it('un bâtiment verrouillé ne compte pas, et une famille toute verrouillée n’a pas de puce', () => {
-    const view = filterCards(cards(['forge', 'charcoalKiln', 'watchtower']), 'production', '');
+    const view = filterCards(cards(['forge', 'charcoalKiln', 'watchtower', 'barracks']), 'production', '');
 
     expect(view.visible.has('forge')).toBe(false);
     expect(view.visible.has('farm')).toBe(true);
@@ -60,10 +60,10 @@ describe('filterCards', () => {
   });
 
   it('une famille choisie qui n’a plus de carte retombe sur « Tous »', () => {
-    const view = filterCards(cards(['watchtower']), 'defense', '');
+    const view = filterCards(cards(['watchtower', 'barracks']), 'defense', '');
 
     expect(view.active).toBe('all');
-    expect(view.visible.size).toBe(MENU_BUILDING_IDS.length - 1);
+    expect(view.visible.size).toBe(MENU_BUILDING_IDS.length - 2);
   });
 
   it('le texte et la famille s’appliquent ensemble', () => {

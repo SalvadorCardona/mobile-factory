@@ -596,6 +596,8 @@ function mobileColor(mobile: Mobile): Color | null {
     case 'arrow':
     case 'pickup':
       return null;
+    case 'companion':
+      return PALETTE.cyan.base;
     case 'patient':
       return mobile.state === 'care' ? null : PALETTE.toxic.light;
     default:

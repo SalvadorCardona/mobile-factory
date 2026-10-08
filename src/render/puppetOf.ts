@@ -4,6 +4,7 @@
  * sélection la silhouette qu'il entoure.
  */
 
+import { COMPANION_CLASSES } from '../data/companions.ts';
 import { ENEMIES, WILDLIFE } from '../data/enemies.ts';
 import type { Mobile } from '../sim/types.ts';
 import type { PuppetId } from './puppet.ts';
@@ -19,6 +20,8 @@ export function puppetOf(
         : { id: ENEMIES[mobile.proto].sprite, shadowWidth: 22, stride: 4 };
     case 'patient':
       return { id: 'patient', shadowWidth: 22, stride: 4, gait: 'limp' };
+    case 'companion':
+      return { id: COMPANION_CLASSES[mobile.role].sprite, shadowWidth: mobile.role === 'warrior' ? 19 : 16, stride: 3 };
     case 'kid':
       return { id: 'kid', shadowWidth: 15, stride: 3, gait: 'hop', woman: mobile.sex === 'female' };
     case 'eve':

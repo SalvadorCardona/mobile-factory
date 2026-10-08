@@ -202,6 +202,24 @@ export const panel: Messages['panel'] = {
     comeCloser: ' — get closer.',
   },
 
+  barracks: {
+    army: (n: number, max: number): string => `Troop: ${n}/${max}`,
+    recruitTitle: 'Recruit',
+    training: (label: string, seconds: number): string => `Training: ${label}, ${seconds} s left`,
+    full: (max: number): string => `Troop is full: ${max} companions at most. A fallen companion frees a slot.`,
+    rosterTitle: 'Army',
+    none: 'No companions yet: recruit one above.',
+    hp: (hp: number, max: number): string => `${hp}/${max} HP`,
+    stats: {
+      hp: (n: number): string => `${n} hit points`,
+      damage: (n: number): string => `${n} damage per hit`,
+      range: (n: number): string => `range ${n} tile${n > 1 ? 's' : ''}`,
+      heal: (n: number): string => `heals ${n} hit point${n > 1 ? 's' : ''}`,
+    },
+    recruit: 'Recruit',
+    seconds: (n: number): string => `${n} s of training`,
+    comeCloser: ' — get closer.',
+  },
   clinic: {
     beds: (used: number, beds: number): string => `Beds taken: ${used}/${beds}`,
     full: 'Full: defeated mutants no longer drop stunned for it.',

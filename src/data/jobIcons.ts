@@ -193,6 +193,16 @@ export const JOB_DRAWINGS = {
     rect(4.4, 9.6, 14.4, 4.4, mint.base, 2),
     pill(5.6, 10.4, 3.4, 1.4, mint.light),
   ),
+  /** La caserne : le bouclier rond à croix corail, deux lances croisées derrière. */
+  barracks: job(
+    line(6, 19, 18, 5, orange.shade),
+    line(18, 19, 6, 5, orange.shade),
+    circle(12.6, 13.2, 6.4, cyan.shade),
+    circle(12, 12.6, 6.4, cyan.base),
+    pill(7.6, 8.6, 4, 1.6, cyan.light),
+    rect(11, 8, 2, 9, coral.base, 1),
+    rect(7.6, 11.6, 9, 2, coral.base, 1),
+  ),
   /** Le labo : l'éprouvette penchée qui glougloute. */
   lab: job(
     group(
