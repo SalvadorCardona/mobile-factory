@@ -793,6 +793,13 @@ commandes du jeu par `sim/testScenario.ts` ; `/test/<id>` ouvrira un autre
 scénario (`ui/testRoute.ts`). GitHub Pages n'ayant pas de page de repli, le
 build copie `index.html` sous chaque route (`vite.config.ts`).
 
+## Aperçu en direct
+
+`.claude/launch.json` déclare le serveur Vite (`npm run dev`, port 5173) :
+dans l'app Claude Code (onglet Code), l'aperçu lance le jeu et le recharge à
+chaque modification (HMR). Le jeu est sous `/mobile-factory/`, la partie de
+test sous `/mobile-factory/test`.
+
 ## Vérifier avant de pousser
 
 ```bash
