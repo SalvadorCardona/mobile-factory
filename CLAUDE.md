@@ -65,8 +65,8 @@ prend que ce qui rentre, le réservé reste au coffre, un coffre filtré grise
 le reste. Les chantiers
 puisent dans les deux, la ville seulement dans son rayon (`logisticRadius`,
 `sim/warehouse.ts`, le cercle jaune du mode construction). Le HUD
-les montre en deux cartes compactes (sur un écran large, la ville en bandeau
-d'une ligne en haut à gauche, qui défile de côté) ; le sac (tap, ou touche I) ouvre
+les montre en deux blocs du haut (le sac, une case de la barre ; la ville, un
+bandeau d'une ligne à gauche, qui défile de côté) ; le sac (tap, ou touche I) ouvre
 `ui/inventoryPanel.ts`, sans pause, comme la fenêtre d'un bâtiment. Sa
 section Ville est un tableau de bord (`sim/flows.ts`, `World.flows`) : débit
 net par objet sur deux minutes (anneau d'échantillons, pas sauvegardé) et
@@ -290,8 +290,8 @@ journée sans mutant (~3 min), un crépuscule (carte teintée indigo, lampions
 allumés, « La nuit tombe — rentrez »), une nuit (~100 s) dont la vague sort des bases mutantes à sa tombée, puis
 l'aube : les mutants restants fuient et le butin tombe dans le sac. Le rendu
 (`render/nightLayer.ts`) n'applique que la teinte : un quad `multiply` et des
-lueurs `add`, pas de filtre. Le HUD l'affiche en **horloge** au bout de la tête
-de la quête (`World.dayDial`, `DIAL_ARCS` : aube, jour, crépuscule, nuit à
+lueurs `add`, pas de filtre. Le HUD l'affiche en **horloge** au bord droit du
+haut (`World.dayDial`, `DIAL_ARCS` : aube, jour, crépuscule, nuit à
 leurs vraies durées ; cadran `dayDialSvg` de `art/ui.ts`) : l'aiguille porte
 le soleil, la lune la nuit, « J2 » à côté (un de plus à chaque aube) ; à
 `DAY_DIAL.nightWarning` de la nuit, elle bat en corail ; un tap dit « Jour 2 ·
@@ -426,7 +426,7 @@ sauvegarde : 0), ni porté ni stocké. Chaque bâtiment achevé rapporte
 `BUILD_PRESTIGE` une seule fois par emplacement (`prestigeSites` : une
 ruine rebâtie ne paie pas), chaque ennemi vaincu `KILL_PRESTIGE` ;
 événement `prestigeGained`, « +N Prestige » flottant, médaille et nombre
-en haut à gauche du HUD, le bandeau de la ville sur sa ligne (sous la quête sur un téléphone). Rien ne le dépense encore.
+en haut à gauche du HUD, le bandeau de la ville à côté (sous la barre sur un téléphone). Rien ne le dépense encore.
 
 **Bases mutantes** (`src/data/enemyBases.ts`, `src/sim/enemyBases.ts`) —
 à la création de la partie, des anneaux de campements (`ENEMY_BASE_RINGS` :
@@ -559,23 +559,38 @@ Les règles, en résumé :
   `style.css` (`--accent`, `--good`, `--danger`…). Pas d'emoji : les
   pictogrammes sont des SVG de `src/art/ui.ts`. Le panneau de debug ne
   s'affiche qu'avec `?debug` en dev.
-- Le haut de l'écran (`.hud-top`) : une **barre unique** pleine largeur
-  (`.hud-topbar`, centrée, 920 px au plus), bâtie sur une grille de cases :
-  tout y a la même hauteur (`--cell-h`), les mêmes rayons et la même face
-  lavande. Dans l'ordre : cinq compteurs de la population (au travail,
-  inactifs, enfants, logés, bonheur) de même largeur (`--cell-w`, chiffres
-  tabulaires : rien ne bouge), le sac (une case qui s'étire, sa jauge en filet
-  au pied), Pause et Réglages (carrés), puis l'**objectif, dernier élément, au
-  bord droit** (`.hud-objective`, jaune : icône et progression, intitulé court
-  dès 900 px ; il rebondit en menthe quand une étape est réussie). Les alertes
-  (corail) ne changent pas la taille d'une case. La grille se resserre par
-  paliers (< 360, 360, 420, 600, 900 px) et tient sur une ligne dès 320 px ; la
-  zone de tap déborde de la case jusqu'à ~44 px. Le tap sur l'objectif ouvre la
-  **quête** en fenêtre sous la barre (`.hud-quest`, `data-folded`, `toggleQuest`
-  : détail, attaque, conseil d'Ève ; elle s'ouvre seule à un nouveau conseil,
-  un objectif réussi, la mairie qui faiblit, et se referme au temps ou d'un tap
-  sur sa tête). Dessous, en flux (`.hud-under`) : horloge du jour, ville, alerte
-  de vivres, Prestige, météo.
+- Le haut de l'écran (`.hud-top`) est **une seule rangée**, une grille collée
+  en haut — la zone sûre plus `--hud-margin` (8 px), rien d'autre : à gauche
+  (`.hud-left`) le Prestige, la ville en bandeau d'une ligne qui défile de côté
+  et l'alerte de vivres ; au centre (`.hud-main`) la barre ; à droite
+  (`.hud-right`, rangée de droite à gauche) l'horloge du jour au bord, la météo
+  à côté. **Une seule variable de hauteur, `--hud-h`**, posée sur `.hud-top` et
+  ajustée par paliers (40, 42, 46, 54 px ; 46 sur un téléphone couché) : la
+  barre et chaque bloc des deux groupes la prennent, sans marge ni `top` ni
+  hauteur à eux ; chaque bloc est sa propre carte blanche, aux rayons de la
+  barre (`--hud-r`), sans cadre qui englobe un groupe. Tout tient sur une ligne
+  dès 1366 px (la barre veut ~830 px, chaque groupe `--hud-side`, 250 px) ; en
+  dessous, la barre reste seule en haut et les deux groupes font une seconde
+  rangée juste dessous, de même hauteur. `src/ui/hudTop.test.ts` verrouille ces
+  règles dans `style.css` : un bloc du haut qui prend sa propre hauteur, une
+  marge ou une transformation casse le test.
+  La **barre** (`.hud-topbar`, 920 px au plus, 880 sur la rangée unique) est
+  bâtie sur une grille de cases : tout y a la même hauteur (`--cell-h`, tirée de
+  `--hud-h`), les mêmes rayons et la même face lavande. Dans l'ordre : cinq
+  compteurs de la population (au travail, inactifs, enfants, logés, bonheur) de
+  même largeur (`--cell-w`, chiffres tabulaires : rien ne bouge), le sac (une
+  case qui s'étire, sa jauge en filet au pied, ou centrée à côté du titre dès
+  600 px — rien ne dépasse d'une case), Pause et Réglages (carrés), puis
+  l'**objectif, dernier élément, au bord droit** (`.hud-objective`, jaune :
+  icône et progression, intitulé court dès 900 px ; il rebondit en menthe quand
+  une étape est réussie). Les alertes (corail) ne changent pas la taille d'une
+  case. La grille se resserre par paliers (< 360, 360, 420, 600, 900 px) et
+  tient sur une ligne dès 320 px ; la zone de tap déborde de la case jusqu'à
+  ~44 px. Le tap sur l'objectif ouvre la **quête** en fenêtre sous la barre,
+  calée sur son bord droit (`.hud-quest`, `data-folded`, `toggleQuest` :
+  détail, attaque, conseil d'Ève ; elle s'ouvre seule à un nouveau conseil, un
+  objectif réussi, la mairie qui faiblit, et se referme au temps ou d'un tap
+  sur sa tête).
 - Clavier : ZQSD / WASD (par position) et flèches font marcher Adam
   (`input/keyboard.ts`) ; Espace, flèches, Entrée et Échap tiennent le menu
   de construction (`BuildMenu.handleKey`) ; P, Échap, I, M et ² sont une
@@ -771,7 +786,7 @@ en ligne https://cardona.digital/mobile-factory/test — ouvre directement,
 sans écran titre, une petite base déjà bâtie (graine 100, matin du jour 1) :
 mairie et son stock, cabane de bûcheron, ferme, puits, poste de construction, et le
 chantier du labo à moitié livré (bois complet, pierre en route, fer manquant).
-Bandeau « Partie de test » en haut. Elle ne lit ni n'écrit aucun stockage
+Bandeau « Partie de test » en bas à gauche (le haut reste celui d'une vraie partie). Elle ne lit ni n'écrit aucun stockage
 (sauvegarde, jardin, record) et repart à l'identique à chaque rechargement.
 Le scénario est de la donnée (`data/testScenario.ts`), rejoué avec les
 commandes du jeu par `sim/testScenario.ts` ; `/test/<id>` ouvrira un autre

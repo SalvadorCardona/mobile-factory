@@ -198,8 +198,10 @@ export class Hud {
   private readonly town: HTMLElement;
   /** Le Prestige de la colonie : son icône et son compte, en haut à gauche. */
   private readonly prestige: HTMLElement;
-  /** Le Prestige et la capsule météo : sous la quête sur un téléphone (cf. `.hud-corner`). */
-  private readonly corner: HTMLElement;
+  /** À gauche de la barre (ou sous elle, sur un téléphone) : le Prestige, la ville et son alerte de vivres. */
+  private readonly left: HTMLElement;
+  /** À droite de la barre (ou sous elle) : la météo et l'horloge du jour. */
+  private readonly right: HTMLElement;
   private lastPrestige = '';
   /** La population de la ville : au travail, inactifs, enfants. */
   private readonly people: HTMLElement;
@@ -395,8 +397,6 @@ export class Hud {
     this.speech.setAttribute('aria-live', 'polite');
     this.weather = element('div', 'hud-weather');
     this.weather.hidden = true;
-    this.corner = element('div', 'hud-corner');
-    this.corner.append(this.prestige, this.weather);
 
     this.banner = element('div', 'hud-banner');
     this.banner.hidden = true;
@@ -465,29 +465,27 @@ export class Hud {
     this.celebration.setAttribute('role', 'status');
     this.confetti = element('div', 'hud-confetti');
 
-    // Le haut de l'écran se met en page tout seul : la quête et son conseil,
-    // et à côté une colonne avec les boutons sur une ligne, le sac dessous.
-    // Rien ne se chevauche, et rien ne bouge quand le conseil change.
+    // Le haut de l'écran : une seule rangée, collée en haut, de blocs de même
+    // hauteur (`--hud-h`) — à gauche le Prestige et la ville, au centre la
+    // barre, à droite l'alerte de vivres, la météo et l'horloge. Sur un écran
+    // trop étroit, les deux groupes passent ensemble sur une rangée dessous.
     this.top = element('div', 'hud-top');
 
-    // Une barre unique, pleine largeur : la population, le sac, Pause et
-    // Réglages, puis l'objectif tout à droite. Dessous, la ville, l'horloge et
-    // l'alerte de vivres ; la quête s'ouvre en fenêtre sous l'objectif.
+    // La barre : la population, le sac, Pause et Réglages, puis l'objectif
+    // tout à droite ; la quête s'ouvre en fenêtre sous l'objectif.
     this.bar = element('div', 'panel hud-topbar');
     this.bar.append(this.people, this.bag, buttons, this.objective);
 
-    const under = element('div', 'hud-under');
-    const side = element('div', 'hud-side');
+    const main = element('div', 'hud-main');
 
     this.quest.append(fold);
-    side.append(this.dayClock, this.town, this.hunger);
-    under.append(this.quest, side, this.corner);
-    this.top.append(this.bar, under);
-    // Sur un écran large, le bandeau de la ville se range juste après le
-    // Prestige, sur sa ligne : il lit sa largeur ici (cf. `.hud-town` dans le CSS).
-    new ResizeObserver(() => {
-      this.top.style.setProperty('--prestige-width', `${this.prestige.offsetWidth}px`);
-    }).observe(this.prestige);
+    main.append(this.bar, this.quest);
+    this.left = element('div', 'hud-left');
+    this.left.append(this.prestige, this.town, this.hunger);
+    // Rangés de droite à gauche : l'horloge tient le bord, la météo passe dessous si la place manque.
+    this.right = element('div', 'hud-right');
+    this.right.append(this.dayClock, this.weather);
+    this.top.append(this.left, main, this.right);
 
     this.root.append(
       // Les confettis d'abord : ils tombent derrière les cartes du HUD et les fenêtres.
@@ -1013,16 +1011,16 @@ export class Hud {
     this.project = project;
   }
 
-  /** Bas de la barre du haut — ou de la quête, ouverte dessous —, en pixels écran : les repères de bord du renderer restent dessous. */
+  /** Bas des rangées du haut — ou de la quête, ouverte dessous —, en pixels écran : les repères de bord du renderer restent dessous. */
   public topInset(): number {
-    const bar = this.bar.getBoundingClientRect().bottom;
+    const bar = this.top.getBoundingClientRect().bottom;
 
     return this.quest.dataset['folded'] === 'false' ? Math.max(bar, this.quest.getBoundingClientRect().bottom) : bar;
   }
 
-  /** La barre du haut et la ville : les repères de bord les contournent. */
+  /** La barre du haut et ses deux groupes : les repères de bord les contournent. */
   public obstacles(): DOMRect[] {
-    return [this.bar.getBoundingClientRect(), this.town.getBoundingClientRect()];
+    return [this.bar, this.left, this.right].map((node) => node.getBoundingClientRect());
   }
 
   /** La ressource que le conseil envoie chercher, ou `null` : le renderer y pointe un repère. */
@@ -1740,9 +1738,8 @@ export class Hud {
     }
 
     const bar = this.bar.getBoundingClientRect();
-    // Sur un téléphone, le Prestige et la météo sont sous la barre ; ailleurs, le Prestige est en haut à gauche.
-    const under = [this.prestige, this.weather].filter((node) => !node.hidden);
-    const above = Math.max(bar.bottom, ...under.map((node) => node.getBoundingClientRect().bottom));
+    // Sur un téléphone, le Prestige, la ville et l'horloge font une rangée sous la barre.
+    const above = this.top.getBoundingClientRect().bottom;
     const width = Math.min(bar.width, CELEBRATION_WIDTH);
 
     this.root.dataset['celebration'] = 'docked';
