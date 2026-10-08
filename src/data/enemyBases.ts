@@ -16,6 +16,13 @@
  * Plus on s'éloigne, plus l'anneau est coriace : le niveau de la base est
  * celui de son anneau.
  *
+ * Une base **défend** sa zone à coups de boules de feu (`fire`, `FIREBALL`) :
+ * tant qu'Adam est à portée — tout ce que son arc peut atteindre de la base,
+ * et toute la zone —, elle charge une lueur, puis tire droit sur lui, sans
+ * anticipation. Qui bouge l'esquive. Elle vise aussi le bâtiment le plus
+ * proche si Adam n'est pas là, mais sa portée ne dépasse jamais sa zone, où
+ * l'on ne bâtit pas : elle ne peut pas attaquer la colonie.
+ *
  * Une base abrite deux sortes de mutants :
  * - ses **gardiens** ne la quittent jamais : ils flânent dans sa zone et
  *   chargent Adam dès qu'il y entre. Morts, la base les refait le jour,
@@ -52,6 +59,24 @@ export interface EnemyBaseLevel {
   guards: GuardSpec;
   /** Son chef (`WILDLIFE.chief`) : tant qu'il vit, la base ne se laisse pas entamer. */
   chief: ChiefSpec;
+  /** Ses boules de feu. */
+  fire: FireSpec;
+}
+
+/** Les boules de feu d'une base, à son niveau. */
+export interface FireSpec {
+  /**
+   * Portée, en tuiles depuis le centre de l'emprise : elle ne dépasse pas la
+   * zone, et dépasse la portée de l'arc d'Adam sur la base — on ne l'entame
+   * pas sans être à portée de ses boules de feu.
+   */
+  range: number;
+  /** Points de vie retirés à Adam par boule de feu. */
+  damage: number;
+  /** Points de vie retirés à un bâtiment touché. */
+  buildingDamage: number;
+  /** Ticks entre deux tirs, la lueur de charge comprise (`FIREBALL.tellTicks`). */
+  cooldownTicks: number;
 }
 
 /**
@@ -128,7 +153,7 @@ export const ENEMY_BASE = {
 /** Par niveau : `ENEMY_BASE_LEVELS[level - 1]`. */
 export const ENEMY_BASE_LEVELS = [
   {
-    hp: 60,
+    hp: 150,
     zoneRadius: 8,
     prestige: 10,
     loot: [
@@ -137,10 +162,11 @@ export const ENEMY_BASE_LEVELS = [
     ],
     // Onze bases au premier anneau, un assaillant tous les deux jours et demi chacune : quatre la première nuit.
     raid: { from: 1, ticksPerRaider: 20 * 450, capacity: 2 },
-    guards: { count: 2, spitters: 1, respawnTicks: 20 * 120 },
-    // Vingt-quatre flèches de l'arc de départ : une demi-minute de combat en esquivant.
+    guards: { count: 3, spitters: 1, respawnTicks: 20 * 120 },
+    // Trente-six flèches de l'arc de départ : une demi-minute de combat en esquivant, boules de feu comprises.
+    fire: { range: 8, damage: 2, buildingDamage: 6, cooldownTicks: 20 * 3.5 },
     chief: {
-      hp: 24,
+      hp: 36,
       damage: 3,
       slamDamage: 4,
       prestige: 5,
@@ -151,7 +177,7 @@ export const ENEMY_BASE_LEVELS = [
     },
   },
   {
-    hp: 120,
+    hp: 320,
     zoneRadius: 9,
     prestige: 25,
     loot: [
@@ -161,9 +187,10 @@ export const ENEMY_BASE_LEVELS = [
     ],
     // Le deuxième anneau se réveille à la nuit 8, plus lent : il épaule le premier.
     raid: { from: 8, ticksPerRaider: 20 * 1200, capacity: 2 },
-    guards: { count: 3, spitters: 1, respawnTicks: 20 * 150 },
+    guards: { count: 4, spitters: 2, respawnTicks: 20 * 150 },
+    fire: { range: 9, damage: 3, buildingDamage: 8, cooldownTicks: 20 * 3 },
     chief: {
-      hp: 40,
+      hp: 70,
       damage: 4,
       slamDamage: 5,
       prestige: 12,
@@ -175,7 +202,7 @@ export const ENEMY_BASE_LEVELS = [
     },
   },
   {
-    hp: 200,
+    hp: 560,
     zoneRadius: 10,
     prestige: 50,
     loot: [
@@ -184,9 +211,10 @@ export const ENEMY_BASE_LEVELS = [
       { item: 'radCore', min: 1, max: 1, chance: 0.5 },
     ],
     raid: { from: 12, ticksPerRaider: 20 * 1800, capacity: 2 },
-    guards: { count: 4, spitters: 2, respawnTicks: 20 * 180 },
+    guards: { count: 5, spitters: 3, respawnTicks: 20 * 180 },
+    fire: { range: 10, damage: 4, buildingDamage: 10, cooldownTicks: 20 * 2.5 },
     chief: {
-      hp: 60,
+      hp: 110,
       damage: 5,
       slamDamage: 6,
       prestige: 25,
@@ -228,6 +256,22 @@ export const RAIDS = {
   capacityMax: 9,
   /** Ticks entre la sortie de deux assaillants de la même base : ils passent la porte l'un après l'autre. */
   exitStagger: 10,
+} as const;
+
+/**
+ * La boule de feu d'une base : elle charge une lueur au-dessus du campement
+ * pendant `tellTicks`, puis part droit vers où était la cible à cet instant,
+ * sans anticipation — qui bouge l'esquive. Plus lente qu'Adam n'est
+ * rapide en travers de sa course, elle s'écrase sur le premier bâtiment
+ * qu'elle rencontre ; arbres et rochers, elle passe par-dessus.
+ */
+export const FIREBALL = {
+  /** Vitesse, en tuiles par seconde. */
+  speed: 6,
+  /** Ticks de lueur avant le tir : le préavis de l'esquive. */
+  tellTicks: 14,
+  /** Hauteur de la bouche, en pixels au-dessus du centre de l'emprise. */
+  muzzle: 20,
 } as const;
 
 /**

@@ -212,6 +212,8 @@ export const panel = {
     raiders: (count: number, capacity: number): string => `Assaillants en réserve : ${count} sur ${capacity}`,
     guards: (count: number, max: number): string => `Gardiens : ${count} sur ${max}`,
     spitters: (count: number, max: number): string => `Cracheurs : ${count} sur ${max}`,
+    fire: (range: number, damage: number): string => `Boules de feu : ${damage} points de vie à ${range} cases`,
+    fireWarning: 'Elle tire des boules de feu sur qui entre dans sa zone : une lueur les annonce, bougez pour les esquiver.',
     chief: (hp: number, max: number): string => `Chef : ${hp} sur ${max} points de vie`,
     shielded: 'Sous le bouclier de son chef : aucune flèche ne l’entame tant qu’il vit. Abattez-le d’abord — il ne revient pas.',
     chiefReward: (prestige: number): string => `Son chef abattu rapporte ${prestige} Prestige et un butin rare.`,

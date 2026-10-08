@@ -67,7 +67,7 @@ import {
   type EnemyId,
   type LootTable,
 } from '../data/enemies.ts';
-import { ENEMY_BASE, GUARD_RANGE, RAIDS, enemyBaseLevel } from '../data/enemyBases.ts';
+import { ENEMY_BASE, FIREBALL, GUARD_RANGE, RAIDS, enemyBaseLevel } from '../data/enemyBases.ts';
 import { EVE } from '../data/eve.ts';
 import { FOG_VISION } from '../data/fog.ts';
 import { GEAR_WORKSHOP, MAX_GEAR, gearOf } from '../data/gear.ts';
@@ -100,7 +100,7 @@ import { WEATHER, WEATHER_CALENDAR, type WeatherId } from '../data/weather.ts';
 import { ChunkIndex } from './chunk.ts';
 import { floorCost, floorMissing, floorNeeds, floorWants } from './antenna.ts';
 import { consumerRecipe, consumerRoom, consumerWants, forgeRecipe, isConsumer, isStarving } from './consumers.ts';
-import { NO_WIND, nearestFoe, shoot, spit, stepArrow, stepSpit, type Wind } from './combat.ts';
+import { NO_WIND, fireball, nearestFoe, shoot, spit, stepArrow, stepSpit, type Wind } from './combat.ts';
 import { clockAt, CYCLE_TICKS, dayDial, nextWave, ticksToDawn, ticksToWave, waveAt, type DayClock, type DayDial } from './dayNight.ts';
 import type {
   Command,
@@ -533,6 +533,12 @@ export type WorldEvents = {
   spitShot: { id: MobileId; spit: MobileId; x: number; y: number };
   /** Un crachat s'est écrasé — sur Adam, un mur, ou au sol au bout de sa course. */
   spitSplashed: { x: number; y: number };
+  /** Une base charge une boule de feu : une lueur en (x, y), qui part dans `ticks`. */
+  baseFireWarned: { id: number; x: number; y: number; ticks: number };
+  /** Une base a tiré une boule de feu (`fireball`) depuis (x, y). */
+  baseFired: { id: number; fireball: MobileId; x: number; y: number };
+  /** Une boule de feu s'est écrasée en (x, y) ; `hit` : sur Adam ou sur un bâtiment. */
+  fireballBurst: { x: number; y: number; hit: boolean };
   /** Le chef d'une base lève sa massue : un cercle de `radius` tuiles en (x, y), qui tombe dans `ticks`. */
   chiefSlamWarned: { id: MobileId; x: number; y: number; radius: number; ticks: number };
   /** La massue du chef est tombée en (x, y) ; `hit` : Adam était encore dans le cercle. */
@@ -1155,6 +1161,7 @@ export class World {
     this.recover();
     this.stepWildlife();
     this.stepGuards();
+    this.stepBaseFire();
     this.watchOverColony();
     this.shootPlayerBow();
 
@@ -3475,6 +3482,18 @@ export class World {
           break;
         }
 
+        case 'fireball': {
+          const hit = stepSpit(mobile, this.player, this.fireWall);
+
+          if (hit === 'player') this.hurtPlayer(mobile.id, mobile.damage);
+          if (hit === 'wall') this.hurtOccupant(mobile.x, mobile.y, mobile.buildingDamage);
+          if (hit !== null || mobile.ttl <= 0) {
+            this.mobiles.delete(mobile.id);
+            this.events.emit('fireballBurst', { x: mobile.x, y: mobile.y, hit: hit !== null });
+          }
+          break;
+        }
+
         case 'arrow': {
           const hit = stepArrow(mobile, this.foes(), this.wind());
           const base = hit || mobile.baseId === undefined ? undefined : this.enemyBase(mobile.baseId);
@@ -4404,6 +4423,84 @@ export class World {
     return this.chunks.occupantAt(tx, ty) !== undefined || this.enemyBaseAt(tx, ty) !== null;
   };
 
+  /** Où une boule de feu s'écrase : un bâtiment. Sa propre base, arbres et rochers, elle passe par-dessus. */
+  private readonly fireWall = (x: number, y: number): boolean => this.chunks.occupantAt(floorDiv(x, TILE_SIZE), floorDiv(y, TILE_SIZE)) !== undefined;
+
+  /** Le bâtiment sous le point (x, y) prend `amount` points de dégâts. */
+  private hurtOccupant(x: number, y: number, amount: number): void {
+    const id = this.chunks.occupantAt(floorDiv(x, TILE_SIZE), floorDiv(y, TILE_SIZE));
+
+    if (id !== undefined) this.damageBuilding(id, amount);
+  }
+
+  /** Pour chaque base, le bâtiment à portée de ses boules de feu, recalculé une fois par seconde. */
+  private readonly fireTargets = new Map<number, { x: number; y: number } | null>();
+
+  /**
+   * Les boules de feu des bases. Une base debout dont Adam est à portée —
+   * sinon le bâtiment le plus proche à portée — décompte son délai : une
+   * lueur s'allume `FIREBALL.tellTicks` avant le tir, puis la boule part vers
+   * où était la cible, sans anticipation. Personne à portée : le délai se
+   * remplit, elle ne tire pas. Sa portée ne dépasse pas sa zone.
+   */
+  private stepBaseFire(): void {
+    const { player } = this;
+    const scan = this.tickCount % 20 === 0;
+
+    for (const base of this.enemyBases) {
+      if (!isStanding(base)) continue;
+
+      const { fire } = enemyBaseLevel(base.level);
+      const reach = fire.range * TILE_SIZE;
+      const center = baseCenter(base);
+
+      const inRange = distanceSq(player.x, player.y, center.x, center.y) <= reach * reach;
+
+      if (!inRange && scan) this.fireTargets.set(base.id, this.buildingInRange(center, reach));
+
+      const target = inRange ? player : (this.fireTargets.get(base.id) ?? null);
+
+      if (!target) {
+        base.fire = fire.cooldownTicks;
+        continue;
+      }
+      base.fire = Math.max(0, base.fire - 1);
+
+      const muzzle = { x: center.x, y: center.y - FIREBALL.muzzle };
+
+      if (base.fire === FIREBALL.tellTicks) {
+        this.events.emit('baseFireWarned', { id: base.id, ...muzzle, ticks: FIREBALL.tellTicks });
+      } else if (base.fire === 0) {
+        base.fire = fire.cooldownTicks;
+
+        const ball = fireball(this.nextMobileId++, base.id, muzzle.x, muzzle.y, { x: target.x, y: target.y - SPIT_MOUTH }, fire.range, fire.damage, fire.buildingDamage);
+
+        this.mobiles.set(ball.id, ball);
+        this.events.emit('baseFired', { id: base.id, fireball: ball.id, ...muzzle });
+      }
+    }
+  }
+
+  /** Le centre du bâtiment fini le plus proche de `from` à moins de `reach` pixels, ou `null`. */
+  private buildingInRange(from: { x: number; y: number }, reach: number): { x: number; y: number } | null {
+    let best: { x: number; y: number } | null = null;
+    let bestSq = reach * reach;
+
+    for (const entity of this.entities.values()) {
+      if (entity.kind === 'site') continue;
+
+      const x = (entity.tx + entity.width / 2) * TILE_SIZE;
+      const y = (entity.ty + entity.height / 2) * TILE_SIZE;
+      const sq = distanceSq(from.x, from.y, x, y);
+
+      if (sq < bestSq) {
+        bestSq = sq;
+        best = { x, y };
+      }
+    }
+    return best;
+  }
+
   /** La massue du chef tombe : Adam encore dans le cercle prend le coup. */
   private slamDown(chief: Beast, at: { x: number; y: number }): void {
     const reach = CHIEF.slam.radius * TILE_SIZE;
@@ -5129,7 +5226,7 @@ export class World {
   private ageInhabitants(): void {
     this.player.age += AGES.yearsPerCycle;
     for (const mobile of [...this.mobiles.values()]) {
-      if (mobile.kind === 'arrow' || mobile.kind === 'spit' || mobile.kind === 'pickup' || mobile.kind === 'patient' || mobile.kind === 'caravan') continue;
+      if (mobile.kind === 'arrow' || mobile.kind === 'spit' || mobile.kind === 'fireball' || mobile.kind === 'pickup' || mobile.kind === 'patient' || mobile.kind === 'caravan') continue;
       // Un enfant qui a faim ou soif ne grandit pas : il attend sa prochaine aube le ventre plein.
       const stunted = mobile.kind === 'kid' ? stuntingNeed(mobile.needs) : null;
 

@@ -11,15 +11,21 @@
  * Sous le brouillard de guerre, seules les bases explorées se montrent, et
  * hors de vue telles qu'on les a vues la dernière fois (`World.knownEnemyBases`).
  *
+ * Le danger se lit avant d'y aller : à l'approche (`GUARD_RANGE.showTiles`),
+ * l'anneau corail de la portée de ses boules de feu se dessine au sol, de
+ * plus en plus net, et autant de flammes que son niveau montent sur son
+ * drapeau. Quand elle charge un tir, une lueur gonfle au-dessus du
+ * campement (`FIREBALL.tellTicks`) : c'est le signal d'esquiver.
+ *
  * La zone tenue est un disque vert fluo très pâle au sol, sous les ombres :
  * on voit où l'on ne bâtira pas sans que la carte en soit voilée. Le
  * `Graphics` n'est redessiné que quand une base tombe.
  */
 
 import { Container, Graphics, Sprite } from 'pixi.js';
-import { TILE_SIZE, floorDiv } from '../core/grid.ts';
+import { TILE_SIZE, distanceSq, floorDiv } from '../core/grid.ts';
 import { LIGHT, PALETTE, STROKE, hex } from '../data/artDirection.ts';
-import { ENEMY_BASE, enemyBaseLevel } from '../data/enemyBases.ts';
+import { ENEMY_BASE, FIREBALL, GUARD_RANGE, enemyBaseLevel } from '../data/enemyBases.ts';
 import { SPRITES } from '../data/sprites.ts';
 import { baseCenter, isShielded, isStanding } from '../sim/enemyBases.ts';
 import { terrainAt } from '../sim/terrain.ts';
@@ -32,10 +38,17 @@ const ZONE_COLOR = hex(PALETTE.toxic.base);
 const ZONE_EDGE = hex(PALETTE.toxic.shade);
 const BAR_TRACK = hex(PALETTE.paper.base);
 const HP_FG = hex(PALETTE.coral.base);
+const DANGER_COLOR = hex(PALETTE.coral.base);
+const FLAME_COLOR = hex(PALETTE.orange.base);
+const FLAME_CORE = hex(PALETTE.yellow.base);
 const BAR_WIDTH = 64;
 const BAR_HEIGHT = 8;
 /** Durée du tremblement d'une base frappée. */
 const WOBBLE_MS = 220;
+/** Durée de la lueur de charge : `FIREBALL.tellTicks` à 20 ticks par seconde. */
+const CHARGE_MS = (FIREBALL.tellTicks / 20) * 1000;
+/** Au plus net, l'anneau de portée n'est pas plus opaque que ceci. */
+const DANGER_ALPHA = 0.55;
 
 interface BaseView {
   root: Container;
@@ -47,6 +60,9 @@ interface BaseView {
   raiders: number;
   shadow: Sprite;
   bar: Graphics;
+  /** La lueur d'un tir qui se charge ; `charge` : millisecondes restantes. */
+  glow: Sprite;
+  charge: number;
   /** Morceau affiché et ratio de la barre : rien n'est refait s'ils n'ont pas changé. */
   part: string;
   barKey: string;
@@ -57,6 +73,8 @@ export class EnemyBaseLayer {
   /** La teinte des zones, au sol : à poser sous les ombres. */
   public readonly zones = new Graphics();
 
+  /** Les anneaux de portée des bases proches d’Adam, redessinés à chaque image. */
+  private readonly danger = new Graphics();
   private readonly views = new Map<number, BaseView>();
   private zonesKey = '';
 
@@ -73,6 +91,12 @@ export class EnemyBaseLayer {
     this.sorted = sorted;
     this.shadows = shadows;
 
+    this.zones.addChild(this.danger);
+    world.events.on('baseFireWarned', ({ id }) => {
+      const view = this.views.get(id);
+
+      if (view) view.charge = CHARGE_MS;
+    });
     world.events.on('enemyBaseHit', ({ id }) => {
       const view = this.views.get(id);
 
@@ -85,6 +109,7 @@ export class EnemyBaseLayer {
     const standing = this.world.knownEnemyBases().filter(isStanding);
 
     this.drawZones(standing);
+    this.drawDanger(standing);
 
     const alive = new Set<number>();
 
@@ -100,6 +125,28 @@ export class EnemyBaseLayer {
       view.root.destroy({ children: true });
       view.shadow.destroy();
       this.views.delete(id);
+    }
+  }
+
+  /** L'anneau de portée des boules de feu des bases à moins de `showTiles` d'Adam : net près d'elle, pâle au loin. */
+  private drawDanger(standing: readonly EnemyBase[]): void {
+    const { player } = this.world;
+    const show = GUARD_RANGE.showTiles * TILE_SIZE;
+
+    this.danger.clear();
+    for (const base of standing) {
+      const { x, y } = baseCenter(base);
+      const { fire } = enemyBaseLevel(base.level);
+      const distance = Math.sqrt(distanceSq(player.x, player.y, x, y));
+
+      if (distance > show) continue;
+
+      const near = 1 - Math.max(0, distance - fire.range * TILE_SIZE) / (show - fire.range * TILE_SIZE);
+
+      this.danger
+        .circle(x, y, fire.range * TILE_SIZE)
+        .fill({ color: DANGER_COLOR, alpha: 0.08 * near })
+        .stroke({ width: STROKE.width * 1.5, color: DANGER_COLOR, alpha: DANGER_ALPHA * near });
     }
   }
 
@@ -132,9 +179,13 @@ export class EnemyBaseLayer {
     }
 
     const bar = new Graphics();
+    const glow = new Sprite(this.library.part('fireball', 'glow'));
 
     bar.visible = false;
-    root.addChild(main, sign, shield, bar);
+    glow.anchor.set(0.5);
+    glow.visible = false;
+    glow.position.set((ENEMY_BASE.width * TILE_SIZE) / 2, height - FIREBALL.muzzle - (ENEMY_BASE.height * TILE_SIZE) / 2);
+    root.addChild(main, sign, shield, flames(base.level, height - SPRITES.enemyBase.height), bar, glow);
     root.position.set(base.tx * TILE_SIZE, base.ty * TILE_SIZE);
     root.zIndex = (base.ty + ENEMY_BASE.height) * TILE_SIZE;
 
@@ -153,7 +204,7 @@ export class EnemyBaseLayer {
     this.sorted.addChild(root);
     this.shadows.addChild(shadow);
 
-    const view: BaseView = { root, main, sign, shield, raiders: base.raiders, shadow, bar, part: 'built', barKey: '', wobble: 0 };
+    const view: BaseView = { root, main, sign, shield, raiders: base.raiders, shadow, bar, glow, charge: 0, part: 'built', barKey: '', wobble: 0 };
 
     this.views.set(base.id, view);
     return view;
@@ -191,6 +242,16 @@ export class EnemyBaseLayer {
       }
     }
 
+    // Elle charge un tir : la lueur gonfle et vire au clair, puis s'éteint d'un coup avec la boule qui part.
+    view.charge = Math.max(0, view.charge - deltaMs);
+    view.glow.visible = view.charge > 0;
+    if (view.glow.visible) {
+      const progress = 1 - view.charge / CHARGE_MS;
+
+      view.glow.scale.set(0.6 + progress * 1.4);
+      view.glow.alpha = 0.35 + progress * 0.5;
+    }
+
     // Frappée : elle tremble, puis revient exactement à sa place.
     view.wobble = Math.max(0, view.wobble - deltaMs);
 
@@ -205,8 +266,26 @@ export class EnemyBaseLayer {
       view.shadow.destroy();
     }
     this.views.clear();
-    this.zones.destroy();
+    this.zones.destroy({ children: true });
   }
+}
+
+/**
+ * Autant de flammes que le niveau de la base, en rang au-dessus du drapeau :
+ * on lit le danger d'un coup d'œil. Rondes, deux tons, sans contour.
+ */
+function flames(level: number, top: number): Graphics {
+  const row = new Graphics();
+  const gap = 11;
+  const left = (ENEMY_BASE.width * TILE_SIZE - (level - 1) * gap) / 2;
+
+  for (let i = 0; i < level; i += 1) {
+    const x = left + i * gap;
+
+    row.circle(x, top - 6, 5).fill(FLAME_COLOR).circle(x - 0.5, top - 5, 2.6).fill(FLAME_CORE);
+    row.roundRect(x - 1.6, top - 15, 3.2, 6, 1.6).fill(FLAME_COLOR);
+  }
+  return row;
 }
 
 /** Le morceau du badge pour `raiders` assaillants en réserve : un seul chiffre (`RAIDS.capacityMax`). */

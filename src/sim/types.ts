@@ -283,6 +283,8 @@ export interface EnemyBase {
   chief: number;
   /** Ticks de jour accumulés vers le prochain gardien, s'il en manque. */
   mend: number;
+  /** Ticks avant sa prochaine boule de feu (`FireSpec`) ; elle ne décompte que si une cible est à portée. */
+  fire: number;
 }
 
 export type Facing = 'down' | 'up' | 'left' | 'right';
@@ -450,6 +452,23 @@ export interface Spit extends Moving {
   damage: number;
   /** Le cracheur : c'est lui qui a blessé Adam. */
   from: MobileId;
+}
+
+/**
+ * Une boule de feu de base mutante (`FIREBALL`) : une ligne droite vers où
+ * était la cible au tir, qui s'écrase sur Adam, sur un bâtiment ou au sol.
+ */
+export interface Fireball extends Moving {
+  kind: 'fireball';
+  vx: number;
+  vy: number;
+  ttl: number;
+  /** Points de vie retirés à Adam. */
+  damage: number;
+  /** Points de vie retirés au bâtiment qu'elle frappe. */
+  buildingDamage: number;
+  /** La base qui l'a tirée. */
+  baseId: number;
 }
 
 /**
@@ -796,7 +815,7 @@ export interface Caravan extends Moving {
   met: boolean;
 }
 
-export type Mobile = Mutant | Beast | Arrow | Spit | Kid | Eve | Worker | Lumberjack | Forester | Farmer | Pickup | Patient | Caravan;
+export type Mobile = Mutant | Beast | Arrow | Spit | Fireball | Kid | Eve | Worker | Lumberjack | Forester | Farmer | Pickup | Patient | Caravan;
 
 /**
  * Les compteurs de la partie, que les objectifs lisent. Ils ne font que

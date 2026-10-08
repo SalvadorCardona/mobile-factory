@@ -61,6 +61,7 @@ export function placeEnemyBases(seed: number, hall: { x: number; y: number }, fr
         spitters: level.guards.spitters,
         mend: 0,
         chief: level.chief.hp,
+        fire: level.fire.cooldownTicks,
       });
     }
   });

@@ -73,6 +73,7 @@ import { RAINBOW, WEATHER_FX } from '../art/weather.ts';
 import { WOLF } from '../art/wolf.ts';
 import { GUARDIAN } from '../art/guardian.ts';
 import { CHIEF_SPRITE } from '../art/chief.ts';
+import { FIREBALL_SPRITE } from '../art/fireball.ts';
 import { SLAM_MARK, SPIT_SPRITE, SPITTER_SPRITE } from '../art/spitter.ts';
 import { WORKER } from '../art/worker.ts';
 
@@ -125,6 +126,8 @@ export const SPRITES = {
   spitter: SPITTER_SPRITE,
   /** Le chef d'une base : cône de chantier en couronne, épaulière de bidon, massue de béton. */
   chief: CHIEF_SPRITE,
+  /** La boule de feu d'une base, en vol, sa traînée et la lueur qu'elle charge. */
+  fireball: FIREBALL_SPRITE,
   /** Le crachat du cracheur, en vol, et une goutte de sa traînée. */
   spit: SPIT_SPRITE,
   /** Le cercle corail du coup de zone du chef, et le disque qui s'y remplit. */

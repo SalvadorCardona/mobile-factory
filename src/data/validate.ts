@@ -18,7 +18,7 @@ import { auditSvg } from './artDirection.ts';
 import { BUILDINGS, RUIN, type BuildingProto } from './buildings.ts';
 import { DAWN_REWARD, DAY_CYCLE } from './dayNight.ts';
 import { BASE_XP, KILL_XP, LEVEL_GAINS, MAX_LEVEL, XP_CURVE, XP_SHARE } from './levels.ts';
-import { ENEMY_BASE_LEVELS, GUARD_RANGE, RAIDS, type EnemyBaseLevel } from './enemyBases.ts';
+import { ENEMY_BASE, ENEMY_BASE_LEVELS, FIREBALL, GUARD_RANGE, RAIDS, type EnemyBaseLevel } from './enemyBases.ts';
 import { CHIEF, ENEMIES, LOOT_DROPS, SPITTER, NIGHT_BOSSES, WAVES, WILDLIFE, WILDLIFE_SPAWN, type LootTable, type WaveSpec, type WildlifeProto } from './enemies.ts';
 import { EVE } from './eve.ts';
 import { ICON_SIZE, ITEM_ICONS, PRESTIGE_ICON } from './icons.ts';
@@ -407,7 +407,8 @@ export function validatePrototypes(): string[] {
   });
 
   for (const [index, level] of ENEMY_BASE_LEVELS.entries()) {
-    const { raid, guards, chief }: EnemyBaseLevel = level;
+    const { raid, guards, chief, fire }: EnemyBaseLevel = level;
+    const previous = index > 0 ? ENEMY_BASE_LEVELS[index - 1]! : null;
 
     if (raid.from < 1 || raid.ticksPerRaider <= 0 || raid.capacity < 1 || raid.capacity > RAIDS.capacityMax) {
       errors.push(`ENEMY_BASE_LEVELS[${index}].raid : nuit, cadence ou capacité incohérentes`);
@@ -428,6 +429,20 @@ export function validatePrototypes(): string[] {
       errors.push(`ENEMY_BASE_LEVELS[${index}].chief : un anneau plus lointain doit avoir un chef plus coriace`);
     }
     errors.push(...lootErrors(`ENEMY_BASE_LEVELS[${index}].chief`, chief.loot));
+    // Une base ne tire que dans sa zone, et plus loin que l'arc d'Adam : on ne l'entame pas sans risque.
+    if (fire.range > level.zoneRadius || fire.range < WEAPONS.bow.range + ENEMY_BASE.reach) {
+      errors.push(`ENEMY_BASE_LEVELS[${index}].fire : portée hors de la zone ou en deçà de l'arc d'Adam`);
+    }
+    if (fire.damage <= 0 || fire.buildingDamage <= 0 || fire.cooldownTicks <= FIREBALL.tellTicks) {
+      errors.push(`ENEMY_BASE_LEVELS[${index}].fire : dégâts ou cadence incohérents (la lueur doit tenir dans le délai)`);
+    }
+    // Plus loin, plus dangereux.
+    if (previous && (level.hp <= previous.hp || fire.damage < previous.fire.damage || fire.cooldownTicks > previous.fire.cooldownTicks)) {
+      errors.push(`ENEMY_BASE_LEVELS[${index}] : un anneau plus lointain doit avoir plus de points de vie et tirer au moins aussi fort et vite`);
+    }
+  }
+  if (FIREBALL.speed <= 0 || FIREBALL.tellTicks <= 0) {
+    errors.push('FIREBALL : vitesse ou lueur incohérentes');
   }
   if (RAIDS.paceGrowth < 0 || RAIDS.capacityEvery <= 0 || RAIDS.capacityMax > 9 || RAIDS.exitStagger <= 0) {
     errors.push('RAIDS : croissance, capacité (un chiffre au badge) ou sortie incohérentes');

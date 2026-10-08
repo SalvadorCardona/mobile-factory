@@ -185,6 +185,8 @@ export const panel: Messages['panel'] = {
     raiders: (count: number, capacity: number): string => `Raiders in reserve: ${count} of ${capacity}`,
     guards: (count: number, max: number): string => `Guards: ${count} of ${max}`,
     spitters: (count: number, max: number): string => `Spitters: ${count} of ${max}`,
+    fire: (range: number, damage: number): string => `Fireballs: ${damage} hit points at ${range} tiles`,
+    fireWarning: 'It fires fireballs at anyone entering its zone: a glow warns of each one, keep moving to dodge.',
     chief: (hp: number, max: number): string => `Chief: ${hp} of ${max} hit points`,
     shielded: 'Shielded by its chief: no arrow harms it while he lives. Bring him down first — he never comes back.',
     chiefReward: (prestige: number): string => `Its chief, defeated, gives ${prestige} Prestige and rare loot.`,

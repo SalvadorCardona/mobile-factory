@@ -10,7 +10,7 @@ import { spit, stepSpit } from './combat.ts';
 import { baseCenter, breed, isShielded, isStanding } from './enemyBases.ts';
 import { PLAYER_SPEED_TILES } from './player.ts';
 import { deserialize, serialize } from './save.ts';
-import type { Beast, EnemyBase, EntityId, Spit } from './types.ts';
+import type { Beast, EnemyBase, EntityId, Fireball, Spit } from './types.ts';
 import { stepBeast } from './wildlife.ts';
 import { World } from './world.ts';
 
@@ -58,6 +58,10 @@ function guards(world: World, base?: EnemyBase, proto?: WildlifeId): Beast[] {
 
 function spits(world: World): Spit[] {
   return [...world.mobiles.values()].filter((mobile): mobile is Spit => mobile.kind === 'spit');
+}
+
+function fireballs(world: World): Fireball[] {
+  return [...world.mobiles.values()].filter((mobile): mobile is Fireball => mobile.kind === 'fireball');
 }
 
 /** Adam en (dx, dy) tuiles du centre de la base, le monde avance d'une seconde : les gardiens sortent. */
@@ -230,7 +234,13 @@ describe('crachats', () => {
 
     const [spitter] = guards(world, base, 'spitter');
 
-    world.events.on('playerHurt', ({ by }) => hits.push(by));
+    // Les boules de feu de la base blessent aussi Adam, mais au nom de la base : on ne compte que les crachats.
+    const balls = new Set<number>();
+
+    world.events.on('baseFired', ({ fireball }) => balls.add(fireball));
+    world.events.on('playerHurt', ({ by }) => {
+      if (!balls.has(by)) hits.push(by);
+    });
     world.player.hp = 100;
     // Adam immobile, l'arc au repos : il prend.
     for (let i = 0; i < 20 * 8; i += 1) {
@@ -362,7 +372,7 @@ describe('chef de base', () => {
   });
 
   it('ne part jamais en vague, et ne revient pas une fois abattu', () => {
-    const base: EnemyBase = { id: 1, tx: 0, ty: 0, level: 1, hp: 60, raiders: 0, brood: 0, guards: 2, spitters: 1, mend: 0, chief: 0 };
+    const base: EnemyBase = { id: 1, tx: 0, ty: 0, level: 1, hp: 60, raiders: 0, brood: 0, guards: 2, spitters: 1, mend: 0, chief: 0, fire: 70 };
 
     for (let i = 0; i < 20 * 3600; i += 1) breed(base, 4);
     expect(base.chief).toBe(0);
@@ -560,11 +570,11 @@ function kite(world: World, base: EnemyBase, center: { x: number; y: number }): 
     if (foe.slam && Math.hypot(player.x - foe.slam.x, player.y - foe.slam.y) < (CHIEF.slam.radius + 0.6) * TILE_SIZE) away(foe.slam.x, foe.slam.y, 3);
     if (foe.proto !== 'spitter' && d < CHIEF.slam.range + 0.8) away(foe.x, foe.y, 1.5);
   }
-  for (const glob of spits(world)) {
+  for (const glob of [...spits(world), ...fireballs(world)]) {
     const d = Math.hypot(player.x - glob.x, player.y - glob.y);
 
-    // De côté, perpendiculaire à sa course.
-    if (d < 3 * TILE_SIZE) {
+    // De côté, perpendiculaire à sa course ; une boule de feu va plus vite, on la quitte plus tôt.
+    if (d < (glob.kind === 'fireball' ? 5 : 3) * TILE_SIZE) {
       const side = (player.x - glob.x) * glob.vy - (player.y - glob.y) * glob.vx >= 0 ? 1 : -1;
       const speed = Math.hypot(glob.vx, glob.vy) || 1;
 

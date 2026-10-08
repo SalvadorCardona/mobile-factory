@@ -726,6 +726,8 @@ function wireAudio(world: World, audio: AudioEngine, settings: SettingsPanel): v
   world.events.on('enemyBaseShielded', () => audio.play('deny'));
   world.events.on('spitShot', () => audio.play('gloop'));
   world.events.on('chiefSlamWarned', () => audio.play('brute'));
+  world.events.on('baseFireWarned', () => audio.play('brute'));
+  world.events.on('baseFired', () => audio.play('gloop'));
   world.events.on('chiefSlammed', () => audio.play('thud'));
   world.events.on('enemyChiefDefeated', () => audio.play('objective'));
   world.events.on('levelUp', () => audio.play('objective'));
@@ -987,6 +989,7 @@ function wireParticles(world: World, renderer: GameRenderer): void {
     particles.burst(x, y - 16, PARTICLES.confetti, 16, 0.16);
     particles.burst(x, y - 16, PARTICLES.star, 8, 0.12);
   });
+  world.events.on('fireballBurst', ({ x, y, hit }) => particles.burst(x, y, PARTICLES.ember, hit ? 10 : 5, 0.1));
   world.events.on('enemyChiefDefeated', ({ x, y }) => {
     particles.burst(x, y - 16, PARTICLES.mutant, 14, 0.14);
     particles.burst(x, y - 16, PARTICLES.confetti, 12, 0.16);

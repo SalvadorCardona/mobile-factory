@@ -10,7 +10,7 @@ import type { PuppetId } from './puppet.ts';
 
 /** Le pantin de chaque marcheur : sprite, ombre, écart des pieds, allure. */
 export function puppetOf(
-  mobile: Exclude<Mobile, { kind: 'arrow' | 'spit' | 'pickup' | 'caravan' }>,
+  mobile: Exclude<Mobile, { kind: 'arrow' | 'spit' | 'fireball' | 'pickup' | 'caravan' }>,
 ): { id: PuppetId; shadowWidth: number; stride: number; gait?: 'scuttle' | 'limp' | 'hop'; woman?: boolean } {
   switch (mobile.kind) {
     case 'mutant':
