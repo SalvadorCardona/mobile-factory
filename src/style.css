@@ -272,7 +272,7 @@ button:disabled,
   --hud-margin: 8px;
   --hud-gap: 8px;
   --hud-side: 520px;
-  --hud-h: 34px;
+  --hud-h: var(--btn);
   --hud-pad: 3px;
   --cell-h: calc(var(--hud-h) - 2 * var(--hud-pad));
   --cell-r: 12px;
@@ -873,6 +873,9 @@ button:disabled,
 .hud-zoom {
   grid-area: controls;
   justify-self: end;
+  align-self: start;
+  box-sizing: border-box;
+  height: var(--btn);
   display: flex;
   align-items: center;
   gap: var(--btn-gap);
@@ -1647,7 +1650,6 @@ button:disabled,
 
 @media (min-width: 360px) {
   .hud-top {
-    --hud-h: 36px;
     --cell-font: 12px;
     --cell-icon: 14px;
   }
@@ -1655,7 +1657,6 @@ button:disabled,
 
 @media (min-width: 420px) {
   .hud-top {
-    --hud-h: 38px;
     --hud-pad: 3px;
     --cell-r: 13px;
     --cell-gap: 3px;
@@ -1680,7 +1681,6 @@ button:disabled,
 /* Une tablette, un bureau, un téléphone couché : la grille respire, l'icône passe à côté du chiffre. */
 @media (min-width: 600px) {
   .hud-top {
-    --hud-h: 42px;
     --hud-pad: 4px;
     --cell-r: 14px;
     --cell-gap: 4px;
@@ -1702,10 +1702,29 @@ button:disabled,
 
 }
 
-/* Un téléphone couché : deux rangées, donc des blocs moins hauts — la carte garde sa place. */
+/*
+ * Dès 600 px, la barre et la rangée des contrôles tiennent côte à côte : même
+ * ligne, même bord haut, même hauteur (`--btn`), la barre prenant ce qui reste
+ * à gauche des contrôles. En dessous, la barre est seule, pleine largeur, et
+ * les contrôles passent dessous, alignés à droite.
+ */
+@media (min-width: 600px) {
+  .hud-top {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'main controls'
+      'left right';
+  }
+
+  .hud-main {
+    justify-self: stretch;
+    max-width: none;
+  }
+}
+
+/* Un téléphone couché : la grille se serre, la carte garde sa place. */
 @media (min-width: 600px) and (max-height: 499px) {
   .hud-top {
-    --hud-h: 38px;
     --hud-pad: 3px;
   }
 }
@@ -1726,10 +1745,8 @@ button:disabled,
  */
 @media (min-width: 1366px) {
   .hud-top {
-    grid-template-columns: minmax(var(--hud-side), 1fr) minmax(0, 420px) auto;
-    grid-template-areas:
-      'left main right'
-      '. . controls';
+    grid-template-columns: minmax(var(--hud-side), 1fr) minmax(0, 420px) auto auto;
+    grid-template-areas: 'left main right controls';
   }
 
   .hud-main {
