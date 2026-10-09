@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decorAt, findSpawn, oreAt, resourceAt, terrainAt } from './terrain.ts';
+import { RIVER, decorAt, findSpawn, inRiver, oreAt, resourceAt, terrainAt, touchesWater } from './terrain.ts';
 
 describe('terrain', () => {
   /*
@@ -208,5 +208,42 @@ describe('foyer', () => {
         expect(oreAt(42, tx, ty)).toEqual(oreAt(42, tx, ty));
       }
     }
+  });
+});
+
+describe('rivières', () => {
+  it('serpentent sur la carte, sans jamais toucher au départ : une ancienne sauvegarde garde son terrain', () => {
+    let seedsWithRiver = 0;
+
+    for (let seed = 1; seed <= 10; seed += 1) {
+      let river = 0;
+
+      for (let ty = -100; ty <= 100; ty += 1) {
+        for (let tx = -100; tx <= 100; tx += 1) {
+          if (!inRiver(seed, tx, ty)) continue;
+          river += 1;
+          expect(Math.hypot(tx, ty)).toBeGreaterThan(RIVER.clearRadius);
+          // La roche garde la place : la rivière ne la taille pas.
+          expect(['water', 'rock']).toContain(terrainAt(seed, tx, ty));
+        }
+      }
+      if (river > 100) seedsWithRiver += 1;
+    }
+    expect(seedsWithRiver).toBeGreaterThanOrEqual(7);
+  });
+
+  it('se lit au bord : une case touche l’eau de côté, pas en diagonale', () => {
+    const seed = 100;
+    let shore: [number, number] | null = null;
+
+    // Un point d'eau et la terre qui le borde, à l'ouest.
+    for (let ty = -60; ty < 60 && !shore; ty += 1) {
+      for (let tx = -60; tx < 60 && !shore; tx += 1) {
+        if (terrainAt(seed, tx, ty) === 'water' && terrainAt(seed, tx - 1, ty) !== 'water') shore = [tx - 1, ty];
+      }
+    }
+    expect(shore).not.toBeNull();
+    expect(touchesWater(seed, shore![0], shore![1], 1, 1)).toBe(true);
+    expect(touchesWater(seed, 0, 0, 1, 1)).toBe(false);
   });
 });

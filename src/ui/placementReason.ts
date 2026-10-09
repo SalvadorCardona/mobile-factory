@@ -28,7 +28,7 @@ export interface PlacementReason {
   remedy: string | null;
 }
 
-type SimpleRejection = Exclude<PlacementRejection, 'resource' | 'footing' | 'road' | 'nearHall' | 'enemyZone' | 'polluted' | 'radioactive'>;
+type SimpleRejection = Exclude<PlacementRejection, 'resource' | 'footing' | 'road' | 'nearHall' | 'shore' | 'enemyZone' | 'polluted' | 'radioactive'>;
 
 /** Une entrée du dictionnaire (remède '' = aucun) en motif affichable. */
 function reason(entry: { text: string; remedy: string }): PlacementReason {
@@ -47,6 +47,8 @@ export function placementReason(block: PlacementBlock, world: World): PlacementR
   if (block.reason === 'footing') return { text: footingText(block.ore ?? null), remedy: placement.footing.remedy };
   // L'antenne se dresse loin : le cercle de la mairie montre jusqu'où.
   if (block.reason === 'nearHall') return reason(placement.nearHall);
+  // Le puits puise dans la rivière : il faut le coller à l'eau.
+  if (block.reason === 'shore') return reason(placement.shore);
   // Une route ne se recouvre pas : le marteau la retire, et rend sa pierre.
   if (block.reason === 'road') return reason(placement.road);
   // La terre polluée attend une station de dépollution ; la radioactive, rien pour l'instant.

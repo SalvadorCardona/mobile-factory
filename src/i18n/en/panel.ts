@@ -350,6 +350,7 @@ export const panel: Messages['panel'] = {
     polluted: { text: 'Polluted land', remedy: 'A cleanup station next to it will make it clean' },
     radioactive: { text: 'Radioactive land', remedy: 'Unbuildable, and nothing cleans it for now' },
     road: { text: 'A road runs here', remedy: 'Remove it first: Build › Road › Remove' },
+    shore: { text: 'The well goes on a riverbank', remedy: 'Set it right against the water: it draws from it' },
     nearHall: { text: 'Too close to the town hall', remedy: 'Move away, outside the circle around it' },
     treesAndRocks: { text: 'Trees and rocks in the way', remedy: 'Adam can harvest them' },
     rocks: { text: 'Rocks in the way', remedy: 'Adam can break them' },

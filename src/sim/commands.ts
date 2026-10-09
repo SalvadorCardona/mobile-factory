@@ -343,6 +343,8 @@ export type PlacementRejection =
    * de ses gisements, l'autre sur l'herbe (`sim/footing.ts`).
    */
   | 'footing'
+  /** Le puits puise au bord de l'eau : aucune case de l'emprise ne touche une rivière. */
+  | 'shore'
   /** Trop près de la mairie : l'antenne se dresse à `hallDistance` tuiles au moins. */
   | 'nearHall'
   /**
