@@ -180,8 +180,11 @@ export class BuildingPanel {
   private lastText = '';
   /** Le compte à rebours de la production en cours (barre et « m:ss »), caché quand rien ne tourne. */
   private readonly production: HTMLElement;
+  private readonly productionIcon: HTMLElement;
   private readonly productionFill: HTMLElement;
   private readonly productionValue: HTMLElement;
+  /** Ce que la barre compte, dit par un tap sur elle (vide : rien à dire). */
+  private productionLabel = '';
   /** `null` : rien d'affiché encore — une liste vide est une clé comme une autre. */
   private lastStats: string | null = null;
   private lastItems = '';
@@ -260,13 +263,21 @@ export class BuildingPanel {
 
     const productionBar = document.createElement('div');
 
+    // Le bébé devant la barre dit ce qu'elle compte : la nurserie fait naître.
+    this.productionIcon = document.createElement('span');
+    this.productionIcon.className = 'building-panel-meter-icon';
+    this.productionIcon.append(uiIcon('child', 22));
+    this.productionIcon.hidden = true;
     productionBar.className = 'building-panel-bar';
     productionBar.dataset['kind'] = 'research';
     this.productionFill = document.createElement('div');
     productionBar.append(this.productionFill);
     this.productionValue = document.createElement('span');
     this.productionValue.className = 'building-panel-meter-value';
-    this.production.append(productionBar, this.productionValue);
+    this.production.append(this.productionIcon, productionBar, this.productionValue);
+    this.production.addEventListener('click', () => {
+      if (this.productionLabel) this.showTip(this.production, this.productionLabel);
+    });
 
     this.stats = document.createElement('div');
     this.stats.className = 'building-panel-stats';
@@ -784,7 +795,6 @@ export class BuildingPanel {
           break;
 
         case 'nursery': {
-          const remaining = Math.max(0, entity.nextBirthTick - this.world.tickCount);
           const kids = this.world.nurseryKids(entity).length;
           const adult = this.world.nextAdultTicks(entity);
 
@@ -796,7 +806,7 @@ export class BuildingPanel {
                 ? text.nursery.full
                 : entity.hungry
                   ? text.nursery.hungry(starvedLine(this.world, entity))
-                  : text.nursery.next(timerText(remaining)),
+                  : '',
           );
           lines.push(adult === null ? text.nursery.noKids : text.nursery.nextAdult(clock(adult)));
           stats.push(
@@ -1167,13 +1177,17 @@ export class BuildingPanel {
 
   /** La barre et le « m:ss » de la production en cours, s'il y en a une ; chaque frame, à peu de frais. */
   private setProduction(entity: Entity): void {
-    const timer = this.world.productionTimer(entity);
+    // Le labo a sa barre dans le panneau Recherche : une seule par fiche.
+    const timer = entity.kind === 'lab' ? null : this.world.productionTimer(entity);
 
     this.production.hidden = timer === null;
     if (!timer) return;
 
     const left = timerText(timer.left);
+    const nursery = entity.kind === 'nursery';
 
+    this.productionIcon.hidden = !nursery;
+    this.productionLabel = nursery ? t().panel.nursery.nextChild : '';
     this.productionFill.style.width = `${Math.round((1 - timer.left / timer.total) * 100)}%`;
     if (this.productionValue.textContent !== left) {
       this.productionValue.textContent = left;
@@ -1226,8 +1240,8 @@ export class BuildingPanel {
   }
 
   /** Un tap sur une puce : son libellé dans une bulle au-dessus d'elle, le temps de le lire. */
-  private showTip(chip: HTMLElement): void {
-    this.tip.textContent = chip.getAttribute('aria-label') ?? '';
+  private showTip(chip: HTMLElement, label = chip.getAttribute('aria-label') ?? ''): void {
+    this.tip.textContent = label;
     this.tip.hidden = false;
     // La bulle reste dans la fenêtre : centrée sur la puce, bornée aux bords.
     const width = this.tip.offsetWidth;

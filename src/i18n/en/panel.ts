@@ -80,7 +80,7 @@ export const panel: Messages['panel'] = {
     hungry: (why: string): string => `Waiting for food. ${why}`,
     stock: (item: string, count: number, target: number, coming: number): string =>
       `${item} in store: ${count} of ${target} wanted${coming > 0 ? ` — ${coming} on the way` : ''}`,
-    next: (time: string): string => `Next child in ${time}`,
+    nextChild: 'Next child',
     full: 'Full: the next child waits for an older one to go to work.',
     nextAdult: (time: string): string => `Next worker in ${time}`,
     noKids: 'No children here yet.',
