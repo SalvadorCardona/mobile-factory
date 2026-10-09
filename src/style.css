@@ -171,6 +171,25 @@ button {
   padding: calc(var(--safe-top) + 8px) calc(var(--safe-right) + 8px)
     calc(var(--safe-bottom) + 8px) calc(var(--safe-left) + 8px);
   font-size: 17px;
+
+  /*
+   * La taille unique des boutons du HUD, à un seul endroit : les six contrôles
+   * du haut (disques) et les trois boutons du joueur du bas (carrés arrondis),
+   * leurs pictogrammes, l'écart qui les sépare. 48 px, une cible tactile sûre
+   * au pouce ; sous 400 px de large la rangée du haut ne tiendrait pas, elle
+   * descend à 44 px, le minimum tactile.
+   */
+  --btn: 48px;
+  --btn-icon: 28px;
+  --btn-gap: 10px;
+}
+
+@media (max-width: 399px) {
+  .hud {
+    --btn: 44px;
+    --btn-icon: 26px;
+    --btn-gap: 6px;
+  }
 }
 
 /* Tant que l'écran titre est là, le HUD de jeu reste caché. */
@@ -245,7 +264,7 @@ button {
   grid-template-areas:
     'main main'
     'left right'
-    'actions actions';
+    'controls controls';
   align-items: start;
   gap: var(--hud-gap);
   pointer-events: none;
@@ -805,8 +824,8 @@ button {
 .hud-button {
   display: grid;
   place-items: center;
-  width: 48px;
-  height: 48px;
+  width: var(--btn);
+  height: var(--btn);
   border: none;
   border-radius: 50%;
   background: var(--paper);
@@ -819,49 +838,49 @@ button {
 }
 
 /*
- * La colonne du bord droit, à mi-hauteur : Pause et Réglages, la carte du
- * monde, puis les trois disques du zoom — loin du sac et du joystick (bas
- * gauche) et du bouton « Bâtir » (bas droite).
+ * La rangée des contrôles, en haut à droite, dans la grille de `.hud-top`
+ * (sous ce qui la précède, jamais dessus) : Pause et Réglages, la carte du
+ * monde, puis les trois disques du zoom, dans cet ordre. Les petits écarts
+ * font les groupes.
  */
 .hud-zoom {
-  position: absolute;
-  top: 50%;
-  right: calc(var(--safe-right) + 10px);
-  transform: translateY(-50%);
+  grid-area: controls;
+  justify-self: end;
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  gap: var(--btn-gap);
+  pointer-events: none;
 }
 
-.hud-zoom-button {
-  width: 40px;
-  height: 40px;
+/* Les pictogrammes de tous les boutons du HUD ont la même taille. */
+.hud-button .icon,
+.hud .hud-bag .icon,
+.hud-actions .build-toggle .icon {
+  width: var(--btn-icon);
+  height: var(--btn-icon);
 }
 
 /* Réglages ferme le duo Pause / Réglages : un écart avant la carte du monde. */
 .hud-settings {
-  margin-bottom: 6px;
+  margin-right: 6px;
 }
 
-.hud-zoom-button[disabled] {
+.hud-button[disabled] {
   opacity: 0.45;
   transform: none;
   box-shadow: var(--face);
 }
 
 /*
- * Le bouton de la carte du monde, en tête de la colonne du zoom : plus grand
- * que ses voisins, il se voit et se prend au pouce. Carte ouverte, il passe
- * en jaune — la carte est là — et la colonne reste par-dessus elle.
+ * Le bouton de la carte du monde, au milieu de la rangée. Carte ouverte, il
+ * passe en jaune — la carte est là — et la rangée reste par-dessus elle.
  */
 .hud[data-map='true'] .hud-zoom {
   z-index: 10;
 }
 
 .hud-map-button {
-  width: 48px;
-  height: 48px;
-  margin-bottom: 6px;
+  margin-right: 6px;
 }
 
 .hud-map-button.is-active {
@@ -1488,7 +1507,7 @@ button {
  * tirée de `--hud-h`, cf. `.hud-top`), les mêmes rayons, la même face
  * lavande : l'objectif, qui prend toute la ligne — icône et progression, son
  * intitulé court dès 420 px. Le sac est un bouton carré du groupe `.hud-actions`,
- * Pause et Réglages sont en tête de la colonne du zoom, au bord droit.
+ * Pause et Réglages sont dans la rangée des contrôles, en haut à droite.
  * La grille se resserre par paliers (< 360, 360, 420, 600, 900 px) ; un tap
  * atteint toujours 40 px, la zone de tap déborde de la case.
  */
@@ -1683,7 +1702,7 @@ button {
     grid-template-columns: minmax(var(--hud-side), 1fr) minmax(0, 420px) auto;
     grid-template-areas:
       'left main right'
-      '. . actions';
+      '. . controls';
   }
 
   .hud-main {
@@ -2653,33 +2672,36 @@ button {
 
 
 /*
- * Les trois boutons du joueur, en haut à droite, sous la rangée du haut (une
- * rangée de la grille de `.hud-top`, donc toujours sous ce qui la précède) :
- * l'habillage d'Adam, son sac, « Bâtir ». Tous carrés, de la même taille
- * (`--action`, 56 px : sous cette taille, une cible tactile se rate au pouce),
- * mêmes rayons, même face avant. Le libellé de « Bâtir » et la touche des
- * raccourcis ne se lisent plus qu'au lecteur d'écran et à l'infobulle. Sur un
- * écran bas, le groupe se range à gauche de la colonne du zoom.
+ * Les trois boutons du joueur, tout en bas à droite, en rangée : l'habillage
+ * d'Adam, son sac, « Bâtir ». Tous carrés, de la taille unique des boutons du
+ * HUD (`--btn`), mêmes rayons, même face avant. Le libellé de « Bâtir » et la
+ * touche des raccourcis ne se lisent plus qu'au lecteur d'écran et à
+ * l'infobulle. Le tiroir de construction et la barre de pose occupent le bas :
+ * la rangée s'efface devant eux.
  */
 .hud-actions {
-  --action: 56px;
-
-  grid-area: actions;
-  justify-self: end;
+  position: absolute;
+  right: calc(var(--safe-right) + 10px);
+  bottom: calc(var(--safe-bottom) + 10px);
   display: flex;
-  gap: 10px;
+  gap: var(--btn-gap);
   padding-bottom: 5px;
+  pointer-events: none;
+}
+
+.hud:has(.build-menu[data-busy='true']) .hud-actions {
+  visibility: hidden;
 }
 
 .hud .hud-actions > * {
   box-sizing: border-box;
   flex: none;
-  width: var(--action);
-  min-width: var(--action);
-  height: var(--action);
-  min-height: var(--action);
+  width: var(--btn);
+  min-width: var(--btn);
+  height: var(--btn);
+  min-height: var(--btn);
   margin: 0;
-  border-radius: 20px;
+  border-radius: calc(var(--btn) * 0.4);
   pointer-events: auto;
 }
 
@@ -2708,12 +2730,6 @@ button {
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
-}
-
-@media (max-height: 699px) {
-  .hud-actions {
-    margin-right: 68px;
-  }
 }
 
 /* ------------------------------------------------------ menu de construction */
@@ -5370,8 +5386,8 @@ button {
 }
 
 .hud-wardrobe-face {
-  width: 44px;
-  height: 44px;
+  width: var(--btn-icon);
+  height: var(--btn-icon);
   border-radius: 50%;
   pointer-events: none;
 }

@@ -858,6 +858,8 @@ export class BuildMenu {
     const placing = this.placement.mode === 'placing';
 
     this.toggleButton.hidden = !idle || this.opened || !this.unlocked();
+    // Tiroir ou barre de pose ouverts : ils occupent le bas de l'écran, où les boutons du joueur s'effacent.
+    this.root.dataset['busy'] = String(!idle || this.opened);
     this.armedBar.hidden = idle;
     this.armedBar.dataset['placing'] = String(placing);
 
@@ -906,7 +908,7 @@ export class BuildMenu {
     return [this.drawer, this.armedBar];
   }
 
-  /** Le bouton « Bâtir » : `main.ts` le range avec les autres boutons du joueur, en haut à droite. */
+  /** Le bouton « Bâtir » : `main.ts` le range avec les autres boutons du joueur, en bas à droite. */
   public get buildButton(): HTMLButtonElement {
     return this.toggleButton;
   }

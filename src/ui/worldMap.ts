@@ -2,7 +2,7 @@
  * La carte du monde : tout le monde découvert d'un coup d'œil, à parcourir
  * du doigt, et un tap pour y envoyer la caméra du jeu.
  *
- * Un bouton du HUD (en tête de la colonne du zoom) et la touche M l'ouvrent
+ * Un bouton du HUD (dans la rangée des contrôles) et la touche M l'ouvrent
  * et la ferment ; Échap et sa croix la ferment aussi (`main.ts`). La colonne
  * reste par-dessus la carte : ouverte, ses boutons zooment la carte, et
  * celui du milieu la ramène sur Adam. Elle couvre
@@ -150,7 +150,7 @@ export class WorldMap {
     this.button = document.createElement('button');
     this.button.type = 'button';
     this.button.className = 'hud-button hud-map-button';
-    this.button.append(uiIcon('map', 26));
+    this.button.append(uiIcon('map'));
     this.button.addEventListener('click', () => this.toggle());
 
     this.root = document.createElement('div');
