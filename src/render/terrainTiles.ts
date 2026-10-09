@@ -17,6 +17,7 @@
 import type { Texture } from 'pixi.js';
 import { GROUND, type Ground } from '../data/artDirection.ts';
 import {
+  CONTAMINATION_TILES,
   GROUND_TILES,
   MEADOW_PATCHES,
   MEADOW_SPRINKLES,
@@ -34,6 +35,7 @@ import {
 } from '../art/terrain.ts';
 import { ROAD_TILES } from '../art/road.ts';
 import { hash3 } from '../core/rng.ts';
+import type { ContaminationKind } from '../data/contamination.ts';
 import { terrainAt, type TerrainKind } from '../sim/terrain.ts';
 import type { SpriteLibrary, SvgSource } from './spriteLibrary.ts';
 
@@ -87,6 +89,9 @@ export function terrainSources(): SvgSource[] {
   for (const color of CORNER_COLORS) {
     for (const corner of CORNERS) add(`terrain.corner.${color}.${corner}`, cornerTile(color, corner));
   }
+  for (const [kind, variants] of Object.entries(CONTAMINATION_TILES)) {
+    variants.forEach((svg, variant) => add(`terrain.${kind}.${variant}`, svg));
+  }
   ROAD_TILES.forEach((svg, links) => add(`terrain.road.${links}`, svg));
   for (const [name, svg] of Object.entries(MEADOW_PATCHES)) add(`terrain.patch.${name}`, svg, PATCH_SIZE.width, PATCH_SIZE.height);
   for (const [name, svg] of Object.entries(MEADOW_SPRINKLES)) add(`terrain.${name}`, svg, 14, 12);
@@ -119,6 +124,11 @@ export class TerrainTiles {
   /** Coin arrondi, peint dans la couleur du sol voisin. */
   public corner(neighbour: DryGround, corner: Corner): Texture {
     return this.library.texture(`terrain.corner.${GROUND[neighbour].base}.${corner}`);
+  }
+
+  /** La tuile d'une terre polluée ou radioactive, posée sur le sol ; `roll` choisit sa variante. */
+  public contamination(kind: ContaminationKind, roll: number): Texture {
+    return this.library.texture(`terrain.${kind}.${variantOf(roll)}`);
   }
 
   /** La dalle d'une route dont les voisines pavées sont `links` (bits `ROAD_LINK`). */

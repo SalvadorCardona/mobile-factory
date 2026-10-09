@@ -347,6 +347,8 @@ export const panel: Messages['panel'] = {
       remedy: 'Straddle the edge of the vein: break its rocks, keep the grass',
     },
     veins: { ironOre: 'iron', coal: 'coal', stone: 'stone' },
+    polluted: { text: 'Polluted land', remedy: 'A cleanup station next to it will make it clean' },
+    radioactive: { text: 'Radioactive land', remedy: 'Unbuildable, and nothing cleans it for now' },
     road: { text: 'A road runs here', remedy: 'Remove it first: Build › Road › Remove' },
     nearHall: { text: 'Too close to the town hall', remedy: 'Move away, outside the circle around it' },
     treesAndRocks: { text: 'Trees and rocks in the way', remedy: 'Adam can harvest them' },

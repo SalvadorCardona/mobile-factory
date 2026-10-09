@@ -182,6 +182,15 @@ export const content: Content = {
       effect: 'Treats knocked-out mutants: 3 beds.',
       upgrades: [],
     },
+    purifier: {
+      label: 'Cleanup station',
+      sign: 'Cleanup',
+      siteDescription: 'A tank to set down, pipes waiting for their pump. It needs a clean tile at the edge of the polluted land.',
+      description:
+        'A violet tank, a beating pump and a pipe sunk into the grey earth: around it, polluted land drains tile by tile and becomes good soil to build on again. Radioactive land does not budge.',
+      effect: 'Cleans the polluted land around it, one tile at a time.',
+      upgrades: [],
+    },
     barracks: {
       label: 'Barracks',
       sign: 'Barracks',

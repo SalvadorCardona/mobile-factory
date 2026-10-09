@@ -17,11 +17,17 @@
  * Là où un sol s'avance dans un autre, son coin s'arrondit (`corner`) : les
  * plateaux ont les angles doux des autres formes du jeu.
  *
+ * - la terre **polluée** (violet sombre, bulles claires) et la terre
+ *   **radioactive** (orange sombre, trèfle d'avertissement jaune) se posent par
+ *   dessus le sol (`CONTAMINATION_TILES`) : deux teintes, deux motifs, qu'on
+ *   ne confond ni entre elles ni avec la roche pâle, même à petite taille.
+ *
  * Chaque tuile est un SVG de 32 × 32, bakée avec les autres dans la texture
  * du chunk (`render/chunkLayer.ts`).
  */
 
 import { GROUND, PALETTE, circle, ellipse, group, pill, rect, shape, svg, type Ground } from '../data/artDirection.ts';
+import type { ContaminationKind } from '../data/contamination.ts';
 
 const T = 32;
 
@@ -62,6 +68,41 @@ export const GROUND_TILES: Record<Ground, readonly string[]> = {
     // Pas d'aplat d'un autre ton : des carrés de teinte voisine feraient un damier.
     tile(flat('rock'), pill(16, 18, 10, 3, GROUND.rock.alt), circle(9, 10, 2, GROUND.rock.alt)),
     tile(flat('rock'), rect(6, 8, 14, 10, GROUND.rock.alt, 4), pill(8, 9.5, 6, 2, GROUND.rock.light)),
+  ],
+};
+
+/** Un secteur de 60° du trèfle d'avertissement, de rayon `r`, centré en (cx, cy), à partir de `start` degrés. */
+function trefoilBlade(cx: number, cy: number, r: number, start: number): string {
+  const point = (angle: number): string => {
+    const rad = (angle * Math.PI) / 180;
+
+    return `${(cx + r * Math.cos(rad)).toFixed(2)} ${(cy + r * Math.sin(rad)).toFixed(2)}`;
+  };
+
+  return shape(`M${cx} ${cy}L${point(start)}A${r} ${r} 0 0 1 ${point(start + 60)}Z`, PALETTE.yellow.base);
+}
+
+/** Le trèfle de la radioactivité : trois pales jaunes autour d'un moyeu indigo. */
+function trefoil(cx: number, cy: number, r: number): string {
+  return trefoilBlade(cx, cy, r, 30) + trefoilBlade(cx, cy, r, 150) + trefoilBlade(cx, cy, r, 270) + circle(cx, cy, r * 0.22, PALETTE.ink.base);
+}
+
+/**
+ * Les tuiles des terres contaminées, trois variantes chacune, tirées par
+ * tuile (`variantOf`) : la sobre le plus souvent, les deux autres pour la vie.
+ * La polluée est une boue violette où crèvent des bulles ; la radioactive une
+ * terre orange sombre, que marque de loin le trèfle jaune.
+ */
+export const CONTAMINATION_TILES: Record<ContaminationKind, readonly string[]> = {
+  polluted: [
+    tile(rect(0, 0, T, T, PALETTE.violet.shade, 0), circle(9, 10, 2.4, PALETTE.violet.base), circle(22, 21, 1.8, PALETTE.violet.base)),
+    tile(rect(0, 0, T, T, PALETTE.violet.shade, 0), circle(20, 9, 4, PALETTE.violet.base), circle(19, 8, 1.4, PALETTE.violet.light), pill(5, 22, 10, 3, PALETTE.violet.base)),
+    tile(rect(0, 0, T, T, PALETTE.violet.shade, 0), circle(10, 20, 5, PALETTE.violet.base), circle(8.6, 18.6, 1.6, PALETTE.violet.light), circle(24, 8, 2.2, PALETTE.violet.light)),
+  ],
+  radioactive: [
+    tile(rect(0, 0, T, T, PALETTE.orange.shade, 0), circle(8, 9, 2.2, PALETTE.orange.base), circle(23, 22, 2.6, PALETTE.orange.base), pill(14, 14, 8, 2.4, PALETTE.orange.base)),
+    tile(rect(0, 0, T, T, PALETTE.orange.shade, 0), trefoil(16, 16, 11)),
+    tile(rect(0, 0, T, T, PALETTE.orange.shade, 0), trefoil(16, 16, 8), circle(5, 5, 1.8, PALETTE.orange.base), circle(27, 27, 1.8, PALETTE.orange.base)),
   ],
 };
 

@@ -17,6 +17,8 @@ export const hud: Messages['hud'] = {
     occupied: 'Spot already taken',
     road: 'A road runs here — remove it first',
     terrain: 'Can’t build on this ground',
+    polluted: 'Polluted land — a cleanup station will make it clean',
+    radioactive: 'Radioactive land — nothing cleans it, not yet',
     outOfReach: 'Too far — get closer',
     resource: 'Clear the trees and rocks first',
     onPlayer: 'You’re standing on the spot',

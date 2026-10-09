@@ -39,7 +39,7 @@ export interface OreNode {
 }
 
 /** Bruit de valeur lissé : lattice de `cell` tuiles, interpolation bilinéaire adoucie. */
-function smoothNoise(seed: number, tx: number, ty: number, cell: number): number {
+export function smoothNoise(seed: number, tx: number, ty: number, cell: number): number {
   const gx = Math.floor(tx / cell);
   const gy = Math.floor(ty / cell);
   const fx = tx / cell - gx;

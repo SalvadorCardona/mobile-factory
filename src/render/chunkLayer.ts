@@ -29,6 +29,7 @@
 
 import { Container, RenderTexture, Sprite, type Renderer, type Texture } from 'pixi.js';
 import { TILE_SIZE, coordKey } from '../core/grid.ts';
+import type { Land } from '../sim/contamination.ts';
 import type { RoadNetwork } from '../sim/roads.ts';
 import { decorAt } from '../sim/terrain.ts';
 import type { Camera } from './camera.ts';
@@ -72,14 +73,16 @@ export class ChunkLayer {
   private readonly tiles: TerrainTiles;
   private readonly seed: number;
   private readonly roads: RoadNetwork;
+  private readonly land: Land;
   private readonly resolution: number;
 
-  public constructor(renderer: Renderer, library: SpriteLibrary, tiles: TerrainTiles, seed: number, roads: RoadNetwork) {
+  public constructor(renderer: Renderer, library: SpriteLibrary, tiles: TerrainTiles, seed: number, roads: RoadNetwork, land: Land) {
     this.renderer = renderer;
     this.library = library;
     this.tiles = tiles;
     this.seed = seed;
     this.roads = roads;
+    this.land = land;
     this.resolution = Math.min(MAX_BLOCK_RESOLUTION, library.stats.resolution);
   }
 
@@ -130,9 +133,10 @@ export class ChunkLayer {
   /**
    * Dessine le bloc dans sa RenderTexture, puis jette la scène.
    *
-   * Huit passes, dans l'ordre du peintre : le sol (sous l'eau, la terre de
+   * Neuf passes, dans l'ordre du peintre : le sol (sous l'eau, la terre de
    * sa rive : l'eau est peinte par `waterLayer.ts`), les taches de la
-   * prairie, ses brins et fleurettes, les transitions (faces avant,
+   * prairie, ses brins et fleurettes, les terres polluées et radioactives
+   * (`Land`), qui recouvrent le sol, les transitions (faces avant,
    * liserés), les coins arrondis entre sols, les chemins de terre battue, qui passent
    * d'un sol à l'autre comme une rampe, les routes, puis le décor, qu'une dalle recouvre : pas de fleur sur un pavé. Les
    * sprites sont temporaires : seule la texture survit. Celles du tileset,
@@ -147,6 +151,7 @@ export class ChunkLayer {
     const corners = new Container();
     const props = new Container();
     const paving = new Container();
+    const soil = new Container();
     const baseTx = bx * BLOCK_TILES;
     const baseTy = by * BLOCK_TILES;
     const { seed } = this;
@@ -194,6 +199,14 @@ export class ChunkLayer {
           continue;
         }
 
+        // Une terre polluée ou radioactive recouvre le sol : ni décor ni fleurette dessus.
+        const tainted = this.land.at(tx, ty);
+
+        if (tainted) {
+          soil.addChild(tileSprite(this.tiles.contamination(tainted, roll), lx, ly));
+          continue;
+        }
+
         const decor = decorAt(seed, tx, ty);
 
         if (decor) {
@@ -226,7 +239,7 @@ export class ChunkLayer {
 
     this.bakeTrails(terrain, left, top, trails);
 
-    scene.addChild(meadow, sprinkles, edges, corners, trails, paving, props);
+    scene.addChild(meadow, sprinkles, soil, edges, corners, trails, paving, props);
     this.renderer.render({ target, container: scene, clear: true });
     scene.destroy({ children: true });
   }

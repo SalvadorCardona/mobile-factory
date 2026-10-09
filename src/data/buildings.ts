@@ -12,6 +12,7 @@
  * sépare de la mairie, et la mairie elle-même. À zéro, il disparaît.
  */
 
+import { PURIFIER } from './contamination.ts';
 import type { ItemId } from './items.ts';
 import { LORE } from './lore.ts';
 import type { SpriteId } from './sprites.ts';
@@ -28,6 +29,7 @@ export type BuildingKind =
   | 'quarry'
   | 'forge'
   | 'clinic'
+  | 'purifier'
   | 'barracks'
   | 'lab'
   | 'lumberCamp'
@@ -558,6 +560,31 @@ export const BUILDINGS = {
     unique: false,
     plan: false,
     sprite: 'clinic',
+    weapon: null,
+    upgrades: [],
+  },
+  purifier: {
+    label: LORE.buildings.purifier.name,
+    sign: LORE.buildings.purifier.sign,
+    siteDescription: LORE.buildings.purifier.site,
+    description: LORE.buildings.purifier.description,
+    effect: LORE.buildings.purifier.effect,
+    kind: 'purifier',
+    category: 'production',
+    width: 2,
+    height: 2,
+    cost: { wood: 14, stone: 10, ironOre: 6 },
+    storage: 0,
+    logisticRadius: 0,
+    hp: 50,
+    workers: 0,
+    minWorkers: 0,
+    menu: true,
+    unique: false,
+    // Pas dès le départ : la pollution se nettoie une fois la colonie sur pied (`PURIFIER`, `data/contamination.ts`).
+    unlockObjective: PURIFIER.unlockObjective,
+    plan: false,
+    sprite: 'purifier',
     weapon: null,
     upgrades: [],
   },
