@@ -40,12 +40,13 @@ import { GameRenderer } from './render/renderer.ts';
 import { activePerks, harvestSeeds, plant, type Garden } from './sim/garden.ts';
 import { stageScenario } from './sim/testScenario.ts';
 import type { Entity } from './sim/types.ts';
-import { STEP_MS, World } from './sim/world.ts';
+import { STEP_MS, TICKS_PER_SECOND, World } from './sim/world.ts';
 import { LocalGarden } from './storage/localGarden.ts';
 import { LocalRecord } from './storage/localRecord.ts';
 import { LocalSave, type LoadResult } from './storage/localSave.ts';
 import { LocalLocale } from './storage/localLocale.ts';
 import { LocalSigns } from './storage/localSigns.ts';
+import { LocalWaveAlerts } from './storage/localWaveAlerts.ts';
 import { LocalZoom } from './storage/localZoom.ts';
 import { TILE_SIZE } from './core/grid.ts';
 import { detectLocale, onLocale, setLocale, t } from './i18n/locale.ts';
@@ -56,7 +57,7 @@ import { ResourcePanel } from './ui/resourcePanel.ts';
 import { escapeAction } from './ui/escape.ts';
 import { JoystickView } from './ui/joystick.ts';
 import { BuildMenu } from './ui/buildMenu.ts';
-import { Hud } from './ui/hud.ts';
+import { Hud, clock as clockText } from './ui/hud.ts';
 import { PauseScreen, TitleScreen } from './ui/screens.ts';
 import { SettingsPanel } from './ui/settingsPanel.ts';
 import { WardrobePanel } from './ui/wardrobePanel.ts';
@@ -387,6 +388,27 @@ async function main(): Promise<void> {
     settings.setSigns(on);
   };
 
+  // Les alertes de vague : une notification du système, si le joueur l'a voulue et que le navigateur la permet.
+  const alertPrefs = scenario ? new LocalWaveAlerts(null) : LocalWaveAlerts.browser();
+  const notifications = 'Notification' in window ? window.Notification : null;
+  const alertsAllowed = (): boolean => notifications?.permission === 'granted' && alertPrefs.load();
+  const toggleWaveAlerts = (): void => {
+    if (!notifications) return;
+    if (alertsAllowed()) {
+      alertPrefs.save(false);
+      settings.setWaveAlerts(false);
+      return;
+    }
+    // Le navigateur demande, une fois ; refusée, elle reste éteinte.
+    void notifications
+      .requestPermission()
+      .catch(() => 'denied')
+      .then((permission) => {
+        alertPrefs.save(permission === 'granted');
+        settings.setWaveAlerts(alertsAllowed());
+      });
+  };
+
   // Les réglages ouverts arrêtent l'horloge, comme la pause, sans en montrer l'écran.
   const settings = new SettingsPanel({
     setLocale: (locale) => {
@@ -396,6 +418,7 @@ async function main(): Promise<void> {
     toggleSound: () => settings.setSound(!audio.toggleMuted()),
     toggleMusic: () => settings.setMusic(audio.toggleMusic()),
     toggleSigns: () => showSigns(!signsOn),
+    toggleWaveAlerts,
     setSfxVolume: (volume) => audio.setSfxVolume(volume),
     setMusicVolume: (volume) => audio.setMusicVolume(volume),
     onToggle: (open) => {
@@ -406,6 +429,22 @@ async function main(): Promise<void> {
 
   renderer.setSigns(signsOn);
   settings.setSigns(signsOn);
+  settings.setWaveAlerts(alertsAllowed(), notifications !== null);
+
+  // Le jeu ne tourne qu'onglet visible (caché, il se met en pause : pas de vague hors ligne) ;
+  // la notification sert quand la fenêtre est ouverte mais qu'on regarde ailleurs.
+  world.events.on('waveAnnounced', ({ ticks, count, from }) => {
+    if (!notifications || !alertsAllowed() || document.hasFocus()) return;
+    try {
+      new notifications(t().hud.wave.notifyTitle, {
+        body: t().hud.wave.announced(clockText(Math.ceil(ticks / TICKS_PER_SECOND)), count, t().hud.from[from]),
+        icon: `${import.meta.env.BASE_URL}icon.png`,
+        tag: 'mobile-factory-wave',
+      });
+    } catch {
+      // Android n'en crée qu'au travers d'un service worker : l'annonce du HUD suffit.
+    }
+  });
 
   const autosave = wireSave(world, saves, () => started);
   const garden = wireGarden(world, scenario ? new LocalGarden(null) : LocalGarden.browser());

@@ -280,6 +280,25 @@ export const UI_ICONS = {
     line(13.5, 8.5, 17, 8.5, ink.base),
     line(3.5, 3.5, 20.5, 20.5, coral.shade),
   ),
+  /** Une cloche jaune de la colonie, son battant indigo : les alertes de vague. */
+  bellOn: svg(
+    S,
+    S,
+    rect(11, 2.5, 2, 3, ink.base, 1),
+    shadedPill(4.5, 4.5, 15, 15, 3, 'yellow'),
+    rect(3, 15, 18, 4, yellow.shade, 2),
+    circle(12, 20.5, 2, ink.base),
+  ),
+  /** Les alertes coupées : la même cloche, barrée de corail. */
+  bellOff: svg(
+    S,
+    S,
+    rect(11, 2.5, 2, 3, ink.base, 1),
+    shadedPill(4.5, 4.5, 15, 15, 3, 'yellow'),
+    rect(3, 15, 18, 4, yellow.shade, 2),
+    circle(12, 20.5, 2, ink.base),
+    line(3.5, 3.5, 20.5, 20.5, coral.shade),
+  ),
   /** Le marteau blanc du bouton de construction, comme sur la maquette. */
   hammer: svg(
     S,

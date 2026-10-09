@@ -1,7 +1,7 @@
 /**
  * Le menu des réglages, derrière le bouton engrenage du HUD : la langue, les
  * sons, la musique et un volume pour chacun des deux, les pancartes des
- * bâtiments. Rien qui touche à la partie — ce sont des préférences de
+ * bâtiments, les alertes de vague (notification du système). Rien qui touche à la partie — ce sont des préférences de
  * l'appareil, gardées hors de la sauvegarde.
  *
  * Ouvert, il arrête l'horloge (`main.ts` lit `open`) ; il se ferme par sa
@@ -20,6 +20,8 @@ export interface SettingsActions {
   toggleSound(): void;
   toggleMusic(): void;
   toggleSigns(): void;
+  /** Les notifications de vague : à l'allumer, le navigateur demande la permission. */
+  toggleWaveAlerts(): void;
   /** Un curseur de volume a bougé : de 0 à 1, à chaque cran pendant qu'on le glisse. */
   setSfxVolume(volume: number): void;
   setMusicVolume(volume: number): void;
@@ -36,12 +38,14 @@ export class SettingsPanel {
   private readonly soundButton: HTMLButtonElement;
   private readonly musicButton: HTMLButtonElement;
   private readonly signsButton: HTMLButtonElement;
+  private readonly waveAlertsButton: HTMLButtonElement;
   private readonly sfxVolume: VolumeSlider;
   private readonly musicVolume: VolumeSlider;
   private readonly actions: SettingsActions;
   private sound = true;
   private music = true;
   private signs = true;
+  private waveAlerts = false;
 
   public constructor(actions: SettingsActions) {
     this.actions = actions;
@@ -108,6 +112,11 @@ export class SettingsPanel {
     this.signsButton.className = 'button-secondary settings-toggle';
     this.signsButton.addEventListener('click', () => actions.toggleSigns());
 
+    this.waveAlertsButton = document.createElement('button');
+    this.waveAlertsButton.type = 'button';
+    this.waveAlertsButton.className = 'button-secondary settings-toggle';
+    this.waveAlertsButton.addEventListener('click', () => actions.toggleWaveAlerts());
+
 
     this.sfxVolume = new VolumeSlider((volume) => actions.setSfxVolume(volume));
     this.musicVolume = new VolumeSlider((volume) => actions.setMusicVolume(volume));
@@ -121,6 +130,7 @@ export class SettingsPanel {
       this.musicButton,
       this.musicVolume.root,
       this.signsButton,
+      this.waveAlertsButton,
     );
     this.root.append(this.panel);
 
@@ -134,6 +144,7 @@ export class SettingsPanel {
       this.setSound(this.sound);
       this.setMusic(this.music);
       this.setSigns(this.signs);
+      this.setWaveAlerts(this.waveAlerts);
       this.sfxVolume.setName(text.sfxVolume);
       this.musicVolume.setName(text.musicVolume);
     });
@@ -182,6 +193,13 @@ export class SettingsPanel {
   public setSigns(on: boolean): void {
     this.signs = on;
     toggleLabel(this.signsButton, on, uiIcon(on ? 'signOn' : 'signOff', 22), t().settings.signs);
+  }
+
+  /** Allumées seulement si le navigateur les permet ; sans API de notification, le bouton disparaît. */
+  public setWaveAlerts(on: boolean, available = true): void {
+    this.waveAlerts = on;
+    this.waveAlertsButton.hidden = !available;
+    toggleLabel(this.waveAlertsButton, on, uiIcon(on ? 'bellOn' : 'bellOff', 22), t().settings.waveAlerts);
   }
 }
 
