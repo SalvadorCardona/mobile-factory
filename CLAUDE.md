@@ -604,8 +604,10 @@ tient dans `CONTAMINATION_KINDS`, pour qu'on l'enrichisse sans toucher au reste.
 **loups** au cœur des forêts (les gardiens des bases sont de la même famille, sans tanière) (`WILDLIFE`, `src/data/enemies.ts` ;
 `src/sim/wildlife.ts`). Leurs tanières se tirent de la seed par chunk ; une
 tanière se peuple hors de la vue d'Adam et loin du village, sous un
-plafond. Ils ne s'en prennent qu'à Adam (qui a des PV et se réveille à la
-mairie s'il tombe) ; l'arc d'Adam vise l'ennemi le plus proche, bête ou
+plafond. Ils ne s'en prennent qu'à Adam (qui a des PV et, s'il tombe, reste à
+terre `DEATH.respawnSeconds` — `data/death.ts`, écran « Vous êtes mort »,
+`World.respawnTicks`, sauvegardé — le monde tournant, puis se relève à la
+mairie ; à terre, ni pas, ni chantier, ni tir : `DEAD_COMMANDS` seules passent) ; l'arc d'Adam vise l'ennemi le plus proche, bête ou
 mutant, et le marque (`player.target`) ; les tours ne visent que les mutants.
 
 **Météo** — lue dans la seed et le temps de jeu, jamais stockée

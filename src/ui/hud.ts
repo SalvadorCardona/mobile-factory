@@ -252,6 +252,9 @@ export class Hud {
   private announced = '';
   private readonly weather: HTMLElement;
   private readonly defeat: HTMLElement;
+  private readonly death: HTMLElement;
+  private readonly deathCount: HTMLElement;
+  private lastDeathSeconds = -1;
   private readonly defeatStats: HTMLElement;
   private readonly victory: HTMLElement;
   private readonly victoryStats: HTMLElement;
@@ -462,6 +465,16 @@ export class Hud {
     defeatPanel.append(defeatTitle, defeatText, this.defeatStats, this.defeatSeeds, replay, fresh, seedLine(world.seed));
     this.defeat.append(defeatPanel);
 
+    // « Vous êtes mort » : plein écran, sans bouton — le décompte de la sim décide seul.
+    this.death = element('div', 'overlay hud-death');
+    this.death.hidden = !world.dead;
+    this.death.setAttribute('role', 'alert');
+
+    const deathTitle = element('h2', 'death-title');
+
+    this.deathCount = element('p', 'death-count');
+    this.death.append(deathTitle, this.deathCount);
+
     this.victory = element('div', 'overlay hud-victory');
     this.victory.hidden = true;
 
@@ -519,6 +532,7 @@ export class Hud {
       this.stats,
       this.celebration,
       this.victory,
+      this.death,
       this.defeat,
     );
     this.tips = new Tooltips(this.root);
@@ -530,6 +544,8 @@ export class Hud {
 
       setTip(this.hintBulb, text.hintBulb);
       setTip(this.pauseButton, text.pause);
+      deathTitle.textContent = text.death.title;
+      this.lastDeathSeconds = -1;
       defeatTitle.textContent = text.defeat.title;
       defeatText.textContent = text.defeat.text;
       replay.textContent = text.defeat.replay;
@@ -711,6 +727,8 @@ export class Hud {
     world.events.on('kidGrewUp', ({ name }) => this.notify(t().hud.toast.kidGrewUp(name), 'good'));
     world.events.on('growthStunted', ({ name, need }) => this.notify(t().hud.toast.growthStunted[need](name), 'bad'));
     world.events.on('townHallDestroyed', () => this.showDefeat());
+    world.events.on('playerKnockedOut', () => (this.death.hidden = false));
+    world.events.on('playerRespawned', () => (this.death.hidden = true));
     world.events.on('weatherAnnounced', ({ id, seconds }) => {
       const { label, advice } = t().weather[id];
 
@@ -1350,6 +1368,7 @@ export class Hud {
     this.updateSpeech();
     this.updatePerson();
     this.updateWeather();
+    this.updateDeath();
     this.placeCelebration();
     this.updateQueenBanner();
     this.tips.refresh();
@@ -1891,6 +1910,19 @@ export class Hud {
     this.victoryStats.replaceChildren(
       ...rows.flatMap(([name, value]) => [text('', name, 'dt'), text('', value, 'dd')]),
     );
+  }
+
+  /* ------------------------------------------------------------------ mort */
+
+  /** Le compte à rebours de la mort, réécrit seulement quand la seconde change. */
+  private updateDeath(): void {
+    if (this.death.hidden) return;
+
+    const seconds = this.world.respawnSeconds();
+
+    if (seconds === this.lastDeathSeconds) return;
+    this.lastDeathSeconds = seconds;
+    this.deathCount.textContent = t().hud.death.countdown(seconds);
   }
 
   /* ---------------------------------------------------------------- défaite */

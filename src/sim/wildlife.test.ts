@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { TILE_SIZE, distanceSq, floorDiv } from '../core/grid.ts';
 import { mulberry32 } from '../core/rng.ts';
 import { ENEMIES, WILDLIFE, WILDLIFE_SPAWN, type WildlifeId } from '../data/enemies.ts';
+import { DEATH } from '../data/death.ts';
 import { WEAPONS } from '../data/weapons.ts';
 import { nearestFoe } from './combat.ts';
 import { PLAYER_MAX_HP } from './player.ts';
@@ -326,12 +327,13 @@ describe('tir automatique', () => {
 });
 
 describe('Adam blessé', () => {
-  it('perd des points de vie sous les crocs, puis se réveille à la mairie remis sur pied', () => {
+  it('perd des points de vie sous les crocs, puis tombe et ne se relève qu’après le décompte, remis sur pied', () => {
     const world = new World(SEEDS[2]!);
     const { player } = world;
     const wolf = beastAt('wolf', player.x + 20, player.y, 9004);
     const hurt: number[] = [];
     let knocked = false;
+    let risen = false;
 
     wolf.state = 'chase';
     wolf.homeX = player.x;
@@ -339,6 +341,7 @@ describe('Adam blessé', () => {
     world.mobiles.set(wolf.id, wolf);
     world.events.on('playerHurt', ({ hp }) => hurt.push(hp));
     world.events.on('playerKnockedOut', () => (knocked = true));
+    world.events.on('playerRespawned', () => (risen = true));
 
     // L'arc riposte : on retire la bête du jeu de l'arc en lui laissant des points de vie à revendre.
     wolf.hp = 1000;
@@ -347,7 +350,40 @@ describe('Adam blessé', () => {
 
     expect(hurt[0]).toBe(PLAYER_MAX_HP - WILDLIFE.wolf.damage);
     expect(knocked).toBe(true);
+    expect(world.dead).toBe(true);
+    expect(world.respawnSeconds()).toBe(DEATH.respawnSeconds);
+
+    // À terre : ni pas, ni coup de plus, et le monde tourne.
+    const fallenAt = { x: player.x, y: player.y };
+    const tickAtFall = world.tickCount;
+
+    world.push({ type: 'setMoveAxis', x: 1, y: 0 });
+    for (let i = 0; i < DEATH.respawnSeconds * 20 - 2; i += 1) world.tick();
+    expect(world.dead).toBe(true);
+    expect(risen).toBe(false);
+    expect(player.x).toBe(fallenAt.x);
+    expect(player.y).toBe(fallenAt.y);
+    expect(player.hp).toBe(0);
+    expect(world.tickCount).toBe(tickAtFall + DEATH.respawnSeconds * 20 - 2);
+
+    world.tick();
+    expect(risen).toBe(true);
+    expect(world.dead).toBe(false);
     expect(player.hp).toBe(PLAYER_MAX_HP);
+  });
+
+  it('la mort se sauvegarde : recharger ne raccourcit pas l’attente', () => {
+    const world = new World(SEEDS[2]!);
+
+    // Chute directe : un coup de plus que ses points de vie.
+    (world as unknown as { hurtPlayer(by: number, damage: number): void }).hurtPlayer(9005, PLAYER_MAX_HP);
+    for (let i = 0; i < 100; i += 1) world.tick();
+
+    const left = world.respawnTicks;
+    const copy = World.restore(JSON.parse(JSON.stringify(world.snapshot())));
+    expect(left).toBeGreaterThan(0);
+    expect(copy.respawnTicks).toBe(left);
+    expect(copy.dead).toBe(true);
   });
 
   it('récupère au calme', () => {

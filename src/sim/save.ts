@@ -121,6 +121,8 @@ export interface WorldState {
   prestigeSites: string[];
   defeated: boolean;
   defeatTick: number;
+  /** Ticks avant que la mort d'Adam ne finisse. Absent : il est debout (et d'une sauvegarde d'avant). */
+  respawnTicks?: number;
   /** Quêtes d'Ève déjà finies. Absent des sauvegardes d'avant Ève : 0. */
   questsDone: number;
   /** Bonus du jardin avec lesquels la colonie est partie. */
@@ -432,6 +434,7 @@ function parseState(raw: unknown): WorldState {
     prestigeSites: [...new Set(array(state['prestigeSites'] ?? []).map(string))],
     defeated: bool(state['defeated']),
     defeatTick: int(state['defeatTick']),
+    ...(state['respawnTicks'] !== undefined && { respawnTicks: int(state['respawnTicks']) }),
     questsDone: state['questsDone'] === undefined ? 0 : int(state['questsDone']),
     // Absents d'une sauvegarde d'avant le jardin : une colonie partie sans bonus.
     perks: array(state['perks'] ?? []).map((id) => oneOf(id, PERKS) as PerkId),
