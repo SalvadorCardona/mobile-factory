@@ -1,7 +1,8 @@
 /**
  * Ce que fait Échap : fermer ce qui est au premier plan, sinon basculer la pause.
  *
- * Le menu des réglages passe avant tout : ouvert, Échap le ferme. Le voile
+ * Le menu des réglages passe avant tout : ouvert, Échap le ferme ; puis
+ * l'éditeur de personnage, qui couvre l'écran (Échap l'annule). Le voile
  * de la pause couvre le reste : en pause, Échap la lève, et ce qui était
  * ouvert derrière le reste. Hors pause, il ferme d'abord la carte du monde,
  * qui couvre tout l'écran, puis le menu de
@@ -14,6 +15,8 @@
 /** Ce qui est ouvert à l'écran quand Échap tombe. */
 export interface EscapeState {
   settingsOpen: boolean;
+  /** L'éditeur de personnage (la garde-robe d'Adam). */
+  wardrobeOpen: boolean;
   paused: boolean;
   mapOpen: boolean;
   menuOpen: boolean;
@@ -21,10 +24,11 @@ export interface EscapeState {
   inventoryOpen: boolean;
 }
 
-export type EscapeAction = 'closeSettings' | 'resume' | 'closeMap' | 'closeMenu' | 'closePanel' | 'closeInventory' | 'pause';
+export type EscapeAction = 'closeSettings' | 'closeWardrobe' | 'resume' | 'closeMap' | 'closeMenu' | 'closePanel' | 'closeInventory' | 'pause';
 
 export function escapeAction(state: EscapeState): EscapeAction {
   if (state.settingsOpen) return 'closeSettings';
+  if (state.wardrobeOpen) return 'closeWardrobe';
   if (state.paused) return 'resume';
   if (state.mapOpen) return 'closeMap';
   if (state.menuOpen) return 'closeMenu';

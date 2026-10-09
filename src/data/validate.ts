@@ -14,7 +14,7 @@
  */
 
 import { TILE_SIZE } from '../core/grid.ts';
-import { auditSvg } from './artDirection.ts';
+import { PALETTE, auditSvg } from './artDirection.ts';
 import { BUILDINGS, RUIN, type BuildingProto } from './buildings.ts';
 import { DAWN_REWARD, DAY_CYCLE } from './dayNight.ts';
 import { BASE_XP, KILL_XP, LEVEL_GAINS, MAX_LEVEL, XP_CURVE, XP_SHARE } from './levels.ts';
@@ -35,6 +35,22 @@ import { RESOURCES, ROCK_OF_ORE } from './resources.ts';
 import { TEST_SCENARIOS, type TestScenarioProto } from './testScenario.ts';
 import { BUILDING_PARTS, RESOURCE_PARTS, SPRITES, UPGRADE_PARTS, WALKER_PARTS, type SpriteProto } from './sprites.ts';
 import { WEAPONS } from './weapons.ts';
+import {
+  COLOR_SLOTS,
+  DEFAULT_LOOK,
+  LOOK_COLORS,
+  LOOK_SLOTS,
+  LOOT_SOURCES,
+  PIECES,
+  PIECE_IDS,
+  WARDROBE_LOOT,
+  isStarter,
+  piecesOf,
+  type PieceId,
+  type PieceProto,
+  type WardrobeDrop,
+} from './wardrobe.ts';
+import { PIECE_ART, adamLookParts, isFootPiece } from '../art/adamLook.ts';
 import { WEATHER, WEATHER_CALENDAR, type WeatherProto } from './weather.ts';
 
 export function validatePrototypes(): string[] {
@@ -626,7 +642,86 @@ export function validatePrototypes(): string[] {
   }
 
   errors.push(...levelErrors());
+  errors.push(...wardrobeErrors());
 
+  return errors;
+}
+
+/**
+ * La garde-robe d'Adam : chaque emplacement a une pièce du départ, l'Adam
+ * par défaut ne porte que des pièces du départ, chacune à sa place ; les
+ * nuanciers ne proposent que des tons de la palette, sans doublon ; chaque
+ * source de butin peut donner quelque chose. Et chaque pièce, portée par
+ * Adam, passe la direction artistique — le corps pour un calque du corps, le
+ * pied pour le pantalon et les chaussures.
+ */
+export function wardrobeErrors(): string[] {
+  const errors: string[] = [];
+  const labels = new Map<string, string>();
+
+  for (const slot of LOOK_SLOTS) {
+    if (!piecesOf(slot).some(isStarter)) errors.push(`PIECES : aucune pièce du départ pour l'emplacement « ${slot} »`);
+
+    const piece = DEFAULT_LOOK.pieces[slot];
+
+    if (PIECES[piece].slot !== slot) errors.push(`DEFAULT_LOOK.${slot} : « ${piece} » n'est pas de cet emplacement`);
+    if (!isStarter(piece)) errors.push(`DEFAULT_LOOK.${slot} : « ${piece} » n'est pas une pièce du départ`);
+  }
+
+  for (const slot of COLOR_SLOTS) {
+    const tones: readonly string[] = LOOK_COLORS[slot];
+
+    if (tones.length < 2) errors.push(`LOOK_COLORS.${slot} : un nuancier propose au moins deux tons`);
+    if (new Set(tones).size !== tones.length) errors.push(`LOOK_COLORS.${slot} : ton en double`);
+    for (const tone of tones) if (!(tone in PALETTE)) errors.push(`LOOK_COLORS.${slot} : ton inconnu « ${tone} »`);
+    if (!tones.includes(DEFAULT_LOOK.colors[slot])) errors.push(`DEFAULT_LOOK.colors.${slot} : hors du nuancier`);
+    // Le vert fluo est aux mutants : Adam ne s'en habille pas.
+    if (tones.includes('toxic')) errors.push(`LOOK_COLORS.${slot} : le vert fluo est réservé aux mutants`);
+  }
+
+  for (const [id, piece] of Object.entries(PIECES) as [PieceId, PieceProto][]) {
+    const previous = labels.get(piece.label);
+
+    if (previous) errors.push(`PIECES.${id} : libellé « ${piece.label} » partagé avec ${previous}`);
+    labels.set(piece.label, id);
+
+    // Le dessin d'une pièce du pied est une jambe ou une chaussure ; celui d'une pièce du corps, des calques.
+    const drawn: unknown = (PIECE_ART[id] as (facing: 'down', paint: typeof DEFAULT_LOOK.colors) => unknown)('down', DEFAULT_LOOK.colors);
+
+    if (isFootPiece(id) !== (typeof drawn === 'string')) errors.push(`PIECE_ART.${id} : dessin du pied pour une pièce du corps, ou l'inverse`);
+
+    const worn = { pieces: { ...DEFAULT_LOOK.pieces, [piece.slot]: id }, colors: DEFAULT_LOOK.colors };
+
+    for (const [part, source] of Object.entries(adamLookParts(worn))) {
+      for (const problem of auditSvg(source)) errors.push(`PIECES.${id} (${part}) : ${problem}`);
+    }
+  }
+
+  for (const source of LOOT_SOURCES) {
+    const drop: WardrobeDrop = WARDROBE_LOOT[source];
+
+    if (drop.chance <= 0 || drop.chance > 1) errors.push(`WARDROBE_LOOT.${source} : chance hors de ]0, 1]`);
+
+    const found = PIECE_IDS.some((id) => !isStarter(id) && (drop.weights[PIECES[id].rarity] ?? 0) > 0);
+
+    if (!found) errors.push(`WARDROBE_LOOT.${source} : aucune pièce à trouver dans ses raretés`);
+  }
+
+  // Une partie de test ne donne que des pièces à trouver, et n'habille Adam que de ce qu'il a.
+  for (const [id, scenario] of Object.entries(TEST_SCENARIOS) as [string, TestScenarioProto][]) {
+    if (!scenario.wardrobe) continue;
+
+    const { found, look } = scenario.wardrobe;
+
+    for (const piece of found) if (isStarter(piece)) errors.push(`TEST_SCENARIOS.${id} : « ${piece} » est une pièce du départ`);
+    for (const slot of LOOK_SLOTS) {
+      const piece = look?.pieces[slot];
+
+      if (piece === undefined) continue;
+      if (PIECES[piece].slot !== slot) errors.push(`TEST_SCENARIOS.${id} : « ${piece} » n'est pas de l'emplacement « ${slot} »`);
+      if (!isStarter(piece) && !found.includes(piece)) errors.push(`TEST_SCENARIOS.${id} : Adam porte « ${piece} » sans l'avoir trouvée`);
+    }
+  }
   return errors;
 }
 

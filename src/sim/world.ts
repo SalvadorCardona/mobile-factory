@@ -72,6 +72,8 @@ import { ENEMY_BASE, FIREBALL, GUARD_RANGE, RAIDS, enemyBaseLevel } from '../dat
 import { EVE } from '../data/eve.ts';
 import { FOG_VISION } from '../data/fog.ts';
 import { GEAR_WORKSHOP, MAX_GEAR, gearOf } from '../data/gear.ts';
+import { copyLook, sameLook, type Look, type LootSource, type PieceId } from '../data/wardrobe.ts';
+import { lookRejection, rollPiece, type LookRejection } from './wardrobe.ts';
 import { HOUSING } from '../data/housing.ts';
 import { AGES, COLONY, NURSERY_CARE } from '../data/inhabitants.ts';
 import { TOWN_PLENTY, type ItemId } from '../data/items.ts';
@@ -682,6 +684,12 @@ export type WorldEvents = {
   /** Un arc forgé : `level` est le nouveau niveau d'équipement. */
   gearCrafted: { level: number; fromBag: [ItemId, number][] };
   gearRejected: { reason: GearRejection };
+  /** Adam a changé d'apparence : le rendu recompose ses calques. */
+  lookChanged: { look: Look };
+  /** L'apparence demandée a été refusée. */
+  lookRejected: { reason: LookRejection };
+  /** Une pièce de garde-robe trouvée : un objectif, une base, son chef, la Reine, une bête. Elle entre à l'éditeur. */
+  pieceFound: { piece: PieceId; source: LootSource };
 };
 
 export class World {
@@ -952,7 +960,7 @@ export class World {
    * non plus — la sauvegarde se prend quand la file est vide.
    */
   public snapshot(): WorldState {
-    const { inventory, ...player } = this.player;
+    const { inventory, look, wardrobe, ...player } = this.player;
 
     return {
       seed: this.seed,
@@ -988,7 +996,7 @@ export class World {
       enemyBases: this.enemyBases.map((base) => ({ ...base })),
       stats: copyStats(this.stats),
       objectiveBase: copyStats(this.objectiveBase),
-      player: { ...player, inventory: inventory.toJSON() },
+      player: { ...player, look: copyLook(look), wardrobe: [...wardrobe], inventory: inventory.toJSON() },
       resources: this.resources.toJSON(),
       planted: this.resources.plantedJSON(),
       crops: this.resources.cropsJSON(),
@@ -1060,7 +1068,7 @@ export class World {
       objectiveBagBonus(state.objective) +
       caravanBagBonus(this.rareTrades);
 
-    Object.assign(this.player, player, { inventory: Store.fromJSON(capacity, inventory) });
+    Object.assign(this.player, player, { look: copyLook(player.look), wardrobe: [...player.wardrobe], inventory: Store.fromJSON(capacity, inventory) });
     this.resources.restore(state.resources, state.planted, state.tick, state.crops);
     this.roads.restore(state.roads);
 
@@ -1257,6 +1265,10 @@ export class World {
 
       case 'craftGear':
         this.craftGear(command.forge);
+        break;
+
+      case 'dressAdam':
+        this.dressAdam(command.look);
         break;
 
       case 'recruitCompanion':
@@ -3873,6 +3885,35 @@ export class World {
     if (this.zoneBase === base.id) this.zoneBase = null;
     this.events.emit('enemyBaseDestroyed', { id: base.id, level: base.level, prestige: level.prestige, x, y });
     this.dropLoot(level.loot, x, y + TILE_SIZE);
+    this.findPiece('enemyBase', base.id);
+  }
+
+  /* -------------------------------------------------------------- garde-robe */
+
+  /** Adam change d'apparence : chaque pièce doit être trouvée et à sa place, chaque couleur au nuancier. */
+  private dressAdam(look: Look): void {
+    const reason = lookRejection(look, this.player.wardrobe);
+
+    if (reason) {
+      this.events.emit('lookRejected', { reason });
+      return;
+    }
+    if (sameLook(look, this.player.look)) return;
+    this.player.look = copyLook(look);
+    this.events.emit('lookChanged', { look: copyLook(look) });
+  }
+
+  /**
+   * La source `source` donne-t-elle une pièce pour l'événement `key` ? Le
+   * tirage est un hachage de la seed (`sim/wardrobe.ts`) : le PRNG du monde
+   * ne bouge pas.
+   */
+  private findPiece(source: LootSource, key: number): void {
+    const piece = rollPiece(this.seed, source, key, this.player.wardrobe);
+
+    if (!piece) return;
+    this.player.wardrobe.push(piece);
+    this.events.emit('pieceFound', { piece, source });
   }
 
   /* -------------------------------------------------------------- équipement */
@@ -3963,7 +4004,10 @@ export class World {
     } else {
       this.events.emit('mutantDied', { id: mutant.id, x: mutant.x, y: mutant.y });
       this.dropLoot(ENEMIES[mutant.proto].loot, mutant.x, mutant.y);
-      if (mutant.queen) this.events.emit('queenSlain', { id: mutant.id, night: this.night, x: mutant.x, y: mutant.y });
+      if (mutant.queen) {
+        this.events.emit('queenSlain', { id: mutant.id, night: this.night, x: mutant.x, y: mutant.y });
+        this.findPiece('queen', this.night);
+      }
     }
 
     if (!this.defeated && !this.hasMutants()) this.events.emit('waveCleared', { night: this.night });
@@ -4427,6 +4471,7 @@ export class World {
       const stored = this.grant(objective.reward);
 
       this.events.emit('objectiveCompleted', { index, stored });
+      this.findPiece('objective', index);
     }
 
     this.victory = true;
@@ -4561,6 +4606,8 @@ export class World {
     this.gainPrestige(KILL_PRESTIGE[beast.proto], beast.x, beast.y);
     this.gainXp(killXp(beast.proto) + (beast.proto === 'chief' && base ? baseXp(base.level, 'chief') : 0), shooter, beast.x, beast.y);
     this.dropLoot(proto.loot, beast.x, beast.y);
+    // Un chef a donné la sienne en tombant ; une bête — crabe, loup, gardien, cracheur — parfois une.
+    if (beast.proto !== 'chief') this.findPiece('beast', beast.id);
   }
 
   /**
@@ -4581,6 +4628,7 @@ export class World {
     });
     this.gainPrestige(level.chief.prestige, chief.x, chief.y);
     this.dropLoot(level.chief.loot, chief.x, chief.y);
+    this.findPiece('chief', base.id);
   }
 
   /** Les points de vie d'une bête au plus : ceux de son espèce, ou, pour un chef, ceux de sa base. */

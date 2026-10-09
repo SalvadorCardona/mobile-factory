@@ -1091,7 +1091,11 @@ export class Hud {
   }
 
   /** Une bulle empilée ; la plus ancienne part quand il y en a trop. */
-  public notify(message: string, tone: ToastTone = 'info'): void {
+  /**
+   * Une bulle qui monte puis s'en va. `action` : un bouton dans la bulle —
+   * « Essayer » sur une pièce de garde-robe trouvée — qui la ferme en servant.
+   */
+  public notify(message: string, tone: ToastTone = 'info', action?: { label: string; run: () => void }): void {
     // Deux fois le même message d'affilée : on relance la bulle au lieu d'en empiler une deuxième.
     const last = this.toasts.lastElementChild as HTMLElement | null;
 
@@ -1106,6 +1110,17 @@ export class Hud {
 
     toast.textContent = message;
     toast.dataset['tone'] = tone;
+    if (action) {
+      const button = element('button', 'hud-toast-action');
+
+      button.type = 'button';
+      button.textContent = action.label;
+      button.addEventListener('click', () => {
+        toast.remove();
+        action.run();
+      });
+      toast.append(button);
+    }
     this.toasts.append(toast);
 
     while (this.toasts.childElementCount > MAX_TOASTS) this.toasts.firstElementChild?.remove();

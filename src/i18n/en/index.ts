@@ -11,6 +11,7 @@ import { researchPanel } from './researchPanel.ts';
 import { resourcePanel } from './resourcePanel.ts';
 import { screens } from './screens.ts';
 import { trade } from './trade.ts';
+import { wardrobe } from './wardrobe.ts';
 
 export const EN: Messages = {
   common,
@@ -23,5 +24,6 @@ export const EN: Messages = {
   trade,
   researchPanel,
   resourcePanel,
+  wardrobe,
   ...content,
 };
