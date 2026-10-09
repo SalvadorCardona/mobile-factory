@@ -18,6 +18,12 @@
  */
 
 :root {
+  /* Curseurs : ceux du système, que `ui/cursors.ts` remplace par les dessinés sur un appareil à souris. */
+  --cursor-arrow: default;
+  --cursor-hand: pointer;
+  --cursor-grab: grab;
+  --cursor-grabbing: grabbing;
+  --cursor-forbidden: not-allowed;
   --ink: #2b2d8f;
   --ink-shade: #1f2070;
   --ink-light: #3d40b8;
@@ -94,15 +100,36 @@ body {
   overflow: hidden;
 }
 
+body {
+  cursor: var(--cursor-arrow);
+}
+
 canvas {
   display: block;
   touch-action: none;
+  cursor: var(--cursor-arrow);
 }
 
 button {
   font: inherit;
-  cursor: pointer;
+  cursor: var(--cursor-hand);
   color: inherit;
+}
+
+[role='button'],
+[role='tab'],
+label,
+summary,
+select,
+input[type='checkbox'],
+input[type='radio'],
+input[type='range'] {
+  cursor: var(--cursor-hand);
+}
+
+button:disabled,
+[aria-disabled='true'] {
+  cursor: var(--cursor-arrow);
 }
 
 /*
@@ -340,7 +367,7 @@ button {
   justify-content: space-between;
   gap: 8px;
   height: 24px;
-  cursor: pointer;
+  cursor: var(--cursor-hand);
 }
 
 /*
@@ -368,7 +395,7 @@ button {
   font-size: 15px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  cursor: pointer;
+  cursor: var(--cursor-hand);
 }
 
 .hud-clock[hidden] {
@@ -485,7 +512,7 @@ button {
   font-size: 16px;
   color: inherit;
   box-shadow: 0 2px 0 var(--violet-light);
-  cursor: pointer;
+  cursor: var(--cursor-hand);
 }
 
 /* La capsule est petite, le doigt ne l'est pas : la zone de tap déborde. */
@@ -912,11 +939,11 @@ button {
   width: 100%;
   height: 100%;
   touch-action: none;
-  cursor: grab;
+  cursor: var(--cursor-grab);
 }
 
 .world-map-canvas:active {
-  cursor: grabbing;
+  cursor: var(--cursor-grabbing);
 }
 
 .world-map-header {
@@ -1283,7 +1310,7 @@ button {
 
 .hud .hud-people-idle {
   pointer-events: auto;
-  cursor: pointer;
+  cursor: var(--cursor-hand);
 }
 
 /* Le chiffre est petit, le doigt ne l'est pas : la zone de tap déborde. */
@@ -1419,7 +1446,7 @@ button {
   font-size: 15px;
   font-weight: 700;
   color: var(--paper);
-  cursor: pointer;
+  cursor: var(--cursor-hand);
   animation: hunger-pulse 1.6s ease-in-out infinite;
 }
 
@@ -1539,7 +1566,7 @@ button {
   box-shadow: 0 3px 0 var(--yellow-shade);
   font: inherit;
   color: var(--ink);
-  cursor: pointer;
+  cursor: var(--cursor-hand);
 }
 
 .hud-topbar .hud-objective:active {
@@ -2622,7 +2649,7 @@ button {
   font: inherit;
   color: var(--paper);
   white-space: nowrap;
-  cursor: pointer;
+  cursor: var(--cursor-hand);
 }
 
 .hud .hud-bag::before {
@@ -3196,7 +3223,7 @@ button {
 }
 
 .build-filter-notice:disabled {
-  cursor: default;
+  cursor: var(--cursor-arrow);
   background: transparent;
   box-shadow: none;
   color: var(--muted);
@@ -4454,7 +4481,7 @@ button {
   height: 28px;
   margin: 0;
   accent-color: var(--violet);
-  cursor: pointer;
+  cursor: var(--cursor-hand);
 }
 
 /* Un écran qui pose une question cache son panneau : `hidden` doit l'emporter sur `display: flex`. */
@@ -5426,7 +5453,7 @@ button {
   font-weight: 700;
   box-shadow: 0 3px 0 var(--violet-shade);
   pointer-events: auto;
-  cursor: pointer;
+  cursor: var(--cursor-hand);
 }
 
 .hud-toast-action:active {
@@ -5624,7 +5651,7 @@ button {
   color: var(--ink);
   font: inherit;
   box-shadow: 0 4px 0 var(--paper-shade);
-  cursor: pointer;
+  cursor: var(--cursor-hand);
 }
 
 .wardrobe-card:active {
@@ -5731,7 +5758,7 @@ span.wardrobe-thumb {
   border-radius: 50%;
   background: var(--swatch);
   box-shadow: inset -4px -4px 0 var(--swatch-shade);
-  cursor: pointer;
+  cursor: var(--cursor-hand);
   transition: transform 120ms ease-out;
 }
 

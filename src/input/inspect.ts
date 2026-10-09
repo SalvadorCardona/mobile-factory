@@ -146,6 +146,11 @@ export class Inspect implements PointerConsumer {
     }
   }
 
+  /** Le curseur survole-t-il quelque chose qui s'ouvre au tap — Ève, une créature, un bâtiment, une base ? */
+  public hovers(sample: PointerSample): boolean {
+    return this.enabled() && this.targetAt(sample) !== undefined;
+  }
+
   /** Un pinch reprend le doigt : rien ne s'ouvre. */
   public onCancel(id: number): void {
     if (id !== this.pointerId) return;

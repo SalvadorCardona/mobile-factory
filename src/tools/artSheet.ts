@@ -18,6 +18,7 @@
  */
 
 import { writeFileSync } from 'node:fs';
+import { CURSOR_SVGS } from '../art/cursors.ts';
 import { ROAD_TILES } from '../art/road.ts';
 import { GROUND_TILES, cornerTile, edgeTile, shadowTile } from '../art/terrain.ts';
 import { UI_ICONS, dayDialSvg } from '../art/ui.ts';
@@ -109,6 +110,7 @@ const allSections: [string, Cell[][]][] = [
   ],
   // Le métier de chaque bâtiment, sous son nom : on vérifie d'un coup d'œil qu'aucun n'en double un autre.
   ['Métiers', rows(BUILDING_IDS.map((id) => cell(BUILDINGS[id].label, JOB_ICONS[id])))],
+  ['Curseurs', rows(Object.entries(CURSOR_SVGS).map(([id, svg]) => cell(`curseur.${id}`, svg)))],
   [
     'Icônes',
     rows([

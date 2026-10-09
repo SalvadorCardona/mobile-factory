@@ -29,6 +29,7 @@ import { PIECES } from './data/wardrobe.ts';
 import { IndicatorTap } from './input/indicatorTap.ts';
 import { seedsFor, type PerkId } from './data/perks.ts';
 import { Inspect } from './input/inspect.ts';
+import { installCursors } from './ui/cursors.ts';
 import { Joystick } from './input/joystick.ts';
 import { Keyboard, isTyping, type KeyboardState } from './input/keyboard.ts';
 import { shortcutOf } from './input/shortcuts.ts';
@@ -159,6 +160,9 @@ async function main(): Promise<void> {
   // Le contrôle d'intégrité des prototypes ne tourne qu'en dev : en production
   // les données sont figées au build, et TypeScript a déjà tout vérifié.
   if (import.meta.env.DEV) assertPrototypes();
+
+  // Les curseurs dessinés, sur un appareil à souris seulement.
+  installCursors();
 
   // La langue d'abord : tout ce qui suit s'écrit dans elle. Au premier lancement, celle du navigateur.
   const localePrefs = LocalLocale.browser();
@@ -564,6 +568,24 @@ async function main(): Promise<void> {
 
   pointers.add(homeTap);
   pointers.add(inspect);
+  // Le curseur de la souris sur la carte : la main sur ce qui se tape, l'interdit
+  // sur une case refusée, la flèche ailleurs. Le HUD (DOM) a ses propres règles CSS.
+  window.addEventListener('pointermove', (event) => {
+    if (event.pointerType !== 'mouse' || event.target !== renderer.canvas) return;
+
+    const rect = renderer.canvas.getBoundingClientRect();
+    const sample = { id: event.pointerId, x: event.clientX - rect.left, y: event.clientY - rect.top, mouse: true };
+    const over =
+      placement.mode !== 'idle'
+        ? placement.block() !== null
+          ? 'forbidden'
+          : 'arrow'
+        : renderer.homeIndicatorAt(sample.x, sample.y) || inspect.hovers(sample)
+          ? 'hand'
+          : 'arrow';
+
+    renderer.canvas.style.cursor = `var(--cursor-${over})`;
+  });
   pointers.add(stick.canvasFinger(renderer.canvas, () => placement.mode === 'idle'));
   pointers.add(placement);
   // Deux doigts sur la carte : le pinch, autour du milieu des deux. Il ne
