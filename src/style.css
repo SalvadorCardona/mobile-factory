@@ -2364,6 +2364,13 @@ button:disabled,
   overflow: hidden;
 }
 
+.hud-flyer {
+  position: absolute;
+  display: inline-flex;
+  pointer-events: none;
+  will-change: transform;
+}
+
 .hud-float {
   position: absolute;
   display: inline-flex;
