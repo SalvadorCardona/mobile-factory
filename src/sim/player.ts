@@ -13,6 +13,7 @@
 
 import { TILE_SIZE } from '../core/grid.ts';
 import { AGES } from '../data/inhabitants.ts';
+import { DEFAULT_LOOK, copyLook } from '../data/wardrobe.ts';
 import { boxOverlaps, facingOf, moveBoxAmong, type ObstacleTest } from './motion.ts';
 import { Store } from './store.ts';
 import type { Contact, Player } from './types.ts';
@@ -66,6 +67,8 @@ export function createPlayer(x: number, y: number, age: number = AGES.adultMin):
     xp: 0,
     gear: 0,
     age,
+    look: copyLook(DEFAULT_LOOK),
+    wardrobe: [],
     inventory: new Store(INVENTORY_CAPACITY),
   };
 }

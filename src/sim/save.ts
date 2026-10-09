@@ -39,6 +39,7 @@ import { ADAM_SALT, adultAge, sexOf } from './inhabitants.ts';
 import { freshHousing, type Housing } from './housing.ts';
 import { freshNeeds, fullNeeds } from './needs.ts';
 import { canPause, clampStaff, isWorkPriority, type StaffPost } from './staffing.ts';
+import { readLook, readWardrobe } from './wardrobe.ts';
 import type { Store, StoreSnapshot } from './store.ts';
 import type {
   BeastState,
@@ -493,6 +494,7 @@ function parseStats(raw: unknown): WorldStats {
 
 function parsePlayer(raw: unknown): SavedPlayer {
   const player = record(raw);
+  const wardrobe = readWardrobe(player['wardrobe']);
 
   return {
     ...moving(player),
@@ -506,6 +508,9 @@ function parsePlayer(raw: unknown): SavedPlayer {
     xp: player['xp'] === undefined ? 0 : int(player['xp']),
     // Absent d'avant l'équipement : l'arc de fortune.
     gear: player['gear'] === undefined ? 0 : Math.min(MAX_GEAR, Math.max(0, int(player['gear']))),
+    // Absentes d'avant la garde-robe : l'apparence par défaut, rien de trouvé.
+    look: readLook(player['look'], wardrobe),
+    wardrobe,
     inventory: stock(player['inventory']),
   };
 }

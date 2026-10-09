@@ -14,6 +14,7 @@ import type { CompanionClassId } from '../data/companions.ts';
 import type { ItemId } from '../data/items.ts';
 import type { PerkId } from '../data/perks.ts';
 import type { ResearchId } from '../data/research.ts';
+import type { Look } from '../data/wardrobe.ts';
 import type { WorkPriority } from '../data/workers.ts';
 import type { TransferDirection, TransferQuantity } from './transfer.ts';
 import type { EntityId, MobileId } from './types.ts';
@@ -101,6 +102,12 @@ export type Command =
    * si la forge est dans son rayon. Adam doit être à portée de la forge.
    */
   | { type: 'craftGear'; forge: EntityId }
+  /**
+   * Change l'apparence d'Adam (`data/wardrobe.ts`) : le bouton « Valider »
+   * de l'éditeur de personnage. Refusée si une pièce n'est pas encore
+   * trouvée, n'est pas de son emplacement, ou qu'une couleur sort du nuancier.
+   */
+  | { type: 'dressAdam'; look: Look }
   /**
    * Recrute un compagnon de la classe `role` à la caserne : le coût de la
    * classe est payé d'un coup, le sac d'abord, puis la ville si la caserne

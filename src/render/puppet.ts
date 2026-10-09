@@ -204,6 +204,15 @@ export class Puppet {
     return sprite;
   }
 
+  /**
+   * Ses morceaux ont été recomposés (Adam s'est changé, `SpriteLibrary.dress`) :
+   * le corps et les pieds reprennent leurs textures — le corps au prochain `update`.
+   */
+  public refresh(): void {
+    this.view = '';
+    for (const foot of this.feet) foot.texture = this.library.texture(`${this.id}.foot`);
+  }
+
   /** Coup reçu : le corps « touché » s'affiche un instant, et gicle. */
   public hit(): void {
     this.hurt = HURT_MS;

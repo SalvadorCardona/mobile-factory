@@ -1,8 +1,11 @@
 /**
  * Adam, le héros.
  *
- * Silhouette lisible à 32 px : cheveux indigo, tunique orange (la teinte des
- * humains), écharpe corail, sac à dos violet.
+ * Silhouette lisible à 32 px : cheveux indigo en épi, regard décidé, barbe
+ * courte, tunique orange ceinturée (la teinte des humains), écharpe corail,
+ * sac à dos violet et son couchage roulé, jambes et godillots. Son corps et
+ * ses pieds sont des **calques** (`adamLook.ts`) : ce registre en garde
+ * l'apparence par défaut, le rendu les recompose quand il se change.
  *
  * Il a les mains vides : l'arc, la hache, la pioche et le marteau sont des
  * morceaux à part, que le rendu ne sort que le temps de l'action — l'arc
@@ -14,20 +17,13 @@
 
 import { svg } from '../data/artDirection.ts';
 import type { SpriteProto } from '../data/sprites.ts';
-import { axe, bow, foot, hammer, humanBody, pickaxe, type Facing } from './people.ts';
+import { ADAM_H, ADAM_W, DEFAULT_ADAM_PARTS } from './adamLook.ts';
+import { axe, bow, hammer, pickaxe } from './people.ts';
 
-const W = 32;
-const H = 48;
-/** Le sol, dans le cadre : l'ancre (0.5, 0.8) tombe ici. */
-const GROUND = 38.4;
+const W = ADAM_W;
+const H = ADAM_H;
 /** La main droite, de face, en pixels du cadre : le pivot des outils. */
-const HAND: readonly [number, number] = [22.5, 32];
-
-const OPTIONS = { pack: true, scarf: true, cap: false } as const;
-
-function body(facing: Facing): string {
-  return svg(W, H, humanBody(facing, OPTIONS));
-}
+const HAND: readonly [number, number] = [22.8, 31.6];
 
 export const ADAM = {
   width: W,
@@ -35,10 +31,7 @@ export const ADAM = {
   anchorX: 0.5,
   anchorY: 0.8,
   parts: {
-    down: body('down'),
-    up: body('up'),
-    side: body('side'),
-    foot: svg(W, H, foot(GROUND)),
+    ...DEFAULT_ADAM_PARTS,
     /** L'arc, tenu à droite de face et de dos, devant en profil. */
     bow: svg(W, H, bow(24.5, 19, 34)),
     axe: svg(W, H, axe(...HAND)),

@@ -20,6 +20,7 @@ import type { Sex } from '../data/inhabitants.ts';
 import type { Shooter } from '../data/levels.ts';
 import type { ItemId } from '../data/items.ts';
 import type { ResearchId } from '../data/research.ts';
+import type { Look, PieceId } from '../data/wardrobe.ts';
 import type { NeedId } from '../data/needs.ts';
 import type { JobPriority, WorkPriority } from '../data/workers.ts';
 import type { Housing } from './housing.ts';
@@ -330,6 +331,10 @@ export interface Player {
   xp: number;
   /** Son âge, en années : une de plus à chaque aube (`data/inhabitants.ts`). */
   age: number;
+  /** Son apparence (`data/wardrobe.ts`) : une pièce par emplacement, les couleurs choisies. L'éditeur la change par `dressAdam`. */
+  look: Look;
+  /** Les pièces de garde-robe trouvées en jouant — celles du départ n'y sont pas. */
+  wardrobe: PieceId[];
   /**
    * Le sac à dos : ce qu'Adam a récolté ou ramassé et pas encore déposé.
    * Ce n'est pas le stock de la ville — celui-là est le coffre de la mairie

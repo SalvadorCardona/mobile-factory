@@ -3269,7 +3269,7 @@ button {
 .building-panel {
   position: absolute;
   left: 50%;
-  bottom: calc(var(--safe-bottom) + 92px);
+  bottom: calc(var(--safe-bottom) + 118px);
   transform: translateX(-50%);
   width: min(340px, calc(100vw - 28px));
   /* Jamais plus haute que l'écran : une fenêtre chargée (la mairie et sa zone d'échange) défile. */
@@ -5254,4 +5254,411 @@ button {
 .barracks-roster-none {
   font-size: 14px;
   color: var(--muted);
+}
+
+/* ------------------------------------------------------- garde-robe d'Adam */
+
+/*
+ * Le bouton de la garde-robe, posé au-dessus du sac, en bas à gauche : le
+ * visage d'Adam tel qu'il est habillé, sur un disque blanc — le sac est le
+ * sien. Une pastille corail dit qu'une pièce vient d'être trouvée.
+ */
+.hud .hud-wardrobe {
+  position: absolute;
+  left: calc(var(--safe-left) + 14px);
+  bottom: calc(var(--safe-bottom) + 118px);
+  width: 56px;
+  height: 56px;
+  overflow: visible;
+}
+
+.hud-wardrobe-face {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.hud-wardrobe[data-new='true']::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--coral);
+  box-shadow: inset -2px -2px 0 var(--coral-shade);
+  animation: wardrobe-ping 1.4s ease-in-out infinite;
+}
+
+@keyframes wardrobe-ping {
+  50% {
+    transform: scale(1.25);
+  }
+}
+
+/* Le bouton d'un toast : « Essayer ». La bulle ne prend pas les doigts, lui si. */
+.hud-toast-action {
+  flex: none;
+  min-height: 36px;
+  margin: -3px -10px -3px 4px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 999px;
+  background: var(--violet);
+  color: var(--paper);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  box-shadow: 0 3px 0 var(--violet-shade);
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.hud-toast-action:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--violet-shade);
+}
+
+/*
+ * L'éditeur : sous les réglages, au-dessus du reste. Debout, l'aperçu en
+ * haut, les onglets et les pièces dessous, qui défilent en hauteur seulement ;
+ * couché, l'aperçu à gauche, le reste à droite. Les boutons en bas, toujours visibles.
+ */
+.wardrobe-screen {
+  z-index: 11;
+  padding: max(12px, var(--safe-top)) max(12px, var(--safe-right)) max(12px, var(--safe-bottom)) max(12px, var(--safe-left));
+}
+
+.wardrobe-panel {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 10px;
+  width: min(560px, 100%);
+  height: min(860px, 100%);
+  padding: 16px 16px 18px;
+  text-align: left;
+}
+
+.wardrobe-head .overlay-title {
+  flex: 1;
+  font-size: 24px;
+}
+
+.wardrobe-count {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.wardrobe-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Adam en pied, à quatre pixels d'écran par pixel du sprite, sur un rond d'herbe. */
+.wardrobe-figure {
+  --spread: 16px;
+  position: relative;
+  width: 128px;
+  height: 168px;
+}
+
+/* Le rond d'herbe sous ses pieds. */
+.wardrobe-figure::before {
+  content: '';
+  position: absolute;
+  top: 142px;
+  left: 18px;
+  width: 92px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--grass);
+}
+
+.wardrobe-figure[data-view='left'] {
+  transform: scaleX(-1);
+}
+
+.wardrobe-figure img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 128px;
+  height: 192px;
+  pointer-events: none;
+}
+
+.wardrobe-foot-left {
+  translate: calc(var(--spread) * -1) 0;
+  animation: wardrobe-step 720ms ease-in-out infinite;
+}
+
+.wardrobe-foot-right {
+  translate: var(--spread) 0;
+  animation: wardrobe-step 720ms ease-in-out -360ms infinite;
+}
+
+.wardrobe-body {
+  animation: wardrobe-bob 360ms ease-in-out infinite alternate;
+}
+
+/* La marche sur place : un pied se lève pendant que l'autre porte, le corps rebondit à chaque pas. */
+@keyframes wardrobe-step {
+  0%,
+  50%,
+  100% {
+    transform: translateY(0);
+  }
+
+  25% {
+    transform: translateY(-9px);
+  }
+}
+
+@keyframes wardrobe-bob {
+  to {
+    transform: translateY(-5px) scale(1.01, 0.99);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wardrobe-figure img,
+  .hud-wardrobe[data-new='true']::after {
+    animation: none;
+  }
+}
+
+.wardrobe-turn {
+  min-height: 44px;
+  padding: 0 18px;
+  font-size: 16px;
+}
+
+.wardrobe-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  padding: 2px 2px 8px;
+}
+
+/* Les onglets sur deux rangées de quatre : tout se voit, rien ne défile de côté. */
+.wardrobe-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.wardrobe-tab {
+  position: relative;
+  min-height: 44px;
+  padding: 0 2px;
+  border: none;
+  border-radius: 14px;
+  background: var(--paper-shade);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wardrobe-tab[aria-selected='true'] {
+  background: var(--violet);
+  color: var(--paper);
+  box-shadow: 0 3px 0 var(--violet-shade);
+}
+
+.wardrobe-tab[data-new='true']::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--coral);
+}
+
+.wardrobe-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 8px;
+}
+
+.wardrobe-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-height: 112px;
+  padding: 8px 4px 8px;
+  border: none;
+  border-radius: 18px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  box-shadow: 0 4px 0 var(--paper-shade);
+  cursor: pointer;
+}
+
+.wardrobe-card:active {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 var(--paper-shade);
+}
+
+.wardrobe-card[aria-pressed='true'] {
+  background: var(--yellow-light);
+  box-shadow: 0 4px 0 var(--yellow-shade);
+}
+
+.wardrobe-thumb {
+  display: block;
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
+  background: var(--grass);
+}
+
+/* Une pièce à trouver : sa silhouette en aplat lavande, un cadenas au coin. */
+span.wardrobe-thumb {
+  background: var(--violet-light);
+  -webkit-mask: var(--silhouette) center / contain no-repeat;
+  mask: var(--silhouette) center / contain no-repeat;
+}
+
+.wardrobe-card[data-locked='true'] {
+  background: var(--paper-shade);
+  box-shadow: 0 4px 0 var(--violet-light);
+  color: var(--muted);
+}
+
+.wardrobe-lock {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+}
+
+.wardrobe-name {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.15;
+  text-align: center;
+}
+
+.wardrobe-rarity,
+.wardrobe-new {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--paper);
+}
+
+.wardrobe-card[data-rarity='rare'] .wardrobe-rarity {
+  background: var(--cyan-shade);
+}
+
+.wardrobe-card[data-rarity='epic'] .wardrobe-rarity {
+  background: var(--violet);
+}
+
+.wardrobe-new {
+  top: auto;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--coral);
+}
+
+.wardrobe-color-title {
+  margin: 4px 0 -2px;
+}
+
+.wardrobe-color-title[hidden],
+.wardrobe-swatches[hidden] {
+  display: none;
+}
+
+.wardrobe-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.wardrobe-swatch {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: var(--swatch);
+  box-shadow: inset -4px -4px 0 var(--swatch-shade);
+  cursor: pointer;
+  transition: transform 120ms ease-out;
+}
+
+.wardrobe-swatch[aria-checked='true'] {
+  transform: scale(1.15);
+}
+
+.wardrobe-swatch[aria-checked='true']::after {
+  content: '';
+  position: absolute;
+  inset: 14px;
+  border-radius: 50%;
+  background: var(--paper);
+}
+
+.wardrobe-hint {
+  margin: 0;
+  min-height: 1.2em;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.wardrobe-footer {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.wardrobe-footer button {
+  min-height: 52px;
+  padding: 0 12px;
+}
+
+/* Couché (un téléphone tourné) : l'aperçu à gauche, les onglets et les pièces à droite. */
+@media (orientation: landscape) and (max-height: 600px) {
+  .wardrobe-panel {
+    grid-template-columns: 180px minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    width: min(860px, 100%);
+    height: 100%;
+    padding: 12px 14px 14px;
+  }
+
+  .wardrobe-head,
+  .wardrobe-footer {
+    grid-column: 1 / -1;
+  }
+
+  .wardrobe-stage {
+    justify-content: center;
+  }
 }

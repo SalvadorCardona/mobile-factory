@@ -23,6 +23,7 @@ import { RESOURCES } from '../../data/resources.ts';
 import { TEST_SCENARIOS } from '../../data/testScenario.ts';
 import { WEAPONS } from '../../data/weapons.ts';
 import { WEATHER } from '../../data/weather.ts';
+import { PIECES } from '../../data/wardrobe.ts';
 
 /** Les textes d'un niveau de bâtiment : `action` est le verbe du bouton qui y mène. */
 interface LevelText {
@@ -85,6 +86,8 @@ export const content = {
   enemyBase: { label: ENEMY_BASE.label, description: ENEMY_BASE.description },
   /** Les arcs d'Adam, du niveau 0 au dernier. */
   gear: GEAR.map(({ label }): string => label),
+  /** Les pièces de la garde-robe d'Adam. */
+  pieces: mapTable(PIECES, (piece): string => piece.label),
   tools: mapTable(TOOLS, (tool): string => tool.label),
   quests: mapTable(QUESTS, ({ label, give, done }): { label: string; give: string; done: string } => ({ label, give, done })),
   objectives: (OBJECTIVES as readonly ObjectiveProto[]).map(

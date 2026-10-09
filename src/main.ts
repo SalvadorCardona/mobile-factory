@@ -24,7 +24,8 @@ import { CHIEF, type WildlifeId } from './data/enemies.ts';
 import { STORY_SEXES } from './data/inhabitants.ts';
 import type { ItemId } from './data/items.ts';
 import { OBJECTIVES, type ObjectiveProto } from './data/objectives.ts';
-import { TEST_SCENARIOS } from './data/testScenario.ts';
+import { TEST_SCENARIOS, type TestScenarioProto } from './data/testScenario.ts';
+import { PIECES } from './data/wardrobe.ts';
 import { IndicatorTap } from './input/indicatorTap.ts';
 import { seedsFor, type PerkId } from './data/perks.ts';
 import { Inspect } from './input/inspect.ts';
@@ -57,6 +58,7 @@ import { BuildMenu } from './ui/buildMenu.ts';
 import { Hud } from './ui/hud.ts';
 import { PauseScreen, TitleScreen } from './ui/screens.ts';
 import { SettingsPanel } from './ui/settingsPanel.ts';
+import { WardrobePanel } from './ui/wardrobePanel.ts';
 import { formatSeed, parseSeed } from './ui/seed.ts';
 import { testBanner, testScenarioOf } from './ui/testRoute.ts';
 import { ZoomControls } from './ui/zoomControls.ts';
@@ -321,9 +323,35 @@ async function main(): Promise<void> {
     recenter: () => (worldMap.open ? worldMap.recenter() : renderer.resetZoom()),
   });
 
+  // L'éditeur de personnage : ouvert, il arrête l'horloge comme les réglages ; « Valider » pousse `dressAdam`.
+  const wardrobe = new WardrobePanel(world, {
+    onToggle: (open) => {
+      accumulator = 0;
+      if (!open) return;
+      buildMenu.close();
+      panel.close();
+      inventory.close();
+      resources.close();
+      trade.close();
+      audio.play('open');
+    },
+  });
+
+  // Une pièce trouvée : un toast, et son bouton « Essayer » ouvre l'éditeur sur son onglet.
+  world.events.on('pieceFound', ({ piece }) => {
+    hud.notify(t().wardrobe.found(t().pieces[piece]), 'good', {
+      label: t().wardrobe.tryOn,
+      run: () => {
+        if (started && !paused && !settings.open && !world.defeated) wardrobe.show(PIECES[piece].slot);
+      },
+    });
+  });
+  world.events.on('lookRejected', () => hud.notify(t().wardrobe.rejected, 'bad'));
+
   // La colonne du bord droit : Pause, Réglages, la carte du monde, puis le zoom.
   zoom.root.prepend(hud.pauseButton, hud.settingsButton, worldMap.button);
-  hud.root.append(worldMap.root, zoom.root, stick.root, buildMenu.root, panel.root, inventory.root, resources.root, trade.root);
+  // Le visage d'Adam, posé au-dessus du sac : sa garde-robe. Les fenêtres du bas passent devant.
+  hud.root.append(wardrobe.button, worldMap.root, zoom.root, stick.root, buildMenu.root, panel.root, inventory.root, resources.root, trade.root);
   stick.avoid(buildMenu.bottomParts, hud.root);
   hud.bag.addEventListener('click', () => inventory.toggle());
   hud.resourcesButton.addEventListener('click', () => resources.toggle());
@@ -421,6 +449,7 @@ async function main(): Promise<void> {
   } else {
     hud.root.append(title.root);
   }
+  hud.root.append(wardrobe.root);
   // Par-dessus tout, écran titre compris : la langue se choisit avant même de jouer.
   hud.root.append(settings.root);
   mount.append(hud.root);
@@ -436,7 +465,7 @@ async function main(): Promise<void> {
       // Ctrl, Alt ou Cmd : un raccourci du navigateur ou du système, pas du menu.
       if (isTyping(event.target) || event.ctrlKey || event.metaKey || event.altKey) return;
 
-      const canOpen = started && !paused && !settings.open && !world.defeated && !worldMap.open;
+      const canOpen = started && !paused && !settings.open && !wardrobe.open && !world.defeated && !worldMap.open;
 
       if (buildMenu.handleKey(event.code, event.repeat, canOpen)) {
         event.preventDefault();
@@ -468,6 +497,7 @@ async function main(): Promise<void> {
 
       const action = escapeAction({
         settingsOpen: settings.open,
+        wardrobeOpen: wardrobe.open,
         paused,
         mapOpen: worldMap.open,
         menuOpen: buildMenu.isOpen,
@@ -476,6 +506,7 @@ async function main(): Promise<void> {
       });
 
       if (action === 'closeSettings') settings.close();
+      else if (action === 'closeWardrobe') wardrobe.close();
       else if (action === 'closeMap') worldMap.close();
       else if (action === 'closeMenu') buildMenu.close();
       else if (action === 'closePanel') {
@@ -488,10 +519,10 @@ async function main(): Promise<void> {
       }
       else setPaused(action === 'pause');
     }
-    if (shortcut === 'inventory' && started && !paused && !settings.open && !worldMap.open) inventory.toggle();
+    if (shortcut === 'inventory' && started && !paused && !settings.open && !wardrobe.open && !worldMap.open) inventory.toggle();
     if (shortcut === 'map') {
       if (worldMap.open) worldMap.close();
-      else if (started && !paused && !settings.open && !world.defeated) worldMap.show();
+      else if (started && !paused && !settings.open && !wardrobe.open && !world.defeated) worldMap.show();
     }
     if (shortcut === 'debug' && import.meta.env.DEV) hud.toggleDebug();
     // Débogage : F lève ou rabat le brouillard de guerre — en dev, panneau de debug ouvert.
@@ -554,11 +585,14 @@ async function main(): Promise<void> {
 
   let accumulator = 0;
   let frame = 0;
+
+  // Une partie de test peut s'ouvrir sur l'éditeur de personnage, pour les captures.
+  if (scenario && (TEST_SCENARIOS[scenario] as TestScenarioProto).wardrobe?.open) wardrobe.show();
   let lastAxisX = 0;
   let lastAxisY = 0;
 
   renderer.app.ticker.add((ticker) => {
-    const running = started && !paused && !settings.open;
+    const running = started && !paused && !settings.open && !wardrobe.open;
 
     if (running && !celebrating) accumulator += Math.min(ticker.deltaMS, MAX_FRAME_MS);
 
@@ -784,6 +818,7 @@ function wireAudio(world: World, audio: AudioEngine, settings: SettingsPanel): v
   world.events.on('queenDived', () => audio.play('gloop'));
   world.events.on('queenSlain', () => audio.play('objective'));
   world.events.on('lootPicked', () => audio.play('pickup'));
+  world.events.on('pieceFound', () => audio.play('pickup'));
   world.events.on('childBorn', () => audio.play('baby'));
   world.events.on('eveArrived', () => audio.play('build'));
   world.events.on('traded', () => audio.play('deliver'));

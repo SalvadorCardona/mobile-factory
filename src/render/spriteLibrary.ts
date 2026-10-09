@@ -62,6 +62,8 @@ export function screenResolution(): number {
 export class SpriteLibrary {
   private readonly textures = new Map<string, Texture>();
   private readonly sources: CanvasSource[] = [];
+  /** Les pages recomposées après le chargement, par sprite (l'apparence d'Adam) : elles remplacent ses morceaux d'origine. */
+  private readonly dressed = new Map<string, CanvasSource[]>();
   public stats: AtlasStats = { pages: 0, images: 0, megapixels: 0, resolution: 1, ms: 0 };
 
   private constructor() {}
@@ -95,6 +97,40 @@ export class SpriteLibrary {
   /** La texture d'un morceau de sprite. */
   public part<S extends SpriteId>(id: S, part: PartOf<S>): Texture {
     return this.texture(`${id}.${part}`);
+  }
+
+  /**
+   * Recompose des morceaux d'un sprite — l'apparence d'Adam, quand il se
+   * change : ils sont rastérisés à part (quelques images, une petite page),
+   * puis `install()` les met à la place des anciens sous les mêmes clés. Le
+   * rendu reprend alors ses textures, puis appelle ce qu'`install()` rend :
+   * la page d'avant se libère. Une recomposition dépassée par une plus
+   * récente n'est jamais installée : elle part au ramasse-miettes.
+   */
+  public async dress(id: SpriteId, parts: Readonly<Record<string, string>>): Promise<{ install: () => () => void }> {
+    const proto: SpriteProto = SPRITES[id];
+    const { resolution } = this.stats;
+    const slots = await Promise.all(
+      Object.entries(parts).map(([part, svg]) => rasterize({ key: `${id}.${part}`, svg, width: proto.width, height: proto.height }, resolution)),
+    );
+
+    return {
+      install: () => {
+        const previous = this.dressed.get(id) ?? [];
+        const stale = slots
+          .map(({ source }) => this.textures.get(source.key))
+          .filter((texture): texture is Texture => texture !== undefined && previous.includes(texture.source as CanvasSource));
+        const before = this.sources.length;
+
+        this.pack(slots, resolution);
+        this.dressed.set(id, this.sources.splice(before));
+
+        return () => {
+          for (const texture of stale) texture.destroy(false);
+          for (const source of previous) source.destroy();
+        };
+      },
+    };
   }
 
   /** Rangement en étagères, les plus hautes d'abord : simple, et bien assez dense ici. */
@@ -160,9 +196,10 @@ export class SpriteLibrary {
 
   public destroy(): void {
     for (const texture of this.textures.values()) texture.destroy(false);
-    for (const source of this.sources) source.destroy();
+    for (const source of [...this.sources, ...[...this.dressed.values()].flat()]) source.destroy();
     this.textures.clear();
     this.sources.length = 0;
+    this.dressed.clear();
   }
 }
 

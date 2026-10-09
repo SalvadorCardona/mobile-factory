@@ -475,6 +475,26 @@ passé soigne Adam (événement `levelUp`, toast, confettis) ; le niveau et la
 barre d'XP ouvrent le bandeau de la ville (`.hud-level`), « +N XP » flotte
 sur l'ennemi.
 
+**Garde-robe d'Adam** (`src/data/wardrobe.ts`, `src/sim/wardrobe.ts`,
+`ui/wardrobePanel.ts`) — Adam se dessine en **calques** (`art/adamLook.ts`) :
+peau, sac, écharpe fixes, puis une **pièce** par emplacement (`LOOK_SLOTS` :
+cheveux, yeux, barbe, haut, pantalon, chaussures, lunettes, chapeau ;
+`PIECES`, rareté, `starter`) et trois nuanciers de la palette (`LOOK_COLORS` :
+yeux, cheveux et barbe, haut). Un calque range ses formes à des profondeurs
+(le sac derrière de face, devant de dos) ; pantalon et chaussures sont dans le
+pied, qui alterne à la marche. Le rendu recompose les morceaux `adam.down/up/
+side/foot` dans une petite page à part quand Adam se change
+(`SpriteLibrary.dress`, `Puppet.refresh`) : aucun sprite de plus. L'éditeur
+s'ouvre au visage d'Adam posé au-dessus du sac (pastille : pièce trouvée) ou
+au « Essayer » du toast « Nouvel objet : … » ; il arrête l'horloge, tient un
+brouillon et pousse `dressAdam` à « Valider » (refus `LookRejection`). Une
+pièce se **trouve** (`WARDROBE_LOOT`) : objectif réussi, base abattue, son
+chef, la Reine, parfois une bête — tirage haché de la seed et de l'événement
+(`rollPiece`), jamais le PRNG du monde. `Player.look` et `Player.wardrobe`
+sont sauvegardés ; une sauvegarde d'avant lit l'Adam par défaut. Partie de
+test `/test/wardrobe` : l'éditeur ouvert, une partie des pièces trouvées.
+Captures dans `docs/wardrobe/`.
+
 **Bases mutantes** (`src/data/enemyBases.ts`, `src/sim/enemyBases.ts`) —
 à la création de la partie, des anneaux de campements (`ENEMY_BASE_RINGS` :
 34, 54, 76 tuiles de la mairie, niveaux 1 à 3) se tirent de la seed, sans

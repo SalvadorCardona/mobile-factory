@@ -51,6 +51,8 @@ import { BUILDINGS, buildingLevel } from '../data/buildings.ts';
 import type { ProblemId } from '../data/problems.ts';
 import { RESEARCH } from '../data/research.ts';
 import { SPRITES, type SpriteId, type SpriteProto } from '../data/sprites.ts';
+import { DEFAULT_LOOK, sameLook, type Look } from '../data/wardrobe.ts';
+import { adamLookParts } from '../art/adamLook.ts';
 import { locale, t } from '../i18n/locale.ts';
 import type { Entity, EntityId } from '../sim/types.ts';
 import { terrainAt } from '../sim/terrain.ts';
@@ -191,6 +193,9 @@ export class EntityLayer {
   private readonly signboards: Signboards;
   /** Le réglage « Pancartes » : faux, aucune ne s'affiche. */
   public signsOn = true;
+  /** La dernière recomposition d'Adam demandée : une plus ancienne qui finit après elle est jetée. */
+  private dressing = 0;
+  private destroyed = false;
 
   public constructor(world: World, library: SpriteLibrary, tiles: TerrainTiles, shadows: Container, signboards: Signboards) {
     this.world = world;
@@ -230,6 +235,9 @@ export class EntityLayer {
       if (view) view.hit = HIT_MS;
     });
     world.events.on('playerHurt', () => this.adam.hit());
+    // Adam s'habille comme il l'a choisi : à l'ouverture d'une partie, et à chaque « Valider » de l'éditeur.
+    if (!sameLook(world.player.look, DEFAULT_LOOK)) this.dressAdam(world.player.look);
+    world.events.on('lookChanged', ({ look }) => this.dressAdam(look));
     // Adam a les mains vides : l'outil découle de ce qu'il fait — la hache pour un arbre, la
     // pioche pour un rocher (fer, charbon, pierre), le marteau pour bâtir, renforcer ou réparer.
     world.events.on('resourceHarvested', ({ item }) => this.wieldTool(item === 'wood' ? 'axe' : 'pickaxe'));
@@ -697,7 +705,26 @@ export class EntityLayer {
     }
   }
 
+  /**
+   * Recompose les calques d'Adam (`art/adamLook.ts`) en textures : un corps par
+   * direction, le pied. Ses animations n'y voient que des textures neuves —
+   * le même nombre de sprites qu'avant, aucun coût par image.
+   */
+  private dressAdam(look: Look): void {
+    const token = ++this.dressing;
+
+    void this.library.dress('adam', adamLookParts(look)).then(({ install }) => {
+      if (token !== this.dressing || this.destroyed) return;
+
+      const release = install();
+
+      this.adam.refresh();
+      release();
+    });
+  }
+
   public destroy(): void {
+    this.destroyed = true;
     this.mobiles.destroy();
     this.adam.destroy();
     this.container.destroy({ children: true });

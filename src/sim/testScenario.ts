@@ -20,6 +20,7 @@ import { BUILDINGS } from '../data/buildings.ts';
 import { DAY_CYCLE } from '../data/dayNight.ts';
 import type { ItemId } from '../data/items.ts';
 import { SCENARIO_REVEAL, type TestScenarioProto } from '../data/testScenario.ts';
+import { copyLook } from '../data/wardrobe.ts';
 import { baseCenter } from './enemyBases.ts';
 import type { Store } from './store.ts';
 import type { EntityId } from './types.ts';
@@ -69,6 +70,10 @@ export function stageScenario(scenario: TestScenarioProto): World {
   teleport(world, (hx + scenario.adam.dx + 0.5) * TILE_SIZE, (hy + scenario.adam.dy + 0.5) * TILE_SIZE);
   if (scenario.gear !== undefined) world.player.gear = scenario.gear;
   if (scenario.nearBase !== undefined) besideBase(world, scenario.nearBase);
+  if (scenario.wardrobe) {
+    world.player.wardrobe = [...scenario.wardrobe.found];
+    if (scenario.wardrobe.look) world.player.look = copyLook(scenario.wardrobe.look);
+  }
 
   // Le soir tombe : l'horloge avance jusqu'au crépuscule, sans rien sauter d'autre — ni nuit, ni aube.
   if (scenario.dusk) {

@@ -19,6 +19,7 @@
 import type { BuildingId } from './buildings.ts';
 import type { ItemId } from './items.ts';
 import type { ResearchId } from './research.ts';
+import type { Look, PieceId } from './wardrobe.ts';
 
 /** Un bâtiment de la base, posé à (dx, dy) tuiles du coin de la mairie. */
 export interface ScenarioBuilding {
@@ -62,6 +63,11 @@ export interface TestScenarioProto {
    * proche de la mairie, du côté de la mairie, plutôt qu'à `adam`.
    */
   nearBase?: number;
+  /**
+   * La garde-robe d'Adam : les pièces déjà trouvées, ce qu'il porte, et
+   * l'éditeur de personnage ouvert d'emblée (`open`).
+   */
+  wardrobe?: { found: readonly PieceId[]; look?: Look; open?: boolean };
 }
 
 /** Le rayon exploré d'office autour de la mairie d'une partie de test. */
@@ -213,6 +219,51 @@ export const TEST_SCENARIOS = {
     adam: { dx: 1, dy: 4 },
     gear: 1,
     nearBase: 10,
+  },
+  /**
+   * L'éditeur de personnage ouvert devant la mairie : Adam a déjà trouvé
+   * une bonne partie de la garde-robe — lunettes d'aviateur, crête, poncho,
+   * chaussons lapin… —, le reste attend sous cadenas. On essaie, on tourne
+   * l'aperçu, on valide, et le nouvel Adam marche sur la carte.
+   */
+  wardrobe: {
+    label: 'Garde-robe',
+    seed: 100,
+    buildings: [{ building: 'lumberCamp', dx: -6, dy: 0 }],
+    town: { wood: 40, stone: 30, food: 12, water: 12 },
+    bag: {},
+    adam: { dx: 1, dy: 4 },
+    wardrobe: {
+      found: [
+        'hairCurly',
+        'hairMohawk',
+        'eyesBright',
+        'beardMustache',
+        'topHoodie',
+        'topPoncho',
+        'pantsPatched',
+        'shoesSneakers',
+        'shoesBunny',
+        'glassesRound',
+        'glassesAviator',
+        'hatFlower',
+        'hatStraw',
+      ],
+      look: {
+        pieces: {
+          hair: 'hairMohawk',
+          eyes: 'eyesBold',
+          beard: 'beardMustache',
+          top: 'topPoncho',
+          pants: 'pantsPatched',
+          shoes: 'shoesSneakers',
+          glasses: 'glassesAviator',
+          hat: 'hatNone',
+        },
+        colors: { eyes: 'cyan', hair: 'coral', top: 'cyan' },
+      },
+      open: true,
+    },
   },
 } as const satisfies Record<string, TestScenarioProto>;
 

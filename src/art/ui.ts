@@ -664,6 +664,15 @@ export const UI_ICONS = {
     polyline([5.5, 16, 9.5, 13, 13, 15, 16.5, 12], ink.base),
     shadedCircle(17, 9, 3.2, 'coral'),
   ),
+  /** Verrouillé : un cadenas jaune, son anse indigo, le trou de la serrure. */
+  lock: svg(
+    S,
+    S,
+    ring(12, 10, 5.5, 5.5, 2, ink.base),
+    shadedBlock(4.5, 10, 15, 11.5, 2.5, 'yellow', 3.5),
+    circle(12, 14.2, 1.7, ink.base),
+    pill(11.3, 14.6, 1.4, 3.6, ink.base),
+  ),
   /** Revenir sur Adam : une mire indigo, son cœur corail au centre. */
   recenter: svg(
     S,
