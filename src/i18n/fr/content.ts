@@ -9,6 +9,7 @@ import { BUILDING_CATEGORIES, BUILDINGS, type BuildingId, type BuildingProto } f
 import { RARE_OFFERS } from '../../data/caravan.ts';
 import { ENEMY_BASE } from '../../data/enemyBases.ts';
 import { ENEMIES, WILDLIFE } from '../../data/enemies.ts';
+import { ERAS, type EraProto } from '../../data/eras.ts';
 import { EVE_LINES } from '../../data/eve.ts';
 import { GEAR } from '../../data/gear.ts';
 import { ITEMS } from '../../data/items.ts';
@@ -94,6 +95,12 @@ export const content = {
     ({ title, hint, celebration, banner }): ObjectiveText => ({ title, hint, celebration, banner: banner ?? '' }),
   ),
   eve: EVE_LINES,
+  /** Les ères de la colonie, dans l'ordre de `ERAS`. */
+  eras: (ERAS as readonly EraProto[]).map(({ label, motto, threatLine }): { label: string; motto: string; threat: string } => ({
+    label,
+    motto,
+    threat: threatLine,
+  })),
   researchStats: mapTable(RESEARCH_STATS, ({ label, unit }): { label: string; unit: string } => ({ label, unit })),
   researchThemes: mapTable(RESEARCH_THEMES, (label): string => label),
   research: mapTable(RESEARCH, ({ label, description }): { label: string; description: string } => ({ label, description })),

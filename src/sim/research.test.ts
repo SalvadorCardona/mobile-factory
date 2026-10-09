@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { TILE_SIZE } from '../core/grid.ts';
 import { BUILDINGS, MENU_BUILDING_IDS, type BuildingId } from '../data/buildings.ts';
 import { ENEMIES, WILDLIFE } from '../data/enemies.ts';
+import { ERAS } from '../data/eras.ts';
 import type { ItemId } from '../data/items.ts';
 import { COLONY } from '../data/inhabitants.ts';
 import { PRODUCTION } from '../data/production.ts';
@@ -127,10 +128,12 @@ function finish(world: World, research: ResearchId): void {
 }
 
 describe('recherches — données', () => {
-  it('passe la validation, de six à douze recherches', () => {
+  it('passe la validation, de six à douze recherches par onglet d’ère', () => {
     expect(validatePrototypes()).toEqual([]);
     expect(RESEARCH_IDS.length).toBeGreaterThanOrEqual(6);
-    expect(RESEARCH_IDS.length).toBeLessThanOrEqual(12);
+    for (let era = 0; era < ERAS.length; era += 1) {
+      expect(RESEARCH_IDS.filter((id) => RESEARCH[id].era === era).length).toBeLessThanOrEqual(12);
+    }
   });
 
   it('mêle objets communs et butin : le combat nourrit la recherche, la récolte aussi', () => {

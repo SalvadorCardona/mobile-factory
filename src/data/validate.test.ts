@@ -27,16 +27,22 @@ describe('prototypes', () => {
   });
 
   it('refuse un objet récoltable sans débouché', () => {
-    // Sans la forge, les foreuses rapides du labo ni l'étage 2 de l'antenne, le charbon ne servirait à rien : la validation doit le dire.
+    // Sans la forge, l'aciérie, les foreuses rapides et le haut fourneau du labo ni l'étage 2 de l'antenne, le charbon ne servirait à rien : la validation doit le dire.
     const forge = RECIPES.smeltPlate as RecipeProto;
+    const steel = RECIPES.castSteel as RecipeProto;
     const drills = RESEARCH.fastDrills as ResearchProto;
+    const furnace = RESEARCH.steelmaking as ResearchProto;
     const floor = BUILDINGS.antenna.upgrades[0] as BuildingUpgrade;
     const inputs = forge.inputs;
+    const steelInputs = steel.inputs;
     const cost = drills.cost;
+    const furnaceCost = furnace.cost;
     const floorCost = floor.cost;
 
     forge.inputs = { ironOre: 2 };
+    steel.inputs = { ironPlate: 2 };
     drills.cost = { ironOre: 10 };
+    furnace.cost = { tools: 8, ironPlate: 10 };
     floor.cost = { ironPlate: 40, radCore: 1 };
     try {
       expect(validatePrototypes()).toContain(
@@ -44,7 +50,9 @@ describe('prototypes', () => {
       );
     } finally {
       forge.inputs = inputs;
+      steel.inputs = steelInputs;
       drills.cost = cost;
+      furnace.cost = furnaceCost;
       floor.cost = floorCost;
     }
     expect(validatePrototypes()).toEqual([]);
