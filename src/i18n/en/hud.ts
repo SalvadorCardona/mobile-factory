@@ -252,6 +252,10 @@ export const hud: Messages['hud'] = {
     buildings: 'Buildings',
     playTime: 'Play time',
   },
+  death: {
+    title: 'You died',
+    countdown: (seconds: number): string => `Respawning in ${seconds} s`,
+  },
   defeat: {
     title: 'The town hall has fallen',
     text: 'The mutants got the better of the colony’s first roof.',

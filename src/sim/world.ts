@@ -50,6 +50,7 @@ import { hash3, mulberry32, type StatefulRng } from '../core/rng.ts';
 import { BUILDINGS, BUILDING_IDS, MENU_BUILDING_IDS, START_BUILDINGS, REPAIR, RUIN, bedsOf, buildingLevel, nextUpgrade, type BuildingId, type BuildingKind, type BuildingProto } from '../data/buildings.ts';
 import { CARAVAN, RARE_OFFERS, type RareOfferId } from '../data/caravan.ts';
 import { CLINIC } from '../data/clinic.ts';
+import { DEATH } from '../data/death.ts';
 import { COMPANIONS, COMPANION_CLASSES, type CompanionClassId } from '../data/companions.ts';
 import { DAWN_REWARD, SURVIVORS } from '../data/dayNight.ts';
 import {
@@ -261,6 +262,9 @@ export function timerText(ticks: number): string {
 }
 export const STEP_MS = 1000 / TICKS_PER_SECOND;
 const STEP_SECONDS = 1 / TICKS_PER_SECOND;
+
+/** Les seules commandes qu'on prend d'Adam à terre : celles qui ne sont pas de lui (vue, jardin, brouillard). */
+const DEAD_COMMANDS: ReadonlySet<Command['type']> = new Set(['setMoveAxis', 'seeBuilding', 'seePieces', 'applyPerks', 'setFog']);
 
 /** Recette utilisée par une foreuse. Une seule pour l'instant, cf. `data/recipes.ts`. */
 const DRILL_RECIPE: RecipeId = 'mineOre';
@@ -572,6 +576,7 @@ export type WorldEvents = {
   chiefSlammed: { id: MobileId; x: number; y: number; hit: boolean };
   /** Adam est tombé : il se réveille à la mairie, remis sur pied. */
   playerKnockedOut: { x: number; y: number };
+  playerRespawned: { x: number; y: number };
   /** La nurserie a produit un enfant. */
   childBorn: { nurseryId: EntityId; kidId: MobileId; x: number; y: number };
   /** Une caravane de troc part de loin vers le bord de la clairière : c'est le jour `day`. */
@@ -779,6 +784,8 @@ export class World {
 
   /** Tick où la mairie est tombée ; 0 tant qu'elle tient. */
   public defeatTick = 0;
+  /** Ticks restants avant la réapparition d'Adam ; 0 : il est debout. */
+  public respawnTicks = 0;
 
   /**
    * Quêtes d'Ève déjà finies, dans l'ordre de `QUEST_IDS`. C'est tout l'état
@@ -1030,6 +1037,7 @@ export class World {
       prestigeSites: [...this.prestigeSites],
       defeated: this.defeated,
       defeatTick: this.defeatTick,
+      ...(this.respawnTicks > 0 && { respawnTicks: this.respawnTicks }),
       questsDone: this.questsDone,
       perks: [...this.perks],
       giftedSites: [...this.giftedSites],
@@ -1098,6 +1106,7 @@ export class World {
     for (const key of state.prestigeSites) this.prestigeSites.add(key);
     this.defeated = state.defeated;
     this.defeatTick = state.defeatTick;
+    this.respawnTicks = state.respawnTicks ?? 0;
     this.questsDone = state.questsDone;
     this.perks = [...state.perks];
     this.giftedSites = [...state.giftedSites];
@@ -1233,28 +1242,31 @@ export class World {
     const speed = (slowed && this.spell ? WEATHER[this.spell.id].playerSpeed : 1) * (paved ? ROADS.speed : 1);
     const contact = stepPlayer(
       this.player,
-      this.moveX,
-      this.moveY,
+      this.dead ? 0 : this.moveX,
+      this.dead ? 0 : this.moveY,
       this.playerObstacleAt,
       STEP_SECONDS,
       (PLAYER_SPEED_TILES + this.bonus('walkSpeed')) * speed,
     );
 
-    this.handleContact(contact);
-    this.watchZone();
-    this.harvestNearby();
-    this.openChests();
+    if (!this.dead) {
+      this.handleContact(contact);
+      this.watchZone();
+      this.harvestNearby();
+      this.openChests();
+    }
     this.growForest();
     this.stepClock();
     this.corrode();
     this.purify();
     this.stepMobiles();
     this.recover();
+    this.stepRespawn();
     this.stepWildlife();
     this.stepGuards();
     this.stepBaseFire();
     this.watchOverColony();
-    this.shootPlayerBow();
+    if (!this.dead) this.shootPlayerBow();
 
     for (const id of this.scheduler.due(this.tickCount)) {
       const entity = this.entities.get(id);
@@ -1278,6 +1290,9 @@ export class World {
   }
 
   private apply(command: Command): void {
+    // À terre, Adam ne fait rien : ni pas, ni chantier, ni échange. Seul ce qui n'est pas de lui passe.
+    if (this.dead && !DEAD_COMMANDS.has(command.type)) return;
+
     switch (command.type) {
       case 'setMoveAxis':
         this.moveX = clamp(command.x, -1, 1);
@@ -4997,9 +5012,21 @@ export class World {
     if (hit) this.hurtPlayer(chief.id, base ? enemyBaseLevel(base.level).chief.slamDamage : WILDLIFE.chief.damage);
   }
 
-  /** Un coup de pince, de croc, de massue ou de crachat. À zéro, Adam tombe et se réveille à la mairie. */
+  /** Adam est-il à terre, en attendant de réapparaître ? */
+  public get dead(): boolean {
+    return this.respawnTicks > 0;
+  }
+
+  /** Les secondes entières avant qu'Adam ne se relève (0 : debout). */
+  public respawnSeconds(): number {
+    return Math.ceil(this.respawnTicks / TICKS_PER_SECOND);
+  }
+
+  /** Un coup de pince, de croc, de massue ou de crachat. À zéro, Adam tombe : il se réveille à la mairie après `DEATH.respawnSeconds`. */
   private hurtPlayer(by: MobileId, damage: number): void {
     const { player } = this;
+
+    if (this.dead) return;
 
     player.hp = Math.max(0, player.hp - damage);
     player.calmTicks = 0;
@@ -5007,20 +5034,47 @@ export class World {
 
     if (player.hp > 0) return;
 
+    const { x, y } = this.respawnSpot();
+
+    player.x = player.prevX = x;
+    player.y = player.prevY = y;
+    player.target = null;
+    this.moveX = 0;
+    this.moveY = 0;
+    this.respawnTicks = DEATH.respawnSeconds * TICKS_PER_SECOND;
+    this.events.emit('playerKnockedOut', { x, y });
+  }
+
+  /** Le point de réapparition : une case libre autour de la mairie, sinon le départ. */
+  private respawnSpot(): { x: number; y: number } {
     const hall = this.entities.get(this.townHallId);
     const spot = hall ? this.freeTileAround(hall.tx, hall.ty, hall.width, hall.height) : null;
-    const x = spot ? (spot.tx + 0.5) * TILE_SIZE : this.spawnX;
-    const y = spot ? (spot.ty + 0.5) * TILE_SIZE : this.spawnY;
+
+    return spot ? { x: (spot.tx + 0.5) * TILE_SIZE, y: (spot.ty + 0.5) * TILE_SIZE } : { x: this.spawnX, y: this.spawnY };
+  }
+
+  /** Le décompte de la mort : un tick par tick de jeu, donc rien en pause. À zéro, Adam se relève, ses PV au maximum. */
+  private stepRespawn(): void {
+    if (!this.dead) return;
+
+    this.respawnTicks -= 1;
+    if (this.respawnTicks > 0) return;
+
+    const { player } = this;
+    const { x, y } = this.respawnSpot();
 
     player.x = player.prevX = x;
     player.y = player.prevY = y;
     player.hp = this.maxHp();
-    this.events.emit('playerKnockedOut', { x, y });
+    player.calmTicks = 0;
+    this.events.emit('playerRespawned', { x, y });
   }
 
   /** Au calme, Adam reprend des forces, un point à la fois. */
   private recover(): void {
     const { player } = this;
+
+    if (this.dead) return;
 
     player.calmTicks += 1;
 

@@ -143,6 +143,9 @@ function playedWorld(): World {
     world.tick();
   }
 
+  // Tombé sous les mutants, Adam ne bâtit pas : on attend qu'il se relève.
+  while (world.dead) world.tick();
+
   // Un chantier entamé, pour que `delivered` voyage aussi.
   const origin = worldToTile(world.player.x, world.player.y);
 

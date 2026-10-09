@@ -311,6 +311,10 @@ export const hud = {
     buildings: 'Bâtiments',
     playTime: 'Temps de jeu',
   },
+  death: {
+    title: 'Vous êtes mort',
+    countdown: (seconds: number): string => `Réapparition dans ${seconds} s`,
+  },
   defeat: {
     title: `La ${HALL.toLowerCase()} est tombée`,
     text: 'Les mutants ont eu raison du premier toit de la colonie.',
