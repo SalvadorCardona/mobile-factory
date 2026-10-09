@@ -89,6 +89,14 @@ export const hud: Messages['hud'] = {
     patientAdmitted: 'Admitted to the clinic: one night of care',
     mutantHealed: 'An ex-mutant leaves the clinic: one more porter!',
     kidGrewUp: (name: string): string => `${name} is 14, one more worker`,
+    starving: {
+      hunger: (name: string, seconds: number): string => `${name} will starve in ${seconds} s — food!`,
+      thirst: (name: string, seconds: number): string => `${name} will die of thirst in ${seconds} s — water!`,
+    },
+    workerStarved: {
+      hunger: (name: string): string => `${name} starved to death`,
+      thirst: (name: string): string => `${name} died of thirst`,
+    },
     growthStunted: {
       hunger: (name: string): string => `${name} is hungry: no birthday this dawn`,
       thirst: (name: string): string => `${name} is thirsty: no birthday this dawn`,
