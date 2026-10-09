@@ -17,6 +17,9 @@
  * Là où un sol s'avance dans un autre, son coin s'arrondit (`corner`) : les
  * plateaux ont les angles doux des autres formes du jeu.
  *
+ * - les plaques de terre contaminée ont les mêmes coins arrondis que les
+ *   sols : `cornerTile` en leur ton (`CONTAMINATION_TONE`), saillants comme
+ *   rentrants ;
  * - la terre **polluée** (violet sombre, bulles claires) et la terre
  *   **radioactive** (orange sombre, trèfle d'avertissement jaune) se posent par
  *   dessus le sol (`CONTAMINATION_TILES`) : deux teintes, deux motifs, qu'on
@@ -26,7 +29,7 @@
  * du chunk (`render/chunkLayer.ts`).
  */
 
-import { GROUND, PALETTE, circle, ellipse, group, pill, rect, shape, svg, type Ground } from '../data/artDirection.ts';
+import { GROUND, PALETTE, circle, ellipse, group, pill, rect, shape, svg, type Color, type Ground } from '../data/artDirection.ts';
 import type { ContaminationKind } from '../data/contamination.ts';
 
 const T = 32;
@@ -106,6 +109,12 @@ export const CONTAMINATION_TILES: Record<ContaminationKind, readonly string[]> =
   ],
 };
 
+/** Le ton plein d'une terre contaminée : celui de ses coins arrondis, qui fondent la plaque dans le sol voisin. */
+export const CONTAMINATION_TONE: Record<ContaminationKind, Color> = {
+  polluted: PALETTE.violet.shade,
+  radioactive: PALETTE.orange.shade,
+};
+
 /**
  * Transition dessinée **sur** une tuile de `owner`, du côté `side` où la
  * voisine est d'un autre sol. `null` : ce côté n'a rien à dessiner.
@@ -129,7 +138,7 @@ export function edgeTile(owner: Ground, side: Side): string | null {
  * couleur du sol voisin. Posé sur un coin saillant, il arrondit la forme —
  * un plateau, une langue de sable.
  */
-export function cornerTile(color: (typeof GROUND)[Ground]['base' | 'alt'], corner: Corner): string {
+export function cornerTile(color: Color, corner: Corner): string {
   const r = CORNER_RADIUS;
   const paths: Record<Corner, string> = {
     tl: `M0 0H${r}A${r} ${r} 0 0 0 0 ${r}Z`,
