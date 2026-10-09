@@ -130,6 +130,8 @@ export interface WorldState {
   researchDone: ResearchId[];
   /** Bâtiments du menu dont la carte a perdu son badge « Nouveau ». */
   seenBuildings: BuildingId[];
+  /** Bâtiments ouverts sans plan ni recherche. Absent d'une sauvegarde d'avant : tous. */
+  openBuildings?: BuildingId[];
   /** Offres rares de la caravane déjà prises, par offre. Absent des sauvegardes d'avant elle : aucune. */
   rareTrades: Partial<Record<RareOfferId, number>>;
   /** Index de l'objectif en cours ; `OBJECTIVES.length` une fois la chaîne bouclée. */
@@ -433,6 +435,7 @@ function parseState(raw: unknown): WorldState {
     giftedSites: array(state['giftedSites'] ?? []).map((id) => oneOf(id, BUILDINGS) as BuildingId),
     researchDone: [...new Set(array(state['researchDone'] ?? []).map((id) => oneOf(id, RESEARCH) as ResearchId))],
     seenBuildings: [...new Set(array(state['seenBuildings'] ?? []).map((id) => oneOf(id, BUILDINGS) as BuildingId))],
+    ...(state['openBuildings'] !== undefined && { openBuildings: [...new Set(array(state['openBuildings']).map((id) => oneOf(id, BUILDINGS) as BuildingId))] }),
     rareTrades: parseRareTrades(state['rareTrades'] ?? {}),
     ...(state['colonists'] !== undefined && { colonists: int(state['colonists']) }),
     ...(state['staffPosts'] !== undefined && { staffPosts: unique(array(state['staffPosts']).map(parseStaffPost)) }),

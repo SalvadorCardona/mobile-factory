@@ -47,7 +47,7 @@
 import { Emitter } from '../core/events.ts';
 import { CHUNK_SIZE, CHUNK_TILES, TILE_SIZE, coordKey, distanceSq, floorDiv, type TileCoord } from '../core/grid.ts';
 import { hash3, mulberry32, type StatefulRng } from '../core/rng.ts';
-import { BUILDINGS, MENU_BUILDING_IDS, REPAIR, RUIN, bedsOf, buildingLevel, nextUpgrade, type BuildingId, type BuildingKind, type BuildingProto } from '../data/buildings.ts';
+import { BUILDINGS, BUILDING_IDS, MENU_BUILDING_IDS, START_BUILDINGS, REPAIR, RUIN, bedsOf, buildingLevel, nextUpgrade, type BuildingId, type BuildingKind, type BuildingProto } from '../data/buildings.ts';
 import { CARAVAN, RARE_OFFERS, type RareOfferId } from '../data/caravan.ts';
 import { CLINIC } from '../data/clinic.ts';
 import { COMPANIONS, COMPANION_CLASSES, type CompanionClassId } from '../data/companions.ts';
@@ -779,6 +779,13 @@ export class World {
    */
   public seenBuildings = new Set<BuildingId>();
 
+  /**
+   * Bâtiments ouverts à la construction sans plan, recherche ni objectif.
+   * Tous par défaut (parties scriptées, anciennes sauvegardes) ; une colonie
+   * neuve (`World.newColony`) n'ouvre que `START_BUILDINGS`.
+   */
+  public openBuildings = new Set<BuildingId>(BUILDING_IDS);
+
   /** Ce que le menu proposait au tick d'avant ; `null` avant le premier. Pas de l'état : il se relit. */
   private menuKnown: Set<BuildingId> | null = null;
 
@@ -911,6 +918,15 @@ export class World {
   /** Le problème que montre chaque producteur — coffre plein, ouvrier manquant —, cf. `problem()`. Jamais sauvegardé. */
   private readonly problems = new ProblemWatch();
 
+  /** Une colonie neuve : seuls les bâtiments de départ sont au menu. */
+  public static newColony(seed: number): World {
+    const world = new World(seed);
+
+    world.openBuildings = new Set(START_BUILDINGS);
+
+    return world;
+  }
+
   public constructor(seed: number) {
     this.seed = seed >>> 0;
     this.resources = new ResourceIndex(this.seed);
@@ -995,6 +1011,7 @@ export class World {
       giftedSites: [...this.giftedSites],
       researchDone: [...this.researchDone],
       seenBuildings: [...this.seenBuildings],
+      openBuildings: [...this.openBuildings],
       rareTrades: { ...this.rareTrades },
       objective: this.objective,
       victory: this.victory,
@@ -1061,6 +1078,7 @@ export class World {
     this.giftedSites = [...state.giftedSites];
     this.researchDone = [...state.researchDone];
     this.seenBuildings = new Set(state.seenBuildings);
+    this.openBuildings = new Set(state.openBuildings ?? BUILDING_IDS);
     this.rareTrades = { ...state.rareTrades };
     this.objective = state.objective;
     this.victory = state.victory;
@@ -2732,7 +2750,11 @@ export class World {
     const proto: BuildingProto = BUILDINGS[building];
     const research = unlockingResearch(building);
 
+    // Un bâtiment sans plan, recherche ni objectif n'est là que s'il est ouvert.
+    const gated = proto.plan || research !== null || proto.unlockObjective !== undefined;
+
     return (
+      (gated || this.openBuildings.has(building)) &&
       isUnlocked(building, this.questsDone) &&
       (research === null || this.researchDone.includes(research)) &&
       this.objective >= (proto.unlockObjective ?? 0)
