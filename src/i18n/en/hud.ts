@@ -24,6 +24,7 @@ export const hud: Messages['hud'] = {
     onPlayer: 'You’re standing on the spot',
     locked: 'Not unlocked yet — you need its blueprint, or one more night',
     unique: 'Only one per colony — you already have one',
+    shore: 'The well goes on a riverbank',
     nearHall: `Too close to the town hall — the antenna stands at least ${BUILDINGS.antenna.hallDistance} tiles away`,
     enemyZone: 'A mutant base holds this zone — take it down first',
     unexplored: 'Unexplored area — go there first',

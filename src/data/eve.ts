@@ -52,7 +52,7 @@ export const EVE_LINES = {
     repair: 'La mairie est abîmée ! Fonce dedans avec du bois, ou tape-la puis « Réparer ».',
     repairFetch: 'La mairie est abîmée ! Rapporte du bois et fonce dedans : ça la répare.',
     /** L'eau de départ fond et pas de puits : sans eau, les ouvriers s'arrêtent. */
-    well: 'Nos ouvriers vont avoir soif, Adam ! Pose un puits : un seul ouvrier y tire l’eau, où que ce soit.',
+    well: 'Nos ouvriers vont avoir soif, Adam ! Pose un puits au bord d’une rivière : un seul ouvrier y puise l’eau.',
     /** Plus de pierre en ville et pas de carrière : la source qui ne s'épuise pas. */
     quarry: 'Plus de pierre en ville ? Pose une carrière : ses ouvriers la taillent dans les ruines.',
     /** Par radio, entre deux nuits, tant qu'elle n'est pas là. `{n}` : nuits restantes. */

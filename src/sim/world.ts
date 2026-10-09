@@ -186,7 +186,7 @@ import { Store } from './store.ts';
 import { ProblemWatch, type ProblemFacts } from './problems.ts';
 import { transferAllPlan, transferAmount, type TransferDirection, type TransferQuantity, type TransferRules } from './transfer.ts';
 import { footingAt, type Footing } from './footing.ts';
-import { findSpawn, habitatAt, isBuildable, isWalkable, oreAt, terrainAt } from './terrain.ts';
+import { findSpawn, habitatAt, isBuildable, isWalkable, oreAt, terrainAt, touchesWater } from './terrain.ts';
 import { inLogisticRange, pointInLogisticRange } from './warehouse.ts';
 import { chopSpot, isTree, pickTree, treesInRange } from './lumberjacks.ts';
 import { plantSpot, plotTiles, type PlotTile } from './forester.ts';
@@ -2627,6 +2627,11 @@ export class World {
       const found = tiles(blocks);
 
       if (found.length > 0) return { reason, tiles: found, blocked: tiles((x, y) => checks.some(([, any]) => any(x, y))) };
+    }
+
+    // Le puits puise dans la rivière : il se pose à son bord.
+    if (proto.shore && !touchesWater(this.seed, tx, ty, proto.width, proto.height)) {
+      return { reason: 'shore', tiles: tiles(() => true) };
     }
 
     // L'antenne se dresse loin de la mairie : il faudra la défendre.

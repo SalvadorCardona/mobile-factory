@@ -10,8 +10,8 @@
  * La carrière n'a pas d'entrée non plus : ses ouvriers taillent la pierre
  * dans les ruines du vieux monde, où qu'elle soit posée, et va d'autant
  * plus vite qu'elle a d'ouvriers. Le puits est une carrière sur sa propre
- * recette (`drawWater`) : la nappe est partout, il tire son eau où qu'il
- * soit, au même rythme.
+ * recette (`drawWater`) : posé au bord d'une rivière, il y puise son eau
+ * au même rythme.
  *
  * La ferme n'a pas de recette : sa nourriture vient des cases de son champ
  * que ses fermiers récoltent (`CROPS`, `data/resources.ts`).

@@ -75,8 +75,14 @@ export interface TestScenarioProto {
   wardrobe?: { found: readonly PieceId[]; look?: Look; open?: boolean };
 }
 
+/**
+ * Le bord d'eau le plus proche de la mairie de la graine 100, où se pose le
+ * puits des parties de test (il puise au bord de l'eau, 26 cases de la mairie).
+ */
+export const SHORE_SPOT = { dx: 20, dy: 16 } as const;
+
 /** Le rayon exploré d'office autour de la mairie d'une partie de test. */
-export const SCENARIO_REVEAL = 24;
+export const SCENARIO_REVEAL = 30;
 
 export const TEST_SCENARIOS = {
   /**
@@ -91,7 +97,7 @@ export const TEST_SCENARIOS = {
     buildings: [
       { building: 'lumberCamp', dx: -6, dy: 0 },
       { building: 'farm', dx: 6, dy: 0 },
-      { building: 'well', dx: -3, dy: 9 },
+      { building: 'well', ...SHORE_SPOT },
       { building: 'constructionPost', dx: -5, dy: 5 },
       { building: 'lab', dx: 4, dy: 5, delivered: { wood: 14, stone: 3 } },
     ],
@@ -189,7 +195,7 @@ export const TEST_SCENARIOS = {
       { building: 'nursery', dx: 5, dy: 5, delivered: {} },
       { building: 'home', dx: 9, dy: 5, delivered: {} },
       { building: 'home', dx: 9, dy: 9, delivered: {} },
-      { building: 'well', dx: -3, dy: 9, delivered: {} },
+      { building: 'well', ...SHORE_SPOT, delivered: {} },
     ],
     town: { wood: 60, stone: 40, coal: 25, food: 40, water: 40 },
     bag: {},

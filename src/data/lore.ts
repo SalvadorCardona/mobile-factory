@@ -197,10 +197,10 @@ export const LORE = {
       sign: 'Puits',
       site: 'Une margelle à moitié montée et deux montants sans toit : un ouvrier y tirera l’eau.',
       description:
-        'Une margelle de pierres, un treuil et son seau sous un petit toit. La nappe ' +
-        'court sous toute la ville : un ouvrier y tire l’eau que boit la colonie et la range ' +
+        'Une margelle de pierres, un treuil et son seau sous un petit toit, au bord ' +
+        'de la rivière : un ouvrier y puise l’eau que boit la colonie et la range ' +
         'dans son coffre, que les porteurs vident à la mairie.',
-      effect: '1 ouvrier tire 12 eaux par minute, où que ce soit.',
+      effect: '1 ouvrier puise 12 eaux par minute, au bord d’une rivière.',
     },
     farm: {
       name: 'Ferme',

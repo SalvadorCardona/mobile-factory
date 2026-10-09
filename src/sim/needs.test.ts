@@ -10,7 +10,7 @@ import { doorOf } from './jobs.ts';
 import { canGrow, deprivedNeed, drainNeeds, fullNeeds, needState, needsPace, pacedTick, stuntingNeed, urgentNeed } from './needs.ts';
 import { freshNeeds } from './needs.ts';
 import { decodeSave, encodeSave, type SavedEntity } from './save.ts';
-import { isWalkable, terrainAt } from './terrain.ts';
+import { isWalkable, terrainAt, touchesWater } from './terrain.ts';
 import type { Entity, Kid, Mobile, Worker } from './types.ts';
 import { World } from './world.ts';
 
@@ -476,12 +476,30 @@ describe('soif', () => {
 });
 
 describe('puits', () => {
+  /** La plus proche emprise de puits posable au bord de l'eau, autour de la mairie. */
+  function shoreSpot(world: World): { tx: number; ty: number } {
+    const hall = world.warehouse()!;
+    let best: { tx: number; ty: number; distance: number } | null = null;
+
+    for (let dy = -70; dy <= 70; dy += 1) {
+      for (let dx = -70; dx <= 70; dx += 1) {
+        const tx = hall.tx + dx;
+        const ty = hall.ty + dy;
+        const land = [0, 1].every((y) => [0, 1].every((x) => isWalkable(terrainAt(world.seed, tx + x, ty + y))));
+
+        if (!land || !touchesWater(world.seed, tx, ty, 2, 2)) continue;
+        if (best === null || dx * dx + dy * dy < best.distance) best = { tx, ty, distance: dx * dx + dy * dy };
+      }
+    }
+    if (!best) throw new Error('aucun bord d’eau près de la mairie — la génération de terrain a changé');
+    return best;
+  }
+
   /** Pose le puits à côté de la mairie et le bâtit d'un « Transférer », Adam à côté. */
   function buildWell(world: World): Entity {
-    const hall = world.warehouse()!;
-    const tx = hall.tx + 5;
-    const ty = hall.ty + 1;
+    const { tx, ty } = shoreSpot(world);
 
+    world.revealAround(tx, ty, 6);
     for (let y = ty - 1; y <= ty + 2; y += 1) for (let x = tx - 1; x <= tx + 2; x += 1) world.resources.clear(x, y);
     world.player.x = world.player.prevX = (tx + 1) * TILE_SIZE;
     world.player.y = world.player.prevY = (ty + 3.5) * TILE_SIZE;
@@ -507,7 +525,7 @@ describe('puits', () => {
     return water;
   }
 
-  it('tire de l’eau dans son coffre, n’importe où, à la cadence de sa recette', () => {
+  it('tire de l’eau dans son coffre, au bord de l’eau, à la cadence de sa recette', () => {
     const world = colony({ food: 50 });
 
     // Un ouvrier libre pour le treuil.
@@ -522,6 +540,25 @@ describe('puits', () => {
 
     run(world, RECIPES.drawWater.duration);
     expect(waterOf(world) - before).toBeGreaterThanOrEqual(RECIPES.drawWater.outputs.water);
+  });
+
+  it('ne se pose qu’au bord de l’eau', () => {
+    const world = colony({ food: 50 });
+    const { tx, ty } = shoreSpot(world);
+    const hall = world.warehouse()!;
+
+    world.revealAround(tx, ty, 6);
+    world.revealAround(hall.tx + 5, hall.ty + 1, 6);
+    world.player.x = world.player.prevX = (tx + 1) * TILE_SIZE;
+    world.player.y = world.player.prevY = (ty + 3.5) * TILE_SIZE;
+    for (let y = ty - 1; y <= ty + 2; y += 1) for (let x = tx - 1; x <= tx + 2; x += 1) world.resources.clear(x, y);
+    expect(world.canPlace('well', tx, ty)).toBeNull();
+
+    // Au milieu de la plaine, à sec : refusé, quelle que soit la portée.
+    world.player.x = world.player.prevX = (hall.tx + 6) * TILE_SIZE;
+    world.player.y = world.player.prevY = (hall.ty + 4.5) * TILE_SIZE;
+    for (let y = hall.ty; y <= hall.ty + 3; y += 1) for (let x = hall.tx + 4; x <= hall.tx + 7; x += 1) world.resources.clear(x, y);
+    expect(world.canPlace('well', hall.tx + 5, hall.ty + 1)).toBe('shore');
   });
 
   it('sans ouvrier, il ne tire rien', () => {

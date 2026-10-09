@@ -34,6 +34,7 @@ export const hud = {
     onPlayer: 'Vous êtes sur l’emplacement',
     locked: 'Pas encore débloqué — il faut son plan, ou tenir encore une nuit',
     unique: 'Un seul par colonie — il y en a déjà un',
+    shore: 'Le puits se pose au bord d’une rivière',
     nearHall: `Trop près de la mairie — l’antenne se dresse à ${BUILDINGS.antenna.hallDistance} cases au moins`,
     enemyZone: 'Une base mutante tient cette zone — abattez-la d’abord',
     unexplored: 'Zone inexplorée — allez-y d’abord',

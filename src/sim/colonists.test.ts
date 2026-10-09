@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { TILE_SIZE } from '../core/grid.ts';
 import { BUILDINGS } from '../data/buildings.ts';
 import { COLONY } from '../data/inhabitants.ts';
-import type { TestScenarioProto } from '../data/testScenario.ts';
+import { SHORE_SPOT, type TestScenarioProto } from '../data/testScenario.ts';
 import { doorOf } from './jobs.ts';
 import { decodeSave, encodeSave } from './save.ts';
 import { stageScenario } from './testScenario.ts';
@@ -110,7 +110,7 @@ describe('ouvriers de la colonie', () => {
 
   it('sans ouvrier libre, un poste reste vide ; un bâtiment tombé rend les siens, qui le pourvoient', () => {
     // Deux bûcherons, quatre fermiers, un puisatier : trois bâtisseurs pour quatre postes.
-    const world = scenario([CAMP, { building: 'farm', dx: 6, dy: 0 }, { building: 'well', dx: -3, dy: 9 }, { building: 'constructionPost', dx: -5, dy: 5 }]);
+    const world = scenario([CAMP, { building: 'farm', dx: 6, dy: 0 }, { building: 'well', ...SHORE_SPOT }, { building: 'constructionPost', dx: -5, dy: 5 }]);
     const post = built(world, 'constructionPost');
     const camp = only(world, 'lumberCamp');
 

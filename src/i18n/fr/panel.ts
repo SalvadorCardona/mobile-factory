@@ -410,6 +410,7 @@ export const panel = {
     polluted: { text: 'Terre polluée', remedy: 'Une station de dépollution à côté la rendra saine' },
     radioactive: { text: 'Terre radioactive', remedy: 'Inconstructible, et rien ne la nettoie pour l’instant' },
     road: { text: 'Une route passe ici', remedy: 'Retirez-la d’abord : Bâtir › Route › Retirer' },
+    shore: { text: 'Le puits se pose au bord d’une rivière', remedy: 'Collez-le à l’eau : il y puise' },
     nearHall: { text: 'Trop près de la mairie', remedy: 'Éloignez-vous, hors du cercle autour d’elle' },
     treesAndRocks: { text: 'Des arbres et des rochers gênent', remedy: 'Adam peut les récolter' },
     rocks: { text: 'Des rochers gênent', remedy: 'Adam peut les casser' },

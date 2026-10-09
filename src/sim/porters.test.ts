@@ -10,6 +10,7 @@ import { DAY_CYCLE } from '../data/dayNight.ts';
 import { RECIPES } from '../data/recipes.ts';
 import { JOB_PRIORITY, WANDER } from '../data/workers.ts';
 import { doorOf } from './jobs.ts';
+import { baseCenter } from './enemyBases.ts';
 import { decodeSave, encodeSave, type SavedEntity } from './save.ts';
 import { isWalkable, terrainAt } from './terrain.ts';
 import type { EntityId, Forge, Site, TownHall, Worker } from './types.ts';
@@ -61,6 +62,11 @@ function landSeed(): { world: World; hx: number; hy: number } {
     if (dry) return { world, hx: hall.tx, hy: hall.ty };
   }
   throw new Error('aucune seed testable — la génération de terrain a changé');
+}
+
+/** La distance de la tuile à la base mutante la plus proche, en tuiles. */
+function awayFromBases(world: World, tx: number, ty: number): number {
+  return Math.min(...world.enemyBases.map((base) => Math.hypot(baseCenter(base).x / TILE_SIZE - tx, baseCenter(base).y / TILE_SIZE - ty)));
 }
 
 /**
@@ -128,12 +134,20 @@ function colony(layout: Layout): World {
     entities.push({ ...place('drill'), kind: 'drill', store, hp: BUILDINGS.drill.hp, level: 1, paused: false, staff: BUILDINGS.drill.workers, output: 'ironOre', blocked: true });
   }
 
-  // Adam à l'écart, immobile : ce sont les porteurs qu'on regarde.
-  state.player = { ...state.player, x: (hx - 20) * TILE_SIZE, y: (hy - 20) * TILE_SIZE };
+  // Adam à l'écart, immobile : ce sont les porteurs qu'on regarde. Loin de toute base mutante, dont les gardiens l'attaqueraient.
+  const spots = [[-20, -20], [20, -20], [-20, 25], [20, 25], [0, -25]] as const;
+  const [ax, ay] = spots.reduce((best, spot) => (awayFromBases(world, hx + spot[0], hy + spot[1]) > awayFromBases(world, hx + best[0], hy + best[1]) ? spot : best));
+
+  state.player = { ...state.player, x: (hx + ax) * TILE_SIZE, y: (hy + ay) * TILE_SIZE };
   state.entities = entities;
   state.nextId = nextId;
   state.mobiles = [];
-  return World.restore(state);
+
+  const restored = World.restore(state);
+
+  // Pas un arbre à sa portée : il ne récolte rien en restant là.
+  for (let y = -6; y <= 6; y += 1) for (let x = -6; x <= 6; x += 1) restored.resources.clear(Math.floor(restored.player.x / TILE_SIZE) + x, Math.floor(restored.player.y / TILE_SIZE) + y);
+  return restored;
 }
 
 function hallOf(world: World): TownHall {

@@ -60,13 +60,67 @@ export function smoothNoise(seed: number, tx: number, ty: number, cell: number):
   return top + (bottom - top) * sy;
 }
 
+/**
+ * Les rivières : le niveau 0,5 d'un bruit lent, tordu par deux bruits plus
+ * courts pour qu'il serpente. La courbe est longue ; un gué (un bruit bas, sous
+ * `RIVER.fordBelow`) la coupe de loin en loin, pour qu'elle ne referme jamais
+ * un quartier de la carte. Elle ne taille pas la roche. Aucune rivière à moins de `RIVER.clearRadius`
+ * tuiles de l'origine, où se pose le départ : le foyer, la clairière et les
+ * bâtiments d'une ancienne sauvegarde restent où ils sont.
+ */
+export const RIVER = {
+  /** Largeur du lit, en tuiles, au plus. */
+  width: 3.5,
+  /** Cellule du bruit qui trace la rivière, en tuiles. */
+  cell: 44,
+  /** Amplitude des méandres, en tuiles. */
+  meander: 7,
+  /** Cellule du bruit des gués, et seuil sous lequel la rivière s'efface. */
+  fordCell: 20,
+  fordBelow: 0.45,
+  /** Pas de rivière en deçà de ce rayon autour de l'origine ; elle y arrive en dix tuiles. */
+  clearRadius: 30,
+  rampTiles: 10,
+} as const;
+
+/** La tuile est-elle dans le lit d'une rivière ? */
+export function inRiver(seed: number, tx: number, ty: number): boolean {
+  const distance = Math.hypot(tx, ty);
+
+  if (distance <= RIVER.clearRadius) return false;
+
+  const ford = smoothNoise(seed ^ 0x2545f491, tx, ty, RIVER.fordCell);
+
+  if (ford < RIVER.fordBelow) return false;
+
+  const wx = tx + (smoothNoise(seed ^ 0x6a09e667, tx, ty, 13) - 0.5) * 2 * RIVER.meander;
+  const wy = ty + (smoothNoise(seed ^ 0xbb67ae85, tx, ty, 13) - 0.5) * 2 * RIVER.meander;
+  const level = smoothNoise(seed ^ 0x3c6ef372, wx, wy, RIVER.cell);
+  // Le lit s'amincit aux gués et à l'approche de la zone dégagée.
+  const ramp = Math.min(1, (distance - RIVER.clearRadius) / RIVER.rampTiles);
+  const bank = Math.min(1, (ford - RIVER.fordBelow) / 0.06);
+  const half = (RIVER.width / 2) * ramp * bank * 0.045;
+
+  return Math.abs(level - 0.5) < half;
+}
+
 export function terrainAt(seed: number, tx: number, ty: number): TerrainKind {
   const height = 0.65 * smoothNoise(seed, tx, ty, 28) + 0.35 * smoothNoise(seed ^ 0x9e3779b9, tx, ty, 9);
 
   if (height < 0.3) return 'water';
+  if (height < 0.74 && inRiver(seed, tx, ty)) return 'water';
   if (height < 0.36) return 'sand';
   if (height < 0.74) return 'grass';
   return 'rock';
+}
+
+/** Une case de l'emprise touche-t-elle l'eau, de côté ? Le bord d'une rivière ou d'un lac. */
+export function touchesWater(seed: number, tx: number, ty: number, width: number, height: number): boolean {
+  const water = (x: number, y: number): boolean => terrainAt(seed, x, y) === 'water';
+
+  for (let x = tx; x < tx + width; x += 1) if (water(x, ty - 1) || water(x, ty + height)) return true;
+  for (let y = ty; y < ty + height; y += 1) if (water(tx - 1, y) || water(tx + width, y)) return true;
+  return false;
 }
 
 /** L'eau se traverse et se construit dessus : non. Le reste : oui. */

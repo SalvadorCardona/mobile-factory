@@ -128,6 +128,12 @@ export interface BuildingProto {
    */
   deposits?: readonly ItemId[];
   /**
+   * Il se pose au bord d'une rivière : une case de l'emprise touche l'eau
+   * (`touchesWater`, `sim/terrain.ts`). Le puits y puise. Absent : n'importe où.
+   * Un puits d'une ancienne sauvegarde, posé loin de l'eau, tourne toujours.
+   */
+  shore?: true;
+  /**
    * Faut-il un plan pour le bâtir ? Un bâtiment à plan n'entre dans le menu
    * qu'une fois le plan donné par Ève, en récompense d'une quête (`data/quests.ts`).
    */
@@ -268,7 +274,7 @@ export const BUILDINGS = {
     siteDescription: LORE.buildings.well.site,
     description: LORE.buildings.well.description,
     effect: LORE.buildings.well.effect,
-    // Une carrière sur sa propre recette (`drawWater`) : un producteur sans entrée, posé n'importe où.
+    // Une carrière sur sa propre recette (`drawWater`) : un producteur sans entrée, posé au bord de l'eau.
     kind: 'quarry',
     category: 'production',
     width: 2,
@@ -283,6 +289,7 @@ export const BUILDINGS = {
     menu: true,
     unique: false,
     plan: false,
+    shore: true,
     sprite: 'well',
     weapon: null,
     upgrades: [],

@@ -266,9 +266,14 @@ population (`World.needAlert`, la plus pressante des deux) dit quand la
 ville va manquer ; son tap montre qui a faim ou soif.
 L'**eau** (`water`, goutte cyan — le bloc cyan clouté, c'est le minerai de
 fer) se tire au **puits** (`well`, un ouvrier) : une carrière sur sa
-propre recette (`drawWater`, trouvée par `recipeOf`), posée n'importe où
-— la nappe est partout, au même rythme ; l'eau de la carte peut être à 30
-tuiles du départ. Elle n'entre dans aucune recette : un besoin est son
+propre recette (`drawWater`, trouvée par `recipeOf`), posée au **bord**
+d'une rivière ou d'un lac (`shore` de `data/buildings.ts`, `touchesWater` de
+`sim/terrain.ts`, refus `shore` : « Le puits se pose au bord d'une rivière »).
+Les rivières (`RIVER`, `inRiver` de `sim/terrain.ts`) sont des lits de 3 à 5
+tuiles qui serpentent, coupés de gués, taillés dans la seed ; aucune à moins
+de 30 tuiles de l'origine, pour que le départ et les anciennes sauvegardes ne
+bougent pas. Un puits d'une ancienne sauvegarde, loin de l'eau, tourne toujours. 
+Elle n'entre dans aucune recette : un besoin est son
 débouché (`validatePrototypes()`). Une sauvegarde d'avant l'eau (version 8)
 reçoit l'eau de départ dans sa mairie (`migrateV8`).
 

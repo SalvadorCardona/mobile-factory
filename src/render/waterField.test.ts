@@ -47,7 +47,7 @@ describe("champ de l'eau", () => {
 
   it("n'a pas de champ là où il n'y a pas d'eau", () => {
     // À l'est du départ, la prairie.
-    expect(waterField(SEED, 3 * SIZE, 0, SIZE)).toBeNull();
+    expect(waterField(SEED, 2 * SIZE, 0, SIZE)).toBeNull();
   });
 
   it("dit l'eau au cœur des tuiles d'eau, la terre au cœur des tuiles à sec", () => {
