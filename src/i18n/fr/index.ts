@@ -9,6 +9,7 @@ import { content } from './content.ts';
 import { hud } from './hud.ts';
 import { inventory } from './inventory.ts';
 import { menu } from './menu.ts';
+import { offline } from './offline.ts';
 import { panel } from './panel.ts';
 import { researchPanel } from './researchPanel.ts';
 import { resourcePanel } from './resourcePanel.ts';
@@ -28,5 +29,6 @@ export const FR = {
   researchPanel,
   resourcePanel,
   wardrobe,
+  offline,
   ...content,
 };
