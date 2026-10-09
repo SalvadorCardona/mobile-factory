@@ -12,6 +12,8 @@ export const researchPanel = {
   /** L'état d'une ligne de la liste, recherche en cours. */
   running: 'En cours',
   launch: 'Lancer',
+  /** « Lancer » quand une recherche tourne déjà : elle part à son tour. */
+  enqueue: 'Mettre en file',
   /** Devant les bâtiments qu'une recherche fait entrer au menu de construction. */
   unlocks: 'Débloque :',
   /** Un bonus en pour cent, déjà formaté : « +50 % ». */
@@ -28,4 +30,13 @@ export const researchPanel = {
   /** « 1 min 05 s » : `seconds` déjà sur deux chiffres. */
   minutes: (minutes: number, seconds: string): string => `${minutes} min ${seconds} s`,
   seconds: (seconds: number): string => `${seconds} s`,
+  /** Une ligne de la liste : en file dans ce labo, ou menée par un autre. */
+  queued: 'En file',
+  taken: 'Menée par un autre labo',
+  /** L'en-tête de la file : « File d’attente 1/3 ». */
+  queueTitle: (count: number, max: number): string => `File d’attente ${count}/${max}`,
+  /** Une recherche en file : son rang et le retrait. */
+  dequeue: 'Retirer',
+  /** « Terminée dans 4:05 » : le temps d'un compte à rebours, en mm:ss. */
+  remaining: (time: string): string => `Reste ${time}`,
 };

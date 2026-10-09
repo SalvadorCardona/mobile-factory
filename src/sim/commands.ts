@@ -72,17 +72,22 @@ export type Command =
   | { type: 'seeBuilding'; building: BuildingId }
   /**
    * Choisit la recherche que mène le labo. Ses prérequis doivent être finis,
-   * et aucune recherche ne doit déjà tourner ; une recherche qui attendait
-   * encore son coût est remplacée — ce qui était déposé reste au coffre.
+   * et aucun autre labo ne doit la mener ni l'avoir en file. Si une recherche
+   * tourne déjà, celle-ci se met en file (`PRODUCTION.queueSize` au plus) ;
+   * une recherche qui attendait encore son coût est remplacée — ce qui était
+   * déposé reste au coffre.
    * Le bouton « Lancer » du panneau Recherche, qu'on soit loin ou non.
    */
   | { type: 'startResearch'; lab: EntityId; research: ResearchId }
   /**
-   * Abandonne la recherche choisie tant que son coût n'est pas réuni. Ce qui
-   * était déposé reste au coffre : les porteurs le rapportent à la mairie,
-   * « Prendre » le remet dans le sac.
+   * Abandonne la recherche choisie. Tant que son coût n'est pas réuni, ce qui
+   * était déposé reste au coffre ; si elle tournait, son coût y revient
+   * (remboursé). Les porteurs le rapportent à la mairie, « Prendre » le remet
+   * dans le sac. La suivante de la file prend sa place.
    */
   | { type: 'cancelResearch'; lab: EntityId }
+  /** Retire une recherche de la file d'un labo (rien n'est payé tant qu'elle n'a pas son tour). */
+  | { type: 'dequeueResearch'; lab: EntityId; research: ResearchId }
   /**
    * Dépose au labo ce que sa recherche attend : le sac d'abord, puis le
    * stock de la ville si le labo est dans le rayon de la mairie. Le bouton
@@ -216,8 +221,10 @@ export type SupplyRejection =
 export type ResearchRejection =
   /** Le labo n'existe plus, ou n'est pas encore bâti. */
   | 'missing'
-  /** Une recherche tourne déjà : une seule à la fois. */
+  /** La file du labo est pleine. */
   | 'busy'
+  /** Un autre labo mène déjà cette recherche, ou l'a en file. */
+  | 'taken'
   /** Il manque un prérequis, ou la recherche est déjà finie. */
   | 'locked'
   /** Pas de recherche en attente de son coût : rien à abandonner ni à livrer. */

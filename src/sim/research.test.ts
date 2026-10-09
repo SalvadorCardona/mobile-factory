@@ -4,6 +4,7 @@ import { BUILDINGS, MENU_BUILDING_IDS, type BuildingId } from '../data/buildings
 import { ENEMIES, WILDLIFE } from '../data/enemies.ts';
 import type { ItemId } from '../data/items.ts';
 import { COLONY } from '../data/inhabitants.ts';
+import { PRODUCTION } from '../data/production.ts';
 import { RESEARCH, RESEARCH_IDS, type ResearchId } from '../data/research.ts';
 import { validatePrototypes } from '../data/validate.ts';
 import { WEAPONS } from '../data/weapons.ts';
@@ -155,22 +156,13 @@ describe('recherches — données', () => {
 });
 
 describe('labo de recherche', () => {
-  it('un seul labo par colonie, chantier compris', () => {
-    const world = new World(drySeed());
+  it('plusieurs labos par colonie : le menu ne limite pas leur nombre', () => {
+    const { world } = withLab();
 
-    fill(world, BUILDINGS.townHall.cost);
-    world.push({ type: 'transferToSite', id: world.townHallId });
-    world.tick();
-
-    const { tx, ty } = spot(world, 'lab');
-
-    world.push({ type: 'placeBuilding', building: 'lab', tx, ty });
-    world.tick();
-
-    const other = spot(world, 'nursery');
-
-    expect(world.atLimit('lab')).toBe(true);
-    expect(world.canPlace('lab', other.tx, other.ty)).toBe('unique');
+    expect(world.atLimit('lab')).toBe(false);
+    expect(world.labs()).toHaveLength(1);
+    build(world, 'lab');
+    expect(world.labs()).toHaveLength(2);
   });
 
   it('refuse une recherche dont un prérequis manque', () => {
@@ -224,7 +216,7 @@ describe('labo de recherche', () => {
     expect(world.townStock()!.count('stone')).toBe(0);
   });
 
-  it('une seule recherche à la fois', () => {
+  it('une seule recherche à la fois par labo : la suivante se met en file', () => {
     const { world, lab } = withLab();
     const refused = rejections(world);
 
@@ -234,8 +226,98 @@ describe('labo de recherche', () => {
     world.push({ type: 'startResearch', lab: lab.id, research: 'sharpAxes' });
     world.tick();
 
-    expect(refused).toEqual(['busy']);
+    expect(refused).toEqual([]);
     expect(lab.research).toBe('walkingBoots');
+    expect(lab.queue).toEqual(['sharpAxes']);
+    expect(world.productionTimer(lab)).not.toBeNull();
+  });
+
+  it('la file est bornée, sans doublon', () => {
+    const { world, lab } = withLab();
+    const refused = rejections(world);
+    const free = RESEARCH_IDS.filter((id) => missingFree(id));
+
+    function missingFree(id: ResearchId): boolean {
+      return RESEARCH[id].requires.length === 0;
+    }
+    pay(world, free[0]!);
+    for (const id of free.slice(1, 1 + PRODUCTION.queueSize + 1)) world.push({ type: 'startResearch', lab: lab.id, research: id });
+    world.push({ type: 'startResearch', lab: lab.id, research: free[1]! });
+    world.tick();
+
+    expect(lab.queue).toHaveLength(PRODUCTION.queueSize);
+    expect(refused).toEqual(['busy']);
+  });
+
+  it('la file part toute seule à la fin de la recherche, coût payé à son tour', () => {
+    const { world, lab } = withLab();
+
+    pay(world, 'walkingBoots');
+    world.push({ type: 'startResearch', lab: lab.id, research: 'sharpAxes' });
+    for (let i = 0; i < RESEARCH.walkingBoots.duration + 1; i += 1) world.tick();
+
+    expect(world.researchDone).toEqual(['walkingBoots']);
+    expect(lab.research).toBe('sharpAxes');
+    expect(lab.queue).toEqual([]);
+    // Son coût n'était pas payé : le labo l'attend.
+    expect(lab.endTick).toBe(0);
+
+    fill(world, RESEARCH.sharpAxes.cost);
+    world.push({ type: 'transferToLab', id: lab.id });
+    world.tick();
+    expect(lab.endTick).toBeGreaterThan(0);
+  });
+
+  it('retirer une recherche de la file', () => {
+    const { world, lab } = withLab();
+
+    pay(world, 'walkingBoots');
+    world.push({ type: 'startResearch', lab: lab.id, research: 'sharpAxes' });
+    world.push({ type: 'dequeueResearch', lab: lab.id, research: 'sharpAxes' });
+    world.tick();
+    expect(lab.queue).toEqual([]);
+  });
+
+  it('abandonner une recherche qui tourne rend son coût au coffre, et la file avance', () => {
+    const { world, lab } = withLab();
+
+    pay(world, 'walkingBoots');
+    expect(lab.store.total()).toBe(0);
+    world.push({ type: 'startResearch', lab: lab.id, research: 'sharpAxes' });
+    world.push({ type: 'cancelResearch', lab: lab.id });
+    world.tick();
+
+    for (const [item, amount] of researchCost('walkingBoots')) expect(lab.store.count(item)).toBeGreaterThanOrEqual(amount);
+    expect(lab.research).toBe('sharpAxes');
+    expect(world.researchDone).toEqual([]);
+  });
+
+  it('deux labos mènent deux recherches en parallèle, mais jamais la même', () => {
+    const { world, lab } = withLab();
+    const second = world.entities.get(build(world, 'lab')) as Lab;
+    const refused = rejections(world);
+
+    pay(world, 'walkingBoots');
+    world.push({ type: 'startResearch', lab: second.id, research: 'walkingBoots' });
+    world.tick();
+    expect(refused).toEqual(['taken']);
+    expect(second.research).toBeNull();
+    expect(researchStatus('walkingBoots', world.researchDone, second, world.labs())).toBe('taken');
+
+    fill(world, RESEARCH.sharpAxes.cost);
+    world.push({ type: 'startResearch', lab: second.id, research: 'sharpAxes' });
+    world.push({ type: 'transferToLab', id: second.id });
+    world.tick();
+
+    expect(lab.endTick).toBeGreaterThan(0);
+    expect(second.endTick).toBeGreaterThan(0);
+    // Pas non plus en file dans le premier.
+    world.push({ type: 'startResearch', lab: lab.id, research: 'sharpAxes' });
+    world.tick();
+    expect(refused).toEqual(['taken', 'taken']);
+
+    for (let i = 0; i < Math.max(RESEARCH.walkingBoots.duration, RESEARCH.sharpAxes.duration) + 1; i += 1) world.tick();
+    expect(world.researchDone).toEqual(expect.arrayContaining(['walkingBoots', 'sharpAxes']));
   });
 
   it('abandonner une recherche qui attend : rien de déposé n’est perdu', () => {
@@ -601,6 +683,32 @@ describe('recherche — sauvegarde', () => {
     expect(labOf(restored).research).toBe('sharpAxes');
     for (let i = 0; i < RESEARCH.sharpAxes.duration + 1; i += 1) restored.tick();
     expect(restored.researchDone).toEqual(['sharpAxes']);
+  });
+
+  it('la file et le compte à rebours survivent au rechargement ; une sauvegarde d’avant la file se lit', () => {
+    const { world, lab } = withLab();
+
+    pay(world, 'walkingBoots');
+    world.push({ type: 'startResearch', lab: lab.id, research: 'sharpAxes' });
+    world.tick();
+
+    const text = encodeSave(world, 0);
+    const decoded = decodeSave(text);
+
+    if (!decoded.ok) throw new Error(decoded.reason);
+    expect(labOf(decoded.world).queue).toEqual(['sharpAxes']);
+    expect(labOf(decoded.world).endTick).toBe(lab.endTick);
+    for (let i = 0; i < RESEARCH.walkingBoots.duration + 1; i += 1) decoded.world.tick();
+    expect(labOf(decoded.world).research).toBe('sharpAxes');
+
+    const file = JSON.parse(text) as { state: { entities: Record<string, unknown>[] } };
+
+    for (const entity of file.state.entities) delete entity['queue'];
+
+    const old = decodeSave(JSON.stringify(file));
+
+    if (!old.ok) throw new Error(old.reason);
+    expect(labOf(old.world).queue).toEqual([]);
   });
 
   it('une sauvegarde d’avant le labo se lit : aucune recherche faite', () => {

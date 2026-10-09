@@ -90,7 +90,7 @@ import { countField, type FieldCount } from '../sim/farmer.ts';
 import { countPlot, type PlotCount } from '../sim/forester.ts';
 import { canPause } from '../sim/staffing.ts';
 import type { Building, EnemyBase, Entity, EntityId, Farmer, Forester, Forge, MobileId, Nursery } from '../sim/types.ts';
-import { TICKS_PER_SECOND, repairCost, siteMissing, type SiteCoverage, type World } from '../sim/world.ts';
+import { TICKS_PER_SECOND, repairCost, siteMissing, timerText, type SiteCoverage, type World } from '../sim/world.ts';
 import type { UiIcon } from '../art/ui.ts';
 import { onLocale, t } from '../i18n/locale.ts';
 import { SEX_SYMBOLS, creatureView, isCreature, type CreatureView, type Selection } from './creatureView.ts';
@@ -178,6 +178,10 @@ export class BuildingPanel {
   private readonly upgradeCost: HTMLElement;
   private readonly upgradeButton: HTMLButtonElement;
   private lastText = '';
+  /** Le compte à rebours de la production en cours (barre et « m:ss »), caché quand rien ne tourne. */
+  private readonly production: HTMLElement;
+  private readonly productionFill: HTMLElement;
+  private readonly productionValue: HTMLElement;
   /** `null` : rien d'affiché encore — une liste vide est une clé comme une autre. */
   private lastStats: string | null = null;
   private lastItems = '';
@@ -249,6 +253,20 @@ export class BuildingPanel {
     this.barFill = document.createElement('div');
     this.bar.append(this.barFill);
     this.meter.append(this.meterIcon, this.bar, this.meterValue);
+
+    this.production = document.createElement('div');
+    this.production.className = 'building-panel-meter building-panel-production';
+    this.production.hidden = true;
+
+    const productionBar = document.createElement('div');
+
+    productionBar.className = 'building-panel-bar';
+    productionBar.dataset['kind'] = 'research';
+    this.productionFill = document.createElement('div');
+    productionBar.append(this.productionFill);
+    this.productionValue = document.createElement('span');
+    this.productionValue.className = 'building-panel-meter-value';
+    this.production.append(productionBar, this.productionValue);
 
     this.stats = document.createElement('div');
     this.stats.className = 'building-panel-stats';
@@ -438,6 +456,7 @@ export class BuildingPanel {
       .page('building')
       .append(
         this.meter,
+        this.production,
         this.stats,
         this.stock,
         this.items,
@@ -597,6 +616,7 @@ export class BuildingPanel {
   }
 
   private refresh(entity: Entity): void {
+    this.setProduction(entity);
     const proto = BUILDINGS[entity.proto];
     const text = t().panel;
     const paused = text.paused;
@@ -776,7 +796,7 @@ export class BuildingPanel {
                 ? text.nursery.full
                 : entity.hungry
                   ? text.nursery.hungry(starvedLine(this.world, entity))
-                  : text.nursery.next(clock(remaining)),
+                  : text.nursery.next(timerText(remaining)),
           );
           lines.push(adult === null ? text.nursery.noKids : text.nursery.nextAdult(clock(adult)));
           stats.push(
@@ -1020,6 +1040,7 @@ export class BuildingPanel {
     this.job.hidden = true;
     this.root.dataset['kind'] = 'enemyBase';
     this.meter.hidden = false;
+    this.production.hidden = true;
     this.infoButton.hidden = false;
     this.research.root.hidden = true;
     this.barracks.root.hidden = true;
@@ -1103,6 +1124,7 @@ export class BuildingPanel {
 
     // Un habitant n'a pas de points de vie : pas de jauge.
     this.meter.hidden = hp === null;
+    this.production.hidden = true;
     if (hp) {
       const value = `${hp.value}/${hp.max}`;
 
@@ -1141,6 +1163,23 @@ export class BuildingPanel {
         return row;
       }),
     );
+  }
+
+  /** La barre et le « m:ss » de la production en cours, s'il y en a une ; chaque frame, à peu de frais. */
+  private setProduction(entity: Entity): void {
+    const timer = this.world.productionTimer(entity);
+
+    this.production.hidden = timer === null;
+    if (!timer) return;
+
+    const left = timerText(timer.left);
+
+    this.productionFill.style.width = `${Math.round((1 - timer.left / timer.total) * 100)}%`;
+    if (this.productionValue.textContent !== left) {
+      this.productionValue.textContent = left;
+      this.production.setAttribute('role', 'img');
+      this.production.setAttribute('aria-label', t().researchPanel.remaining(left));
+    }
   }
 
   /** Les jauges d'un habitant, une par besoin, puis son bonheur ; reconstruites quand l'une bouge d'un centième. */

@@ -206,7 +206,7 @@ export const content: Content = {
       siteDescription: 'A plank shack, vials waiting on a crate, an antenna to put up.',
       description:
         'Gurgling vials, a jury-rigged antenna and a chimney that smokes when it’s thinking. Drop off wood, stone and enemy trophies; out come upgrades for the whole game.',
-      effect: 'Research: a better bow, a bigger bag, stronger porters… One per colony.',
+      effect: 'Research: a better bow, a bigger bag, stronger porters… One research at a time per lab: build another to run two.',
       upgrades: [],
     },
     antenna: {

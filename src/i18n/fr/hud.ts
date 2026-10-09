@@ -137,7 +137,8 @@ export const hud = {
     /** `labels` : les bâtiments entrés au menu, déjà joints. */
     buildingsUnlocked: (n: number, labels: string): string =>
       n > 1 ? `Nouveaux bâtiments débloqués : ${labels}` : `Nouveau bâtiment débloqué : ${labels}`,
-    researchBusy: 'Une recherche tourne déjà — une seule à la fois',
+    researchBusy: 'La file de ce labo est pleine',
+    researchTaken: 'Un autre labo mène déjà cette recherche',
     researchLocked: 'Il manque une recherche avant celle-ci',
     researchNothing: 'Rien dans le sac ni en ville que cette recherche attende',
     antennaRaised: (floor: number, night: number): string =>

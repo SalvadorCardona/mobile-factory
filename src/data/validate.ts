@@ -775,9 +775,6 @@ function researchErrors(): string[] {
   const unlockedBy = new Map<string, string>();
 
   if (labs.length === 0) errors.push('RESEARCH : aucun labo pour mener les recherches');
-  for (const [id, building] of labs) {
-    if (!building.unique) errors.push(`BUILDINGS.${id} : un labo doit être unique — une seule recherche à la fois`);
-  }
 
   for (const [id, research] of entries) {
     if (research.label.trim() === '' || research.description.trim() === '') errors.push(`RESEARCH.${id} : libellé ou description vide`);

@@ -111,7 +111,8 @@ export const hud: Messages['hud'] = {
     researchStarted: (research: string): string => `${research}: research begins`,
     researchCompleted: (effect: string): string => `Research complete — ${effect}`,
     buildingsUnlocked: (n, labels) => (n > 1 ? `New buildings unlocked: ${labels}` : `New building unlocked: ${labels}`),
-    researchBusy: 'Research already running — one at a time',
+    researchBusy: 'This lab’s queue is full',
+    researchTaken: 'Another lab already has this research',
     researchLocked: 'Another research comes before this one',
     researchNothing: 'Nothing in the bag or in town this research needs',
     antennaRaised: (floor: number, night: number): string =>

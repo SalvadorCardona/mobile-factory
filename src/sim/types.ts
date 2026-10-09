@@ -183,11 +183,12 @@ export interface Barracks extends Built {
 }
 
 /**
- * Le labo de recherche, un seul par colonie. Il mène une recherche à la
+ * Le labo de recherche. Il mène une recherche à la
  * fois : choisie, elle attend que son coût soit déposé dans le coffre ; payé,
  * le coût est consommé et le compte à rebours tourne jusqu'à `endTick`, où
  * le labo se réveille. Les recherches finies ne sont pas à lui mais à la
- * colonie (`World.researchDone`) : elles survivent au labo.
+ * colonie (`World.researchDone`) : elles survivent au labo. Plusieurs labos
+ * mènent plusieurs recherches de front, mais jamais la même deux fois.
  *
  * Ce que le coffre contient au-delà du coût de la recherche en cours — le
  * reste d'une recherche abandonnée — repart à la mairie avec les porteurs,
@@ -199,6 +200,11 @@ export interface Lab extends Built {
   research: ResearchId | null;
   /** Tick de fin du compte à rebours ; 0 tant que le coût n'est pas réuni. */
   endTick: number;
+  /**
+   * Les recherches en file (`PRODUCTION.queueSize` au plus), lancées l'une
+   * après l'autre quand celle-ci s'achève. Leur coût n'est payé qu'à leur tour.
+   */
+  queue: ResearchId[];
 }
 
 /**
