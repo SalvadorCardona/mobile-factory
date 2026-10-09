@@ -653,6 +653,10 @@ export type WorldEvents = {
   kidGrewUp: { id: MobileId; name: string; x: number; y: number };
   /** L'habitant `id` a comblé un besoin à la mairie : sa jauge est pleine. */
   needMet: { id: MobileId; need: NeedId; x: number; y: number };
+  /** Un ouvrier est à bout de `need` : il meurt dans `seconds` s s'il n'a pas de quoi. */
+  starving: { id: MobileId; name: string; need: NeedId; seconds: number; x: number; y: number };
+  /** Un ouvrier est mort de faim ou de soif (`need`) : il a quitté la ville. */
+  workerStarved: { id: MobileId; name: string; need: NeedId; x: number; y: number };
   /** Un enfant affamé (ou assoiffé : `need`) n'a pas pris d'année à l'aube. */
   growthStunted: { id: MobileId; name: string; need: NeedId };
   /** Le labo `id` a choisi une recherche : il attend son coût. */
@@ -944,6 +948,8 @@ export class World {
 
   /** Depuis quel tick chaque ouvrier dehors est sans travail, cf. `isIdle()`. Jamais sauvegardé. */
   private readonly idleSince = new Map<MobileId, number>();
+  /** Ticks passés à zéro d'un besoin, par habitant et besoin (`famineKey`). Pas sauvegardé : au chargement, le compte repart. */
+  private readonly famine = new Map<number, number>();
 
   /** Le problème que montre chaque producteur — coffre plein, ouvrier manquant —, cf. `problem()`. Jamais sauvegardé. */
   private readonly problems = new ProblemWatch();
@@ -5852,6 +5858,7 @@ export class World {
   private stepNeeds(mobile: Inhabitant, alarm: boolean): boolean {
     // Avant la mairie, ni faim ni soif : les provisions de la colonie arrivent avec elle (`COLONY.startingStock`).
     if (this.warehouse()) drainNeeds(mobile.needs, this.isToiling(mobile));
+    if (isLaborer(mobile) && this.starve(mobile)) return true;
 
     if (alarm) {
       if (mobile.meal !== null) this.cancelMeal(mobile);
@@ -5871,6 +5878,63 @@ export class World {
     mobile.prevY = mobile.y;
     mobile.moving = false;
     return true;
+  }
+
+  /**
+   * Le compte à rebours de la famine : chaque tick à zéro d'un besoin
+   * (`NEEDS[id].deathTicks`) le fait avancer, une jauge remontée le remet à
+   * rien. Au premier tick à bout, un avertissement dit combien de secondes il
+   * lui reste. Vrai s'il meurt ce tick.
+   */
+  private starve(mobile: Laborer): boolean {
+    for (const [index, need] of NEED_IDS.entries()) {
+      const key = famineKey(mobile.id, index);
+
+      if (mobile.needs[need] > 0) {
+        if (this.famine.size > 0) this.famine.delete(key);
+        continue;
+      }
+
+      const ticks = (this.famine.get(key) ?? 0) + 1;
+      const { deathTicks } = NEEDS[need];
+
+      if (ticks >= deathTicks) {
+        this.perish(mobile, need);
+        return true;
+      }
+      this.famine.set(key, ticks);
+      if (ticks === 1) {
+        const name = nameOf(this.seed, mobile.id, mobile.sex);
+
+        this.events.emit('starving', { id: mobile.id, name, need, seconds: Math.round(deathTicks / 20), x: mobile.x, y: mobile.y });
+      }
+    }
+    return false;
+  }
+
+  /** Mort de faim ou de soif : ses réservations rendues, il quitte la ville et la colonie compte un ouvrier de moins. */
+  private perish(mobile: Laborer, need: NeedId): void {
+    const home = this.entities.get(mobile.homeId);
+
+    this.cancelMeal(mobile);
+    if (mobile.kind === 'worker' && mobile.job) {
+      if (mobile.job.carried) this.jobs.releaseIn(this.entities, mobile.job);
+      else this.jobs.cancel(this.entities, mobile.job);
+    }
+    if (mobile.kind === 'lumberjack') {
+      const onTrip = mobile.state === 'toTree' || mobile.state === 'chop' || mobile.state === 'toCamp';
+
+      this.releaseTree(mobile);
+      if (onTrip && home?.kind === 'lumberCamp') home.store.releaseIn('wood', LUMBERJACKS.carry);
+    }
+    if (mobile.kind === 'farmer' && home?.kind === 'farm') this.dropPlot(mobile, home);
+
+    for (let index = 0; index < NEED_IDS.length; index += 1) this.famine.delete(famineKey(mobile.id, index));
+    this.idleSince.delete(mobile.id);
+    this.mobiles.delete(mobile.id);
+    if (isColonist(mobile)) this.colonists = Math.max(0, this.colonists - 1);
+    this.rosterChanged();
+    this.events.emit('workerStarved', { id: mobile.id, name: nameOf(this.seed, mobile.id, mobile.sex), need, x: mobile.x, y: mobile.y });
   }
 
   /** Travaille-t-il ? Dehors, à une tâche. Un enfant ne travaille jamais, un dormeur non plus. */
@@ -8262,6 +8326,11 @@ function copyMobile(mobile: Mobile): Mobile {
   if (mobile.kind === 'mutant' && mobile.queen) return { ...mobile, queen: { ...mobile.queen } };
   if (mobile.kind === 'beast' && mobile.slam) return { ...mobile, slam: { ...mobile.slam } };
   return { ...mobile };
+}
+
+/** La clé du compte à rebours d'un besoin pour un habitant : un entier, pour ne rien allouer à chaque tick. */
+function famineKey(id: MobileId, need: number): number {
+  return id * NEED_IDS.length + need;
 }
 
 /** Un ouvrier qui vit d'un bâtiment : porteur, bûcheron, forestier, fermier. */

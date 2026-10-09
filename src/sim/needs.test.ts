@@ -613,3 +613,127 @@ describe('soif — sauvegarde', () => {
     for (const mobile of people) expect(mobile).toMatchObject({ needs: { thirst: 1 } });
   });
 });
+
+describe('famine', () => {
+  const THIRST_DEATH = NEEDS.thirst.deathTicks;
+
+  it('un ouvrier à bout de soif, sans eau en ville, meurt après son délai : la colonie compte un ouvrier de moins', () => {
+    const world = colony({ food: 50 });
+    const worker = workers(world)[0]!;
+    const warnings: number[] = [];
+    const deaths: { name: string; need: string }[] = [];
+
+    world.events.on('starving', ({ id, seconds }) => {
+      if (id === worker.id) warnings.push(seconds);
+    });
+    world.events.on('workerStarved', ({ id, name, need }) => {
+      if (id === worker.id) deaths.push({ name, need });
+    });
+
+    const before = world.colonists;
+
+    worker.needs.thirst = 0;
+    run(world, THIRST_DEATH - 2);
+    expect(world.mobiles.has(worker.id)).toBe(true);
+    expect(warnings).toEqual([THIRST_DEATH / 20]);
+    expect(deaths).toEqual([]);
+
+    run(world, 2);
+    expect(world.mobiles.has(worker.id)).toBe(false);
+    expect(deaths).toHaveLength(1);
+    expect(deaths[0]!.need).toBe('thirst');
+    expect(deaths[0]!.name).not.toBe('');
+    expect(world.colonists).toBe(before - 1);
+  });
+
+  it('boire à temps remet le compte à rebours à rien', () => {
+    const world = colony({ food: 50 });
+    const worker = workers(world)[0]!;
+
+    worker.needs.thirst = 0;
+    run(world, THIRST_DEATH - 400);
+    world.townStock()!.add('water', 5);
+    for (let i = 0; i < 20 * 60 && worker.needs.thirst < 1; i += 1) world.tick();
+    expect(worker.needs.thirst).toBe(1);
+    expect(world.mobiles.has(worker.id)).toBe(true);
+
+    // Il retombe à zéro : un délai entier de nouveau, pas ce qui restait.
+    run(world, 1);
+    worker.needs.thirst = 0;
+    world.townStock()!.remove('water', world.townStock()!.count('water'));
+    run(world, THIRST_DEATH - 2);
+    expect(world.mobiles.has(worker.id)).toBe(true);
+  });
+
+  it('la faim tue aussi, plus lentement que la soif', () => {
+    expect(NEEDS.hunger.deathTicks).toBeGreaterThan(NEEDS.thirst.deathTicks);
+
+    const world = colony({ water: 50 });
+    const worker = workers(world)[0]!;
+    let cause: string | null = null;
+
+    world.events.on('workerStarved', ({ id, need }) => {
+      if (id === worker.id) cause = need;
+    });
+    worker.needs.hunger = 0;
+    run(world, NEEDS.hunger.deathTicks);
+    expect(cause).toBe('hunger');
+    expect(world.mobiles.has(worker.id)).toBe(false);
+  });
+
+  it('un enfant à bout ne meurt pas', () => {
+    const world = colony({});
+    const child = kid(world);
+
+    child.needs.hunger = 0;
+    child.needs.thirst = 0;
+    run(world, NEEDS.hunger.deathTicks + 20);
+    expect(world.mobiles.has(child.id)).toBe(true);
+  });
+
+  it('un porteur qui meurt rend ses réservations : le job est refait par un autre', () => {
+    const world = colony({ food: 50, water: 50 });
+    const hall = world.warehouse()!;
+
+    place(world, hall.tx + 6, hall.ty - 4);
+    world.townStock()!.add('stone', 30);
+    for (let i = 0; i < 20 * 20 && !workers(world).some((mobile) => mobile.job); i += 1) world.tick();
+
+    const worker = workers(world).find((mobile) => mobile.job)!;
+
+    world.townStock()!.remove('water', 50);
+    worker.needs.thirst = 0;
+    run(world, THIRST_DEATH + 1);
+    expect(world.mobiles.has(worker.id)).toBe(false);
+    // Sa réservation est rendue : la pierre redevient disponible pour un autre porteur.
+    world.townStock()!.add('water', 50);
+    for (let i = 0; i < 20 * 30 && !workers(world).some((other) => other.job?.item === 'stone'); i += 1) world.tick();
+    expect(workers(world).some((other) => other.job?.item === 'stone')).toBe(true);
+  });
+
+  it('une jauge à zéro avant la mairie ne tue personne : rien ne baisse tant qu’elle n’est pas bâtie', () => {
+    const world = new World(100);
+    const free = [...world.mobiles.values()].filter((mobile): mobile is Worker => mobile.kind === 'worker');
+
+    run(world, 20 * 60 * 5);
+    for (const worker of free) expect(worker.needs.hunger).toBe(1);
+  });
+
+  it('les ouvriers d’une ancienne sauvegarde, sans jauges, repartent pleins et survivent au délai', () => {
+    const world = colony({ food: 50, water: 50 });
+    const file = JSON.parse(encodeSave(world, 0)) as { state: { mobiles: Record<string, unknown>[] } };
+
+    for (const mobile of file.state.mobiles) delete mobile['needs'];
+
+    const decoded = decodeSave(JSON.stringify(file));
+
+    if (!decoded.ok) throw new Error(decoded.reason);
+
+    const loaded = decoded.world;
+    const before = workers(loaded).length;
+
+    for (const worker of workers(loaded)) expect(worker.needs).toEqual(fullNeeds());
+    run(loaded, NEEDS.hunger.deathTicks + 20);
+    expect(workers(loaded)).toHaveLength(before);
+  });
+});

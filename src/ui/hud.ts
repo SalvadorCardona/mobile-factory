@@ -725,6 +725,8 @@ export class Hud {
     world.events.on('patientAdmitted', () => this.notify(t().hud.toast.patientAdmitted, 'good'));
     world.events.on('mutantHealed', () => this.notify(t().hud.toast.mutantHealed, 'good'));
     world.events.on('kidGrewUp', ({ name }) => this.notify(t().hud.toast.kidGrewUp(name), 'good'));
+    world.events.on('starving', ({ name, need, seconds }) => this.notify(t().hud.toast.starving[need](name, seconds), 'bad'));
+    world.events.on('workerStarved', ({ name, need }) => this.notify(t().hud.toast.workerStarved[need](name), 'bad'));
     world.events.on('growthStunted', ({ name, need }) => this.notify(t().hud.toast.growthStunted[need](name), 'bad'));
     world.events.on('townHallDestroyed', () => this.showDefeat());
     world.events.on('playerKnockedOut', () => (this.death.hidden = false));

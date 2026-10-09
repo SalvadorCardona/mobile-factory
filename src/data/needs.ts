@@ -6,10 +6,10 @@
  * travail qu'au repos. Sous `seekBelow`, il interrompt sa tâche et va
  * consommer `item` au stock de la ville — à la mairie —, puis la reprend.
  * Sans rien à consommer, il passe sous `weakBelow` et travaille au ralenti ;
- * à zéro, il s'arrête (`stopsWork`). Un enfant qui manque ne grandit pas
- * (`blocksGrowth`). Personne n'en meurt : la famine arrête le travail, rien
- * de plus — on la rend mortelle en ajoutant ici un délai, pas en touchant aux
- * humains.
+ * à zéro, il s'arrête (`stopsWork`) et le compte à rebours de la mort
+ * démarre (`deathTicks`) : un ouvrier qui reste à zéro ce délai meurt, la
+ * ville en moins d'un ouvrier. Le moindre repas le remet à zéro. Un enfant
+ * qui manque ne grandit pas (`blocksGrowth`) et ne meurt pas.
  *
  * La soif est la faim en plus pressé : l'eau du puits, une jauge qui baisse
  * deux fois plus vite. Un besoin de plus est une entrée de plus dans
@@ -37,6 +37,8 @@ export interface NeedProto {
   stopsWork: boolean;
   /** Vrai : un enfant qui manque ne prend pas d'année à l'aube. */
   blocksGrowth: boolean;
+  /** Ticks passés à zéro avant que l'ouvrier en meure ; la jauge remontée, le compte repart de rien. */
+  deathTicks: number;
 }
 
 export const NEEDS = {
@@ -51,6 +53,8 @@ export const NEEDS = {
     weakPace: 0.5,
     stopsWork: true,
     blocksGrowth: true,
+    // Trois minutes à jeun après la dernière miette : le temps de semer, de chasser ou de faire venir un convoi.
+    deathTicks: 20 * 60 * 3,
   },
   thirst: {
     item: 'water',
@@ -63,6 +67,8 @@ export const NEEDS = {
     weakPace: 0.5,
     stopsWork: true,
     blocksGrowth: true,
+    // Une minute et demie sans une goutte : la soif tue plus vite que la faim.
+    deathTicks: 20 * 90,
   },
 } as const satisfies Record<string, NeedProto>;
 

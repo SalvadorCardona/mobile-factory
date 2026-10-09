@@ -109,6 +109,15 @@ export const hud = {
     patientAdmitted: 'Admis à la clinique : une nuit de soins',
     mutantHealed: 'Un ex-mutant sort de la clinique : un porteur de plus !',
     kidGrewUp: (name: string): string => `${name} a 14 ans, un ouvrier de plus`,
+    /** Un ouvrier à bout : le temps qu'il lui reste. */
+    starving: {
+      hunger: (name: string, seconds: number): string => `${name} meurt de faim dans ${seconds} s — de la nourriture !`,
+      thirst: (name: string, seconds: number): string => `${name} meurt de soif dans ${seconds} s — de l’eau !`,
+    },
+    workerStarved: {
+      hunger: (name: string): string => `${name} est mort de faim`,
+      thirst: (name: string): string => `${name} est mort de soif`,
+    },
     /** Un enfant affamé ou assoiffé ne prend pas d'année : un message par besoin. */
     growthStunted: {
       hunger: (name: string): string => `${name} a faim : pas d’anniversaire cette aube`,
