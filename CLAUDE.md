@@ -65,8 +65,9 @@ prend que ce qui rentre, le réservé reste au coffre, un coffre filtré grise
 le reste. Les chantiers
 puisent dans les deux, la ville seulement dans son rayon (`logisticRadius`,
 `sim/warehouse.ts`, le cercle jaune du mode construction). Le HUD
-les montre à part : le sac, un gros bouton violet en bas à gauche (`.hud-bag`,
-le pendant de « Bâtir » : pictogramme blanc `bagButton`, « Sac », « 10/60 »
+les montre à part : le sac, un bouton carré violet (`.hud-bag`) du groupe `.hud-actions`, en haut
+à droite sous la rangée du haut, avec l'habillage d'Adam et « Bâtir » — trois
+boutons de 56 px (pictogramme blanc `bagButton`, « 10/60 »
 dans une capsule qui se remplit, l'objet que réclame le conseil, touche I) ; la
 ville, un bandeau d'une ligne en haut à gauche, une maison sans libellé, qui
 défile de côté. Le sac (tap, ou touche I) ouvre

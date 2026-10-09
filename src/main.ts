@@ -352,8 +352,9 @@ async function main(): Promise<void> {
 
   // La colonne du bord droit : Pause, Réglages, la carte du monde, puis le zoom.
   zoom.root.prepend(hud.pauseButton, hud.settingsButton, worldMap.button);
-  // Le visage d'Adam, posé au-dessus du sac : sa garde-robe. Les fenêtres du bas passent devant.
-  hud.root.append(wardrobe.button, worldMap.root, zoom.root, stick.root, buildMenu.root, panel.root, inventory.root, resources.root, trade.root);
+  // Les trois boutons du joueur, en haut à droite : la garde-robe d'Adam, le sac, « Bâtir ».
+  hud.actions.append(wardrobe.button, hud.bag, buildMenu.buildButton);
+  hud.root.append(worldMap.root, zoom.root, stick.root, buildMenu.root, panel.root, inventory.root, resources.root, trade.root);
   stick.avoid(buildMenu.bottomParts, hud.root);
   hud.bag.addEventListener('click', () => inventory.toggle());
   hud.resourcesButton.addEventListener('click', () => resources.toggle());
