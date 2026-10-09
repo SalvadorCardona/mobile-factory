@@ -189,7 +189,7 @@ async function main(): Promise<void> {
     ? stageScenario(TEST_SCENARIOS[scenario])
     : loaded.status === 'ok'
       ? loaded.world
-      : new World(readSeed());
+      : World.newColony(readSeed());
 
   // Le joystick repart au repos : un doigt posé au moment où l'onglet s'est fermé ne fait plus marcher Adam.
   if (loaded.status === 'ok') world.push({ type: 'setMoveAxis', x: 0, y: 0 });

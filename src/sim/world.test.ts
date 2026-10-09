@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_SIZE, tileToChunk, worldToTile } from '../core/grid.ts';
-import { BUILDINGS, type BuildingId, type BuildingProto } from '../data/buildings.ts';
+import { BUILDINGS, START_BUILDINGS, type BuildingId, type BuildingProto } from '../data/buildings.ts';
+import { deserialize, serialize } from './save.ts';
 import { TOWN_PLENTY, type ItemId } from '../data/items.ts';
 import { COLONY } from '../data/inhabitants.ts';
 import { RECIPES } from '../data/recipes.ts';
@@ -1544,5 +1545,25 @@ describe('la mairie, entrepôt de la colonie', () => {
 
     expect(restored.warehouse()?.store.count('wood')).toBe(49);
     expect(restored.warehouse()?.store.capacity).toBe(Infinity);
+  });
+});
+
+describe('bâtiments de départ', () => {
+  const free = (world: World, id: BuildingId): boolean => world.isUnlocked(id);
+
+  it('une colonie neuve ne propose que START_BUILDINGS, ou ce qu’un plan, une recherche ou un objectif gouverne', () => {
+    const world = World.newColony(100);
+
+    for (const id of START_BUILDINGS) expect(free(world, id)).toBe(true);
+    for (const id of ['drill', 'farm', 'well', 'quarry', 'lumberCamp', 'watchtower', 'lab'] as const) expect(free(world, id)).toBe(false);
+  });
+
+  it('une sauvegarde d’avant les ouvre tous, et une colonie neuve se recharge à l’identique', () => {
+    const state = serialize(World.newColony(100));
+    const { openBuildings, ...legacy } = state;
+
+    expect(deserialize(JSON.parse(JSON.stringify(state))).openBuildings).toEqual(new Set(START_BUILDINGS));
+    expect(openBuildings).toEqual([...START_BUILDINGS]);
+    expect(deserialize(JSON.parse(JSON.stringify(legacy))).isUnlocked('drill')).toBe(true);
   });
 });
