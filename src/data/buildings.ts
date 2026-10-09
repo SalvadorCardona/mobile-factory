@@ -630,7 +630,7 @@ export const BUILDINGS = {
     workers: 0,
     minWorkers: 0,
     menu: true,
-    unique: true,
+    unique: false,
     plan: false,
     sprite: 'lab',
     weapon: null,

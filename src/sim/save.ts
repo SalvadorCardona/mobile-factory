@@ -30,6 +30,7 @@ import { NEED_IDS, NEEDS, type NeedId } from '../data/needs.ts';
 import { OBJECTIVES } from '../data/objectives.ts';
 import { JOB_PRIORITY, WORK_PRIORITY, type JobPriority, type WorkPriority } from '../data/workers.ts';
 import { PERKS, type PerkId } from '../data/perks.ts';
+import { PRODUCTION } from '../data/production.ts';
 import { RESEARCH, type ResearchId } from '../data/research.ts';
 import { RESOURCES, type ResourceId } from '../data/resources.ts';
 import type { SavedFog } from './fog.ts';
@@ -709,7 +710,13 @@ function parseEntity(raw: unknown): SavedEntity {
       const endTick = int(entity['endTick']);
 
       if (endTick < 0 || (research === null && endTick > 0)) throw new SaveError('compte à rebours sans recherche');
-      return { ...built, kind, research, endTick };
+      // Absente d'une sauvegarde d'avant la file : rien en attente.
+      const queue = entity['queue'] === undefined ? [] : array(entity['queue']).map((id) => oneOf(id, RESEARCH) as ResearchId);
+
+      if (queue.length > PRODUCTION.queueSize || new Set(research === null ? queue : [research, ...queue]).size !== queue.length + (research === null ? 0 : 1)) {
+        throw new SaveError('file de recherche invalide');
+      }
+      return { ...built, kind, research, endTick, queue };
     }
   }
 }

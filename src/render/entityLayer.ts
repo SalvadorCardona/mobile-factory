@@ -44,12 +44,11 @@
  * en millisecondes d'écran — la simulation n'en sait rien.
  */
 
-import { Container, Graphics, Sprite, type Ticker } from 'pixi.js';
+import { Container, Graphics, Sprite, Text, type Ticker } from 'pixi.js';
 import { TILE_SIZE, floorDiv } from '../core/grid.ts';
 import { LIGHT, PALETTE, hex } from '../data/artDirection.ts';
 import { BUILDINGS, buildingLevel } from '../data/buildings.ts';
 import type { ProblemId } from '../data/problems.ts';
-import { RESEARCH } from '../data/research.ts';
 import { SPRITES, type SpriteId, type SpriteProto } from '../data/sprites.ts';
 import { DEFAULT_LOOK, sameLook, type Look } from '../data/wardrobe.ts';
 import { adamLookParts } from '../art/adamLook.ts';
@@ -61,7 +60,8 @@ import { isCollecting, labMissing, researchCost } from '../sim/research.ts';
 import type { SiteLine } from '../sim/siteLedger.ts';
 import { canPause, employs } from '../sim/staffing.ts';
 import type { WorkPriority } from '../data/workers.ts';
-import { siteMissing, type World } from '../sim/world.ts';
+import { siteMissing, timerText, type World } from '../sim/world.ts';
+import { ZOOM } from './camera.ts';
 import { MobileLayer, drawHp } from './mobileLayer.ts';
 import { type HeldTool, Puppet } from './puppet.ts';
 import { NEEDS_MIN_ZOOM, SiteNeeds } from './siteNeeds.ts';
@@ -80,7 +80,10 @@ const BUILD_FG = hex(PALETTE.violet.base);
 const HP_FG = hex(PALETTE.coral.base);
 /** Le compte à rebours d'une recherche payée : la teinte de sa barre dans la fenêtre du labo. */
 const RESEARCH_FG = hex(PALETTE.mint.shade);
+const INK = hex(PALETTE.ink.base);
 const BAR_HEIGHT = 8;
+/** Le « m:ss » sous la barre d'un producteur, en pixels monde. */
+const TIMER_FONT = 11;
 /** La rangée des objets d'un chantier commence autant de pixels sous la barre. */
 const NEEDS_DIP = 2;
 
@@ -168,6 +171,9 @@ interface EntityView {
   shown: string;
   /** Dernier état dessiné de la barre : ne retessèle que s'il change. */
   barKey: string;
+  /** Le temps restant en « m:ss », sous la barre d'une nurserie ou d'un labo qui produit ; `null` ailleurs. */
+  timer: Text | null;
+  timerKey: string;
   /** Sous la barre d'un chantier, ce qu'il attend encore ; `null` pour un bâtiment fini. */
   needs: SiteNeeds | null;
   /** La pancarte d'un bâtiment fini, `null` pour un chantier ; et la clé de sa texture. */
@@ -390,6 +396,21 @@ export class EntityLayer {
       root.addChildAt(sign, root.getChildIndex(bar));
     }
 
+    let timer: Text | null = null;
+
+    if (entity.kind === 'lab' || entity.kind === 'nursery') {
+      timer = new Text({
+        text: '',
+        style: { fontFamily: 'Fredoka', fontWeight: '600', fontSize: TIMER_FONT, fill: INK },
+        // Net jusqu'au zoom le plus fort, à la densité de l'écran.
+        resolution: Math.min(3, window.devicePixelRatio || 1) * ZOOM.max,
+      });
+      timer.anchor.set(0.5, 0);
+      timer.position.set((entity.width * TILE_SIZE) / 2, barTop(entity) + BAR_HEIGHT + 1);
+      timer.visible = false;
+      root.addChild(timer);
+    }
+
     return {
       root,
       main,
@@ -409,6 +430,8 @@ export class EntityLayer {
       baseX: 0,
       shown,
       barKey: '',
+      timer,
+      timerKey: '',
       needs,
       sign,
       signKey: '',
@@ -451,9 +474,17 @@ export class EntityLayer {
         ratio = total === 0 ? 1 : 1 - labMissing(entity) / total;
         color = PROGRESS_FG;
       } else {
-        ratio = 1 - Math.max(0, entity.endTick - this.world.tickCount) / RESEARCH[entity.research].duration;
+        const timer = this.world.productionTimer(entity)!;
+
+        ratio = 1 - timer.left / timer.total;
         color = RESEARCH_FG;
       }
+    } else if (entity.kind === 'nursery' && entity.hp >= buildingLevel(entity.proto, entity.level).hp && this.world.productionTimer(entity)) {
+      // Intacte et au travail, la nurserie montre le temps avant la naissance.
+      const timer = this.world.productionTimer(entity)!;
+
+      ratio = 1 - timer.left / timer.total;
+      color = RESEARCH_FG;
     } else {
       const max = buildingLevel(entity.proto, entity.level).hp;
 
@@ -479,6 +510,23 @@ export class EntityLayer {
 
     view.bar.clear().roundRect(x, y, width, BAR_HEIGHT, 4).fill(BAR_TRACK);
     if (fill > 0) view.bar.roundRect(x + 2, y + 2, Math.max(4, fill), 4, 2).fill(color);
+  }
+
+  /** Le temps restant d'une production, en « m:ss » sous sa barre : seulement tant qu'elle tourne et que la barre se voit. */
+  private showTimer(view: EntityView, entity: Entity): void {
+    if (!view.timer) return;
+
+    const timer = view.bar.visible ? this.world.productionTimer(entity) : null;
+
+    view.timer.visible = timer !== null;
+    if (!timer) return;
+
+    const text = timerText(timer.left);
+
+    if (text !== view.timerKey) {
+      view.timerKey = text;
+      view.timer.text = text;
+    }
   }
 
   /**
@@ -566,6 +614,7 @@ export class EntityLayer {
       }
 
       this.drawBar(view, entity);
+      this.showTimer(view, entity);
       this.showNeeds(view, entity, zoom, ticker.deltaMS);
       this.showSign(view, entity, zoom);
       this.showAlert(view, entity, ticker.lastTime);

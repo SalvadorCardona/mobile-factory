@@ -71,6 +71,10 @@ export function statusLine(id: ResearchId, status: ResearchStatus, done: readonl
       return text.runningLeft(clock(ticksLeft));
     case 'collecting':
       return text.collecting;
+    case 'queued':
+      return text.queued;
+    case 'taken':
+      return text.taken;
     case 'available':
       return text.duration(clock(RESEARCH[id].duration));
     case 'locked':

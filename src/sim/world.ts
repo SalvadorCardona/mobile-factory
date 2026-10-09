@@ -172,7 +172,9 @@ import {
   labWants,
   missingRequirements,
   researchBonus,
+  queueFull,
   researchCost,
+  researchHolder,
   unlockingResearch,
 } from './research.ts';
 import { TownFlows } from './flows.ts';
@@ -244,6 +246,19 @@ type Producer = Drill | Farm | Quarry | Forge | LumberCamp;
 
 /** 20 ticks de simulation par seconde. */
 export const TICKS_PER_SECOND = 20;
+
+/** Où en est une production à durée : ticks restants, sur la durée totale. */
+export interface ProductionTimer {
+  left: number;
+  total: number;
+}
+
+/** Un compte à rebours en « m:ss », pour la carte et les fenêtres : 3 min → « 3:00 ». */
+export function timerText(ticks: number): string {
+  const seconds = Math.ceil(Math.max(0, ticks) / TICKS_PER_SECOND);
+
+  return `${Math.floor(seconds / 60)}:${(seconds % 60).toString().padStart(2, '0')}`;
+}
 export const STEP_MS = 1000 / TICKS_PER_SECOND;
 const STEP_SECONDS = 1 / TICKS_PER_SECOND;
 
@@ -637,8 +652,10 @@ export type WorldEvents = {
   growthStunted: { id: MobileId; name: string; need: NeedId };
   /** Le labo `id` a choisi une recherche : il attend son coût. */
   researchChosen: { id: EntityId; research: ResearchId };
-  /** La recherche choisie est abandonnée ; ce qui était déposé reste au coffre. */
+  /** La recherche choisie est abandonnée ; ce qui était déposé reste au coffre, son coût payé y revient. */
   researchCancelled: { id: EntityId; research: ResearchId };
+  /** Une recherche prend place dans la file du labo, ou en sort (`queued` faux). */
+  researchQueued: { id: EntityId; research: ResearchId; queued: boolean };
   /** Le coût est réuni et consommé : le compte à rebours tourne jusqu'à `endTick`. */
   researchStarted: { id: EntityId; research: ResearchId; endTick: number };
   /** La recherche est finie : son effet vaut désormais pour toute la partie. */
@@ -1346,6 +1363,10 @@ export class World {
 
       case 'cancelResearch':
         this.cancelResearch(command.lab);
+        break;
+
+      case 'dequeueResearch':
+        this.dequeueResearch(command.lab, command.research);
         break;
 
       case 'transferToLab':
@@ -2379,12 +2400,19 @@ export class World {
     return PLAYER_MAX_HP + levelHp(this.level());
   }
 
-  /** Le labo fini de la colonie — il n'y en a qu'un —, ou `null`. */
-  public lab(): Lab | null {
+  /** Les labos finis de la colonie : chacun mène sa recherche. */
+  public labs(): Lab[] {
+    const found: Lab[] = [];
+
     for (const entity of this.entities.values()) {
-      if (entity.kind === 'lab') return entity;
+      if (entity.kind === 'lab') found.push(entity);
     }
-    return null;
+    return found;
+  }
+
+  /** Le premier labo fini de la colonie, ou `null`. */
+  public lab(): Lab | null {
+    return this.labs()[0] ?? null;
   }
 
   /** Le labo désigné par une commande, s'il existe et qu'il est bâti. */
@@ -2397,45 +2425,92 @@ export class World {
   }
 
   /**
-   * « Lancer » : le labo choisit sa recherche et attend son coût. Une seule
-   * à la fois — refusé si le compte à rebours d'une autre tourne ; une
-   * recherche qui attendait encore son coût est remplacée, ce qui était
-   * déposé reste au coffre et compte pour la nouvelle s'il lui sert. Si le
-   * coffre a déjà tout, le compte à rebours part aussitôt.
+   * « Lancer » : le labo choisit sa recherche et attend son coût. Un labo ne
+   * mène qu'une recherche à la fois : si le compte à rebours d'une autre
+   * tourne, celle-ci se met en file et partira à son tour (son coût ne se
+   * paie qu'alors). Jamais la même recherche dans deux labos, ni deux fois
+   * dans la file. Une recherche qui attendait encore son coût est remplacée,
+   * ce qui était déposé reste au coffre et compte pour la nouvelle s'il lui
+   * sert. Si le coffre a déjà tout, le compte à rebours part aussitôt.
    */
   private chooseResearch(id: EntityId, research: ResearchId): void {
     const lab = this.labFor(id);
 
     if (!lab) return;
-    if (lab.endTick > 0) {
-      this.events.emit('researchRejected', { id, reason: 'busy' });
-      return;
-    }
     if (!Object.hasOwn(RESEARCH, research) || this.researchDone.includes(research) || missingRequirements(research, this.researchDone).length > 0) {
       this.events.emit('researchRejected', { id, reason: 'locked' });
       return;
     }
-    if (lab.research === research) return;
+    if (lab.research === research || lab.queue.includes(research)) return;
+    if (researchHolder(research, this.labs(), lab)) {
+      this.events.emit('researchRejected', { id, reason: 'taken' });
+      return;
+    }
+    if (lab.endTick > 0) {
+      if (queueFull(lab)) {
+        this.events.emit('researchRejected', { id, reason: 'busy' });
+        return;
+      }
+      lab.queue.push(research);
+      this.events.emit('researchQueued', { id, research, queued: true });
+      return;
+    }
 
     lab.research = research;
     this.events.emit('researchChosen', { id, research });
     this.startCountdown(lab);
   }
 
-  /** « Abandonner » : tant que le coût n'est pas réuni, le labo lâche sa recherche. Rien de déposé n'est perdu. */
+  /**
+   * « Abandonner » : le labo lâche sa recherche, et la suivante de la file
+   * prend sa place. Tant que le coût n'est pas réuni, rien de déposé n'est
+   * perdu ; si le compte à rebours tournait, le coût payé retourne au coffre.
+   */
   private cancelResearch(id: EntityId): void {
     const lab = this.labFor(id);
 
     if (!lab) return;
-    if (!isCollecting(lab)) {
-      this.events.emit('researchRejected', { id, reason: lab.endTick > 0 ? 'busy' : 'idle' });
+    if (lab.research === null) {
+      this.events.emit('researchRejected', { id, reason: 'idle' });
       return;
     }
 
-    const research = lab.research!;
+    const research = lab.research;
 
+    if (lab.endTick > 0) {
+      for (const [item, amount] of researchCost(research)) lab.store.add(item, Math.min(amount, lab.store.freeSpace()));
+    }
     lab.research = null;
+    lab.endTick = 0;
     this.events.emit('researchCancelled', { id, research });
+    this.advanceResearchQueue(lab);
+  }
+
+  /** Retire une recherche de la file d'un labo : rien n'était payé. */
+  private dequeueResearch(id: EntityId, research: ResearchId): void {
+    const lab = this.labFor(id);
+
+    if (!lab) return;
+
+    const at = lab.queue.indexOf(research);
+
+    if (at < 0) {
+      this.events.emit('researchRejected', { id, reason: 'idle' });
+      return;
+    }
+    lab.queue.splice(at, 1);
+    this.events.emit('researchQueued', { id, research, queued: false });
+  }
+
+  /** Le labo est libre : la première recherche de la file est choisie, et part si son coût est au coffre. */
+  private advanceResearchQueue(lab: Lab): void {
+    const next = lab.queue.shift();
+
+    if (next === undefined) return;
+    this.events.emit('researchQueued', { id: lab.id, research: next, queued: false });
+    lab.research = next;
+    this.events.emit('researchChosen', { id: lab.id, research: next });
+    this.startCountdown(lab);
   }
 
   /**
@@ -2552,6 +2627,7 @@ export class World {
       this.player.inventory = Store.fromJSON(inventory.capacity + effect.amount, inventory.toJSON());
     }
     this.events.emit('researchCompleted', { id: lab.id, research });
+    this.advanceResearchQueue(lab);
   }
 
   /* ------------------------------------------------------------- placement */
@@ -2953,7 +3029,7 @@ export class World {
         break;
 
       case 'lab':
-        building = { ...base, kind: 'lab', research: null, endTick: 0 };
+        building = { ...base, kind: 'lab', research: null, endTick: 0, queue: [] };
         break;
 
       case 'lumberCamp':
@@ -3403,6 +3479,26 @@ export class World {
       if (mobile.kind === 'kid' && mobile.homeId === nursery.id) kids.push(mobile);
     }
     return kids;
+  }
+
+  /**
+   * Le compte à rebours de la production en cours d'un bâtiment — la naissance
+   * d'un enfant, une recherche payée — ou `null` quand rien ne tourne : en
+   * pause, en attente de nourriture ou de son coût, nurserie pleine. Un futur
+   * producteur à durée l'ajoute ici ; la carte et la fenêtre le lisent.
+   */
+  public productionTimer(entity: Entity): ProductionTimer | null {
+    if (entity.kind === 'lab') {
+      if (entity.research === null || entity.endTick === 0) return null;
+      return { left: Math.max(0, entity.endTick - this.tickCount), total: RESEARCH[entity.research].duration };
+    }
+    if (entity.kind === 'nursery') {
+      const left = entity.nextBirthTick - this.tickCount;
+
+      if (entity.paused || entity.hungry || left <= 0 || this.nurseryKids(entity).length >= NURSERY_CARE.capacity) return null;
+      return { left, total: RECIPES[NURSERY_RECIPE].duration };
+    }
+    return null;
   }
 
   /**

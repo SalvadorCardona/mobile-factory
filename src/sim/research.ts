@@ -13,6 +13,7 @@
 
 import type { BuildingId } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
+import { PRODUCTION } from '../data/production.ts';
 import { RECIPES } from '../data/recipes.ts';
 import { CROPS } from '../data/resources.ts';
 import { RESEARCH, RESEARCH_IDS, type ResearchId, type ResearchStat } from '../data/research.ts';
@@ -66,14 +67,32 @@ export function missingRequirements(id: ResearchId, done: readonly ResearchId[])
  * - `running` : son coût est payé, le compte à rebours tourne ;
  * - `collecting` : choisie, le labo attend son coût ;
  * - `available` : ses prérequis sont finis, on peut la lancer ;
+ * - `queued` : en file dans ce labo, elle partira à son tour ;
+ * - `taken` : un autre labo la mène ou l'a en file — pas deux fois la même ;
  * - `locked` : il manque un prérequis.
  */
-export type ResearchStatus = 'done' | 'running' | 'collecting' | 'available' | 'locked';
+export type ResearchStatus = 'done' | 'running' | 'collecting' | 'queued' | 'taken' | 'available' | 'locked';
 
-export function researchStatus(id: ResearchId, done: readonly ResearchId[], lab: Lab | null): ResearchStatus {
+/**
+ * Le labo qui a cette recherche en cours ou en file, hors `except`. Une même
+ * recherche ne tourne jamais dans deux labos.
+ */
+export function researchHolder(id: ResearchId, labs: readonly Lab[], except?: Lab): Lab | null {
+  return labs.find((lab) => lab !== except && (lab.research === id || lab.queue.includes(id))) ?? null;
+}
+
+/** `labs` : tous les labos de la colonie, pour savoir si un autre tient déjà la recherche. */
+export function researchStatus(id: ResearchId, done: readonly ResearchId[], lab: Lab | null, labs: readonly Lab[] = lab ? [lab] : []): ResearchStatus {
   if (done.includes(id)) return 'done';
   if (lab?.research === id) return lab.endTick > 0 ? 'running' : 'collecting';
+  if (lab?.queue.includes(id)) return 'queued';
+  if (researchHolder(id, labs, lab ?? undefined)) return 'taken';
   return missingRequirements(id, done).length === 0 ? 'available' : 'locked';
+}
+
+/** Les recherches en file derrière celle qui tourne, ou pleine : plus de place. */
+export function queueFull(lab: Lab): boolean {
+  return lab.queue.length >= PRODUCTION.queueSize;
 }
 
 /** Le labo attend-il son coût ? Une recherche choisie dont le compte à rebours n'a pas démarré. */

@@ -3535,6 +3535,14 @@ button {
   margin-top: 8px;
 }
 
+.building-panel-production[hidden] {
+  display: none;
+}
+
+.building-panel-production .building-panel-bar {
+  flex: 1;
+}
+
 .building-panel-meter-icon {
   display: inline-flex;
   flex: none;
@@ -4036,6 +4044,14 @@ button {
 .research-current .building-panel-bar {
   margin-top: 8px;
   background: var(--paper);
+}
+
+.research-queue {
+  margin-top: 10px;
+}
+
+.research-queue[hidden] {
+  display: none;
 }
 
 .research-current .building-panel-actions {

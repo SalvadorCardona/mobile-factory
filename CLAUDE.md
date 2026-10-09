@@ -404,10 +404,16 @@ de la seed et du jour : surplus de la ville → ce qui lui manque (5 pour 1),
 butin → plaque de fer, une offre rare plafonnée sur la partie
 (`rareTrades`). Commande `trade`, une fois par échange, payée sac puis ville.
 
-**Labo de recherche** (`src/data/research.ts`, `src/sim/research.ts`, un
-seul par colonie : `unique`) — on y choisit une recherche, on dépose son coût
-(sac, ville dans le rayon, porteurs, ou en le heurtant), puis le compte à
-rebours tourne ; une à la fois. Lancer ne prend rien à la ville : tant que le
+**Labo de recherche** (`src/data/research.ts`, `src/sim/research.ts`) — on y
+choisit une recherche, on dépose son coût (sac, ville dans le rayon,
+porteurs, ou en le heurtant), puis le compte à rebours tourne ; une à la fois
+par labo, les suivantes en file (`PRODUCTION.queueSize`, `data/production.ts`,
+`Lab.queue`, `dequeueResearch`) et payées à leur tour ; plusieurs labos
+mènent plusieurs recherches de front, jamais la même (refus `taken`).
+« Abandonner » une recherche qui tourne rend son coût au coffre. Le temps
+restant d'une production (naissance, recherche) est `World.productionTimer`,
+en « m:ss » (`timerText`) sous la barre du bâtiment sur la carte et dans sa
+fenêtre ; les durées restent à `RECIPES.raiseChild` et `RESEARCH[id]`. Lancer ne prend rien à la ville : tant que le
 coût manque, le labo porte au-dessus de lui la rangée d’un chantier
 (`World.labLedger`, même `render/siteNeeds.ts`), et sa fenêtre le même relevé
 (`ui/siteNeedRow.ts`). Le coût mêle objets communs et **butin

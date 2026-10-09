@@ -764,6 +764,7 @@ export class Hud {
     });
     world.events.on('researchRejected', ({ reason }) => {
       if (reason === 'busy') this.notify(t().hud.toast.researchBusy, 'bad');
+      if (reason === 'taken') this.notify(t().hud.toast.researchTaken, 'bad');
       if (reason === 'locked') this.notify(t().hud.toast.researchLocked, 'bad');
       if (reason === 'outOfReach') this.notify(t().hud.rejection.outOfReach, 'bad');
       if (reason === 'nothingToGive') this.notify(t().hud.toast.researchNothing, 'bad');

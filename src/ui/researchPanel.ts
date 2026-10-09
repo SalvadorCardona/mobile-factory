@@ -20,11 +20,12 @@
 
 import type { BuildingId } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
+import { PRODUCTION } from '../data/production.ts';
 import { RESEARCH, RESEARCH_IDS, RESEARCH_THEMES, type ResearchId, type ResearchTheme } from '../data/research.ts';
 import { locale, onLocale, t } from '../i18n/locale.ts';
-import { labNeeds, researchCost, researchStatus, type ResearchStatus } from '../sim/research.ts';
+import { labNeeds, queueFull, researchCost, researchStatus, type ResearchStatus } from '../sim/research.ts';
 import type { Lab } from '../sim/types.ts';
-import type { World } from '../sim/world.ts';
+import { timerText, type World } from '../sim/world.ts';
 import { buildingIcon, itemAmount } from './icons.ts';
 import { siteNeedRow } from './siteNeedRow.ts';
 import { effectLine, statusLine } from './researchText.ts';
@@ -41,9 +42,11 @@ export class ResearchPanel {
   private readonly transferButton: HTMLButtonElement;
   private readonly cancelButton: HTMLButtonElement;
   private readonly takeButton: HTMLButtonElement;
+  private readonly queue: HTMLElement;
   private readonly list: HTMLElement;
   private labId: number | null = null;
   private lastCurrent = '';
+  private lastQueue = '';
   private lastList = '';
 
   private readonly world: World;
@@ -69,8 +72,10 @@ export class ResearchPanel {
     actions.append(this.transferButton, this.cancelButton, this.takeButton);
     this.current.append(this.currentTitle, this.currentStatus, this.bar, this.currentCost, actions);
 
+    this.queue = element('div', 'research-queue');
+    this.queue.hidden = true;
     this.list = element('div', 'research-list');
-    this.root.append(this.current, this.list);
+    this.root.append(this.current, this.queue, this.list);
 
     // Les boutons suivent la langue ; la liste se réécrit au prochain `update()`, dont la clé porte la langue.
     onLocale(() => {
@@ -87,9 +92,11 @@ export class ResearchPanel {
     if (lab.id !== this.labId) {
       this.labId = lab.id;
       this.lastCurrent = '';
+      this.lastQueue = '';
       this.lastList = '';
     }
     this.updateCurrent(lab);
+    this.updateQueue(lab);
     this.updateList(lab);
   }
 
@@ -128,11 +135,15 @@ export class ResearchPanel {
       const left = lab.endTick - world.tickCount;
 
       this.current.dataset['state'] = 'running';
-      this.setText(this.currentStatus, `${statusLine(lab.research, 'running', world.researchDone, left)} · ${effectLine(lab.research, world.researchDone, world.perks)}`);
+      this.setText(
+        this.currentStatus,
+        `${t().researchPanel.remaining(timerText(left))} · ${statusLine(lab.research, 'running', world.researchDone, left)} · ${effectLine(lab.research, world.researchDone, world.perks)}`,
+      );
       this.bar.dataset['kind'] = 'research';
       this.barFill.style.width = `${Math.round((1 - left / research.duration) * 100)}%`;
       this.transferButton.hidden = true;
-      this.cancelButton.hidden = true;
+      // Abandonner une recherche qui tourne rend son coût au coffre.
+      this.cancelButton.hidden = false;
       this.setCost([], 'running');
       return;
     }
@@ -159,6 +170,37 @@ export class ResearchPanel {
     this.setCost(ledger.map(siteNeedRow), `collecting:${lab.research}:${JSON.stringify(ledger)}`);
   }
 
+  /** La file du labo : chaque recherche en attente, et de quoi la retirer. Reconstruite seulement si elle change. */
+  private updateQueue(lab: Lab): void {
+    const key = `${locale()}|${lab.queue.join(',')}`;
+
+    this.queue.hidden = lab.queue.length === 0;
+    if (key === this.lastQueue) return;
+    this.lastQueue = key;
+
+    const title = element('h3', 'research-group-title');
+
+    title.textContent = t().researchPanel.queueTitle(lab.queue.length, PRODUCTION.queueSize);
+    this.queue.replaceChildren(
+      title,
+      ...lab.queue.map((id) => {
+        const row = element('article', 'research-row');
+        const head = element('div', 'research-row-head');
+        const name = element('h4', 'research-name');
+        const remove = element('button', 'inventory-action research-launch') as HTMLButtonElement;
+
+        row.dataset['status'] = 'queued';
+        name.textContent = t().research[id].label;
+        remove.type = 'button';
+        remove.textContent = t().researchPanel.dequeue;
+        remove.addEventListener('click', () => this.world.push({ type: 'dequeueResearch', lab: lab.id, research: id }));
+        head.append(name, remove);
+        row.append(head);
+        return row;
+      }),
+    );
+  }
+
   private setCost(children: HTMLElement[], key: string): void {
     if (key === this.lastCurrent) return;
     this.lastCurrent = key;
@@ -171,11 +213,12 @@ export class ResearchPanel {
   private updateList(lab: Lab): void {
     const { world } = this;
     const { researchDone: done } = world;
-    const statuses = RESEARCH_IDS.map((id): [ResearchId, ResearchStatus] => [id, researchStatus(id, done, lab)]);
+    const statuses = RESEARCH_IDS.map((id): [ResearchId, ResearchStatus] => [id, researchStatus(id, done, lab, world.labs())]);
     const key = [
       locale(),
       statuses.map(([, status]) => status).join(','),
       lab.endTick > 0,
+      queueFull(lab),
       world.perks.join(','),
       ...this.relevantItems().map((item) => `${item}=${this.owned(item)}`),
     ].join('|');
@@ -219,9 +262,9 @@ export class ResearchPanel {
 
       launch.type = 'button';
       launch.dataset['tone'] = 'deposit';
-      launch.textContent = t().researchPanel.launch;
-      // Une seule à la fois : tant qu'une recherche tourne, on attend.
-      launch.disabled = lab.endTick > 0;
+      // Une recherche tourne déjà : celle-ci se met en file, tant qu'il y a de la place.
+      launch.textContent = lab.endTick > 0 ? t().researchPanel.enqueue : t().researchPanel.launch;
+      launch.disabled = lab.endTick > 0 && queueFull(lab);
       launch.addEventListener('click', () => world.push({ type: 'startResearch', lab: lab.id, research: id }));
       head.append(launch);
     }

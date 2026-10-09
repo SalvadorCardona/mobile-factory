@@ -13,6 +13,7 @@ export const researchPanel: Messages['researchPanel'] = {
   transferBag: 'Transfer from the bag, bump the lab, or let the porters do it.',
   running: 'Underway',
   launch: 'Start',
+  enqueue: 'Queue',
   unlocks: 'Unlocks:',
   percent: (value) => `+${value}%`,
   zeroPercent: '0%',
@@ -24,4 +25,9 @@ export const researchPanel: Messages['researchPanel'] = {
   requires: (list) => `Requires: ${list}`,
   minutes: (minutes, seconds) => `${minutes} min ${seconds} s`,
   seconds: (seconds) => `${seconds} s`,
+  queued: 'Queued',
+  taken: 'Run by another lab',
+  queueTitle: (count, max) => `Queue ${count}/${max}`,
+  dequeue: 'Remove',
+  remaining: (time) => `${time} left`,
 };

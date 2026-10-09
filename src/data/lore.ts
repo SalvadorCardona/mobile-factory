@@ -286,7 +286,7 @@ export const LORE = {
         'Des fioles qui glougloutent, une antenne bricolée et une cheminée qui fume ' +
         'quand ça cherche. On y dépose bois, pierre et trophées d’ennemis ; il en ' +
         'ressort des améliorations pour toute la partie.',
-      effect: 'Recherches : un meilleur arc, un plus grand sac, des porteurs plus forts… Un seul par colonie.',
+      effect: 'Recherches : un meilleur arc, un plus grand sac, des porteurs plus forts… Une recherche à la fois par labo : bâtissez-en un autre pour en mener deux.',
     },
     /**
      * L'Antenne, le projet de l'acte II : trois étages livrés l'un après

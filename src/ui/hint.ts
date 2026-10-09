@@ -220,12 +220,11 @@ function meanwhile(world: World): Advice | null {
     return { text: lines.meanwhileStock.replace('{item}', t().hud.hint.inSentence(t().items[lowest])), wants: lowest };
   }
 
-  const lab = entities.find((entity) => entity.kind === 'lab');
+  const labs = world.labs();
 
   if (
-    lab?.kind === 'lab' &&
-    lab.research === null &&
-    RESEARCH_IDS.some((id) => researchStatus(id, world.researchDone, lab) === 'available')
+    labs.some((lab) => lab.research === null) &&
+    RESEARCH_IDS.some((id) => researchStatus(id, world.researchDone, null, labs) === 'available')
   ) {
     return { text: lines.meanwhileResearch, wants: null };
   }
