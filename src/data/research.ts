@@ -133,6 +133,16 @@ export const RESEARCH = {
     effect: null,
     unlocks: ['barracks'],
   },
+  fortification: {
+    label: 'Fortifications',
+    description: 'Des pieux, des créneaux et deux bons archers : la ville se prépare à la nuit.',
+    theme: 'building',
+    cost: { wood: 12, stone: 8, mutantGoo: 2 },
+    duration: 20 * 45,
+    requires: [],
+    effect: null,
+    unlocks: ['archerTower', 'palisade'],
+  },
   sharpArrows: {
     label: 'Flèches à croc',
     description: 'Des crocs de loup en pointe de flèche : ça mord.',

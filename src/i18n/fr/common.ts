@@ -24,6 +24,8 @@ export const settings = {
   music: 'Musique',
   /** Les pancartes des bâtiments, sur la carte. */
   signs: 'Pancartes',
+  /** Une notification du système quand une vague s'annonce et que le jeu n'a pas le focus. */
+  waveAlerts: 'Alertes de vague',
   /** Les curseurs de volume, sous chaque interrupteur. */
   sfxVolume: 'Volume des bruitages',
   musicVolume: 'Volume de la musique',
