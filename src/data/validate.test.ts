@@ -51,12 +51,12 @@ describe('prototypes', () => {
   });
 
   it('refuse une quête qui demande un bâtiment qu’on ne trouve qu’au labo', () => {
-    const goal = QUESTS.farm.goal as { building: BuildingId };
+    const goal = QUESTS.housing.goal as { building: BuildingId };
     const building = goal.building;
 
     goal.building = 'clinic';
     try {
-      expect(validatePrototypes()).toContain("QUESTS.farm : demande « clinic », qui n'arrive qu'au labo");
+      expect(validatePrototypes()).toContain("QUESTS.housing : demande « clinic », qui n'arrive qu'au labo");
     } finally {
       goal.building = building;
     }

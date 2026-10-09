@@ -107,17 +107,17 @@ describe('tables de butin', () => {
 });
 
 describe('butin au sol', () => {
-  it('un crabe abattu lâche sa nourriture au sol, pas dans le sac', () => {
+  it('un crabe abattu lâche sa viande au sol, pas dans le sac', () => {
     const world = new World(SEED);
-    const before = world.player.inventory.count('food');
+    const before = world.player.inventory.count('meat');
     const dropped = killNextTo(world, 'crab');
 
-    expect(dropped.map((loot) => loot.item)).toEqual(['food']);
-    expect(world.player.inventory.count('food')).toBe(before);
+    expect(dropped.map((loot) => loot.item)).toEqual(['meat']);
+    expect(world.player.inventory.count('meat')).toBe(before);
     expect(world.mobiles.get(dropped[0]!.id)).toBe(dropped[0]);
   });
 
-  it('un loup lâche plus de nourriture qu’un crabe, tout près de là où il est tombé', () => {
+  it('un loup lâche plus de viande qu’un crabe, tout près de là où il est tombé', () => {
     const world = new World(SEED);
     let x = 0;
     let y = 0;
@@ -125,7 +125,7 @@ describe('butin au sol', () => {
     // Touché, le loup charge : il tombe ailleurs que là où il était.
     world.events.on('beastDied', (died) => ({ x, y } = died));
     const dropped = killNextTo(world, 'wolf');
-    const food = dropped.filter((loot) => loot.item === 'food');
+    const food = dropped.filter((loot) => loot.item === 'meat');
 
     expect(food.length).toBeGreaterThanOrEqual(2);
     for (const loot of dropped) {
@@ -148,15 +148,15 @@ describe('butin au sol', () => {
     const world = new World(SEED);
     const [loot] = killNextTo(world, 'crab');
     const picked: ItemId[] = [];
-    const before = world.player.inventory.count('food');
+    const before = world.player.inventory.count('meat');
 
     world.events.on('lootPicked', ({ item }) => picked.push(item));
     world.player.x = loot!.x;
     world.player.y = loot!.y;
     world.tick();
 
-    expect(picked).toEqual(['food']);
-    expect(world.player.inventory.count('food')).toBe(before + 1);
+    expect(picked).toEqual(['meat']);
+    expect(world.player.inventory.count('meat')).toBe(before + 1);
     expect(world.mobiles.has(loot!.id)).toBe(false);
   });
 
@@ -201,7 +201,7 @@ describe('butin au sol', () => {
     inventory.remove('wood', 1);
     world.tick();
     expect(world.mobiles.has(loot!.id)).toBe(false);
-    expect(inventory.count('food')).toBeGreaterThan(0);
+    expect(inventory.count('meat')).toBeGreaterThan(0);
   });
 
   it('disparaît s’il est oublié', () => {

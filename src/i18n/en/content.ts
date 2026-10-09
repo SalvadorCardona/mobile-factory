@@ -23,6 +23,7 @@ export const content: Content = {
     coal: 'Coal',
     ironOre: 'Iron ore',
     food: 'Food',
+    meat: 'Meat',
     water: 'Water',
     ironPlate: 'Iron plate',
     mutantGoo: 'Mutant goo',
@@ -107,7 +108,7 @@ export const content: Content = {
       sign: 'Nursery',
       siteDescription: 'Walls to raise before the cradle goes in. It needs wood and stone.',
       description:
-        'A heated shelter, blankets, a cradle. Every three minutes a child is born here and the colony grows by one survivor — if there’s enough to feed them: each birth eats six food from the farm.',
+        'A heated shelter, blankets, a cradle. Every three minutes a child is born here and the colony grows by one survivor — if there’s enough to feed them: each birth eats six food from the hunt.',
       effect: '+1 child every 3 min, for 6 food.',
       upgrades: [],
     },
@@ -312,10 +313,10 @@ export const content: Content = {
     pickaxe: 'Scrap pickaxe',
   },
   quests: {
-    farm: {
-      label: 'Build a farm',
-      give: 'A farm, Adam! Nobody rebuilds the world on an empty stomach.',
-      done: 'Yum. Here, my blueprint for the builders’ house!',
+    housing: {
+      label: 'Build a house',
+      give: 'A house, Adam! Nobody rebuilds the world without a roof overhead.',
+      done: 'Cosy. Here, my blueprint for the builders’ house!',
     },
     towers: {
       label: 'Two watchtowers',
@@ -355,7 +356,7 @@ export const content: Content = {
     },
     {
       title: 'See the first child born',
-      hint: 'A nursery, with six food from the farm inside: a baby!',
+      hint: 'A nursery, with six food from the hunt inside: a baby!',
       celebration: 'A child is born: the colony has a future. Town hall repaired, +20 bag slots.',
       banner: '',
     },

@@ -21,7 +21,7 @@ export const COLONY = {
   startingWorkers: 10,
   /**
    * Ce qui tombe en ville quand la mairie est bâtie : de quoi faire tenir les
-   * dix premiers ouvriers le temps de poser un puits et de lancer une ferme —
+   * dix premiers ouvriers le temps de poser un puits et de rapporter la première viande —
    * trois repas chacun, quatre gorgées (`data/needs.ts`).
    */
   startingStock: { food: 30, water: 40 },

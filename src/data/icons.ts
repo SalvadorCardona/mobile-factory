@@ -20,7 +20,7 @@ import { PRESTIGE } from './prestige.ts';
 export const ICON_SIZE = 24;
 
 const S = ICON_SIZE;
-const { ink, orange, yellow, cyan, mint, toxic, paper } = PALETTE;
+const { ink, orange, yellow, cyan, mint, toxic, paper, coral } = PALETTE;
 
 export const ITEM_ICONS: Record<ItemId, string> = {
   /** Une bûche orange, sa tranche jaune et ses cernes — comme sur la maquette. */
@@ -64,6 +64,17 @@ export const ITEM_ICONS: Record<ItemId, string> = {
     cushion(8, 17, 8, 6),
     cushion(16.5, 17, 8, 6),
     line(12.5, 21, 12.5, 23, mint.shade),
+  ),
+  /** Un pilon de viande corail sur son os blanc : le butin d'une chasse. */
+  meat: svg(
+    S,
+    S,
+    pill(15, 13, 6, 5, paper.shade),
+    pill(15, 12.5, 5, 3.6, paper.base),
+    circle(19.5, 17, 2.2, paper.shade),
+    circle(19.2, 16.5, 1.7, paper.base),
+    shadedPill(3, 3, 14, 13, 6, 'coral'),
+    pill(6, 5.5, 5, 2.4, coral.light),
   ),
   /**
    * Une goutte d'eau cyan, pointe en haut — la teinte de l'eau, mais pas la

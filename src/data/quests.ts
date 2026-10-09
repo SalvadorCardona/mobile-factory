@@ -52,12 +52,12 @@ export interface QuestProto {
 }
 
 export const QUESTS = {
-  farm: {
-    label: 'Bâtir une ferme',
-    goal: { type: 'build', building: 'farm', count: 1 },
+  housing: {
+    label: 'Bâtir une maison',
+    goal: { type: 'build', building: 'home', count: 1 },
     reward: { type: 'plan', building: 'builderHouse' },
-    give: 'Une ferme, Adam ! On ne rebâtit rien le ventre vide.',
-    done: 'Miam. Tiens, mon plan de la maison des constructeurs !',
+    give: 'Une maison, Adam ! On ne rebâtit rien sans toit sur la tête.',
+    done: 'Au chaud. Tiens, mon plan de la maison des constructeurs !',
   },
   towers: {
     label: 'Deux tours de guet',

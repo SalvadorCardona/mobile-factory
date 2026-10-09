@@ -167,10 +167,10 @@ describe('Ève', () => {
 
     expect(world.canPlace('builderHouse', origin.tx + 2, origin.ty + 2)).toBe('locked');
 
-    build(world, 'farm');
+    build(world, 'home');
     for (let i = 0; i < EVE.checkTicks; i += 1) world.tick();
 
-    expect(completed).toEqual(['farm']);
+    expect(completed).toEqual(['housing']);
     expect(world.questsDone).toBe(1);
     expect(world.canPlace('builderHouse', origin.tx + 2, origin.ty + 2)).not.toBe('locked');
   });
@@ -206,11 +206,11 @@ describe('quêtes et récompenses', () => {
   });
 
   it('débloque un plan à la quête qui le donne', () => {
-    const done = QUEST_IDS.findIndex((id) => id === 'farm') + 1;
+    const done = QUEST_IDS.findIndex((id) => id === 'housing') + 1;
 
     expect(isUnlocked('builderHouse', done - 1)).toBe(false);
     expect(isUnlocked('builderHouse', done)).toBe(true);
-    expect(isUnlocked('farm', 0)).toBe(true);
+    expect(isUnlocked('home', 0)).toBe(true);
   });
 
   it('récolte plus vite avec les outils reçus', () => {

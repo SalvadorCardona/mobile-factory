@@ -51,7 +51,7 @@ describe('filterCards', () => {
     const view = filterCards(cards(['forge', 'charcoalKiln', 'watchtower', 'barracks']), 'production', '');
 
     expect(view.visible.has('forge')).toBe(false);
-    expect(view.visible.has('farm')).toBe(true);
+    expect(view.visible.has('well')).toBe(true);
     expect(view.chips.find((chip) => chip.filter === 'production')?.count).toBe(
       MENU_BUILDING_IDS.filter((id) => BUILDINGS[id].category === 'production').length - 2,
     );
@@ -108,7 +108,7 @@ describe('filterCards', () => {
 
     expect(world.inMenu('forge')).toBe(false);
     expect(view.visible.has('forge')).toBe(false);
-    expect(view.visible.has('farm')).toBe(true);
+    expect(view.visible.has('well')).toBe(true);
     expect(view.chips[0]?.count).toBe([...shown.values()].filter((card) => card.shown).length);
   });
 });

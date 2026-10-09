@@ -399,7 +399,7 @@ export const WILDLIFE = {
     respawnTicks: 20 * 90,
     // Une pince à griller, et parfois la pince elle-même, bonne pour le labo.
     loot: [
-      { item: 'food', min: 1, max: 1, chance: 1 },
+      { item: 'meat', min: 1, max: 1, chance: 1 },
       { item: 'crabClaw', min: 1, max: 1, chance: 0.4 },
     ],
     sprite: 'crab',
@@ -426,7 +426,7 @@ export const WILDLIFE = {
     respawnTicks: 20 * 180,
     // Plus de viande qu'un crabe, et parfois le collier de ferraille d'un ancien chien.
     loot: [
-      { item: 'food', min: 2, max: 3, chance: 1 },
+      { item: 'meat', min: 2, max: 3, chance: 1 },
       { item: 'ironOre', min: 1, max: 1, chance: 0.2 },
       { item: 'wolfFang', min: 1, max: 1, chance: 0.5 },
     ],
