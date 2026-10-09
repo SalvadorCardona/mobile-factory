@@ -429,6 +429,8 @@ export const panel = {
       resource: { text: 'Un arbre ou un rocher gêne', remedy: 'Adam peut le récolter' },
       enemyZone: { text: 'Une base mutante tient la zone', remedy: 'Abattez-la avec un arc de son niveau' },
       unexplored: { text: 'Le tracé entre dans l’inconnu', remedy: 'Explorez d’abord la zone' },
+      polluted: { text: 'Terre polluée sur le tracé', remedy: 'Une station de dépollution la rendra saine' },
+      radioactive: { text: 'Terre radioactive sur le tracé', remedy: 'Inconstructible, et rien ne la nettoie pour l’instant' },
     },
   },
 };

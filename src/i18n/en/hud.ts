@@ -37,6 +37,8 @@ export const hud: Messages['hud'] = {
     resource: 'Skipped trees and rocks: clear them to pave',
     enemyZone: 'No roads inside a mutant base’s zone',
     unexplored: 'No roads into the unknown: explore first',
+    polluted: 'No roads on polluted land — a purifier will clean it',
+    radioactive: 'No roads on radioactive land',
   },
   gear: {
     outOfReach: 'Too far from the forge — get closer',

@@ -2764,6 +2764,9 @@ export class World {
     if (this.chunks.occupantAt(tx, ty) !== undefined) return 'occupied';
     if (this.resources.isTaken(tx, ty)) return 'resource';
     if (this.enemyZoneAt(tx, ty)) return 'enemyZone';
+    const land = this.land.at(tx, ty);
+
+    if (land === 'polluted' || land === 'radioactive') return land;
     return null;
   }
 

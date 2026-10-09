@@ -6,12 +6,10 @@
  * Sprite. Sans ça, ce sont des milliers de quads par frame.
  *
  * Le sol, la prairie (taches, brins, fleurettes : `meadow.ts`) et le décor
- * sont régénérés depuis la seed et ne changent jamais. Deux choses s'y
- * ajoutent, que la ville trace : les routes pavées — un pavage ou un coup de
+ * sont régénérés depuis la seed et ne changent jamais. Une chose s'y
+ * ajoute, que la ville trace : les routes pavées — un pavage ou un coup de
  * marteau rebake le bloc touché (`invalidate`), et son voisin si la dalle
- * est au bord, puisque la voisine change de raccord — et les chemins de
- * terre battue entre la mairie et ses bâtiments (`setTrails`), qui rebakent
- * les blocs qu'ils traversent quand un bâtiment s'achève ou tombe. Les arbres et les rochers, qui changent
+ * est au bord, puisque la voisine change de raccord. Les arbres et les rochers, qui changent
  * et qui montent au-dessus de leur tuile, sont des sprites à part
  * (`resourceLayer.ts`).
  *
@@ -35,11 +33,8 @@ import { decorAt } from '../sim/terrain.ts';
 import type { Camera } from './camera.ts';
 import type { SpriteLibrary } from './spriteLibrary.ts';
 import { BlockTerrain, CORNERS, CORNER_SIDES, SIDES, SIDE_OFFSET, groundRoll, type Surface, type TerrainTiles } from './terrainTiles.ts';
-import { PATCH_SIZE, TRAIL_WIDTH } from '../art/terrain.ts';
-import { patchesIn, sprinkleAt, trailBounds, trailPoints, type Trail } from './meadow.ts';
-
-/** Pas entre deux ronds d'un chemin, en pixels monde : assez serré pour que leur union soit lisse. */
-const TRAIL_STEP = 3;
+import { PATCH_SIZE } from '../art/terrain.ts';
+import { patchesIn, sprinkleAt } from './meadow.ts';
 
 /** Côté d'un bloc, en tuiles, et en pixels monde. */
 export const BLOCK_TILES = 16;
@@ -63,10 +58,8 @@ export class ChunkLayer {
   public readonly container = new Container();
 
   private readonly baked = new Map<string, BakedBlock>();
-  /** Blocs bakés dont une route ou un chemin a changé : rebakés au prochain `update`. */
+  /** Blocs bakés dont une route a changé : rebakés au prochain `update`. */
   private readonly stale = new Set<string>();
-  /** Les chemins de terre battue de la ville, par clé. */
-  private trails = new Map<string, Trail>();
 
   private readonly renderer: Renderer;
   private readonly library: SpriteLibrary;
@@ -137,8 +130,7 @@ export class ChunkLayer {
    * sa rive : l'eau est peinte par `waterLayer.ts`), les taches de la
    * prairie, ses brins et fleurettes, les terres polluées et radioactives
    * (`Land`), qui recouvrent le sol, les transitions (faces avant,
-   * liserés), les coins arrondis entre sols, les chemins de terre battue, qui passent
-   * d'un sol à l'autre comme une rampe, les routes, puis le décor, qu'une dalle recouvre : pas de fleur sur un pavé. Les
+   * liserés), les coins arrondis entre sols, les routes, puis le décor, qu'une dalle recouvre : pas de fleur sur un pavé. Les
    * sprites sont temporaires : seule la texture survit. Celles du tileset,
    * partagées, restent.
    */
@@ -146,7 +138,6 @@ export class ChunkLayer {
     const scene = new Container();
     const meadow = new Container();
     const sprinkles = new Container();
-    const trails = new Container();
     const edges = new Container();
     const corners = new Container();
     const props = new Container();
@@ -253,79 +244,9 @@ export class ChunkLayer {
       meadow.addChild(sprite);
     }
 
-    this.bakeTrails(terrain, left, top, trails);
-
-    scene.addChild(meadow, sprinkles, soil, edges, corners, trails, paving, props);
+    scene.addChild(meadow, sprinkles, soil, edges, corners, paving, props);
     this.renderer.render({ target, container: scene, clear: true });
     scene.destroy({ children: true });
-  }
-
-  /**
-   * Les chemins qui traversent le bloc, tamponnés en ronds : la terre, puis
-   * sa trace claire. Un rond ne se pose ni sur l'eau ni contre elle : un
-   * chemin s'arrête à la rive et reprend de l'autre côté.
-   */
-  private bakeTrails(terrain: BlockTerrain, left: number, top: number, into: Container): void {
-    const margin = TRAIL_WIDTH.outer;
-    const outer = new Container();
-    const inner = new Container();
-
-    for (const trail of this.trails.values()) {
-      const bounds = trailBounds(trail, margin);
-
-      if (bounds.right < left || bounds.left > left + BLOCK_SIZE || bounds.bottom < top || bounds.top > top + BLOCK_SIZE) continue;
-
-      for (const { x, y } of trailPoints(trail, TRAIL_STEP)) {
-        const px = x - left;
-        const py = y - top;
-
-        if (px < -margin || py < -margin || px > BLOCK_SIZE + margin || py > BLOCK_SIZE + margin) continue;
-
-        const lx = Math.floor(px / TILE_SIZE);
-        const ly = Math.floor(py / TILE_SIZE);
-
-        if (terrain.kind(lx, ly) === 'water' || SIDES.some((side) => terrain.kind(lx + SIDE_OFFSET[side][0], ly + SIDE_OFFSET[side][1]) === 'water')) {
-          continue;
-        }
-
-        const dot = new Sprite(this.tiles.trail('outer'));
-
-        dot.anchor.set(0.5);
-        dot.position.set(px, py);
-        outer.addChild(dot);
-
-        const trace = new Sprite(this.tiles.trail('inner'));
-
-        trace.anchor.set(0.5);
-        trace.position.set(px, py);
-        inner.addChild(trace);
-      }
-    }
-    into.addChild(outer, inner);
-  }
-
-  /**
-   * Les chemins de la ville ont changé (`meadow.ts`, `trailsOf`) : les blocs
-   * que traverse un chemin apparu ou disparu se rebakent. Les autres gardent leur texture.
-   */
-  public setTrails(trails: readonly Trail[]): void {
-    const next = new Map(trails.map((trail) => [trail.key, trail]));
-    const changed = [...this.trails.values()].filter((trail) => !next.has(trail.key));
-
-    for (const trail of next.values()) if (!this.trails.has(trail.key)) changed.push(trail);
-    this.trails = next;
-
-    for (const trail of changed) {
-      const bounds = trailBounds(trail, TRAIL_WIDTH.outer);
-
-      for (let by = Math.floor(bounds.top / BLOCK_SIZE); by <= Math.floor(bounds.bottom / BLOCK_SIZE); by += 1) {
-        for (let bx = Math.floor(bounds.left / BLOCK_SIZE); bx <= Math.floor(bounds.right / BLOCK_SIZE); bx += 1) {
-          const key = coordKey(bx, by);
-
-          if (this.baked.has(key)) this.stale.add(key);
-        }
-      }
-    }
   }
 
   /**

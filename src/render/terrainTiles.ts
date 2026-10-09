@@ -24,8 +24,6 @@ import {
   MEADOW_SPRINKLES,
   PATCH_SIZE,
   SHADOW_SIZE,
-  TRAIL_DOTS,
-  TRAIL_WIDTH,
   cornerTile,
   edgeTile,
   shadowTile,
@@ -99,8 +97,6 @@ export function terrainSources(): SvgSource[] {
   ROAD_TILES.forEach((svg, links) => add(`terrain.road.${links}`, svg));
   for (const [name, svg] of Object.entries(MEADOW_PATCHES)) add(`terrain.patch.${name}`, svg, PATCH_SIZE.width, PATCH_SIZE.height);
   for (const [name, svg] of Object.entries(MEADOW_SPRINKLES)) add(`terrain.${name}`, svg, 14, 12);
-  add('terrain.trail.outer', TRAIL_DOTS.outer, TRAIL_WIDTH.outer, TRAIL_WIDTH.outer);
-  add('terrain.trail.inner', TRAIL_DOTS.inner, TRAIL_WIDTH.inner, TRAIL_WIDTH.inner);
   return sources;
 }
 
@@ -155,11 +151,6 @@ export class TerrainTiles {
   /** Un brin ou une fleurette semé sur l'herbe. */
   public sprinkle(name: MeadowSprinkle): Texture {
     return this.library.texture(`terrain.${name}`);
-  }
-
-  /** Un rond de terre battue (`outer`) ou de sa trace claire (`inner`). */
-  public trail(part: 'outer' | 'inner'): Texture {
-    return this.library.texture(`terrain.trail.${part}`);
   }
 
   /** Ombre portée pleine, dans la teinte foncée du sol ; `SHADOW_SIZE` px, à étirer. */
