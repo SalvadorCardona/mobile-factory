@@ -25,12 +25,16 @@ export function fullNeeds(): Needs {
   return Object.fromEntries(NEED_IDS.map((id) => [id, 1])) as Needs;
 }
 
-/** Un tick de temps qui passe : chaque jauge baisse, plus vite au travail. */
-export function drainNeeds(needs: Needs, working: boolean): void {
+/**
+ * Un tick de temps qui passe : chaque jauge baisse, plus vite au travail.
+ * `resist` : la part épargnée par besoin (la recherche), 0,25 → un quart de moins.
+ */
+export function drainNeeds(needs: Needs, working: boolean, resist: Partial<Record<NeedId, number>> = {}): void {
   for (const id of NEED_IDS) {
     const need = NEEDS[id];
+    const spared = Math.min(1, Math.max(0, resist[id] ?? 0));
 
-    needs[id] = Math.max(0, needs[id] - 1 / (working ? need.workTicks : need.restTicks));
+    needs[id] = Math.max(0, needs[id] - (1 - spared) / (working ? need.workTicks : need.restTicks));
   }
 }
 
