@@ -34,7 +34,7 @@ import type { RoadNetwork } from '../sim/roads.ts';
 import { decorAt } from '../sim/terrain.ts';
 import type { Camera } from './camera.ts';
 import type { SpriteLibrary } from './spriteLibrary.ts';
-import { BlockTerrain, CORNERS, CORNER_SIDES, SIDES, SIDE_OFFSET, groundRoll, type TerrainTiles } from './terrainTiles.ts';
+import { BlockTerrain, CORNERS, CORNER_SIDES, SIDES, SIDE_OFFSET, groundRoll, type Surface, type TerrainTiles } from './terrainTiles.ts';
 import { PATCH_SIZE, TRAIL_WIDTH } from '../art/terrain.ts';
 import { patchesIn, sprinkleAt, trailBounds, trailPoints, type Trail } from './meadow.ts';
 
@@ -160,6 +160,18 @@ export class ChunkLayer {
     // qui regarde elle-même une tuile autour quand elle est sous l'eau.
     const terrain = new BlockTerrain(seed, baseTx, baseTy, BLOCK_TILES, 2);
 
+    // La surface de chaque tuile du bloc et de sa première couronne, lue une fois.
+    const surfaceSpan = BLOCK_TILES + 2;
+    const surfaces: Surface[] = [];
+
+    for (let ly = -1; ly <= BLOCK_TILES; ly += 1) {
+      for (let lx = -1; lx <= BLOCK_TILES; lx += 1) {
+        surfaces.push(this.land.at(baseTx + lx, baseTy + ly) ?? terrain.beneath(lx, ly));
+      }
+    }
+
+    const surfaceAt = (lx: number, ly: number): Surface => surfaces[(ly + 1) * surfaceSpan + lx + 1]!;
+
     for (let ly = 0; ly < BLOCK_TILES; ly += 1) {
       for (let lx = 0; lx < BLOCK_TILES; lx += 1) {
         const tx = baseTx + lx;
@@ -167,31 +179,35 @@ export class ChunkLayer {
         // L'eau n'est pas bakée : sous elle, la terre de sa rive (`waterLayer.ts` la peint par-dessus).
         const ground = terrain.beneath(lx, ly);
         const roll = groundRoll(seed, tx, ty);
+        const own = surfaceAt(lx, ly);
 
         scene.addChild(tileSprite(this.tiles.ground(ground, roll), lx, ly));
 
         for (const side of SIDES) {
           const [dx, dy] = SIDE_OFFSET[side];
 
-          if (terrain.beneath(lx + dx, ly + dy) === ground) continue;
+          // La terre contaminée recouvre son sol : les transitions du sol dessous se taisent.
+          if (own !== ground || terrain.beneath(lx + dx, ly + dy) === ground) continue;
 
           const edge = this.tiles.edge(ground, side);
 
           if (edge) edges.addChild(tileSprite(edge, lx, ly));
         }
 
-        // Un coin est saillant quand ses deux voisins orthogonaux sont d'un
-        // même autre sol : on l'arrondit, peint dans la couleur de ce sol.
+        // Un coin est saillant quand ses deux voisins orthogonaux sont d'une
+        // même autre surface : on l'arrondit, peint dans la couleur de celle-ci.
+        // Vaut aussi pour la terre contaminée, dont les plaques ont ainsi des
+        // coins saillants et rentrants arrondis.
         for (const corner of CORNERS) {
           const [vertical, horizontal] = CORNER_SIDES[corner];
           const [vx, vy] = SIDE_OFFSET[vertical];
           const [hx, hy] = SIDE_OFFSET[horizontal];
-          const above = terrain.beneath(lx + vx, ly + vy);
-          const beside = terrain.beneath(lx + hx, ly + hy);
+          const above = surfaceAt(lx + vx, ly + vy);
+          const beside = surfaceAt(lx + hx, ly + hy);
 
-          if (above === ground || beside !== above) continue;
+          if (above === own || beside !== above) continue;
 
-          corners.addChild(tileSprite(this.tiles.corner(beside, corner), lx, ly));
+          corners.addChild(tileSprite(this.tiles.surfaceCorner(beside, corner), lx, ly));
         }
 
         if (this.roads.has(tx, ty)) {

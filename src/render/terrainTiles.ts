@@ -15,9 +15,10 @@
  */
 
 import type { Texture } from 'pixi.js';
-import { GROUND, type Ground } from '../data/artDirection.ts';
+import { GROUND, type Color, type Ground } from '../data/artDirection.ts';
 import {
   CONTAMINATION_TILES,
+  CONTAMINATION_TONE,
   GROUND_TILES,
   MEADOW_PATCHES,
   MEADOW_SPRINKLES,
@@ -68,7 +69,10 @@ const TILE = 32;
  * à sec. L'herbe près d'un autre sol est toujours sa base : aucune tache ne
  * touche un autre sol (`chunkLayer.ts`).
  */
-const CORNER_COLORS = GROUNDS.filter((ground) => ground !== 'water').map((ground) => GROUND[ground].base);
+const CORNER_COLORS: Color[] = [
+  ...GROUNDS.filter((ground) => ground !== 'water').map((ground) => GROUND[ground].base),
+  ...Object.values(CONTAMINATION_TONE),
+];
 
 /** Les images du sol, à passer à `SpriteLibrary.load`. */
 export function terrainSources(): SvgSource[] {
@@ -131,6 +135,13 @@ export class TerrainTiles {
     return this.library.texture(`terrain.${kind}.${variantOf(roll)}`);
   }
 
+  /** Coin arrondi d'une tuile dont les deux voisines sont d'une même surface : sol à sec ou terre contaminée. */
+  public surfaceCorner(neighbour: Surface, corner: Corner): Texture {
+    const color = neighbour === 'polluted' || neighbour === 'radioactive' ? CONTAMINATION_TONE[neighbour] : GROUND[neighbour].base;
+
+    return this.library.texture(`terrain.corner.${color}.${corner}`);
+  }
+
   /** La dalle d'une route dont les voisines pavées sont `links` (bits `ROAD_LINK`). */
   public road(links: number): Texture {
     return this.library.texture(`terrain.road.${links}`);
@@ -159,6 +170,9 @@ export class TerrainTiles {
 
 /** Un sol à sec : ce que le bake dessine. */
 export type DryGround = Exclude<Ground, 'water'>;
+
+/** Ce que l'œil voit d'une tuile : son sol à sec, ou la terre contaminée qui le recouvre. */
+export type Surface = DryGround | ContaminationKind;
 
 /**
  * Le sol d'un bloc de `size` tuiles et de sa marge, lu une fois depuis la
