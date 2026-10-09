@@ -1,9 +1,7 @@
 /**
- * Les boutons de zoom : une colonne de petits disques blancs sur le bord
- * droit, à mi-hauteur — loin du joystick, du sac (bas gauche) et du bouton
- * « Bâtir » (bas droite). Pause, Réglages et la carte du monde s'y posent en
- * tête (`main.ts`), puis avancer, revenir sur Adam au zoom par défaut,
- * reculer.
+ * Les boutons de zoom : une rangée de disques blancs en haut à droite, sous
+ * la barre du haut. Pause, Réglages et la carte du monde s'y posent en tête
+ * (`main.ts`), puis avancer, revenir sur Adam au zoom par défaut, reculer.
  *
  * Ils ne touchent pas à la caméra : chacun appelle son rappel, et `update`
  * les grise en butée (et le bouton du milieu quand on est déjà chez soi).
@@ -59,9 +57,9 @@ function button(icon: 'zoomIn' | 'zoomOut' | 'recenter', onClick: () => void): H
   const node = document.createElement('button');
 
   node.type = 'button';
-  node.className = 'hud-button hud-zoom-button';
+  node.className = 'hud-button';
   node.dataset['icon'] = icon;
-  node.append(uiIcon(icon, 20));
+  node.append(uiIcon(icon));
   node.addEventListener('click', onClick);
   return node;
 }

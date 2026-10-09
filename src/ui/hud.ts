@@ -198,6 +198,8 @@ export class Hud {
   private clockTipUntil = 0;
   /** Le groupe des boutons du joueur, en haut à droite : l'habillage, le sac, « Bâtir ». */
   public readonly actions: HTMLElement;
+  /** La rangée des contrôles (Pause, Réglages, carte, zoom), posée dans le haut par `mountControls`. */
+  private controls: HTMLElement = document.createElement('div');
   /** Le sac, compact : un bouton qui ouvre le panneau inventaire. */
   public readonly bag: HTMLButtonElement;
   /** Au bout du bandeau de la ville : ouvre le panneau des ressources (`main.ts` le branche). */
@@ -435,12 +437,12 @@ export class Hud {
     bannerBody.append(this.bannerTitle, this.bannerText);
     this.banner.append(this.bannerArrow, bannerBody);
 
-    // Pause et Réglages : deux disques en tête de la colonne du zoom, au bord droit (`main.ts`).
-    this.pauseButton = element('button', 'hud-button hud-zoom-button hud-pause');
+    // Pause et Réglages : les deux premiers disques de la rangée des contrôles, en haut à droite (`main.ts`).
+    this.pauseButton = element('button', 'hud-button hud-pause');
     this.pauseButton.type = 'button';
     this.pauseButton.append(uiIcon('pause'));
 
-    this.settingsButton = element('button', 'hud-button hud-zoom-button hud-settings');
+    this.settingsButton = element('button', 'hud-button hud-settings');
     this.settingsButton.type = 'button';
     this.settingsButton.setAttribute('aria-haspopup', 'dialog');
     this.settingsButton.append(uiIcon('settings'));
@@ -517,12 +519,13 @@ export class Hud {
     this.left.append(this.town, this.people, this.dayClock, this.hunger);
     this.right = element('div', 'hud-right');
     this.right.append(this.weather);
-    this.top.append(this.left, main, this.right, this.actions);
+    this.top.append(this.left, main, this.right);
 
     this.root.append(
       // Les confettis d'abord : ils tombent derrière les cartes du HUD et les fenêtres.
       this.confetti,
       this.top,
+      this.actions,
       this.countdown,
       this.speech,
       this.person,
@@ -1095,9 +1098,15 @@ export class Hud {
     return this.quest.dataset['folded'] === 'false' ? Math.max(bar, this.quest.getBoundingClientRect().bottom) : bar;
   }
 
+  /** Range la rangée des contrôles dans le haut de l'écran, en haut à droite. */
+  public mountControls(node: HTMLElement): void {
+    this.controls = node;
+    this.top.append(node);
+  }
+
   /** La barre du haut et ses deux groupes : les repères de bord les contournent. */
   public obstacles(): DOMRect[] {
-    return [this.bar, this.left, this.right, this.actions].map((node) => node.getBoundingClientRect());
+    return [this.bar, this.left, this.right, this.controls, this.actions].map((node) => node.getBoundingClientRect());
   }
 
   /** La ressource que le conseil envoie chercher, ou `null` : le renderer y pointe un repère. */

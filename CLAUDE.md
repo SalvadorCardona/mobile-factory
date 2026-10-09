@@ -65,9 +65,9 @@ prend que ce qui rentre, le réservé reste au coffre, un coffre filtré grise
 le reste. Les chantiers
 puisent dans les deux, la ville seulement dans son rayon (`logisticRadius`,
 `sim/warehouse.ts`, le cercle jaune du mode construction). Le HUD
-les montre à part : le sac, un bouton carré violet (`.hud-bag`) du groupe `.hud-actions`, en haut
-à droite sous la rangée du haut, avec l'habillage d'Adam et « Bâtir » — trois
-boutons de 56 px (pictogramme blanc `bagButton`, « 10/60 »
+les montre à part : le sac, un bouton carré violet (`.hud-bag`) du groupe `.hud-actions`, tout en bas
+à droite, avec l'habillage d'Adam et « Bâtir » — trois
+boutons de `--btn` (48 px, la taille unique des neuf boutons du HUD) (pictogramme blanc `bagButton`, « 10/60 »
 dans une capsule qui se remplit, l'objet que réclame le conseil, touche I) ; la
 ville, un bandeau d'une ligne en haut à gauche, une maison sans libellé, qui
 défile de côté. Le sac (tap, ou touche I) ouvre
@@ -675,8 +675,9 @@ Les règles, en résumé :
   air de bouton ; corail quand ça va mal, seul « inactifs » se tape ; sous la
   ville sur un téléphone), l'**horloge du jour** juste à sa droite et l'alerte
   de vivres ; au centre (`.hud-main`) la barre ; à droite (`.hud-right`) la
-  météo. Pause et Réglages ne sont plus en haut : deux disques en tête de la
-  colonne du bord droit, au-dessus de la carte du monde et du zoom. **Une seule variable de hauteur, `--hud-h`**, posée sur `.hud-top` et
+  météo. Pause, Réglages, la carte du monde et le zoom forment une rangée de
+  disques en haut à droite (`.hud-zoom`, dernière rangée de la grille de `.hud-top`) ; le bord droit n'a plus de colonne. Tous les boutons du HUD prennent
+  `--btn` (48 px, 44 px sous 400 px de large) et `--btn-icon`, posés sur `.hud`. **Une seule variable de hauteur, `--hud-h`**, posée sur `.hud-top` et
   ajustée par paliers (34, 36, 38, 42 px ; 38 sur un téléphone couché) : la
   barre et chaque bloc des deux groupes la prennent, sans marge ni `top` ni
   hauteur à eux ; chaque bloc est sa propre carte blanche, aux rayons de la
