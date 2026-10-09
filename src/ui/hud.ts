@@ -607,6 +607,8 @@ export class Hud {
 
       if (entity) this.celebrate(entity, t().hud.float.built(t().buildings[entity.proto].label));
     });
+    // Un coffre ouvert : « Coffre ouvert ! » monte au-dessus de lui.
+    world.events.on('chestOpened', ({ tx, ty }) => this.celebrate({ tx, ty, width: 1, height: 1 }, t().wardrobe.chestOpened));
     world.events.on('prestigeGained', ({ amount, x, y }) => this.floatPrestige(amount, x, y));
     world.events.on('xpGained', ({ amount, x, y }) => this.floatXp(amount, x, y));
     world.events.on('levelUp', ({ level, maxHp, bowDamage }) => {

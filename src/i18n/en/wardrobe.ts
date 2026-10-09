@@ -43,9 +43,10 @@ export const wardrobe: Messages['wardrobe'] = {
     chief: 'Loot from a base chief',
     queen: 'Loot from the Puddle Queen',
     beast: 'Found on a beast',
+    chest: 'Found in a chest',
   },
   locked: 'To be found',
-  lockedHint: 'Found while playing: objectives, mutant bases and their chiefs, the Queen, sometimes a beast.',
+  lockedHint: 'Found while playing: chests on the map, objectives, mutant bases and their chiefs, the Queen, sometimes a beast.',
   new: 'New',
   owned: (owned, total) => `${owned}/${total} pieces`,
   turn: 'Turn',
@@ -54,4 +55,6 @@ export const wardrobe: Messages['wardrobe'] = {
   found: (piece) => `New item: ${piece}`,
   tryOn: 'Try it on',
   rejected: 'Adam can’t wear this outfit.',
+  spare: (prestige) => `Wardrobe complete: +${prestige} Prestige instead`,
+  chestOpened: 'Chest opened!',
 };

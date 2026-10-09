@@ -15,13 +15,15 @@
  * avant le joueur.
  */
 
-import { TILE_SIZE } from '../core/grid.ts';
+import { CHUNK_TILES, TILE_SIZE, floorDiv } from '../core/grid.ts';
 import { BUILDINGS } from '../data/buildings.ts';
 import { DAY_CYCLE } from '../data/dayNight.ts';
 import type { ItemId } from '../data/items.ts';
 import { SCENARIO_REVEAL, type TestScenarioProto } from '../data/testScenario.ts';
 import { copyLook } from '../data/wardrobe.ts';
+import type { Chest } from './chests.ts';
 import { baseCenter } from './enemyBases.ts';
+import { isWalkable, resourceAt, terrainAt } from './terrain.ts';
 import type { Store } from './store.ts';
 import type { EntityId } from './types.ts';
 import { World, siteMissing } from './world.ts';
@@ -70,6 +72,7 @@ export function stageScenario(scenario: TestScenarioProto): World {
   teleport(world, (hx + scenario.adam.dx + 0.5) * TILE_SIZE, (hy + scenario.adam.dy + 0.5) * TILE_SIZE);
   if (scenario.gear !== undefined) world.player.gear = scenario.gear;
   if (scenario.nearBase !== undefined) besideBase(world, scenario.nearBase);
+  if (scenario.nearChest !== undefined) besideChest(world, scenario.nearChest);
   if (scenario.wardrobe) {
     world.player.wardrobe = [...scenario.wardrobe.found];
     if (scenario.wardrobe.look) world.player.look = copyLook(scenario.wardrobe.look);
@@ -139,6 +142,31 @@ function besideBase(world: World, tiles: number): void {
   const length = Math.hypot(hx - x, hy - y) || 1;
 
   teleport(world, x + ((hx - x) / length) * tiles * TILE_SIZE, y + ((hy - y) / length) * tiles * TILE_SIZE);
+}
+
+/** Adam à `tiles` tuiles à gauche du coffre fermé le plus proche de la mairie, ses abords explorés. */
+function besideChest(world: World, tiles: number): void {
+  const hall = world.entities.get(world.townHallId);
+
+  if (!hall) throw new Error('scénario de test : pas de mairie');
+
+  const cx = floorDiv(hall.tx, CHUNK_TILES);
+  const cy = floorDiv(hall.ty, CHUNK_TILES);
+  let best: Chest | null = null;
+
+  for (let dy = -2; dy <= 2; dy += 1) {
+    for (let dx = -2; dx <= 2; dx += 1) {
+      const chest = world.chestOfChunk(cx + dx, cy + dy);
+
+      if (!chest || world.chestAt(chest.tx, chest.ty) === null) continue;
+      // Le chemin d'Adam jusqu'au coffre est libre : ni eau, ni arbre, ni rocher.
+      if (!Array.from({ length: tiles }, (_, i) => chest.tx - 1 - i).every((tx) => isWalkable(terrainAt(world.seed, tx, chest.ty)) && resourceAt(world.seed, tx, chest.ty) === null)) continue;
+      if (!best || (chest.tx - hall.tx) ** 2 + (chest.ty - hall.ty) ** 2 < (best.tx - hall.tx) ** 2 + (best.ty - hall.ty) ** 2) best = chest;
+    }
+  }
+  if (!best) throw new Error('scénario de test : pas de coffre près de la mairie');
+  world.revealAround(best.tx, best.ty, tiles + 6);
+  teleport(world, (best.tx - tiles + 0.5) * TILE_SIZE, (best.ty + 0.5) * TILE_SIZE);
 }
 
 function teleport(world: World, x: number, y: number): void {

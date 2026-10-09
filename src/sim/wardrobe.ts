@@ -4,7 +4,7 @@
  * Pur et sans état : le monde garde l'apparence et les pièces trouvées
  * (`Player.look`, `Player.wardrobe`) et appelle ces fonctions — pour juger
  * la commande `dressAdam`, pour tirer une pièce quand une source en donne une
- * (`WARDROBE_LOOT`), pour relire une sauvegarde.
+ * (`WARDROBE_LOOT`, `BASE_WARDROBE_LOOT`), pour relire une sauvegarde.
  *
  * Le tirage est un **hachage** de la seed, de la source et de ce qui l'a
  * donné (l'objectif, la base, la bête) : jamais le PRNG du monde, pour que
@@ -22,8 +22,8 @@ import {
   PIECES,
   PIECE_IDS,
   RARITY_IDS,
-  WARDROBE_LOOT,
   isStarter,
+  wardrobeDrop,
   type Look,
   type LootSource,
   type PieceId,
@@ -54,24 +54,24 @@ export function lookRejection(look: Look, wardrobe: readonly PieceId[]): LookRej
   return null;
 }
 
-/**
- * La pièce que donne la source `source` pour l'événement `key` (l'index d'un
- * objectif, l'id d'une base ou d'une bête, le numéro de la nuit de la
- * Reine), parmi celles qu'Adam n'a pas encore ; `null` si le sort ne la donne
- * pas, ou s'il ne reste rien de ce qu'elle peut donner.
- */
-export function rollPiece(seed: number, source: LootSource, key: number, wardrobe: readonly PieceId[]): PieceId | null {
-  const drop: WardrobeDrop = WARDROBE_LOOT[source];
+/** Un tirage : la pièce trouvée, `'spare'` si le sort en donnait une mais qu'Adam a déjà tout, `null` si le sort n'en donne pas. */
+type Roll = PieceId | 'spare' | null;
+
+function rollOne(seed: number, source: LootSource, key: number, draw: number, wardrobe: readonly PieceId[], drop: WardrobeDrop): Roll {
   const salt = LOOT_SOURCES.indexOf(source) + 1;
-  const roll = (n: number): number => hash3(seed, salt * 7919 + n, key) / 4294967296;
+  const roll = (n: number): number => hash3(seed, salt * 7919 + draw * 3 + n, key) / 4294967296;
 
   if (roll(0) >= drop.chance) return null;
 
   const missing = PIECE_IDS.filter((piece) => !owns(wardrobe, piece));
+
+  if (missing.length === 0) return 'spare';
+
   const rarities = RARITY_IDS.filter((rarity) => (drop.weights[rarity] ?? 0) > 0 && missing.some((piece) => PIECES[piece].rarity === rarity));
   const total = rarities.reduce((sum, rarity) => sum + (drop.weights[rarity] ?? 0), 0);
 
-  if (total === 0) return null;
+  // Les raretés de la source épuisées : une autre pièce qui manque, plutôt qu'un doublon.
+  if (total === 0) return missing[Math.floor(roll(2) * missing.length)] ?? 'spare';
 
   let pick = roll(1) * total;
   let rarity: Rarity = rarities[rarities.length - 1]!;
@@ -86,7 +86,45 @@ export function rollPiece(seed: number, source: LootSource, key: number, wardrob
 
   const pool = missing.filter((piece) => PIECES[piece].rarity === rarity);
 
-  return pool[Math.floor(roll(2) * pool.length)] ?? null;
+  return pool[Math.floor(roll(2) * pool.length)] ?? 'spare';
+}
+
+/**
+ * La pièce que donne la source `source` pour l'événement `key` (l'index d'un
+ * objectif, l'id d'une base, d'une bête ou d'un coffre, le numéro de la nuit
+ * de la Reine), parmi celles qu'Adam n'a pas encore — d'abord dans les
+ * raretés de la source, sinon n'importe laquelle qui manque ; `null` si le
+ * sort ne la donne pas, ou si Adam a déjà tout.
+ */
+export function rollPiece(seed: number, source: LootSource, key: number, wardrobe: readonly PieceId[], drop: WardrobeDrop = wardrobeDrop(source)): PieceId | null {
+  const piece = rollOne(seed, source, key, 0, wardrobe, drop);
+
+  return piece === 'spare' ? null : piece;
+}
+
+/** Ce que donne une source : les pièces trouvées, sans doublon, et le nombre de tirages tombés quand Adam avait déjà tout. */
+export interface PieceDraw {
+  pieces: PieceId[];
+  spares: number;
+}
+
+/** Tous les tirages d'une source (`WardrobeDrop.count`) : chacun voit les pièces des précédents. */
+export function drawPieces(seed: number, source: LootSource, key: number, wardrobe: readonly PieceId[], drop: WardrobeDrop = wardrobeDrop(source)): PieceDraw {
+  const result: PieceDraw = { pieces: [], spares: 0 };
+
+  for (let draw = 0; draw < (drop.count ?? 1); draw += 1) {
+    const piece = rollOne(seed, source, key, draw, [...wardrobe, ...result.pieces], drop);
+
+    if (piece === 'spare') result.spares += 1;
+    else if (piece !== null) result.pieces.push(piece);
+  }
+  return result;
+}
+
+/** Les pièces pas encore regardées d'une sauvegarde : des pièces trouvées, sans doublon. */
+export function readUnseen(raw: unknown, wardrobe: readonly PieceId[]): PieceId[] {
+  if (!Array.isArray(raw)) return [];
+  return [...new Set(raw.filter((piece): piece is PieceId => typeof piece === 'string' && wardrobe.includes(piece as PieceId)))];
 }
 
 /**

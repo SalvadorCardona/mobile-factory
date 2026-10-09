@@ -10,8 +10,11 @@
  * mêmes calques qu'en jeu, `art/adamLook.ts`), qu'on fait tourner. Dessous,
  * un onglet par emplacement, sur deux rangées — pas de défilement de côté —,
  * puis les pièces de l'onglet en grosses cartes : Adam qui la porte, cadré
- * sur elle. Une pièce pas encore trouvée est une silhouette au cadenas ; un
- * tap dit où la chercher. Un emplacement coloré a son nuancier.
+ * sur elle, son bord à la couleur de sa rareté. Une pièce pas encore trouvée
+ * est une silhouette au cadenas ; un tap dit où la chercher. Une pièce
+ * trouvée porte « Nouveau » — et son onglet une pastille — jusqu'à ce qu'on
+ * ouvre son onglet (`seePieces`, `Player.unseenPieces` : la marque survit à
+ * un rechargement). Un emplacement coloré a son nuancier.
  *
  * Rien ne change avant « Valider » : l'éditeur tient un brouillon, et pousse
  * la commande `dressAdam` ; « Annuler », la croix, Échap ou un tap sur le
@@ -69,8 +72,13 @@ export class WardrobePanel {
   private draft: Look;
   private slot: LookSlot = LOOK_SLOTS[0];
   private turn: Turn = 'down';
-  /** Les pièces trouvées depuis la dernière ouverture : elles portent « Nouveau ». */
-  private readonly fresh = new Set<PieceId>();
+  /**
+   * Les pièces dont l'éditeur a déjà dit qu'elles étaient vues (`seePieces`) :
+   * la commande attend le tick, l'éditeur n'attend pas.
+   */
+  private readonly sent = new Set<PieceId>();
+  /** Celles qu'on regarde depuis l'ouverture : elles gardent leur « Nouveau » jusqu'à la fermeture. */
+  private readonly shown = new Set<PieceId>();
 
   public constructor(world: World, actions: WardrobeActions) {
     this.world = world;
@@ -186,9 +194,8 @@ export class WardrobePanel {
     panel.append(head, stage, controls, footer);
     this.root.append(panel);
 
-    world.events.on('pieceFound', ({ piece }) => {
-      this.fresh.add(piece);
-      this.button.dataset['new'] = 'true';
+    world.events.on('pieceFound', () => {
+      this.renderBadge();
       if (this.open) this.render();
     });
     world.events.on('lookChanged', () => this.renderFace());
@@ -207,6 +214,7 @@ export class WardrobePanel {
       this.render();
     });
     this.renderFace();
+    this.renderBadge();
   }
 
   public get open(): boolean {
@@ -227,9 +235,9 @@ export class WardrobePanel {
   public close(): void {
     if (!this.open) return;
     this.root.hidden = true;
-    // Ce qu'on vient de voir n'est plus nouveau.
-    this.fresh.clear();
-    delete this.button.dataset['new'];
+    // Ce qu'on vient de voir n'est plus nouveau ; les onglets qu'on n'a pas ouverts gardent le leur.
+    this.shown.clear();
+    this.renderBadge();
     this.actions.onToggle(false);
   }
 
@@ -280,9 +288,18 @@ export class WardrobePanel {
   private renderSlot(): void {
     const text = t().wardrobe;
 
+    // Les pièces nouvelles de l'onglet ouvert sont vues : elles gardent leur marque jusqu'à la fermeture.
+    const seen = piecesOf(this.slot).filter((piece) => this.unseen(piece));
+
+    for (const piece of seen) this.shown.add(piece);
+    if (seen.length > 0) {
+      for (const piece of seen) this.sent.add(piece);
+      this.world.push({ type: 'seePieces', pieces: seen });
+    }
+
     for (const [slot, tab] of this.tabs) {
       tab.setAttribute('aria-selected', String(slot === this.slot));
-      tab.dataset['new'] = String(piecesOf(slot).some((piece) => this.fresh.has(piece)));
+      tab.dataset['new'] = String(piecesOf(slot).some((piece) => this.unseen(piece)));
     }
 
     this.grid.replaceChildren(...piecesOf(this.slot).map((piece) => this.card(piece)));
@@ -364,7 +381,7 @@ export class WardrobePanel {
       rarity.textContent = text.rarities[proto.rarity];
       card.append(rarity);
     }
-    if (this.fresh.has(piece)) {
+    if (this.shown.has(piece)) {
       const badge = document.createElement('span');
 
       badge.className = 'wardrobe-new';
@@ -382,6 +399,17 @@ export class WardrobePanel {
       this.renderSlot();
     });
     return card;
+  }
+
+  /** Une pièce trouvée que l'éditeur n'a pas encore montrée. */
+  private unseen(piece: PieceId): boolean {
+    return this.world.player.unseenPieces.includes(piece) && !this.sent.has(piece);
+  }
+
+  /** La pastille du bouton : une pièce trouvée attend d'être regardée. */
+  private renderBadge(): void {
+    if (this.world.player.unseenPieces.some((piece) => this.unseen(piece))) this.button.dataset['new'] = 'true';
+    else delete this.button.dataset['new'];
   }
 
   /** Le visage d'Adam sur son bouton, tel qu'il est habillé. */

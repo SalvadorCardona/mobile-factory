@@ -335,6 +335,8 @@ export interface Player {
   look: Look;
   /** Les pièces de garde-robe trouvées en jouant — celles du départ n'y sont pas. */
   wardrobe: PieceId[];
+  /** Les pièces trouvées que l'éditeur n'a pas encore montrées : elles portent « Nouveau » (`seePieces`). */
+  unseenPieces: PieceId[];
   /**
    * Le sac à dos : ce qu'Adam a récolté ou ramassé et pas encore déposé.
    * Ce n'est pas le stock de la ville — celui-là est le coffre de la mairie

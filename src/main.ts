@@ -347,6 +347,7 @@ async function main(): Promise<void> {
     });
   });
   world.events.on('lookRejected', () => hud.notify(t().wardrobe.rejected, 'bad'));
+  world.events.on('piecesSpared', ({ prestige }) => hud.notify(t().wardrobe.spare(prestige), 'good'));
 
   // La colonne du bord droit : Pause, Réglages, la carte du monde, puis le zoom.
   zoom.root.prepend(hud.pauseButton, hud.settingsButton, worldMap.button);
@@ -819,6 +820,7 @@ function wireAudio(world: World, audio: AudioEngine, settings: SettingsPanel): v
   world.events.on('queenSlain', () => audio.play('objective'));
   world.events.on('lootPicked', () => audio.play('pickup'));
   world.events.on('pieceFound', () => audio.play('pickup'));
+  world.events.on('chestOpened', () => audio.play('eureka'));
   world.events.on('childBorn', () => audio.play('baby'));
   world.events.on('eveArrived', () => audio.play('build'));
   world.events.on('traded', () => audio.play('deliver'));
@@ -1044,6 +1046,11 @@ function wireParticles(world: World, renderer: GameRenderer): void {
     particles.burst(x, y, PARTICLES.rubble, 8, 0.1);
   });
   world.events.on('spitSplashed', ({ x, y }) => particles.burst(x, y, PARTICLES.mutant, 5, 0.08));
+  // Un coffre s'ouvre : des confettis et des étoiles jaillissent de la caisse.
+  world.events.on('chestOpened', ({ x, y }) => {
+    particles.burst(x, y - 8, PARTICLES.confetti, 14, 0.15);
+    particles.burst(x, y - 8, PARTICLES.star, 6, 0.1);
+  });
   // Un niveau de plus : une gerbe de confettis et d'étoiles autour d'Adam.
   world.events.on('levelUp', ({ x, y }) => {
     particles.burst(x, y - 16, PARTICLES.confetti, 16, 0.16);
