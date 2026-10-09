@@ -467,6 +467,31 @@ nuit à tenir : `goalWait`/`objectiveWait`) affiche son temps restant, ou en
 corail ce qui la retient ; Ève enchaîne alors sur de quoi s'occuper
 (réparer, une tour, l'objet le plus bas en ville, une recherche).
 
+**Ville qui évolue** (`art/levels.ts`, `sim/decor.ts`, `data/housing.ts` `DECOR`) — la
+mairie, la maison, la carrière et la foreuse montent à trois niveaux
+(`upgrades` de `data/buildings.ts`, « Bâtir en pierre » dans leur fenêtre,
+commande `upgradeBuilding`, payée sac puis ville) ; chaque niveau a un
+bonus lu en un point (`logisticRadiusOf` : rayon de la mairie, `bedsOf` :
+lits d'une maison, `speedOf` : durée d'un cycle de carrière ou de
+foreuse) et le troisième attend la recherche « Maçonnerie » (`research`
+d'un niveau, `World.upgradeLocked`). Le style suit l'ère : le niveau 1 est
+le bois tel qu'on le bâtit, le 2 la pierre (soubassement de moellons
+corail, chaînages, fanion corail), le 3 la brique (soubassement orange,
+lanternes, guirlande, étendard doré) — `levelled(base, niveau, spot)`
+pose l'ornement sur les morceaux `built` / `damaged` du sprite de base,
+même cadre, même ancre. Les **décorations** (`kind: 'decor'`, famille
+« Décor » : parterre, banc, lampadaire, fontaine, statue d'Adam, sprites
+`art/ornaments.ts`) sont des bâtiments sans ouvrier ni coffre, posés
+comme les autres, qui se **retirent** d'un tap (`removeDecor`, le coût
+retourne en ville) ; à chaque aube, chacune ajoute son `mood.amount` au
+bonheur des ouvriers à `mood.radius` tuiles, dans la limite de
+`DECOR.maxPerDawn` (`restInhabitants`, `decorMoodAt`). Elles se
+gagnent : objectif (`unlockObjective`, les parterres et bancs après les
+3 nuits, la statue après l'acte I) ou exploration (`unlockExplored`, la
+fontaine : cases explorées du brouillard). Une ancienne sauvegarde charge
+tout au niveau 1 (`level` absent). Planche : `docs/niveaux/`,
+`npm run art:sheet -- planche.svg 3 Niveaux`.
+
 **Prestige** (`src/data/prestige.ts`, icône `PRESTIGE_ICON`) — un compteur
 de la colonie (`World.prestige`, sauvegardé ; absent d'une vieille
 sauvegarde : 0), ni porté ni stocké. Chaque bâtiment achevé rapporte

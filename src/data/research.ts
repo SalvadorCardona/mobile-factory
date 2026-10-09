@@ -113,6 +113,16 @@ export const RESEARCH = {
     effect: null,
     unlocks: ['forge', 'charcoalKiln'],
   },
+  masonry: {
+    label: 'Maçonnerie',
+    description: 'Briques cuites au four et mortier de chaux : la mairie, les maisons, la carrière et la foreuse montent au troisième niveau.',
+    theme: 'building',
+    cost: { stone: 20, ironPlate: 3 },
+    duration: 20 * 60,
+    requires: ['metalworking'],
+    effect: null,
+    unlocks: [],
+  },
   fieldMedicine: {
     label: 'Médecine de fortune',
     description: 'De la gelée de mutant sous la loupe : ce qui les change se soigne.',

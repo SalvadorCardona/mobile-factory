@@ -114,9 +114,12 @@ export function moodCauses(person: Pick<Housing, 'bed'>): MoodCause[] {
   return [person.bed === null ? 'outside' : 'bed'];
 }
 
-/** Le bonheur au matin : chaque cause ajoute sa part, entre 0 et `HAPPINESS.max`. */
-export function nightlyMood(happiness: number, causes: readonly MoodCause[]): number {
-  const delta = causes.reduce((sum, cause) => sum + MOOD[cause], 0);
+/**
+ * Le bonheur au matin : chaque cause ajoute sa part, `decor` celle des
+ * décorations alentour (`sim/decor.ts`), entre 0 et `HAPPINESS.max`.
+ */
+export function nightlyMood(happiness: number, causes: readonly MoodCause[], decor = 0): number {
+  const delta = causes.reduce((sum, cause) => sum + MOOD[cause], 0) + decor;
 
   return Math.min(HAPPINESS.max, Math.max(0, happiness + delta));
 }
