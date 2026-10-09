@@ -25,7 +25,7 @@ import { ICON_SIZE, ITEM_ICONS, PRESTIGE_ICON } from './icons.ts';
 import { CATEGORY_ICONS } from './categoryIcons.ts';
 import { JOB_ICONS } from './jobIcons.ts';
 import { ITEMS } from './items.ts';
-import { NEEDS, type NeedProto } from './needs.ts';
+import { HUNTING, NEEDS, type NeedProto } from './needs.ts';
 import { OBJECTIVES, type ObjectiveProto } from './objectives.ts';
 import { PERKS, type PerkProto } from './perks.ts';
 import { QUESTS, QUEST_IDS, TOOLS, type QuestProto } from './quests.ts';
@@ -289,6 +289,7 @@ export function validatePrototypes(): string[] {
     for (const itemId of Object.keys(research.cost)) consumed.add(itemId);
   }
   for (const need of Object.values(NEEDS) as NeedProto[]) consumed.add(need.item);
+  consumed.add(HUNTING.meat);
   for (const id of Object.keys(ITEMS)) {
     if (!consumed.has(id)) {
       errors.push(`ITEMS.${id} : aucun débouché — ni coût de bâtiment ou d'amélioration, ni entrée de recette, ni coût de recherche, ni besoin`);

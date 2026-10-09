@@ -79,7 +79,7 @@ import { chestOfChunk, type Chest } from './chests.ts';
 import { HOUSING } from '../data/housing.ts';
 import { AGES, COLONY, NURSERY_CARE } from '../data/inhabitants.ts';
 import { TOWN_PLENTY, type ItemId } from '../data/items.ts';
-import { NEED_ALERT, NEED_IDS, NEEDS, type NeedId } from '../data/needs.ts';
+import { HUNTING, NEED_ALERT, NEED_IDS, NEEDS, type NeedId } from '../data/needs.ts';
 import { LEVEL_GAINS, MAX_LEVEL, type Shooter } from '../data/levels.ts';
 import { BUILD_PRESTIGE, KILL_PRESTIGE } from '../data/prestige.ts';
 import { PROBLEMS, type ProblemId } from '../data/problems.ts';
@@ -3501,10 +3501,30 @@ export class World {
     };
   }
 
+  /** Toute la viande libre de la ville devient de la nourriture (`HUNTING`). */
+  private butcherMeat(): void {
+    const town = this.townStock();
+
+    if (!town) return;
+
+    const meat = town.available(HUNTING.meat);
+
+    if (meat <= 0) return;
+
+    const food = town.add(HUNTING.food, meat * HUNTING.foodPerMeat);
+    const used = Math.ceil(food / HUNTING.foodPerMeat);
+
+    town.remove(HUNTING.meat, used);
+    if (food > 0) this.tally(HUNTING.food, food);
+  }
+
   private stepMobiles(): void {
     if (this.lodging) this.lodgeCrews();
     // Une fois par seconde : les lits suivent les maisons finies ou tombées, les ouvriers venus ou partis.
     if (this.tickCount % HOUSING.assignTicks === 0) this.settleBeds();
+
+    // La viande déposée à la mairie devient de la nourriture.
+    if (this.tickCount % HUNTING.convertTicks === 0) this.butcherMeat();
 
     // Les casernes comptent leur formation à la seconde.
     if (this.tickCount % TICKS_PER_SECOND === 0) this.stepBarracks();

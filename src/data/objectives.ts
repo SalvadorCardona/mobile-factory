@@ -109,7 +109,7 @@ export const OBJECTIVES = [
   },
   {
     title: 'Voir naître le premier enfant',
-    hint: `Une ${nursery.name.toLowerCase()}, et six nourritures de la ferme dedans : un bébé !`,
+    hint: `Une ${nursery.name.toLowerCase()}, et six nourritures de la chasse dedans : un bébé !`,
     goals: [
       { type: 'build', building: 'nursery', count: 1 },
       { type: 'births', count: 1 },

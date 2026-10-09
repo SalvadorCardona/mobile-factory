@@ -23,6 +23,8 @@ export const ITEMS = {
   coal: { label: 'Charbon', stack: 100 },
   ironOre: { label: 'Minerai de fer', stack: 100 },
   food: { label: 'Nourriture', stack: 100 },
+  // Le butin des bêtes sauvages : à la mairie, elle devient de la nourriture (`HUNTING`, `data/needs.ts`).
+  meat: { label: 'Viande', stack: 100 },
   // Tirée au puits : on la boit, rien d'autre (`data/needs.ts`).
   water: { label: 'Eau', stack: 100 },
   ironPlate: { label: 'Plaque de fer', stack: 50 },

@@ -290,7 +290,7 @@ describe('objectifs', () => {
     const hall = world.entities.get(world.townHallId)!;
 
     if (hall.kind === 'site') throw new Error('la mairie est redevenue un chantier');
-    build(world, 'farm', iron);
+    build(world, 'home', iron);
     runUntil(world, () => world.questsDone >= 2, 20 * 5);
     expect(world.isUnlocked('builderHouse')).toBe(true);
     build(world, 'builderHouse', iron);

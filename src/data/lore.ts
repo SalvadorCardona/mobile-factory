@@ -160,7 +160,7 @@ export const LORE = {
       description:
         'Un abri chauffé, des couvertures, un berceau. Toutes les trois minutes, ' +
         'un enfant y naît et la colonie grandit d’un survivant — s’il y a de ' +
-        'quoi le nourrir : chaque naissance mange six nourritures de la ferme.',
+        'quoi le nourrir : chaque naissance mange six nourritures, rapportées de la chasse.',
       effect: '+1 enfant toutes les 3 min, contre 6 nourritures.',
     },
     builderHouse: {

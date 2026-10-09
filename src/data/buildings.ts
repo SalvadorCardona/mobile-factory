@@ -449,7 +449,8 @@ export const BUILDINGS = {
     hp: 50,
     workers: 4,
     minWorkers: 0,
-    menu: true,
+    // Retirée du menu : la nourriture vient de la chasse (`HUNTING`). Une ferme d'une ancienne sauvegarde reste debout.
+    menu: false,
     unique: false,
     plan: false,
     sprite: 'farm',

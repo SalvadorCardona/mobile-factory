@@ -23,7 +23,7 @@ describe('buildOrder', () => {
   });
 
   it('ce qu’on peut payer d’abord, puis le reste, les cartes grisées au bout', () => {
-    const affordable = new Set<BuildingId>(['farm', 'watchtower']);
+    const affordable = new Set<BuildingId>(['home', 'watchtower']);
     const locked = new Set<BuildingId>(['lumberCamp']);
     const order = buildOrder(MENU_BUILDING_IDS, {
       threat: false,
@@ -31,7 +31,7 @@ describe('buildOrder', () => {
       affordable: (id) => affordable.has(id),
     });
 
-    expect(order.slice(0, 2)).toEqual(['farm', 'watchtower']);
+    expect(order.slice(0, 2)).toEqual(['home', 'watchtower']);
     expect(order.at(-1)).toBe('lumberCamp');
     expect([...order].sort()).toEqual([...MENU_BUILDING_IDS].sort());
   });

@@ -93,6 +93,7 @@ export const ITEM_TONES: Record<ItemId, Tone> = {
   ironOre: FAMILY_TONES.iron,
   coal: FAMILY_TONES.coal,
   food: FAMILY_TONES.colony,
+  meat: FAMILY_TONES.stone,
   water: FAMILY_TONES.water,
   ironPlate: FAMILY_TONES.iron,
   mutantGoo: FAMILY_TONES.mutants,
