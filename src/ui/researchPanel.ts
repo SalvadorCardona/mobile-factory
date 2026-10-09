@@ -25,7 +25,7 @@ import { RESEARCH, RESEARCH_IDS, RESEARCH_THEMES, type ResearchId, type Research
 import { locale, onLocale, t } from '../i18n/locale.ts';
 import { labNeeds, queueFull, researchCost, researchStatus, type ResearchStatus } from '../sim/research.ts';
 import type { Lab } from '../sim/types.ts';
-import { timerText, type World } from '../sim/world.ts';
+import type { World } from '../sim/world.ts';
 import { buildingIcon, itemAmount } from './icons.ts';
 import { siteNeedRow } from './siteNeedRow.ts';
 import { effectLine, statusLine } from './researchText.ts';
@@ -137,7 +137,7 @@ export class ResearchPanel {
       this.current.dataset['state'] = 'running';
       this.setText(
         this.currentStatus,
-        `${t().researchPanel.remaining(timerText(left))} · ${statusLine(lab.research, 'running', world.researchDone, left)} · ${effectLine(lab.research, world.researchDone, world.perks)}`,
+        `${statusLine(lab.research, 'running', world.researchDone, left)} · ${effectLine(lab.research, world.researchDone, world.perks)}`,
       );
       this.bar.dataset['kind'] = 'research';
       this.barFill.style.width = `${Math.round((1 - left / research.duration) * 100)}%`;
