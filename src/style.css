@@ -244,7 +244,8 @@ button {
   grid-template-columns: minmax(0, 1fr) fit-content(50%);
   grid-template-areas:
     'main main'
-    'left right';
+    'left right'
+    'actions actions';
   align-items: start;
   gap: var(--hud-gap);
   pointer-events: none;
@@ -1486,7 +1487,7 @@ button {
  * sur une grille de cases : tout ce qu'elle porte a la même hauteur (`--cell-h`,
  * tirée de `--hud-h`, cf. `.hud-top`), les mêmes rayons, la même face
  * lavande : l'objectif, qui prend toute la ligne — icône et progression, son
- * intitulé court dès 420 px. Le sac est le gros bouton du bas (`.hud-bag`),
+ * intitulé court dès 420 px. Le sac est un bouton carré du groupe `.hud-actions`,
  * Pause et Réglages sont en tête de la colonne du zoom, au bord droit.
  * La grille se resserre par paliers (< 360, 360, 420, 600, 900 px) ; un tap
  * atteint toujours 40 px, la zone de tap déborde de la case.
@@ -1680,7 +1681,9 @@ button {
 @media (min-width: 1366px) {
   .hud-top {
     grid-template-columns: minmax(var(--hud-side), 1fr) minmax(0, 420px) auto;
-    grid-template-areas: 'left main right';
+    grid-template-areas:
+      'left main right'
+      '. . actions';
   }
 
   .hud-main {
@@ -2580,28 +2583,24 @@ button {
 }
 
 /*
- * Le sac : un gros bouton violet en bas à gauche, le pendant de « Bâtir » en
- * bas à droite — même capsule, même face avant, même reflet, le violet du sac
- * d'Adam. « 7/60 » dans une capsule qui se remplit (corail qui clignote,
- * plein) ; l'objet que le conseil réclame à côté ; la touche I sur un clavier.
+ * Le sac : le deuxième bouton du groupe en haut à droite (`.hud-actions`),
+ * carré comme ses voisins — même face avant, même reflet, le violet du sac
+ * d'Adam. « 7/60 » tient dans une capsule qui se remplit (corail qui clignote,
+ * plein) collée à son bord bas ; l'objet que le conseil réclame, en pastille
+ * à son coin. Le nom et la touche I sont dans l'infobulle.
  */
 .hud .hud-bag {
-  position: absolute;
-  left: calc(var(--safe-left) + 10px);
-  bottom: calc(var(--safe-bottom) + 14px);
+  position: relative;
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
-  min-height: 60px;
-  padding: 0 18px 0 14px;
+  justify-content: flex-start;
+  gap: 2px;
+  padding: 6px 0 0;
   border: none;
-  border-radius: 999px;
   background: var(--violet);
   box-shadow: 0 5px 0 var(--violet-shade);
   font: inherit;
-  font-size: 21px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
   color: var(--paper);
   white-space: nowrap;
   cursor: pointer;
@@ -2610,10 +2609,10 @@ button {
 .hud .hud-bag::before {
   content: '';
   position: absolute;
-  top: 7px;
-  left: 16px;
-  width: 26px;
-  height: 6px;
+  top: 6px;
+  left: 12px;
+  width: 20px;
+  height: 5px;
   border-radius: 999px;
   background: var(--violet-light);
   pointer-events: none;
@@ -2625,10 +2624,12 @@ button {
 }
 
 .hud-bag-count {
-  padding: 1px 9px;
+  padding: 1px 7px;
   border-radius: 999px;
   background: linear-gradient(90deg, var(--violet-light) var(--fill, 0%), var(--violet-shade) var(--fill, 0%));
-  font-size: 15px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
   font-variant-numeric: tabular-nums;
 }
 
@@ -2638,16 +2639,81 @@ button {
 }
 
 .hud-bag-wanted {
-  font-size: 15px;
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  font-size: 12px;
+  pointer-events: none;
 }
 
 .hud-bag-wanted .icon {
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
 }
 
-.hud-bag .key-hint {
-  margin-left: 2px;
+
+/*
+ * Les trois boutons du joueur, en haut à droite, sous la rangée du haut (une
+ * rangée de la grille de `.hud-top`, donc toujours sous ce qui la précède) :
+ * l'habillage d'Adam, son sac, « Bâtir ». Tous carrés, de la même taille
+ * (`--action`, 56 px : sous cette taille, une cible tactile se rate au pouce),
+ * mêmes rayons, même face avant. Le libellé de « Bâtir » et la touche des
+ * raccourcis ne se lisent plus qu'au lecteur d'écran et à l'infobulle. Sur un
+ * écran bas, le groupe se range à gauche de la colonne du zoom.
+ */
+.hud-actions {
+  --action: 56px;
+
+  grid-area: actions;
+  justify-self: end;
+  display: flex;
+  gap: 10px;
+  padding-bottom: 5px;
+}
+
+.hud .hud-actions > * {
+  box-sizing: border-box;
+  flex: none;
+  width: var(--action);
+  min-width: var(--action);
+  height: var(--action);
+  min-height: var(--action);
+  margin: 0;
+  border-radius: 20px;
+  pointer-events: auto;
+}
+
+.hud-actions > [hidden] {
+  display: none;
+}
+
+.hud-actions .build-toggle {
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+}
+
+.hud-actions .build-toggle::before {
+  top: 6px;
+  left: 12px;
+  width: 20px;
+  height: 5px;
+}
+
+.hud-actions .build-toggle-label,
+.hud-actions .key-hint {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (max-height: 699px) {
+  .hud-actions {
+    margin-right: 68px;
+  }
 }
 
 /* ------------------------------------------------------ menu de construction */
@@ -2671,14 +2737,6 @@ button {
 
 .build-menu [hidden] {
   display: none;
-}
-
-/* 56 px minimum : sous cette taille, une cible tactile se rate au pouce. */
-.build-toggle {
-  min-width: 164px;
-  min-height: 60px;
-  padding: 0 22px 0 16px;
-  font-size: 21px;
 }
 
 /*
@@ -5259,22 +5317,19 @@ button {
 /* ------------------------------------------------------- garde-robe d'Adam */
 
 /*
- * Le bouton de la garde-robe, posé au-dessus du sac, en bas à gauche : le
- * visage d'Adam tel qu'il est habillé, sur un disque blanc — le sac est le
- * sien. Une pastille corail dit qu'une pièce vient d'être trouvée.
+ * Le bouton de la garde-robe, premier du groupe en haut à droite : le visage
+ * d'Adam tel qu'il est habillé, sur une carte blanche de la taille de ses
+ * voisins — le sac est le sien. Une pastille corail dit qu'une pièce vient
+ * d'être trouvée.
  */
 .hud .hud-wardrobe {
-  position: absolute;
-  left: calc(var(--safe-left) + 14px);
-  bottom: calc(var(--safe-bottom) + 118px);
-  width: 56px;
-  height: 56px;
+  position: relative;
   overflow: visible;
 }
 
 .hud-wardrobe-face {
-  width: 46px;
-  height: 46px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   pointer-events: none;
 }

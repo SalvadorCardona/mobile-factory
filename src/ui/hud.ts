@@ -196,6 +196,8 @@ export class Hud {
   private readonly dayClockTip: HTMLElement;
   private lastClock = '';
   private clockTipUntil = 0;
+  /** Le groupe des boutons du joueur, en haut à droite : l'habillage, le sac, « Bâtir ». */
+  public readonly actions: HTMLElement;
   /** Le sac, compact : un bouton qui ouvre le panneau inventaire. */
   public readonly bag: HTMLButtonElement;
   /** Au bout du bandeau de la ville : ouvre le panneau des ressources (`main.ts` le branche). */
@@ -370,7 +372,8 @@ export class Hud {
     clip.append(this.hint);
     fold.append(clip);
 
-    // Le sac : un gros bouton en bas à gauche, comme « Bâtir » en bas à droite.
+    // Les boutons du joueur, en haut à droite : le sac, avec l'habillage d'Adam et « Bâtir » (`main.ts`).
+    this.actions = element('div', 'hud-actions');
     this.bag = element('button', 'hud-bag');
     this.bag.type = 'button';
     this.bag.setAttribute('aria-keyshortcuts', 'I');
@@ -501,13 +504,12 @@ export class Hud {
     this.left.append(this.town, this.people, this.dayClock, this.hunger);
     this.right = element('div', 'hud-right');
     this.right.append(this.weather);
-    this.top.append(this.left, main, this.right);
+    this.top.append(this.left, main, this.right, this.actions);
 
     this.root.append(
       // Les confettis d'abord : ils tombent derrière les cartes du HUD et les fenêtres.
       this.confetti,
       this.top,
-      this.bag,
       this.countdown,
       this.speech,
       this.person,
@@ -1074,7 +1076,7 @@ export class Hud {
 
   /** La barre du haut et ses deux groupes : les repères de bord les contournent. */
   public obstacles(): DOMRect[] {
-    return [this.bar, this.left, this.right].map((node) => node.getBoundingClientRect());
+    return [this.bar, this.left, this.right, this.actions].map((node) => node.getBoundingClientRect());
   }
 
   /** La ressource que le conseil envoie chercher, ou `null` : le renderer y pointe un repère. */
@@ -1680,7 +1682,7 @@ export class Hud {
     count.dataset['full'] = String(full);
     count.style.setProperty('--fill', `${Math.round((inventory.total() / inventory.capacity) * 100)}%`);
     hint.textContent = t().menu.keys.inventory;
-    this.bag.replaceChildren(uiIcon('bagButton', 28), text('hud-bag-name', label.bag), count);
+    this.bag.replaceChildren(uiIcon('bagButton', 28), count);
     if (wanted) {
       const chip = itemAmount(wanted, inventory.count(wanted));
 

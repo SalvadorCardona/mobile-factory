@@ -168,7 +168,9 @@ export class BuildMenu {
     this.root = document.createElement('div');
     this.root.className = 'build-menu';
 
-    const toggleLabel = document.createTextNode('');
+    const toggleLabel = document.createElement('span');
+
+    toggleLabel.className = 'build-toggle-label';
     const spaceKey = keyHint();
 
     this.toggleButton = button('', () => this.toggle());
@@ -318,7 +320,7 @@ export class BuildMenu {
     onLocale(() => {
       const text = t();
 
-      toggleLabel.data = text.menu.build;
+      toggleLabel.textContent = text.menu.build;
       spaceKey.textContent = text.menu.keys.space;
       title.textContent = text.menu.drawerTitle;
       this.search.placeholder = text.menu.searchPlaceholder;
@@ -899,9 +901,14 @@ export class BuildMenu {
     this.repeatButton.disabled = !confirmable;
   }
 
-  /** Ce que le menu pose en bas de l'écran — tiroir, barre de pose, bouton — : le joystick et la caméra s'en écartent. */
+  /** Ce que le menu pose en bas de l'écran — tiroir, barre de pose — : le joystick et la caméra s'en écartent. */
   public get bottomParts(): HTMLElement[] {
-    return [this.drawer, this.armedBar, this.toggleButton];
+    return [this.drawer, this.armedBar];
+  }
+
+  /** Le bouton « Bâtir » : `main.ts` le range avec les autres boutons du joueur, en haut à droite. */
+  public get buildButton(): HTMLButtonElement {
+    return this.toggleButton;
   }
 
   /** `main.ts` y branche le renderer : la bulle se pose sous le fantôme, à l'écran. */
