@@ -785,7 +785,9 @@ function researchErrors(): string[] {
       if (!Number.isInteger(amount) || amount <= 0) errors.push(`RESEARCH.${id} : coût nul ou fractionnaire en « ${itemId} »`);
     }
     if (sum(research.cost) > room) errors.push(`RESEARCH.${id} : le coffre du labo ne peut pas contenir son coût`);
-    if (research.effect === null && research.unlocks.length === 0) errors.push(`RESEARCH.${id} : ni effet ni déblocage`);
+    const opensLevel = Object.values(BUILDINGS).some((building) => building.upgrades.some((upgrade) => 'research' in upgrade && upgrade.research === id));
+
+    if (research.effect === null && research.unlocks.length === 0 && !opensLevel) errors.push(`RESEARCH.${id} : ni effet, ni déblocage, ni niveau de bâtiment`);
     if (research.effect !== null) {
       if (!(research.effect.stat in RESEARCH_STATS)) errors.push(`RESEARCH.${id} : statistique inconnue « ${research.effect.stat} »`);
       if (research.effect.amount === 0) errors.push(`RESEARCH.${id} : effet nul`);
