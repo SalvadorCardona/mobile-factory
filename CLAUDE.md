@@ -101,7 +101,8 @@ sans chantier (`paveRoad`, jugé par `World.roadPlan`). Adam, porteurs,
 bûcherons et bâtisseurs y vont 1,6 fois plus vite (`onRoad`, lu par
 `walkToward` et le pas d'Adam) ; mutants et bêtes, non. « Retirer » (le
 marteau, `removeRoad`) rend la pierre ; une route bloque la pose d'un
-bâtiment (refus `road`). Dalles raccordées (`art/road.ts`, seize masques)
+bâtiment (refus `road`). Ni eau, ni terre polluée ou radioactive
+(refus `terrain`, `polluted`, `radioactive`, cases en corail au tracé). Dalles raccordées (`art/road.ts`, seize masques)
 bakées avec le sol : un pavage rebake le bloc.
 
 **Débouchés** — tout objet entre dans un coût de bâtiment, une entrée de
@@ -783,9 +784,8 @@ Les règles, en résumé :
   résolution plafonnée à 2). L'herbe est une **prairie sans damier** (piste A,
   `render/meadow.ts`) : grandes taches claires ou denses aux bords ronds
   (jamais au contact d'un autre sol), brins et fleurettes semés hors de la
-  grille, tirés de la seed ; et des chemins de terre battue de la mairie
-  bâtie à chaque bâtiment fini, lus dans la ville — le bloc qu'un chemin
-  traverse se rebake quand il apparaît ou disparaît, comme sous une route.
+  grille, tirés de la seed. Aucun chemin n'est tracé seul entre les
+  bâtiments : les seules routes sont celles que le joueur pave.
   Le décor ne se heurte pas et n'est jamais de l'état.
   L'eau n'est pas bakée (sous elle, la terre de sa rive) : un seul shader la
   peint par-dessus (`render/waterLayer.ts`, `waterShader.ts`), d'après un

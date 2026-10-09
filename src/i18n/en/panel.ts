@@ -367,6 +367,8 @@ export const panel: Messages['panel'] = {
       resource: { text: 'A tree or rock is in the way', remedy: 'Adam can harvest it' },
       enemyZone: { text: 'A mutant base holds the zone', remedy: 'Take it down with a bow of its level' },
       unexplored: { text: 'The path runs into the unknown', remedy: 'Explore the area first' },
+      polluted: { text: 'Polluted land on the path', remedy: 'A purifier will make it clean' },
+      radioactive: { text: 'Radioactive land on the path', remedy: 'Unbuildable, and nothing cleans it yet' },
     },
   },
 };

@@ -327,6 +327,10 @@ export type RoadRejection =
   | 'enemyZone'
   /** Personne n'y est encore allé : on ne pave pas l'inconnu. */
   | 'unexplored'
+  /** Terre polluée : comme un bâtiment, on n'y pave pas (une station la nettoie). */
+  | 'polluted'
+  /** Terre radioactive : on n'y pave pas, et rien ne la nettoie. */
+  | 'radioactive'
   /** Plus de pierre, ni dans le sac, ni en ville à portée. */
   | 'noStone';
 

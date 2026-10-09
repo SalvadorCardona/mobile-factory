@@ -49,6 +49,8 @@ export const hud = {
     resource: 'Arbres et rochers sautés : dégagez-les pour paver',
     enemyZone: 'Pas de route dans la zone d’une base mutante',
     unexplored: 'Pas de route dans l’inconnu : explorez d’abord',
+    polluted: 'Pas de route sur la terre polluée — une station de dépollution la nettoiera',
+    radioactive: 'Pas de route sur la terre radioactive',
   },
   /** Pourquoi un arc n'a pas été forgé (`GearRejection`, hors `missing`). */
   gear: {

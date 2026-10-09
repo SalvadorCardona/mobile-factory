@@ -4,6 +4,7 @@ import { BUILDINGS } from '../data/buildings.ts';
 import type { ItemId } from '../data/items.ts';
 import { ROADS, ROAD_LINK } from '../data/roads.ts';
 import type { RoadRejection } from './commands.ts';
+import { contaminationAt } from './contamination.ts';
 import { freshHousing } from './housing.ts';
 import { freshNeeds } from './needs.ts';
 import { RoadNetwork, stepsBetween, type RoadTest } from './roads.ts';
@@ -180,6 +181,34 @@ describe('routes pavées', () => {
 
     expect(world.roads.size()).toBe(0);
     expect(world.player.inventory.count('stone')).toBe(5);
+  });
+
+  it('ne pave ni la terre polluée, ni la terre radioactive, comme un bâtiment', () => {
+    const world = withTown(100);
+
+    world.player.inventory.add('stone', 10);
+    for (const kind of ['polluted', 'radioactive'] as const) {
+      let spot: TileCoord | null = null;
+
+      for (let ty = -120; ty < 120 && !spot; ty += 1) {
+        for (let tx = -120; tx < 120 && !spot; tx += 1) {
+          if (contaminationAt(world.seed, tx, ty) === kind && isWalkable(terrainAt(world.seed, tx, ty))) spot = { tx, ty };
+        }
+      }
+      if (!spot) throw new Error(`aucune terre ${kind}`);
+      world.revealAround(spot.tx, spot.ty, 4);
+
+      expect(world.roadBlock(spot.tx, spot.ty)).toBe(kind);
+      expect(world.roadPlan([spot])[0]?.state).toBe(kind);
+      world.push({ type: 'paveRoad', tiles: [spot] });
+      world.tick();
+      expect(world.roads.has(spot.tx, spot.ty)).toBe(false);
+    }
+    expect(world.player.inventory.count('stone')).toBe(10);
+  });
+
+  it('aucune route n’apparaît seule : la mairie bâtie, une nouvelle partie n’a pas une dalle', () => {
+    expect(withTown().roads.size()).toBe(0);
   });
 
   it('une route bloque la pose d’un bâtiment ; le marteau la retire et rend sa pierre', () => {
