@@ -434,6 +434,30 @@ des plaques. `researchDone` est de l'état ; la recherche en cours est celle
 du labo. La fenêtre du labo est le panneau Recherche (`ui/researchPanel.ts`) :
 chaque recherche y dit ce qu'elle débloque, vignette et nom.
 
+**Ères** (`src/data/eras.ts`, `sim/eras.ts`, `ui/eraPanel.ts`) — quatre
+paliers : **Campement** (le départ, `START_BUILDINGS`), **Bourg**, **Ville**,
+**Cité industrielle** ; `World.era` (index, sauvegardé ; absent d'une ancienne
+sauvegarde : 0, le Campement). On passe à la suivante depuis la fenêtre de la
+mairie (« Ères · Campement », pastille corail quand tout est réuni) : un
+panneau liste ses conditions (`eraChecks` : objectifs réussis de la chaîne,
+habitants, bâtiments finis, recherches clés, investissement payé sac puis
+ville) et ce qu'elle apporte ; « Passer à l'ère » pousse `advanceEra`
+(refus `EraRejection`). Chaque ère ouvre au menu des bâtiments existants
+(`opens`, versés dans `World.openBuildings`), un **onglet de recherches** au
+labo (`era` de `data/research.ts`, `World.researchOpen` ; la recherche
+d'une ère plus tardive est refusée `locked`), dont celle qui débloque sa
+chaîne — briqueterie (`brickworks` : pierre + bois → brique), atelier
+(`workshop` : plaque + bois → outils), aciérie (`steelworks` : plaques +
+charbon → acier), des forges sur leur recette —, une menace ajoutée aux chefs
+de chaque nuit (`threat`, `withEraThreat` : mutants, gros mutants) et un
+visage de mairie (morceaux `era1`…`era3` de `art/townHall.ts`). Le passage
+(`eraReached`) arrête l'horloge sur un écran plein (nom, devise, récapitulatif,
+fanfare `colony`, pluie de feuilles) jusqu'à « En avant ! ». Ève le signale
+(`eraReady`). L'histoire (objectifs) ouvre la porte d'une ère, l'ère ouvre
+l'économie ; `validatePrototypes()` vérifie qu'une ère ne demande que ce que
+les précédentes rendent accessible. Partie testée de bout en bout dans
+`sim/eras.test.ts`.
+
 **Objectifs** — la partie est une chaîne d'objectifs en données
 (`src/data/objectives.ts`, jugés par `src/sim/objectives.ts`) : mairie,
 3 nuits (Ève arrive), les demandes d'Ève (ses quêtes), foreuse et 20 fer,

@@ -3,7 +3,8 @@
  *
  * En haut, la recherche choisie : son coût déposé objet par objet, comme le
  * relevé d'un chantier (livré / demandé, en route, en ville), puis, une fois payée, sa barre de progression et le
- * temps qui reste. Dessous, toutes les recherches, groupées par thème
+ * temps qui reste. Dessous, un onglet par ère atteinte (`data/eras.ts`) —
+ * chaque ère ouvre le sien —, puis ses recherches, groupées par thème
  * (Bâtiments, Combat, Récolte, Ville), dans une liste qui défile : leur effet
  * chiffré (« Dégâts de l'arc : 1 → 1,5 ») ou les bâtiments qu'elles font
  * entrer au menu de construction, vignette et nom — c'est ici qu'on découvre
@@ -44,6 +45,11 @@ export class ResearchPanel {
   private readonly takeButton: HTMLButtonElement;
   private readonly queue: HTMLElement;
   private readonly list: HTMLElement;
+  /** Les onglets d'ère, au-dessus de la liste : un par ère atteinte (`data/eras.ts`). */
+  private readonly eraTabs: HTMLElement;
+  /** L'onglet ouvert, et la dernière ère vue : une ère neuve ouvre son onglet. */
+  private eraTab = 0;
+  private seenEra = -1;
   private labId: number | null = null;
   private lastCurrent = '';
   private lastQueue = '';
@@ -75,7 +81,9 @@ export class ResearchPanel {
     this.queue = element('div', 'research-queue');
     this.queue.hidden = true;
     this.list = element('div', 'research-list');
-    this.root.append(this.current, this.queue, this.list);
+    this.eraTabs = element('div', 'research-eras');
+    this.eraTabs.setAttribute('role', 'tablist');
+    this.root.append(this.current, this.queue, this.eraTabs, this.list);
 
     // Les boutons suivent la langue ; la liste se réécrit au prochain `update()`, dont la clé porte la langue.
     onLocale(() => {
@@ -213,9 +221,22 @@ export class ResearchPanel {
   private updateList(lab: Lab): void {
     const { world } = this;
     const { researchDone: done } = world;
-    const statuses = RESEARCH_IDS.map((id): [ResearchId, ResearchStatus] => [id, researchStatus(id, done, lab, world.labs())]);
+
+    // Une ère neuve : son onglet s'ouvre de lui-même, c'est là que sont les nouveautés.
+    if (world.era !== this.seenEra) {
+      this.seenEra = world.era;
+      this.eraTab = world.era;
+    }
+    this.eraTab = Math.min(this.eraTab, world.era);
+
+    const statuses = RESEARCH_IDS.filter((id) => RESEARCH[id].era === this.eraTab).map((id): [ResearchId, ResearchStatus] => [
+      id,
+      researchStatus(id, done, lab, world.labs()),
+    ]);
     const key = [
       locale(),
+      world.era,
+      this.eraTab,
       statuses.map(([, status]) => status).join(','),
       lab.endTick > 0,
       queueFull(lab),
@@ -238,7 +259,30 @@ export class ResearchPanel {
       return section;
     });
 
-    this.list.replaceChildren(...groups);
+    this.list.replaceChildren(...groups.filter((group) => group.childElementCount > 1));
+    this.renderEraTabs(lab);
+  }
+
+  /** Un onglet par ère atteinte, le premier compris ; seul, le Campement n'en montre pas. */
+  private renderEraTabs(lab: Lab): void {
+    const tabs = Array.from({ length: this.world.era + 1 }, (_, era) => {
+      const tab = element('button', 'research-era') as HTMLButtonElement;
+
+      tab.type = 'button';
+      tab.setAttribute('role', 'tab');
+      tab.setAttribute('aria-selected', String(era === this.eraTab));
+      tab.textContent = t().eras[era]!.label;
+      tab.addEventListener('click', () => {
+        if (era === this.eraTab) return;
+        this.eraTab = era;
+        this.lastList = '';
+        this.updateList(lab);
+      });
+      return tab;
+    });
+
+    this.eraTabs.hidden = tabs.length < 2;
+    this.eraTabs.replaceChildren(...tabs);
   }
 
   /** Une recherche : nom, effet chiffré, coût, état, et « Lancer » si on peut. */

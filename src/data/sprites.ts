@@ -40,7 +40,10 @@ import { FARM } from '../art/farm.ts';
 import { FARMER } from '../art/farmer.ts';
 import { FORESTER } from '../art/forester.ts';
 import { FORESTER_HOUSE } from '../art/foresterHouse.ts';
+import { BRICKWORKS } from '../art/brickworks.ts';
 import { CHARCOAL_KILN } from '../art/charcoalKiln.ts';
+import { STEELWORKS } from '../art/steelworks.ts';
+import { WORKSHOP } from '../art/workshop.ts';
 import { FORGE } from '../art/forge.ts';
 import { JOBS } from '../art/jobs.ts';
 import { KID } from '../art/kid.ts';
@@ -189,6 +192,9 @@ export const SPRITES = {
   watchtower: WATCHTOWER,
   forge: FORGE,
   charcoalKiln: CHARCOAL_KILN,
+  brickworks: BRICKWORKS,
+  workshop: WORKSHOP,
+  steelworks: STEELWORKS,
   reinforcedTower: REINFORCED_TOWER,
   clinic: CLINIC_SPRITE,
   purifier: PURIFIER_SPRITE,
