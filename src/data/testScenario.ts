@@ -64,6 +64,11 @@ export interface TestScenarioProto {
    */
   nearBase?: number;
   /**
+   * Adam se tient à tant de tuiles à gauche du coffre fermé le plus proche
+   * de la mairie (`data/chests.ts`), ses abords explorés, plutôt qu'à `adam`.
+   */
+  nearChest?: number;
+  /**
    * La garde-robe d'Adam : les pièces déjà trouvées, ce qu'il porte, et
    * l'éditeur de personnage ouvert d'emblée (`open`).
    */
@@ -219,6 +224,21 @@ export const TEST_SCENARIOS = {
     adam: { dx: 1, dy: 4 },
     gear: 1,
     nearBase: 10,
+  },
+  /**
+   * Un coffre à ouvrir : Adam à trois pas à gauche du coffre le plus proche
+   * de la mairie. Un pas à droite, il s'ouvre — couvercle qui bascule,
+   * gerbe de lumière, confettis —, et le toast « Nouvel objet : … » mène à
+   * la garde-robe, où la pièce porte « Nouveau ».
+   */
+  chest: {
+    label: 'Coffre à ouvrir',
+    seed: 100,
+    buildings: [],
+    town: { wood: 40, stone: 30, food: 12, water: 12 },
+    bag: {},
+    adam: { dx: 1, dy: 4 },
+    nearChest: 3,
   },
   /**
    * L'éditeur de personnage ouvert devant la mairie : Adam a déjà trouvé

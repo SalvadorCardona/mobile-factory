@@ -5519,6 +5519,15 @@ button {
   box-shadow: 0 2px 0 var(--paper-shade);
 }
 
+/* La rareté se lit au bord de la carte : cyan pour une rare, violet pour une épique. */
+.wardrobe-card[data-rarity='rare'][data-locked='false'][aria-pressed='false']:not(:active) {
+  box-shadow: 0 4px 0 var(--cyan-shade);
+}
+
+.wardrobe-card[data-rarity='epic'][data-locked='false'][aria-pressed='false']:not(:active) {
+  box-shadow: 0 4px 0 var(--violet);
+}
+
 .wardrobe-card[aria-pressed='true'] {
   background: var(--yellow-light);
   box-shadow: 0 4px 0 var(--yellow-shade);

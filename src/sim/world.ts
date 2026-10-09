@@ -45,7 +45,7 @@
  */
 
 import { Emitter } from '../core/events.ts';
-import { CHUNK_TILES, TILE_SIZE, coordKey, distanceSq, floorDiv, type TileCoord } from '../core/grid.ts';
+import { CHUNK_SIZE, CHUNK_TILES, TILE_SIZE, coordKey, distanceSq, floorDiv, type TileCoord } from '../core/grid.ts';
 import { hash3, mulberry32, type StatefulRng } from '../core/rng.ts';
 import { BUILDINGS, MENU_BUILDING_IDS, REPAIR, RUIN, bedsOf, buildingLevel, nextUpgrade, type BuildingId, type BuildingKind, type BuildingProto } from '../data/buildings.ts';
 import { CARAVAN, RARE_OFFERS, type RareOfferId } from '../data/caravan.ts';
@@ -72,8 +72,10 @@ import { ENEMY_BASE, FIREBALL, GUARD_RANGE, RAIDS, enemyBaseLevel } from '../dat
 import { EVE } from '../data/eve.ts';
 import { FOG_VISION } from '../data/fog.ts';
 import { GEAR_WORKSHOP, MAX_GEAR, gearOf } from '../data/gear.ts';
-import { copyLook, sameLook, type Look, type LootSource, type PieceId } from '../data/wardrobe.ts';
-import { lookRejection, rollPiece, type LookRejection } from './wardrobe.ts';
+import { WARDROBE_SPARE, copyLook, sameLook, wardrobeDrop, type Look, type LootSource, type PieceId } from '../data/wardrobe.ts';
+import { drawPieces, lookRejection, type LookRejection } from './wardrobe.ts';
+import { CHESTS } from '../data/chests.ts';
+import { chestOfChunk, type Chest } from './chests.ts';
 import { HOUSING } from '../data/housing.ts';
 import { AGES, COLONY, NURSERY_CARE } from '../data/inhabitants.ts';
 import { TOWN_PLENTY, type ItemId } from '../data/items.ts';
@@ -690,6 +692,10 @@ export type WorldEvents = {
   lookRejected: { reason: LookRejection };
   /** Une pièce de garde-robe trouvée : un objectif, une base, son chef, la Reine, une bête. Elle entre à l'éditeur. */
   pieceFound: { piece: PieceId; source: LootSource };
+  /** Une source donnait des pièces, mais Adam a déjà toute la garde-robe : du Prestige à la place (`WARDROBE_SPARE`). */
+  piecesSpared: { source: LootSource; prestige: number };
+  /** Adam ouvre un coffre de la carte, au centre (x, y) de sa case. */
+  chestOpened: { id: number; tx: number; ty: number; x: number; y: number };
 };
 
 export class World {
@@ -853,6 +859,10 @@ export class World {
 
   /** Cache des tanières par chunk : un calcul pur, gardé pour ne pas le refaire à chaque passage. */
   private readonly denCache = new Map<string, Den[]>();
+  /** Le coffre de chaque chunk déjà regardé, tel que la seed le pose (`sim/chests.ts`). */
+  private readonly chestCache = new Map<string, Chest | null>();
+  /** Les coffres qu'Adam a ouverts, par id : c'est tout ce qui est de l'état. */
+  private readonly openedChests = new Set<number>();
 
   /** Les réservations des porteurs. Pas de l'état : elles se relisent dans leurs jobs. */
   private readonly jobs = new JobBoard();
@@ -960,7 +970,7 @@ export class World {
    * non plus — la sauvegarde se prend quand la file est vide.
    */
   public snapshot(): WorldState {
-    const { inventory, look, wardrobe, ...player } = this.player;
+    const { inventory, look, wardrobe, unseenPieces, ...player } = this.player;
 
     return {
       seed: this.seed,
@@ -996,7 +1006,7 @@ export class World {
       enemyBases: this.enemyBases.map((base) => ({ ...base })),
       stats: copyStats(this.stats),
       objectiveBase: copyStats(this.objectiveBase),
-      player: { ...player, look: copyLook(look), wardrobe: [...wardrobe], inventory: inventory.toJSON() },
+      player: { ...player, look: copyLook(look), wardrobe: [...wardrobe], unseenPieces: [...unseenPieces], inventory: inventory.toJSON() },
       resources: this.resources.toJSON(),
       planted: this.resources.plantedJSON(),
       crops: this.resources.cropsJSON(),
@@ -1005,6 +1015,7 @@ export class World {
       entities: [...this.entities.values()].map(saveEntity),
       mobiles: [...this.mobiles.values()].map(copyMobile),
       dens: [...this.dens].map(([id, den]) => ({ id, ...den })),
+      chests: [...this.openedChests],
       scheduler: this.scheduler.toJSON(this.tickCount),
     };
   }
@@ -1068,7 +1079,12 @@ export class World {
       objectiveBagBonus(state.objective) +
       caravanBagBonus(this.rareTrades);
 
-    Object.assign(this.player, player, { look: copyLook(player.look), wardrobe: [...player.wardrobe], inventory: Store.fromJSON(capacity, inventory) });
+    Object.assign(this.player, player, {
+      look: copyLook(player.look),
+      wardrobe: [...player.wardrobe],
+      unseenPieces: [...player.unseenPieces],
+      inventory: Store.fromJSON(capacity, inventory),
+    });
     this.resources.restore(state.resources, state.planted, state.tick, state.crops);
     this.roads.restore(state.roads);
 
@@ -1100,6 +1116,9 @@ export class World {
 
     this.dens.clear();
     for (const { id, members, readyTick } of state.dens) this.dens.set(id, { members, readyTick });
+
+    this.openedChests.clear();
+    for (const id of state.chests ?? []) this.openedChests.add(id);
 
     // Une sauvegarde d'avant les bases mutantes les découvre autour de la mairie — sauf celles dont la
     // zone tient déjà du bâti, ou dont l'emprise tomberait sur Adam.
@@ -1180,6 +1199,7 @@ export class World {
     this.handleContact(contact);
     this.watchZone();
     this.harvestNearby();
+    this.openChests();
     this.growForest();
     this.stepClock();
     this.corrode();
@@ -1233,6 +1253,10 @@ export class World {
 
       case 'seeBuilding':
         if (this.inMenu(command.building)) this.seenBuildings.add(command.building);
+        break;
+
+      case 'seePieces':
+        this.player.unseenPieces = this.player.unseenPieces.filter((piece) => !command.pieces.includes(piece));
         break;
 
       case 'transferToSite':
@@ -2557,7 +2581,8 @@ export class World {
 
     const checks: [PlacementRejection, (x: number, y: number) => boolean][] = [
       ['terrain', (x, y) => !isBuildable(terrainAt(this.seed, x, y))],
-      ['occupied', (x, y) => !this.chunks.isFree(x, y, 1, 1)],
+      // Un coffre pas encore ouvert aussi : on ne l'enterre pas sous un bâtiment.
+      ['occupied', (x, y) => !this.chunks.isFree(x, y, 1, 1) || this.chestAt(x, y) !== null],
       ['road', (x, y) => this.roads.has(x, y)],
       // Une pousse aussi : on ne bâtit pas sur ce que le forestier a planté.
       ['resource', (x, y) => this.resources.isTaken(x, y)],
@@ -3885,7 +3910,7 @@ export class World {
     if (this.zoneBase === base.id) this.zoneBase = null;
     this.events.emit('enemyBaseDestroyed', { id: base.id, level: base.level, prestige: level.prestige, x, y });
     this.dropLoot(level.loot, x, y + TILE_SIZE);
-    this.findPiece('enemyBase', base.id);
+    this.findPiece('enemyBase', base.id, base.level, x, y);
   }
 
   /* -------------------------------------------------------------- garde-robe */
@@ -3904,16 +3929,76 @@ export class World {
   }
 
   /**
-   * La source `source` donne-t-elle une pièce pour l'événement `key` ? Le
+   * La source `source` donne-t-elle des pièces pour l'événement `key` ? Le
    * tirage est un hachage de la seed (`sim/wardrobe.ts`) : le PRNG du monde
-   * ne bouge pas.
+   * ne bouge pas. `level` est celui d'une base ou de son chef. Jamais de
+   * doublon : quand Adam a déjà tout, du Prestige à la place, en (x, y).
    */
-  private findPiece(source: LootSource, key: number): void {
-    const piece = rollPiece(this.seed, source, key, this.player.wardrobe);
+  private findPiece(source: LootSource, key: number, level = 1, x = this.player.x, y = this.player.y): void {
+    const { pieces, spares } = drawPieces(this.seed, source, key, this.player.wardrobe, wardrobeDrop(source, level));
 
-    if (!piece) return;
-    this.player.wardrobe.push(piece);
-    this.events.emit('pieceFound', { piece, source });
+    for (const piece of pieces) {
+      this.player.wardrobe.push(piece);
+      this.player.unseenPieces.push(piece);
+      this.events.emit('pieceFound', { piece, source });
+    }
+    if (spares > 0) {
+      const prestige = spares * WARDROBE_SPARE.prestige;
+
+      this.gainPrestige(prestige, x, y);
+      this.events.emit('piecesSpared', { source, prestige });
+    }
+  }
+
+  /* ---------------------------------------------------------------- coffres */
+
+  /** Le coffre d'un chunk, ou `null` : celui de la seed, sauf s'il tombe sous l'emprise d'une base mutante. */
+  public chestOfChunk(cx: number, cy: number): Chest | null {
+    const key = coordKey(cx, cy);
+    let chest = this.chestCache.get(key);
+
+    if (chest === undefined) {
+      const found = chestOfChunk(this.seed, cx, cy);
+
+      chest = found && !this.enemyBases.some((base) => onBase(base, found.tx, found.ty)) ? found : null;
+      this.chestCache.set(key, chest);
+    }
+    return chest;
+  }
+
+  /** Le coffre fermé de la tuile, ou `null`. */
+  public chestAt(tx: number, ty: number): Chest | null {
+    const chest = this.chestOfChunk(floorDiv(tx, CHUNK_TILES), floorDiv(ty, CHUNK_TILES));
+
+    return chest && chest.tx === tx && chest.ty === ty && !this.openedChests.has(chest.id) ? chest : null;
+  }
+
+  /** Adam a-t-il déjà ouvert ce coffre ? */
+  public isChestOpen(id: number): boolean {
+    return this.openedChests.has(id);
+  }
+
+  /** Adam passe à `CHESTS.openTiles` d'un coffre fermé : il l'ouvre, et y trouve une pièce. */
+  private openChests(): void {
+    const { player } = this;
+    const reach = CHESTS.openTiles * TILE_SIZE;
+
+    // Les chunks à portée d'Adam : un seul, sauf au bord.
+    for (let cy = floorDiv(player.y - reach, CHUNK_SIZE); cy <= floorDiv(player.y + reach, CHUNK_SIZE); cy += 1) {
+      for (let cx = floorDiv(player.x - reach, CHUNK_SIZE); cx <= floorDiv(player.x + reach, CHUNK_SIZE); cx += 1) {
+        const chest = this.chestOfChunk(cx, cy);
+
+        if (!chest || this.openedChests.has(chest.id)) continue;
+
+        const x = (chest.tx + 0.5) * TILE_SIZE;
+        const y = (chest.ty + 0.5) * TILE_SIZE;
+
+        if (distanceSq(player.x, player.y, x, y) > reach * reach) continue;
+        this.openedChests.add(chest.id);
+        this.events.emit('chestOpened', { id: chest.id, tx: chest.tx, ty: chest.ty, x, y });
+        this.findPiece('chest', chest.id, 1, x, y);
+      }
+    }
   }
 
   /* -------------------------------------------------------------- équipement */
@@ -4006,7 +4091,7 @@ export class World {
       this.dropLoot(ENEMIES[mutant.proto].loot, mutant.x, mutant.y);
       if (mutant.queen) {
         this.events.emit('queenSlain', { id: mutant.id, night: this.night, x: mutant.x, y: mutant.y });
-        this.findPiece('queen', this.night);
+        this.findPiece('queen', this.night, 1, mutant.x, mutant.y);
       }
     }
 
@@ -4607,7 +4692,7 @@ export class World {
     this.gainXp(killXp(beast.proto) + (beast.proto === 'chief' && base ? baseXp(base.level, 'chief') : 0), shooter, beast.x, beast.y);
     this.dropLoot(proto.loot, beast.x, beast.y);
     // Un chef a donné la sienne en tombant ; une bête — crabe, loup, gardien, cracheur — parfois une.
-    if (beast.proto !== 'chief') this.findPiece('beast', beast.id);
+    if (beast.proto !== 'chief') this.findPiece('beast', beast.id, 1, beast.x, beast.y);
   }
 
   /**
@@ -4628,7 +4713,7 @@ export class World {
     });
     this.gainPrestige(level.chief.prestige, chief.x, chief.y);
     this.dropLoot(level.chief.loot, chief.x, chief.y);
-    this.findPiece('chief', base.id);
+    this.findPiece('chief', base.id, base.level, chief.x, chief.y);
   }
 
   /** Les points de vie d'une bête au plus : ceux de son espèce, ou, pour un chef, ceux de sa base. */
@@ -6676,7 +6761,8 @@ export class World {
         terrainAt(this.seed, tx, ty) !== 'grass' ||
         oreAt(this.seed, tx, ty) !== null ||
         this.chunks.occupantAt(tx, ty) !== undefined ||
-        this.roads.has(tx, ty);
+        this.roads.has(tx, ty) ||
+        this.chestAt(tx, ty) !== null;
 
       return { tx, ty, state: blocked ? 'blocked' : 'free' };
     });
@@ -6886,7 +6972,8 @@ export class World {
       terrainAt(this.seed, tx, ty) !== 'grass' ||
       oreAt(this.seed, tx, ty) !== null ||
       this.chunks.occupantAt(tx, ty) !== undefined ||
-      this.roads.has(tx, ty);
+      this.roads.has(tx, ty) ||
+      this.chestAt(tx, ty) !== null;
 
     return blocked ? 'blocked' : 'free';
   }

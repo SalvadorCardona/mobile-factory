@@ -315,6 +315,21 @@ const hairMohawk: PieceArt = (facing, { hair }) => {
   }
 };
 
+/** Le chignon : les cheveux tirés en arrière, noués en boule sur le crâne, une feuille piquée dedans. */
+const hairBun: PieceArt = (facing, { hair }) => {
+  const h = PALETTE[hair];
+  const bun = (x: number, y: number): string => circle(x, y, 3.6, h.shade) + circle(x - 0.3, y - 0.4, 3.2, h.base) + pill(x - 2, y - 2.6, 2.6, 1.3, h.light);
+
+  switch (facing) {
+    case 'down':
+      return { hairMid: bun(16, 3.6) + leaf(18.4, 2.6, -30, 0.7) + circle(16, 11.5, 6.9, h.base) + pill(11.6, 6.4, 6, 2, h.light), hairFront: pill(10.8, 9.8, 10.4, 1.8, h.shade) };
+    case 'up':
+      return { hairMid: circle(16, 12, 6.9, h.base) + pill(11.6, 6.6, 6, 2, h.light) + bun(16, 4.4) + leaf(18.4, 3.4, -30, 0.7) };
+    case 'side':
+      return { hairMid: bun(11, 4.6) + leaf(12.8, 3.4, -40, 0.7) + circle(15, 11.2, 6.5, h.base) + pill(11, 6.4, 6, 2, h.light), hairFront: pill(16.4, 9.8, 6, 1.6, h.shade) };
+  }
+};
+
 /* ---------------------------------------------------------------- les yeux */
 
 /** Un œil ouvert : le blanc, l'iris de la couleur choisie, un éclat. */
@@ -366,6 +381,21 @@ const eyesWink: PieceArt = (facing, paint) =>
     (x, y) => eye(x, y, paint.eyes),
     (x, y, inner) => brow(x, y, inner * 10, paint.hair),
     (x, y) => group(`rotate(-8 ${x} ${y})`, pill(x - 1.7, y - 0.5, 3.4, 1.1, ink.base)),
+  );
+
+/** Une étoile à quatre branches : deux capsules en croix, un cœur blanc. */
+function sparkle(x: number, y: number, size: number, tone: Tone): string {
+  const c = PALETTE[tone];
+
+  return pill(x - 0.45 * size, y - 2 * size, 0.9 * size, 4 * size, c.base) + pill(x - 2 * size, y - 0.45 * size, 4 * size, 0.9 * size, c.base) + circle(x, y, 0.5 * size, paper.base);
+}
+
+/** Les yeux étoilés : grands ouverts, une étoile dans l'iris — quelque chose l'émerveille, même ici. */
+const eyesStarry: PieceArt = (facing, paint) =>
+  eyes(
+    facing,
+    (x, y) => eye(x, y, paint.eyes, 1.15) + sparkle(x + 0.2, y + 0.2, 0.55, 'yellow'),
+    (x, y, inner) => brow(x, y - 0.8, -inner * 14, paint.hair),
   );
 
 /* ---------------------------------------------------------------- les barbes */
@@ -449,6 +479,22 @@ const beardFull: PieceArt = (facing, { hair }) => {
       return {};
     case 'side':
       return { beard: pill(15.8, 13.4, 2.2, 5.6, h.base) + pill(16.4, 16.2, 8, 6, h.shade) + pill(16.6, 16.2, 7.6, 4.8, h.base) + pill(21.4, 17.6, 2.2, 1.1, coral.shade) };
+  }
+};
+
+/** La barbe tressée : une natte sous le menton, nouée d'une perle jaune trouvée dans les ruines. */
+const beardBraid: PieceArt = (facing, { hair }) => {
+  const h = PALETTE[hair];
+  const braid = (x: number, y: number): string =>
+    circle(x, y, 1.5, h.shade) + circle(x, y + 2.2, 1.3, h.base) + circle(x - 0.4, y + 1.8, 0.45, h.light) + shadedCircle(x, y + 4.2, 1.1, 'yellow');
+
+  switch (facing) {
+    case 'down':
+      return { beard: pill(10.4, 16.6, 11.2, 3.6, h.base) + pill(11.6, 17, 2.6, 1, h.light) + pill(14.5, 17.2, 3, 1.3, coral.shade) + braid(16, 20.2) };
+    case 'up':
+      return {};
+    case 'side':
+      return { beard: pill(16.6, 16.4, 6.4, 3.4, h.base) + pill(21.6, 17.4, 2, 1.1, coral.shade) + braid(19.4, 19.6) };
   }
 };
 
@@ -587,6 +633,9 @@ const pantsPatched: FootArt = () => leg('cyan') + rect(14.1, 31.6, 3, 2.6, coral
 
 const pantsStriped: FootArt = () => leg('yellow') + pill(13.7, 30.6, 4.6, 1, coral.base) + pill(13.7, 32.6, 4.6, 1, coral.base) + pill(13.7, 34.6, 4.6, 1, coral.base);
 
+/** Le pantalon fleuri : de la toile menthe où une liane a poussé, une fleur au genou. */
+const pantsGarden: FootArt = () => leg('mint') + pill(14.6, 31.4, 1.2, 4.6, PALETTE.mint.shade) + leaf(15.2, 33, -40, 0.45) + flower(15.6, 31.4, 'coral', 0.55);
+
 const shoesBoots: FootArt = () => pill(12.6, 33.4, 6.8, 5, ink.shade) + pill(12.6, 33.4, 6.8, 3.8, ink.base) + pill(13.6, 33.9, 2.4, 1, ink.light);
 
 const shoesSandals: FootArt = () => pill(13, 34.6, 6, 3.4, skin.base) + pill(12.6, 37, 6.8, 1.4, orange.shade) + pill(13, 35.2, 6, 1.1, orange.base);
@@ -616,15 +665,18 @@ export const PIECE_ART = {
   hairBuzz,
   hairCurly,
   hairMohawk,
+  hairBun,
   eyesBold,
   eyesSleepy,
   eyesBright,
   eyesWink,
+  eyesStarry,
   beardNone,
   beardStubble,
   beardShort,
   beardMustache,
   beardFull,
+  beardBraid,
   topTunic,
   topHoodie,
   topJacket,
@@ -634,6 +686,7 @@ export const PIECE_ART = {
   pantsShorts,
   pantsPatched,
   pantsStriped,
+  pantsGarden,
   shoesBoots,
   shoesSandals,
   shoesSneakers,

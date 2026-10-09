@@ -46,10 +46,11 @@ export const wardrobe = {
     chief: 'Butin d’un chef de base',
     queen: 'Butin de la Reine des flaques',
     beast: 'Trouvée sur une bête',
+    chest: 'Trouvée dans un coffre',
   },
   locked: 'À trouver',
   /** Sous une pièce verrouillée choisie : où la chercher. */
-  lockedHint: 'Elle se trouve en jouant : objectifs, bases mutantes et leurs chefs, la Reine, parfois une bête.',
+  lockedHint: 'Elle se trouve en jouant : coffres de la carte, objectifs, bases mutantes et leurs chefs, la Reine, parfois une bête.',
   new: 'Nouveau',
   /** Le compte des pièces qu'Adam peut porter. */
   owned: (owned: number, total: number): string => `${owned}/${total} pièces`,
@@ -60,4 +61,8 @@ export const wardrobe = {
   found: (piece: string): string => `Nouvel objet : ${piece}`,
   tryOn: 'Essayer',
   rejected: 'Adam ne peut pas porter cette tenue.',
+  /** Adam a déjà toute la garde-robe : le Prestige qu'il reçoit à la place. */
+  spare: (prestige: number): string => `Garde-robe complète : +${prestige} Prestige à la place`,
+  /** Le mot qui flotte au-dessus d'un coffre qui s'ouvre. */
+  chestOpened: 'Coffre ouvert !',
 };

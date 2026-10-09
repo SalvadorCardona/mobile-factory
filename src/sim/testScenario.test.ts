@@ -71,6 +71,20 @@ describe('parties de test', () => {
     expect(siteMissing(lab)).toBeGreaterThan(0);
   });
 
+  it('le coffre à ouvrir : trois pas à droite, Adam l’ouvre et trouve une pièce', () => {
+    const world = stageScenario(TEST_SCENARIOS.chest);
+    const opened: number[] = [];
+    const before = world.player.wardrobe.length;
+
+    world.events.on('chestOpened', ({ id }) => opened.push(id));
+    world.push({ type: 'setMoveAxis', x: 1, y: 0 });
+    for (let i = 0; i < 60 && opened.length === 0; i += 1) world.tick();
+
+    expect(opened).toHaveLength(1);
+    expect(world.player.wardrobe).toHaveLength(before + 1);
+    expect(world.player.unseenPieces).toContain(world.player.wardrobe.at(-1));
+  });
+
   it('la nurserie : les logisticiens lui portent son stock visé depuis la mairie', () => {
     const world = stageScenario(TEST_SCENARIOS.nursery);
     const nursery = [...world.entities.values()].find((entity) => entity.kind === 'nursery');

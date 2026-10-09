@@ -14,7 +14,7 @@ import type { CompanionClassId } from '../data/companions.ts';
 import type { ItemId } from '../data/items.ts';
 import type { PerkId } from '../data/perks.ts';
 import type { ResearchId } from '../data/research.ts';
-import type { Look } from '../data/wardrobe.ts';
+import type { Look, PieceId } from '../data/wardrobe.ts';
 import type { WorkPriority } from '../data/workers.ts';
 import type { TransferDirection, TransferQuantity } from './transfer.ts';
 import type { EntityId, MobileId } from './types.ts';
@@ -108,6 +108,8 @@ export type Command =
    * trouvée, n'est pas de son emplacement, ou qu'une couleur sort du nuancier.
    */
   | { type: 'dressAdam'; look: Look }
+  /** L'éditeur a montré ces pièces trouvées : elles perdent leur « Nouveau » (`Player.unseenPieces`). */
+  | { type: 'seePieces'; pieces: PieceId[] }
   /**
    * Recrute un compagnon de la classe `role` à la caserne : le coût de la
    * classe est payé d'un coup, le sac d'abord, puis la ville si la caserne

@@ -69,6 +69,7 @@ export function createPlayer(x: number, y: number, age: number = AGES.adultMin):
     age,
     look: copyLook(DEFAULT_LOOK),
     wardrobe: [],
+    unseenPieces: [],
     inventory: new Store(INVENTORY_CAPACITY),
   };
 }

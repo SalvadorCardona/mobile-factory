@@ -47,6 +47,7 @@ import { LAB } from '../art/lab.ts';
 import { LOGISTICIAN } from '../art/logistician.ts';
 import { LOGISTICS_POST } from '../art/logisticsPost.ts';
 import { LOOT } from '../art/loot.ts';
+import { CHEST } from '../art/chest.ts';
 import { LUMBER_CAMP } from '../art/lumberCamp.ts';
 import { HUNGRY } from '../art/hungry.ts';
 import { THIRSTY } from '../art/thirsty.ts';
@@ -160,6 +161,8 @@ export const SPRITES = {
   puddle: PUDDLE,
   /** Le butin qu'ils lâchent : un morceau par objet. */
   loot: LOOT,
+  /** Un coffre de la carte : fermé, puis ouvert (caisse, couvercle relevé, gerbe de lumière). */
+  chest: CHEST,
   /** Le médaillon du métier de chaque bâtiment, sur sa pancarte : un morceau par bâtiment. */
   jobs: JOBS,
   /** La base mutante, et le badge de ses assaillants en réserve (`sign0` à `sign9`). */

@@ -40,16 +40,20 @@ import {
   DEFAULT_LOOK,
   LOOK_COLORS,
   LOOK_SLOTS,
+  BASE_WARDROBE_LOOT,
   LOOT_SOURCES,
   PIECES,
   PIECE_IDS,
+  RARITY_IDS,
   WARDROBE_LOOT,
   isStarter,
   piecesOf,
   type PieceId,
   type PieceProto,
+  type Rarity,
   type WardrobeDrop,
 } from './wardrobe.ts';
+import { CHESTS } from './chests.ts';
 import { PIECE_ART, adamLookParts, isFootPiece } from '../art/adamLook.ts';
 import { WEATHER, WEATHER_CALENDAR, type WeatherProto } from './weather.ts';
 
@@ -697,15 +701,42 @@ export function wardrobeErrors(): string[] {
     }
   }
 
-  for (const source of LOOT_SOURCES) {
-    const drop: WardrobeDrop = WARDROBE_LOOT[source];
+  // Chaque table de butin : une chance dans ]0, 1], des poids positifs, au moins un tirage, et de quoi trouver.
+  const drops: [string, WardrobeDrop][] = [
+    ...(Object.entries(WARDROBE_LOOT) as [string, WardrobeDrop][]).map(([source, drop]): [string, WardrobeDrop] => [`WARDROBE_LOOT.${source}`, drop]),
+    ...BASE_WARDROBE_LOOT.flatMap((level, index) =>
+      (Object.entries(level) as [string, WardrobeDrop][]).map(([source, drop]): [string, WardrobeDrop] => [`BASE_WARDROBE_LOOT[${index}].${source}`, drop]),
+    ),
+  ];
 
-    if (drop.chance <= 0 || drop.chance > 1) errors.push(`WARDROBE_LOOT.${source} : chance hors de ]0, 1]`);
+  for (const [name, drop] of drops) {
+    if (drop.chance <= 0 || drop.chance > 1) errors.push(`${name} : chance hors de ]0, 1]`);
+    if (drop.count !== undefined && (!Number.isInteger(drop.count) || drop.count < 1)) errors.push(`${name} : count entier ≥ 1`);
+    for (const [rarity, weight] of Object.entries(drop.weights)) {
+      if (!RARITY_IDS.includes(rarity as Rarity)) errors.push(`${name} : rareté inconnue « ${rarity} »`);
+      if (!(weight > 0)) errors.push(`${name} : poids de « ${rarity} » non positif`);
+    }
 
     const found = PIECE_IDS.some((id) => !isStarter(id) && (drop.weights[PIECES[id].rarity] ?? 0) > 0);
 
-    if (!found) errors.push(`WARDROBE_LOOT.${source} : aucune pièce à trouver dans ses raretés`);
+    if (!found) errors.push(`${name} : aucune pièce à trouver dans ses raretés`);
   }
+  for (const source of LOOT_SOURCES) if (!drops.some(([name]) => name.endsWith(`.${source}`))) errors.push(`LOOT_SOURCES : « ${source} » n'a pas de table`);
+  if (BASE_WARDROBE_LOOT.length !== ENEMY_BASE_LEVELS.length) errors.push('BASE_WARDROBE_LOOT : une table par niveau de base (ENEMY_BASE_LEVELS)');
+  // Plus haute la base, plus de pièces : jamais moins que le niveau d'avant.
+  for (let index = 1; index < BASE_WARDROBE_LOOT.length; index += 1) {
+    const count = (drop: WardrobeDrop): number => drop.count ?? 1;
+
+    if (count(BASE_WARDROBE_LOOT[index]!.enemyBase) < count(BASE_WARDROBE_LOOT[index - 1]!.enemyBase)) {
+      errors.push(`BASE_WARDROBE_LOOT[${index}] : moins généreux que le niveau d'avant`);
+    }
+  }
+  // Chaque emplacement a au moins trois pièces à trouver : le butin a de l'intérêt partout.
+  for (const slot of LOOK_SLOTS) {
+    if (piecesOf(slot).filter((id) => !isStarter(id)).length < 3) errors.push(`PIECES : moins de trois pièces à trouver pour « ${slot} »`);
+  }
+  if (!(CHESTS.chance > 0 && CHESTS.chance <= 1)) errors.push('CHESTS.chance hors de ]0, 1]');
+  if (!(CHESTS.openTiles > 0) || !(CHESTS.tries >= 1) || !(CHESTS.minSpawnTiles >= 0)) errors.push('CHESTS : portée, tentatives ou distance invalides');
 
   // Une partie de test ne donne que des pièces à trouver, et n'habille Adam que de ce qu'il a.
   for (const [id, scenario] of Object.entries(TEST_SCENARIOS) as [string, TestScenarioProto][]) {

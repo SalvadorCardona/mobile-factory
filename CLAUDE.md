@@ -488,11 +488,24 @@ side/foot` dans une petite page à part quand Adam se change
 s'ouvre au visage d'Adam posé au-dessus du sac (pastille : pièce trouvée) ou
 au « Essayer » du toast « Nouvel objet : … » ; il arrête l'horloge, tient un
 brouillon et pousse `dressAdam` à « Valider » (refus `LookRejection`). Une
-pièce se **trouve** (`WARDROBE_LOOT`) : objectif réussi, base abattue, son
-chef, la Reine, parfois une bête — tirage haché de la seed et de l'événement
-(`rollPiece`), jamais le PRNG du monde. `Player.look` et `Player.wardrobe`
-sont sauvegardés ; une sauvegarde d'avant lit l'Adam par défaut. Partie de
-test `/test/wardrobe` : l'éditeur ouvert, une partie des pièces trouvées.
+pièce se **trouve** (`WARDROBE_LOOT`) : coffre de la carte, objectif réussi,
+base abattue et son chef — plus de pièces, et plus rares, plus la base est
+loin (`BASE_WARDROBE_LOOT`, par niveau) —, la Reine, parfois une bête ;
+tirage haché de la seed et de l'événement (`drawPieces`), jamais le PRNG du
+monde, jamais un doublon : les raretés de la source d'abord, puis toute pièce
+qui manque, et, garde-robe complète, du Prestige (`WARDROBE_SPARE`, toast).
+Les **coffres** (`data/chests.ts`, `sim/chests.ts`, sprite `chest`,
+`render/chestLayer.ts`) : un au plus par chunk, tiré de la seed sur une case
+nue hors de la clairière, jamais stocké ; Adam l'ouvre en passant à
+`CHESTS.openTiles` (`chestOpened` : couvercle qui bascule, gerbe, confettis,
+« Coffre ouvert ! »), il reste ouvert sur la carte ; fermé, il bloque la pose
+d'un bâtiment (`occupied`), le forestier et la ferme. Une pièce trouvée porte
+« Nouveau » dans l'éditeur, et son onglet une pastille, jusqu'à ce qu'on
+ouvre son onglet (`Player.unseenPieces`, commande `seePieces`). Sauvegardés :
+`Player.look`, `Player.wardrobe`, `Player.unseenPieces` et les coffres
+ouverts (`chests`) ; une sauvegarde d'avant lit l'Adam par défaut et aucun
+coffre ouvert. Parties de test `/test/wardrobe` (l'éditeur ouvert, une
+partie des pièces trouvées) et `/test/chest` (Adam à trois pas d'un coffre).
 Captures dans `docs/wardrobe/`.
 
 **Bases mutantes** (`src/data/enemyBases.ts`, `src/sim/enemyBases.ts`) —

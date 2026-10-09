@@ -39,7 +39,7 @@ import { ADAM_SALT, adultAge, sexOf } from './inhabitants.ts';
 import { freshHousing, type Housing } from './housing.ts';
 import { freshNeeds, fullNeeds } from './needs.ts';
 import { canPause, clampStaff, isWorkPriority, type StaffPost } from './staffing.ts';
-import { readLook, readWardrobe } from './wardrobe.ts';
+import { readLook, readUnseen, readWardrobe } from './wardrobe.ts';
 import type { Store, StoreSnapshot } from './store.ts';
 import type {
   BeastState,
@@ -178,6 +178,8 @@ export interface WorldState {
   mobiles: Mobile[];
   /** Tanières habitées ou vidées ; les autres se relisent dans la seed. */
   dens: SavedDen[];
+  /** Les coffres déjà ouverts, par id (`sim/chests.ts`) ; les autres se relisent dans la seed. Absent d'avant eux : aucun. */
+  chests?: number[];
   scheduler: SchedulerSnapshot;
 }
 
@@ -448,6 +450,7 @@ function parseState(raw: unknown): WorldState {
     entities: unique(array(state['entities']).map(parseEntity)),
     mobiles: unique(array(state['mobiles']).map((mobile) => parseMobile(mobile, seed))),
     dens: unique(array(state['dens']).map(parseDen)),
+    chests: [...new Set(array(state['chests'] ?? []).map(int))],
     scheduler: parseScheduler(state['scheduler']),
   };
 }
@@ -511,6 +514,8 @@ function parsePlayer(raw: unknown): SavedPlayer {
     // Absentes d'avant la garde-robe : l'apparence par défaut, rien de trouvé.
     look: readLook(player['look'], wardrobe),
     wardrobe,
+    // Absentes d'avant le marquage « Nouveau » : tout a déjà été vu.
+    unseenPieces: readUnseen(player['unseenPieces'], wardrobe),
     inventory: stock(player['inventory']),
   };
 }
