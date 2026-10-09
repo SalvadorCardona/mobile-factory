@@ -48,6 +48,7 @@ export const BUILD_PRESTIGE = {
   forge: 3,
   charcoalKiln: 2,
   clinic: 3,
+  purifier: 3,
   barracks: 3,
   lab: 4,
   antenna: 10,

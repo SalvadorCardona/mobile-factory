@@ -27,6 +27,8 @@ export const hud = {
     occupied: 'Emplacement déjà occupé',
     road: 'Une route passe ici — retirez-la d’abord',
     terrain: 'Terrain non constructible',
+    polluted: 'Terre polluée — une station de dépollution la nettoiera',
+    radioactive: 'Terre radioactive — rien ne la nettoie, pas encore',
     outOfReach: 'Trop loin — rapprochez-vous',
     resource: 'Dégagez d’abord les arbres et rochers',
     onPlayer: 'Vous êtes sur l’emplacement',

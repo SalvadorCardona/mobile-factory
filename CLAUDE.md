@@ -576,6 +576,19 @@ bâti et d'Adam. Débogage : `?nofog` en dev, ou F panneau `?debug` ouvert
 (commande `setFog`). Une partie de test explore `SCENARIO_REVEAL` autour de
 la mairie.
 
+**Terres polluées et radioactives** (`data/contamination.ts`,
+`sim/contamination.ts`, `World.land`) — deux sols tirés de la seed par un
+champ de bruit (`CONTAMINATION` : taille des plaques, seuils, clairière
+épargnée), jamais stockés : la **polluée** (boue violette) et, au cœur des
+plaques, la **radioactive** (orange, trèfle jaune). Aucune ne se bâtit
+(refus `polluted` / `radioactive`, cases en corail au fantôme). La **station
+de dépollution** (`purifier`, 2 × 2, sans ouvrier, `PURIFIER` : objectif de
+déblocage 5, rayon 4 depuis le bord de l'emprise, une case toutes les 60
+ticks, la plus proche d'abord) rend saine la terre polluée de son rayon ;
+les cases nettoyées sont de l'état (`cleaned`, absent d'une ancienne
+sauvegarde : aucune). La radioactive ne se nettoie pas ; ce qu'elle permet
+tient dans `CONTAMINATION_KINDS`, pour qu'on l'enrichisse sans toucher au reste.
+
 **Faune** — en plus des mutants, des **crabes** vivent sur le sable et des
 **loups** au cœur des forêts (les gardiens des bases sont de la même famille, sans tanière) (`WILDLIFE`, `src/data/enemies.ts` ;
 `src/sim/wildlife.ts`). Leurs tanières se tirent de la seed par chunk ; une

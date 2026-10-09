@@ -193,6 +193,18 @@ export const JOB_DRAWINGS = {
     rect(4.4, 9.6, 14.4, 4.4, mint.base, 2),
     pill(5.6, 10.4, 3.4, 1.4, mint.light),
   ),
+  /** La station de dépollution : la goutte violette qui s'efface, et la pousse menthe qui revient. */
+  purifier: job(
+    polygon([9, 4.5, 13.4, 11.4, 4.6, 11.4], violet.shade),
+    circle(9, 13.2, 4.4, violet.shade),
+    polygon([8.6, 4.2, 12.6, 10.6, 4.8, 10.6], violet.base),
+    circle(8.6, 12.6, 4, violet.base),
+    pill(6.4, 11, 1.6, 3, violet.light),
+    pill(13, 18, 7, 2.8, ink.shade),
+    line(16.5, 18, 16.5, 14, mint.shade),
+    polygon([16.5, 15.5, 13.4, 13, 15, 17], mint.base),
+    polygon([16.5, 14.5, 20.4, 12.4, 19, 17], mint.light),
+  ),
   /** La caserne : le bouclier rond à croix corail, deux lances croisées derrière. */
   barracks: job(
     line(6, 19, 18, 5, orange.shade),

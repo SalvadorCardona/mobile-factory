@@ -75,6 +75,7 @@ import { GEAR_WORKSHOP, MAX_GEAR, gearOf } from '../data/gear.ts';
 import { WARDROBE_SPARE, copyLook, sameLook, wardrobeDrop, type Look, type LootSource, type PieceId } from '../data/wardrobe.ts';
 import { drawPieces, lookRejection, type LookRejection } from './wardrobe.ts';
 import { CHESTS } from '../data/chests.ts';
+import { PURIFIER } from '../data/contamination.ts';
 import { chestOfChunk, type Chest } from './chests.ts';
 import { HOUSING } from '../data/housing.ts';
 import { AGES, COLONY, NURSERY_CARE } from '../data/inhabitants.ts';
@@ -177,6 +178,7 @@ import {
 import { TownFlows } from './flows.ts';
 import { ResourceIndex, type TileLook } from './resources.ts';
 import { FogOfWar, type Sight } from './fog.ts';
+import { Land } from './contamination.ts';
 import { RoadNetwork } from './roads.ts';
 import type { SavedEntity, WorldState } from './save.ts';
 import { Scheduler } from './scheduler.ts';
@@ -390,6 +392,8 @@ export type WorldEvents = {
   roadPaved: { tiles: TileCoord[]; fromBag: number };
   /** Ces dalles viennent d'être retirées ; `toBag` pierres sont revenues au sac. */
   roadRemoved: { tiles: TileCoord[]; toBag: number };
+  /** Une station de dépollution vient de rendre saines ces terres polluées. */
+  landCleaned: { tiles: TileCoord[] };
   /** Une partie du tracé n'a pas été pavée — faute de pierre d'abord, sinon le premier refus ; `paved` tuiles l'ont été quand même. */
   roadRejected: { reason: RoadRejection; paved: number };
   drillBlocked: { id: EntityId };
@@ -704,6 +708,8 @@ export class World {
   public readonly resources: ResourceIndex;
   /** Les tuiles pavées : une modification du joueur, sauvegardée comme les tuiles entamées. */
   public readonly roads = new RoadNetwork();
+  /** Les terres polluées et radioactives de la carte, et celles qu'on a nettoyées (`sim/contamination.ts`). */
+  public readonly land: Land;
   /**
    * Le brouillard de guerre : cases explorées, cases vues, et ce qu'on
    * se rappelle de celles qu'on ne voit plus (`sim/fog.ts`). Une case revue
@@ -929,6 +935,7 @@ export class World {
 
   public constructor(seed: number) {
     this.seed = seed >>> 0;
+    this.land = new Land(this.seed);
     this.resources = new ResourceIndex(this.seed);
     this.resources.watch((tx, ty) => this.rememberTile(tx, ty));
     this.rng = mulberry32(this.seed ^ 0x3c6ef372);
@@ -1028,6 +1035,7 @@ export class World {
       planted: this.resources.plantedJSON(),
       crops: this.resources.cropsJSON(),
       roads: this.roads.toJSON(),
+      cleaned: this.land.toJSON(),
       fog: this.fog.toJSON(),
       entities: [...this.entities.values()].map(saveEntity),
       mobiles: [...this.mobiles.values()].map(copyMobile),
@@ -1105,6 +1113,7 @@ export class World {
     });
     this.resources.restore(state.resources, state.planted, state.tick, state.crops);
     this.roads.restore(state.roads);
+    this.land.restore(state.cleaned ?? {});
 
     for (const saved of state.entities) {
       const entity: Entity =
@@ -1221,6 +1230,7 @@ export class World {
     this.growForest();
     this.stepClock();
     this.corrode();
+    this.purify();
     this.stepMobiles();
     this.recover();
     this.stepWildlife();
@@ -2602,6 +2612,9 @@ export class World {
       // Un coffre pas encore ouvert aussi : on ne l'enterre pas sous un bâtiment.
       ['occupied', (x, y) => !this.chunks.isFree(x, y, 1, 1) || this.chestAt(x, y) !== null],
       ['road', (x, y) => this.roads.has(x, y)],
+      // Terre polluée ou radioactive : on n'y bâtit pas. Seule la pollution se nettoie (`purifier`).
+      ['polluted', (x, y) => this.land.at(x, y) === 'polluted'],
+      ['radioactive', (x, y) => this.land.at(x, y) === 'radioactive'],
       // Une pousse aussi : on ne bâtit pas sur ce que le forestier a planté.
       ['resource', (x, y) => this.resources.isTaken(x, y)],
       // Un bâtiment est solide : le poser sur Adam l'emmurerait.
@@ -2931,6 +2944,10 @@ export class World {
         building = { ...base, kind: 'clinic' };
         break;
 
+      case 'purifier':
+        building = { ...base, kind: 'purifier' };
+        break;
+
       case 'barracks':
         building = { ...base, kind: 'barracks', training: null };
         break;
@@ -3120,6 +3137,7 @@ export class World {
       case 'townHall':
       case 'house':
       case 'clinic':
+      case 'purifier':
       case 'barracks':
       case 'lumberCamp':
       case 'foresterHouse':
@@ -7387,6 +7405,21 @@ export class World {
    * La pluie acide ronge ce qui est déjà abîmé, hors de l'abri. Elle use,
    * elle n'achève pas : un bâtiment garde toujours son dernier point de vie.
    */
+  /**
+   * Les stations de dépollution : toutes les `PURIFIER.intervalTicks`, chacune
+   * rend saine la case polluée la plus proche de son emprise, dans son rayon.
+   * Le décalage par id les désynchronise ; sans case à nettoyer, elle attend.
+   */
+  private purify(): void {
+    for (const entity of this.entities.values()) {
+      if (entity.kind !== 'purifier' || (this.tickCount + entity.id) % PURIFIER.intervalTicks !== 0) continue;
+
+      const next = this.land.cleanableAround(entity.tx, entity.ty, entity.width, entity.height, PURIFIER.radius)[0];
+
+      if (next && this.land.clean(next.tx, next.ty)) this.events.emit('landCleaned', { tiles: [next] });
+    }
+  }
+
   private corrode(): void {
     const corrosion = this.spell ? WEATHER[this.spell.id].corrosion : null;
 

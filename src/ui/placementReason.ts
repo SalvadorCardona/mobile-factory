@@ -28,7 +28,7 @@ export interface PlacementReason {
   remedy: string | null;
 }
 
-type SimpleRejection = Exclude<PlacementRejection, 'resource' | 'footing' | 'road' | 'nearHall' | 'enemyZone'>;
+type SimpleRejection = Exclude<PlacementRejection, 'resource' | 'footing' | 'road' | 'nearHall' | 'enemyZone' | 'polluted' | 'radioactive'>;
 
 /** Une entrée du dictionnaire (remède '' = aucun) en motif affichable. */
 function reason(entry: { text: string; remedy: string }): PlacementReason {
@@ -49,6 +49,8 @@ export function placementReason(block: PlacementBlock, world: World): PlacementR
   if (block.reason === 'nearHall') return reason(placement.nearHall);
   // Une route ne se recouvre pas : le marteau la retire, et rend sa pierre.
   if (block.reason === 'road') return reason(placement.road);
+  // La terre polluée attend une station de dépollution ; la radioactive, rien pour l'instant.
+  if (block.reason === 'polluted' || block.reason === 'radioactive') return reason(placement[block.reason]);
   // Une base mutante tient la zone : il faut l'abattre, avec un arc de son niveau.
   if (block.reason === 'enemyZone') return reason(placement.enemyZone);
   if (block.reason !== 'resource') return simple(block.reason);

@@ -328,6 +328,10 @@ export type PlacementRejection =
   | 'occupied'
   /** Une route pave l'emprise : on la retire d'abord, au marteau. */
   | 'road'
+  /** Terre polluée : inconstructible tant qu'une station de dépollution ne l'a pas nettoyée. */
+  | 'polluted'
+  /** Terre radioactive : inconstructible, et rien ne la nettoie (pour l'instant). */
+  | 'radioactive'
   | 'terrain'
   | 'outOfReach'
   /** Un arbre ou un rocher encombre l'emprise : il faut le récolter d'abord. */

@@ -258,6 +258,16 @@ export const LORE = {
         'habitant, un peu vert sur les bords, qui porte plus lourd que les autres.',
       effect: 'Soigne les mutants assommés : 3 places.',
     },
+    purifier: {
+      name: 'Station de dépollution',
+      sign: 'Dépollution',
+      site: 'Une cuve à poser, des tuyaux qui attendent leur pompe. Il faut une case saine, au bord des terres polluées.',
+      description:
+        'Une cuve violette, une pompe qui bat et un tuyau planté dans la terre grise : ' +
+        'autour d’elle, les terres polluées se vident case après case, et redeviennent ' +
+        'de la bonne terre où bâtir. La terre radioactive, elle, ne bouge pas.',
+      effect: 'Rend saines les terres polluées alentour, une case à la fois.',
+    },
     barracks: {
       name: 'Caserne',
       sign: 'Caserne',

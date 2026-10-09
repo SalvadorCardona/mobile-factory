@@ -33,6 +33,7 @@
 
 import { TILE_SIZE, floorDiv } from '../core/grid.ts';
 import { GROUND, PALETTE, type Color } from '../data/artDirection.ts';
+import type { ContaminationKind } from '../data/contamination.ts';
 import type { ItemId } from '../data/items.ts';
 import type { ResourceId } from '../data/resources.ts';
 import { onLocale, t } from '../i18n/locale.ts';
@@ -91,6 +92,12 @@ const RESOURCE_COLORS: Record<ResourceId, Color> = {
   ironRock: PALETTE.cyan.shade,
   coalRock: PALETTE.ink.base,
   stoneRock: PALETTE.coral.base,
+};
+
+/** Terres polluées et radioactives : les teintes de leurs tuiles. */
+const TAINT_COLORS: Record<ContaminationKind, Color> = {
+  polluted: PALETTE.violet.shade,
+  radioactive: PALETTE.orange.shade,
 };
 
 const ROAD_COLOR: Color = PALETTE.paper.shade;
@@ -343,7 +350,7 @@ export class WorldMap {
     const context = block.canvas.getContext('2d')!;
     const size = BLOCK * BLOCK_PX;
     const image = context.createImageData(size, size);
-    const { seed, resources, roads } = this.world;
+    const { seed, resources, roads, land } = this.world;
 
     for (let ly = 0; ly < BLOCK; ly += 1) {
       for (let lx = 0; lx < BLOCK; lx += 1) {
@@ -353,7 +360,7 @@ export class WorldMap {
 
         if (sight === 'unexplored') continue;
 
-        const [r, g, b] = this.colorOf(tileColor(seed, tx, ty, roads.has(tx, ty), resources.at(tx, ty)?.id ?? null));
+        const [r, g, b] = this.colorOf(tileColor(seed, tx, ty, roads.has(tx, ty), resources.at(tx, ty)?.id ?? null, land.at(tx, ty)));
         const veil = sight === 'explored' ? VEIL : 0;
         const [vr, vg, vb] = this.colorOf(VEIL_COLOR);
 
@@ -573,8 +580,9 @@ class DragTap implements PointerConsumer {
 }
 
 /** La couleur d'une tuile : la route, sinon l'arbre ou le rocher, sinon le filon, sinon le sol. */
-function tileColor(seed: number, tx: number, ty: number, road: boolean, resource: ResourceId | null): Color {
+function tileColor(seed: number, tx: number, ty: number, road: boolean, resource: ResourceId | null, tainted: ContaminationKind | null): Color {
   if (road) return ROAD_COLOR;
+  if (tainted) return TAINT_COLORS[tainted];
   if (resource) return RESOURCE_COLORS[resource];
 
   const terrain = terrainAt(seed, tx, ty);

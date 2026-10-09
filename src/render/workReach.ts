@@ -26,6 +26,7 @@
 import { Graphics } from 'pixi.js';
 import { TILE_SIZE } from '../core/grid.ts';
 import { PALETTE, RADIUS, STROKE, hex } from '../data/artDirection.ts';
+import { PURIFIER } from '../data/contamination.ts';
 import { BUILDINGS, type BuildingId, type BuildingKind } from '../data/buildings.ts';
 import { BUILDERS, FARMERS, FORESTERS, LOGISTICIANS, LUMBERJACKS } from '../data/workers.ts';
 import type { GhostState } from '../input/placement.ts';
@@ -38,6 +39,8 @@ const REACHES: Partial<Record<BuildingKind, { radius: number; color: number }>> 
   lumberCamp: { radius: LUMBERJACKS.radius, color: hex(PALETTE.mint.shade) },
   depot: { radius: LOGISTICIANS.radius, color: hex(PALETTE.cyan.shade) },
   yard: { radius: BUILDERS.radius, color: hex(PALETTE.violet.shade) },
+  // Sa portée se mesure depuis le bord de l'emprise (2 × 2) : le cercle part de son centre, une tuile plus loin.
+  purifier: { radius: PURIFIER.radius + 1, color: hex(PALETTE.violet.shade) },
 };
 
 type Footprint = { tx: number; ty: number; width: number; height: number };

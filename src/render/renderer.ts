@@ -93,7 +93,7 @@ export class GameRenderer {
     this.world = world;
     this.library = library;
     this.tiles = new TerrainTiles(library);
-    this.chunkLayer = new ChunkLayer(app.renderer, library, this.tiles, world.seed, world.roads);
+    this.chunkLayer = new ChunkLayer(app.renderer, library, this.tiles, world.seed, world.roads, world.land);
     // Une route posée ou retirée rebake le sol sous elle : c'est le seul changement que le sol connaisse.
     const repave = ({ tiles }: { tiles: readonly TileCoord[] }): void => {
       for (const { tx, ty } of tiles) this.chunkLayer.invalidate(tx, ty);
@@ -101,6 +101,8 @@ export class GameRenderer {
 
     world.events.on('roadPaved', repave);
     world.events.on('roadRemoved', repave);
+    // Une terre dépolluée redevient du sol ordinaire : le bloc se rebake.
+    world.events.on('landCleaned', repave);
     this.waterLayer = new WaterLayer(world.seed);
     this.signboards = new Signboards(app.renderer, library);
     this.entityLayer = new EntityLayer(world, library, this.tiles, this.shadows, this.signboards);

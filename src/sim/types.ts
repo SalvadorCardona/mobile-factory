@@ -246,6 +246,14 @@ export interface Antenna extends Built {
   kind: 'antenna';
 }
 
+/**
+ * La station de dépollution : elle n'a rien à retenir. Les cases qu'elle a
+ * nettoyées sont à la carte (`World.land`), pas à elle : elles lui survivent.
+ */
+export interface Purifier extends Built {
+  kind: 'purifier';
+}
+
 export type Entity =
   | Site
   | Drill
@@ -257,6 +265,7 @@ export type Entity =
   | Quarry
   | Forge
   | Clinic
+  | Purifier
   | Barracks
   | Lab
   | LumberCamp

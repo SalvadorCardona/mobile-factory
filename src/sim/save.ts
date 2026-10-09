@@ -171,6 +171,8 @@ export interface WorldState {
   crops?: Record<string, number>;
   /** Tuiles pavées : `"cx,cy"` → index des tuiles dans le chunk. */
   roads: Record<string, number[]>;
+  /** Terres polluées nettoyées : `"cx,cy"` → index des tuiles dans le chunk. Absent d'avant elles : aucune. */
+  cleaned?: Record<string, number[]>;
   /**
    * Le brouillard de guerre : cases explorées et captures de ce qu'on y a vu.
    * Absent d'avant lui : les alentours du bâti et d'Adam sont explorés au chargement.
@@ -449,6 +451,8 @@ function parseState(raw: unknown): WorldState {
     crops: parseCrops(state['crops'] ?? {}),
     // Absentes d'une sauvegarde d'avant les routes : rien n'était pavé.
     roads: parseRoads(state['roads'] ?? {}),
+    // Absentes d'une sauvegarde d'avant les terres polluées : rien n'était nettoyé.
+    cleaned: parseRoads(state['cleaned'] ?? {}),
     ...(state['fog'] !== undefined && { fog: parseFog(state['fog']) }),
     entities: unique(array(state['entities']).map(parseEntity)),
     mobiles: unique(array(state['mobiles']).map((mobile) => parseMobile(mobile, seed))),
@@ -685,6 +689,7 @@ function parseEntity(raw: unknown): SavedEntity {
     case 'townHall':
     case 'house':
     case 'clinic':
+    case 'purifier':
     case 'lumberCamp':
     case 'foresterHouse':
     case 'depot':

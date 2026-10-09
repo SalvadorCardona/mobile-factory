@@ -27,6 +27,7 @@ import { BUILDER_HOUSE } from '../art/builderHouse.ts';
 import { CARAVAN_SPRITE } from '../art/caravan.ts';
 import { CARGO_BIKE } from '../art/cargoBike.ts';
 import { CLINIC_SPRITE } from '../art/clinic.ts';
+import { PURIFIER_SPRITE } from '../art/purifier.ts';
 import { CONSTRUCTION_POST } from '../art/constructionPost.ts';
 import { CRAB } from '../art/crab.ts';
 import { CRACK } from '../art/crack.ts';
@@ -190,6 +191,7 @@ export const SPRITES = {
   charcoalKiln: CHARCOAL_KILN,
   reinforcedTower: REINFORCED_TOWER,
   clinic: CLINIC_SPRITE,
+  purifier: PURIFIER_SPRITE,
   barracks: BARRACKS,
   lab: LAB,
   lumberCamp: LUMBER_CAMP,
